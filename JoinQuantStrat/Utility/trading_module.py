@@ -19,12 +19,19 @@ def copy(path):
     with open(path, 'wb') as f:
         f.write(c)
 
-def loading(broker):
+def loading(broker, version = 1):
     ''' ��½ '''
     user = use(broker)
     
     if broker == config.trade_acc['use_xq']:
-        user.prepare(config.trade_acc['json_xq'])
+        if version == 1:
+            user.prepare(config.trade_acc['json_xq'])
+        elif version == 2:
+            user.prepare(config.trade_acc['json2_xq'])
+        elif version == 3:
+            user.prepare(config.trade_acc['json3_xq'])
+        else:
+            user.prepare(config.trade_acc['json_xq'])
     elif broker == config.trade_acc['use_yjb']:
         copy(config.trade_acc['jar_yjb'])    
         user.prepare(config.trade_acc['json_yjb'])
@@ -45,28 +52,28 @@ def check(user):
     log.info('持仓:')
     log.info('获取持仓:', json.dumps(user.position,ensure_ascii=False))
 
-def realAction(stock, pct, data):
-    # all actions mimic market order
-    if 'two_eight_real_action' in config.real_action and config.real_action['two_eight_real_action']:
-        current_data = get_current_data()
-        current_price = 0.0
-        if data:
-            current_price = data[stock].pre_close
-        try:
-            realAction_xq(stock[:6], pct)
-            #realAction_yjb(stock[:6], pct, current_data[stock].high_limit, current_data[stock].low_limit)
-            #pass
-        except:
-            traceback.print_exc()
-            log.info("We have an issue on xue qiu actions!! for stock %s" % stock)
-            send_message("Stock [%s] adjustment to %.2f failed for xue qiu" % (stock, pct), channel='weixin')
-           
-        try:
-            realAction_email(stock[:6], pct, current_price)
-        except:
-            traceback.print_exc()
-            log.info("We have an issue on email actions!! for stock %s" % stock)
-            send_message("Stock [%s] adjustment to %.2f failed for email" % (stock, pct), channel='weixin')
+# def realAction(stock, pct, data):
+#     # all actions mimic market order
+#     if 'two_eight_real_action' in config.real_action and config.real_action['two_eight_real_action']:
+#         current_data = get_current_data()
+#         current_price = 0.0
+#         if data:
+#             current_price = data[stock].pre_close
+#         try:
+#             realAction_xq(stock[:6], pct)
+#             #realAction_yjb(stock[:6], pct, current_data[stock].high_limit, current_data[stock].low_limit)
+#             #pass
+#         except:
+#             traceback.print_exc()
+#             log.info("We have an issue on xue qiu actions!! for stock %s" % stock)
+#             send_message("Stock [%s] adjustment to %.2f failed for xue qiu" % (stock, pct), channel='weixin')
+#            
+#         try:
+#             realAction_email(stock[:6], pct, current_price)
+#         except:
+#             traceback.print_exc()
+#             log.info("We have an issue on email actions!! for stock %s" % stock)
+#             send_message("Stock [%s] adjustment to %.2f failed for email" % (stock, pct), channel='weixin')
 
 realAction_email_list = []
 
@@ -123,6 +130,18 @@ def realAction_xq(stock, value_pct):
     user = loading('xq')
     check(user)
     log.info("xue qiu stock [%s] is requested to be adjusted to weight %d pct" %(stock, value_pct))
+    user.adjust_weight(stock, int(value_pct))
+    
+def realAction_xq_2(stock, value_pct):
+    user = loading('xq', 2)
+    check(user)
+    log.info("xue qiu No.2 stock [%s] is requested to be adjusted to weight %d pct" %(stock, value_pct))
+    user.adjust_weight(stock, int(value_pct))
+    
+def realAction_xq_3(stock, value_pct):
+    user = loading('xq', 3)
+    check(user)
+    log.info("xue qiu No.3 stock [%s] is requested to be adjusted to weight %d pct" %(stock, value_pct))
     user.adjust_weight(stock, int(value_pct))
     
 def realAction_yjb(stock, value_pct, high, low):
