@@ -21,6 +21,7 @@ from api import *
 from webtrader import WebTrader
 import tradestat
 import config
+from trading_module import *
 
 # global constants
 macd_func = partial(talib.MACD, fastperiod=12,slowperiod=26,signalperiod=9)
@@ -28,33 +29,42 @@ macd_func = partial(talib.MACD, fastperiod=12,slowperiod=26,signalperiod=9)
 
 #enable_profile()
 
-def loading():
-    ''' 登陆 '''
-    user = use(config.trade_acc['use_xq'])
-    user.prepare(config.trade_acc['json2_xq'])
-    return user
+# def loading():
+#     ''' 登陆 '''
+#     user = use(config.trade_acc['use_xq'])
+#     user.prepare(config.trade_acc['json2_xq'])
+#     return user
     
-def check(user):
-    ''' 获取信息并输出 '''
-    log.info('获取今日委托单:')
-    log.info('今日委托单:', json.dumps(user.entrust,ensure_ascii=False))
-    log.info('-'*30)
-    log.info('获取资金状况:')
-    log.info('资金状况:', json.dumps(user.balance,ensure_ascii=False) )
-    log.info('enable_balance(可用金额):',  json.dumps(user.balance[0]['enable_balance'],ensure_ascii=False))
-    log.info('-'*30)
-    log.info('持仓:')
-    log.info('获取持仓:', json.dumps(user.position,ensure_ascii=False))
+# def check(user):
+#     ''' 获取信息并输出 '''
+#     log.info('获取今日委托单:')
+#     log.info('今日委托单:', json.dumps(user.entrust,ensure_ascii=False))
+#     log.info('-'*30)
+#     log.info('获取资金状况:')
+#     log.info('资金状况:', json.dumps(user.balance,ensure_ascii=False) )
+#     log.info('enable_balance(可用金额):',  json.dumps(user.balance[0]['enable_balance'],ensure_ascii=False))
+#     log.info('-'*30)
+#     log.info('持仓:')
+#     log.info('获取持仓:', json.dumps(user.position,ensure_ascii=False))
+
+# def realAction(stock, value_pct):
+#     if False and 'macd_real_action' in config.real_action and config.real_action['macd_real_action']:
+#         try:
+#             user = loading()
+#             check(user)
+#             log.info("stock [%s] is requested to be adjusted to weight %d pct" %(stock, value_pct))
+#             user.adjust_weight(stock[:6], int(value_pct))
+#         except:
+#             log.info("stock [%s] requested adjustment failed")
 
 def realAction(stock, value_pct):
     if False and 'macd_real_action' in config.real_action and config.real_action['macd_real_action']:
         try:
-            user = loading()
-            check(user)
-            log.info("stock [%s] is requested to be adjusted to weight %d pct" %(stock, value_pct))
-            user.adjust_weight(stock[:6], int(value_pct))
+            realAction_xq_2(stock[:6], pct)
         except:
-            log.info("stock [%s] requested adjustment failed")
+            traceback.print_exc()
+            log.info("We have an issue on xue qiu 2 actions!! for stock %s" % stock)
+            send_message("Stock [%s] adjustment to %.2f failed for xue qiu 2" % (stock, pct), channel='weixin')        
 
 ########################################################################################################
 
@@ -76,20 +86,20 @@ def displayVar():
     log.info("g.tailing_stop_loss: %f" % g.tailing_stop_loss)
     log.info("################################################")    
     
-def after_code_changed(context):
-    g.stock_domain = '000002.XSHG'
-    g.stock_filter = True
-    g.dynamic_stop_loss = True
-    g.allow_stop_loss = True
-    g.total_num_of_pos = 4
-    g.trading_hour = 9
-    g.trading_minute = 45
-    g.botUseZvalue = True
-    g.topUseZvalue = True
+# def after_code_changed(context):
+#     g.stock_domain = '000002.XSHG'
+#     g.stock_filter = True
+#     g.dynamic_stop_loss = True
+#     g.allow_stop_loss = True
+#     g.total_num_of_pos = 5
+#     g.trading_hour = 10
+#     g.trading_minute = 42
+#     g.botUseZvalue = True
+#     g.topUseZvalue = True
 
 def set_variables():
     g.user = None
-    g.total_num_of_pos = 4
+    g.total_num_of_pos = 5
     g.number_of_days = 30
     g.number_of_days_wave_backwards = 60
     g.number_of_days_backwards = 133
@@ -129,8 +139,8 @@ def set_params():
     g.tailing_stop_loss = 0.95
     g.stock_domain = '000002.XSHG' #399400.XSHE 000002.XSHG
     g.benchmark = '000300.XSHG'
-    g.trading_hour = 9
-    g.trading_minute = 45
+    g.trading_hour = 10
+    g.trading_minute = 42
         # 加载统计模块
     g.trade_stat = tradestat.trade_stat()
 
@@ -207,7 +217,7 @@ def before_trading_start(context):
         # g.feasible_stocks = pddf.index.values
         filterStockList(context)
         #g.feasible_stocks = set_feasible_stocks(get_index_stocks(g.stock_domain),g.number_of_days,context)
-
+        #g.sell_list += [x for x in context.portfolio.positions.keys() if x not in check_to_hold(context)]
         g.to_buy = check_to_buy(context)
     g.t+=1
 
@@ -338,6 +348,11 @@ def rebalance(to_sell, to_buy, context):
             realAction(security, 100/g.total_num_of_pos)
 
 
+def check_to_hold(context):
+    # check if current holdings are still qualified for possession
+    to_hold = [x[1] for x in filterByAnal(context.portfolio.positions.keys(), context)]
+    return to_hold
+
 def check_to_sell(context, data):
     to_sell = []
     for stock in context.portfolio.positions:
@@ -370,7 +385,7 @@ def check_to_sell(context, data):
             elif g.allow_stop_loss and (pos.price / g.max_price[stock] < sg):
                 log.info("add %s in sell list due to tailing stop loss" % stock)
                 to_sell.append(stock)
-             # record max price for the stock
+            #  record max price for the stock
             elif pos.price > g.max_price[stock]: # update the max price
                 g.max_price[stock] = pos.price
     return to_sell
@@ -511,14 +526,15 @@ def checkAtTopDoubleCross(macd_raw, macd_hist, prices):
         latest_hist_area = macd_hist[indexOfGoldCross[-1]:]
         max_val_Index = latest_hist_area.tolist().index(max(latest_hist_area))
         recentArea_est = abs(sum(latest_hist_area[:max_val_Index])) * 2
-        recentlength_est = (max_val_Index - indexOfGoldCross[-1]) * 2
         
         previousArea = macd_hist[indexOfGoldCross[-2]:indexOfDeathCross[-1]]
         previousArea_sum = abs(sum(previousArea))
-        previouslength = indexOfDeathCross[-1] - indexOfGoldCross[-2]
         
-        if recentlength_est == 0 or previouslength == 0:
-            return False
+        # recentlength_est = (max_val_Index - indexOfGoldCross[-1]) * 2
+        # previouslength = indexOfDeathCross[-1] - indexOfGoldCross[-2]
+        
+        # if recentlength_est == 0 or previouslength == 0:
+        #     return False
         
         if g.topUseZvalue:
             prices_z = zscore(prices)
@@ -556,14 +572,15 @@ def checkAtBottomDoubleCross(macd_raw, macd_hist, prices):
         latest_hist_area = macd_hist[indexOfDeathCross[-1]:]
         min_val_Index = latest_hist_area.tolist().index(min(latest_hist_area))
         recentArea_est = abs(sum(latest_hist_area[:min_val_Index])) * 2
-        recentlength_est = (min_val_Index - indexOfDeathCross[-1]) * 2
         
         previousArea = macd_hist[indexOfDeathCross[-2]:indexOfGoldCross[-1]]
         previousArea_sum = abs(sum(previousArea))
-        previouslength = indexOfGoldCross[-1] - indexOfDeathCross[-2]
         
-        if recentlength_est == 0 or previouslength == 0:
-            return False,0    
+        # recentlength_est = (min_val_Index - indexOfDeathCross[-1]) * 2
+        # previouslength = indexOfGoldCross[-1] - indexOfDeathCross[-2]
+        
+        # if recentlength_est == 0 or previouslength == 0:
+        #     return False,0    
 
         # this is only an estimation
         # bottom_len = indexOfDeathCross[-1] - indexOfDeathCross[-2]
