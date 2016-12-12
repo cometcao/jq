@@ -13,6 +13,13 @@ from email.mime.text import MIMEText
 from email.header import Header
 from kuanke.user_space_api import *
 import traceback
+import Crypto
+from Crypto.PublicKey import RSA
+from Crypto import Random
+from Crypto.Hash import MD5
+
+def encryptString(input):
+    pass
 
 def copy(path):
     c = read_file(path)

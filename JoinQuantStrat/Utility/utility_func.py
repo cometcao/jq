@@ -8,6 +8,21 @@ from kuanke.user_space_api import *
 from jqdata import *
 from scipy.signal import argrelextrema
 from blacklist import *
+import talib
+from functools import partial
+
+# global constants
+macd_func = partial(talib.MACD, fastperiod=12,slowperiod=26,signalperiod=9)
+#macd_func_ext = partial(talib.MACDEXT, fastperiod=12,slowperiod=26,signalperiod=9)
+
+def MACD(prices):
+    raw, signal, macd = macd_func(prices)
+    # macd = macd * 2
+    return raw, signal, macd
+
+def getAllStocks(context):
+    pddf = get_all_securities(date = context.current_dt.date())
+    return pddf.index.values
 
 def getMcapInfo(stocks, context):
     # get yesterdays market cap
@@ -45,19 +60,55 @@ def getPeInfo(stocks, context):
         stockinfo.append( (queryDf['pe_ratio'][j], queryDf['code'][j]) )
     return stockinfo
 
-def findPeriod(stock):
+def findPeriod_v2(stock):
     if stock not in g.period:
+        df = attribute_history(stock, g.number_of_days_wave_backwards, '1d', ('high', 'low', 'close'), skip_paused=True)
+        df.loc[:,'macd_raw'], _, df.loc[:,'macd'] = MACD(df['close'].values)
+        df = df.dropna()
+        if df.shape[0] > 2:
+            try:
+                # gold
+                mask = df['macd'] > 0
+                mask = mask[mask==True][mask.shift(1) == False]
+                # death
+                mask2 = df['macd'] < 0
+                mask2 = mask2[mask2==True][mask2.shift(1)==False]       
+                     
+                gkey1 = mask.keys()[-1]
+                gkey2 = mask.keys()[-2]
+                dkey1 = mask2.keys()[-1]
+                dkey2 = mask2.keys()[-2]
+
+                if gkey1 > dkey1:
+                    dk = df.index.get_loc(dkey1)
+                    gk = df.index.get_loc(gkey2)
+                    g.period[stock] = dk - gk
+                else:
+                    gk = df.index.get_loc(gkey1)
+                    dk = df.index.get_loc(dkey2)
+                    g.period[stock] = gk - dk
+            except IndexError:
+                g.period[stock] = 20
+        else:
+            g.period[stock] = 20    
+    return g.period[stock]
+
+def findPeriod(stock):
+    if stock not in g.period: # g.period resets every day
         df = attribute_history(stock, g.number_of_days_wave_backwards, '1d', ('high', 'low'), skip_paused=True)
-        topIndex = argrelextrema(df['high'].values, np.greater_equal,order=1)[0]
-        bottomIndex = argrelextrema(df['low'].values, np.less_equal,order=1)[0]
+        topIndex = argrelextrema(df['high'].values, np.greater_equal,order=2)[0]
+        bottomIndex = argrelextrema(df['low'].values, np.less_equal,order=2)[0]
         delta = None
         if len(topIndex) < 2 or len(bottomIndex) < 2:
             return 20
         if topIndex[-1] > bottomIndex[-1]:
             delta = df['low'].index[bottomIndex[-1]] - df['high'].index[topIndex[-2]]
         else:
-            delta = df['high'].index[bottomIndex[-1]] - df['low'].index[topIndex[-2]]
-        g.period[stock] = delta.days
+            delta = df['high'].index[topIndex[-1]] - df['low'].index[bottomIndex[-2]]
+        if delta.days == 0:
+            g.period[stock] = 20
+        else:
+            g.period[stock] = abs(delta.days)
     return g.period[stock]
 
 
@@ -217,7 +268,7 @@ def set_feasible_stocks(stock_list,days,context):
 # ����Joinquant�ĵ�����ǰ����������������ִ�У�������������order_target_value�����ؼ���ʾ�������
 # �����ɹ����ر�����������һ����ɽ��������򷵻�None
 def order_target_value_new(security, value):
-    if value == 0:
+    if value == 0:            
         log.info("short %s - %s" % (security, get_security_info(security).display_name))
     else:
         log.info("long %s - %s with amount RMB %f" % (security, get_security_info(security).display_name, value))
