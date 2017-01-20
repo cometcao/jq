@@ -57,6 +57,10 @@ def chip_migration(df):
     collective_tr_sum = 100
     row_size, _ = df.shape
     ii = initialIndex(df, collective_tr_sum)
+    if ii == row_size-1:
+        df.ix[-1, 'chip_density'] = 0
+        return df
+    
     initialDate = df.index[0]
     initialEndDate = df.index[ii]
     # build initial chip view
@@ -83,8 +87,6 @@ def chip_change(avg, tr, chip_view):
     
     while True:
         # for negative value on turnover_ratio
-#         profit_mask = chip_view['pct_change'] >= 0
-#         loss_mask = chip_view['pct_change'] < 0
         dealing_tr_mask = chip_view['turnover_ratio'] < 0 
 
         # with negative tr we need to move it to adjacent price level
@@ -94,26 +96,23 @@ def chip_change(avg, tr, chip_view):
             offset = 1
             if chip_view.ix[p, 'pct_change'] > 0:
                 offset = -1
+            print chip_view
             previous_index = chip_view.index[current_p_index+offset]
             chip_view.loc[previous_index, 'turnover_ratio'] += chip_view.loc[p, 'turnover_ratio']
             chip_view.loc[p, 'turnover_ratio'] = 0
             
         loss_mask = dealing_tr_mask[dealing_tr_mask==True][dealing_tr_mask.shift(-1)==False]
-        print loss_mask
         for p in loss_mask.keys():
             current_p_index = chip_view.index.get_loc(p)
-            print current_p_index
             offset = 1
             if chip_view.ix[p, 'pct_change'] > 0:
                 offset = -1
-            next_index = chip_view.index[current_p_index+offset]            
-            print next_index
             print chip_view
+            next_index = chip_view.index[current_p_index+offset]            
             chip_view.loc[next_index, 'turnover_ratio'] += chip_view.loc[p, 'turnover_ratio']
             chip_view.loc[p, 'turnover_ratio'] = 0         
         # after all moves, we remove any price level wth only pos tr left
         chip_view = chip_view[chip_view.turnover_ratio != 0]
-        print chip_view
         if (chip_view.turnover_ratio>0).all():
             break
     
@@ -122,8 +121,6 @@ def chip_change(avg, tr, chip_view):
         chip_view.loc[avg, 'turnover_ratio'] += tr
     else:
         chip_view.loc[avg, 'turnover_ratio'] = tr
-    print chip_view
-    print chip_view.ix[:,'turnover_ratio'].sum()
     return chip_view.sort_index()
         
 def work_out_change_portion(avg, chip_view, tr):
