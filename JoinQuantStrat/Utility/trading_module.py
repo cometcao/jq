@@ -109,7 +109,7 @@ def realAction_email_final():
         subject = orderString
         smtpserver = 'smtp.mail.yahoo.com' 
         username = 'hprotein@yahoo.com' 
-        password = 'Talent1031'
+        password = 't198412C'
         
         msg = MIMEText("JQ order",'plain') 
         msg['Subject'] = Header(subject)

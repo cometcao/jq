@@ -22,16 +22,36 @@ def two_eight_turn_v3(context, major, sub):
     price_sub = attribute_history(sub, 21, '1d', ('close'), df=False)
     major_delta = (price_major['close'][-1] - price_major['close'][0]) / price_major['close'][0]
     sub_delta = (price_sub['close'][-1] - price_sub['close'][0]) / price_sub['close'][0]
-    
+
+    log.info("growth for 80%% weighted with change rate %.2f%%" % (major_delta*100))
+    log.info("growth for 20%% weighted with change rate %.2f%%" % (sub_delta*100))
     if major_delta < 0 and sub_delta < 0:
         log.info("negative growth for all!")
         return -1
     elif major_delta > sub_delta:
-        log.info("positive growth for 80%% weighted with change rate %.2f%%" % (major_delta*100))
         return 8
     else:
-        log.info("positive growth for 20%% weighted with change rate %.2f%%" % (sub_delta*100))
         return 2
+    
+def two_eight_turn_inverse(context, major, sub):
+    price_major = attribute_history(major, 21, '1d', ('close'), df=False)
+    price_sub = attribute_history(sub, 21, '1d', ('close'), df=False)
+    major_delta = (price_major['close'][-1] - price_major['close'][0]) / price_major['close'][0]
+    sub_delta = (price_sub['close'][-1] - price_sub['close'][0]) / price_sub['close'][0]
+    
+    log.info("growth for 80%% weighted with change rate %.2f%%" % (major_delta*100))
+    log.info("growth for 20%% weighted with change rate %.2f%%" % (sub_delta*100))
+    if major_delta > 0 and sub_delta > 0:
+        if major_delta < sub_delta:
+            return 8
+        else:
+            return 2
+    elif major_delta < 0:
+        return 8    
+    elif sub_delta < 0:
+        return 2
+    else:
+        return -1
     
 def two_eight_turn_v4(context, major, sub):
     major_period = findPeriod_v2(major)
@@ -41,14 +61,14 @@ def two_eight_turn_v4(context, major, sub):
     major_delta = (price_major['close'][-1] - price_major['close'][0]) / price_major['close'][0]
     sub_delta = (price_sub['close'][-1] - price_sub['close'][0]) / price_sub['close'][0]
     
+    log.info("growth for 80%% weighted with change rate %.2f%%" % (major_delta*100))
+    log.info("growth for 20%% weighted with change rate %.2f%%" % (sub_delta*100))
     if major_delta < 0 and sub_delta < 0:
         log.info("negative growth for all!")
         return -1
     elif major_delta > sub_delta:
-        log.info("positive growth for 80%% weighted with change rate %.2f%%" % (major_delta*100))
         return 8
     else:
-        log.info("positive growth for 20%% weighted with change rate %.2f%%" % (sub_delta*100))
         return 2
     
 def two_eight_turn_macd(context, major, sub):
@@ -62,6 +82,25 @@ def two_eight_turn_macd(context, major, sub):
         return 2
     elif sub_hist[-1] < sub_hist[-2]:
         return 8
+    else:
+        major_growth = (major_hist[-1] - major_hist[-2]) / abs(major_hist[-2])
+        sub_growth = (sub_hist[-1] - sub_hist[-2]) / abs(sub_hist[-2])
+        if major_growth > sub_growth:
+            return 8
+        else:
+            return 2
+
+def two_eight_turn_macd_v2(context, major, sub):
+    major_df = attribute_history(major, 55, '1d', ('close'), skip_paused=True, df=False)
+    sub_df = attribute_history(sub, 55, '1d', ('close'), skip_paused=True, df=False) 
+    major_macd_raw, _, major_hist = MACD(major_df['close'])
+    sub_macd_raw, _, sub_hist = MACD(sub_df['close'])
+    if major_hist[-1] < 0 and sub_hist[-1] < 0:
+        return -1
+    elif sub_hist[-1] < 0:
+        return 8
+    elif major_hist[-1] < 0:
+        return 2
     else:
         major_growth = (major_hist[-1] - major_hist[-2]) / abs(major_hist[-2])
         sub_growth = (sub_hist[-1] - sub_hist[-2]) / abs(sub_hist[-2])
