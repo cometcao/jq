@@ -5,6 +5,7 @@ Created on 14 Jan 2017
 '''
 from kuanke.user_space_api import *
 from copy import deepcopy
+from scipy.signal import argrelextrema
 ############################### initial attempt, work out the cumulative turnover ratio ####################################
 ############################### and concentration based on price range #####################################################
 def cumsum_tr_concentration(df):
@@ -31,7 +32,7 @@ def initialIndex(df, collective_tr_sum):
         total += df.loc[dai, 'turnover_ratio']
         if total > collective_tr_sum:
             return i
-    return 0
+    return -1
 
 def fixed_tr_price_range_concentration(df, stock, con_ratio):
     collective_tr_sum = 200
@@ -53,12 +54,11 @@ def fixed_tr_price_range_concentration(df, stock, con_ratio):
 
 ##############################################################################################################################
 ################################## chip migration simulation ##############################
-def chip_migration(df):
-    collective_tr_sum = 100
+def chip_migration(df, collective_tr_sum = 100):
     row_size, _ = df.shape
     ii = initialIndex(df, collective_tr_sum)
-    if ii == row_size-1:
-        df.ix[-1, 'chip_density'] = 0
+    df.ix[-1, 'chip_density'] = 1
+    if ii == -1:
         return df
     
     initialDate = df.index[0]
@@ -93,10 +93,7 @@ def chip_change(avg, tr, chip_view):
         profit_mask = dealing_tr_mask[dealing_tr_mask==True][dealing_tr_mask.shift(1)==False]
         for p in profit_mask.keys():
             current_p_index = chip_view.index.get_loc(p)
-            offset = 1
-            if chip_view.ix[p, 'pct_change'] > 0:
-                offset = -1
-            print chip_view
+            offset = -1
             previous_index = chip_view.index[current_p_index+offset]
             chip_view.loc[previous_index, 'turnover_ratio'] += chip_view.loc[p, 'turnover_ratio']
             chip_view.loc[p, 'turnover_ratio'] = 0
@@ -105,9 +102,6 @@ def chip_change(avg, tr, chip_view):
         for p in loss_mask.keys():
             current_p_index = chip_view.index.get_loc(p)
             offset = 1
-            if chip_view.ix[p, 'pct_change'] > 0:
-                offset = -1
-            print chip_view
             next_index = chip_view.index[current_p_index+offset]            
             chip_view.loc[next_index, 'turnover_ratio'] += chip_view.loc[p, 'turnover_ratio']
             chip_view.loc[p, 'turnover_ratio'] = 0         
@@ -128,3 +122,34 @@ def work_out_change_portion(avg, chip_view, tr):
     total_change = abs(chip_view['pct_change']).sum()
     chip_view['change_portion'] = abs(chip_view['pct_change'])/total_change
     chip_view['moved_tr'] = chip_view['change_portion'] * tr
+
+def chip_concentration(context, stock_list):
+    density_dict = []
+    for stock in stock_list:
+        # print "working on stock %s" % stock
+        df = attribute_history(stock, count = 120, unit='1d', fields=('avg', 'volume'), skip_paused=True)
+        df_dates = df.index
+        for da in df_dates:
+            df_fund = get_fundamentals(query(
+                    valuation.turnover_ratio
+                ).filter(
+                    valuation.code.in_([stock])
+                ), date=da)
+            if not df_fund.empty:
+                df.loc[da, 'turnover_ratio'] = df_fund['turnover_ratio'][0]
+        df = df.dropna()
+        df = chip_migration(df)
+        concentration_number, latest_concentration_rate= analyze_chip_density(df)
+        density_dict.append((stock, concentration_number * latest_concentration_rate))
+    return sorted(density_dict, key=lambda x : x[1], reverse=True)
+
+def analyze_chip_density(df):
+    df = df.dropna()
+    df = df.drop_duplicates(cols='chip_density')
+    bottomIndex = argrelextrema(df.chip_density.values, np.less_equal,order=3)[0]
+    concentration_num = len(bottomIndex)
+    latest_concentration_rate = df.chip_density.values[-1] / df.chip_density[bottomIndex[-1]]
+    # print df.chip_density.values        
+    # print bottomIndex
+    # print concentration_num, latest_concentration_rate
+    return concentration_num, latest_concentration_rate
