@@ -77,6 +77,8 @@ def chip_migration(df, collective_tr_sum = 100):
         wave_range = (chip_view.index[-1] - chip_view.index[0]) / chip_view.index[0]
         density = chip_sum / wave_range
         df.loc[da, 'chip_density'] = density
+#         print chip_view.ix[:,'turnover_ratio'].sum()
+#         print chip_view
     return df
 
 def chip_change(avg, tr, chip_view):
@@ -107,6 +109,7 @@ def chip_change(avg, tr, chip_view):
             chip_view.loc[p, 'turnover_ratio'] = 0         
         # after all moves, we remove any price level wth only pos tr left
         chip_view = chip_view[chip_view.turnover_ratio != 0]
+#         print chip_view
         if (chip_view.turnover_ratio>0).all():
             break
     
@@ -126,7 +129,7 @@ def work_out_change_portion(avg, chip_view, tr):
 def chip_concentration(context, stock_list):
     density_dict = []
     for stock in stock_list:
-        # print "working on stock %s" % stock
+#         print "working on stock %s" % stock
         df = attribute_history(stock, count = 120, unit='1d', fields=('avg', 'volume'), skip_paused=True)
         df_dates = df.index
         for da in df_dates:

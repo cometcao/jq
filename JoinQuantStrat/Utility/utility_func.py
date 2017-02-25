@@ -25,61 +25,61 @@ def getAllStocks(context):
 #     return pddf.index.values
     return get_index_stocks("000001.XSHG") + get_index_stocks("399106.XSHE")
     
-#庄股值计算    
-def cow_stock_value(stock,stock_time) :
-    q = query(valuation).filter(valuation.code == stock)
-    try:
-        pb = get_fundamentals(q, stock_time)['pb_ratio'][0]
-        cap = get_fundamentals(q, stock_time)['circulating_market_cap'][0]
-    except:
-        return 0
-    if cap>100: return 0
-    num_fall=fall_money_day_3line(stock,120,20,60,160,stock_time)
-    num_cross=money_5_cross_60(stock,120,5,160,stock_time)
-    
-    return (num_fall*num_cross)/(pb*(cap**0.5))
-
-#计算脉冲（1.0版本）                 
-def  money_5_cross_60(stock , n,n1=5,n2=60,stock_time=datetime.datetime.now()):
-    if  not (n2 >n1 ) : 
-        log.info("fall_money_day 参数错误")
-        return 0 
-    #stock_m=attribute_history(stock, n+n2+1, '1d', ['money'], True)
-    stock_m=get_price(stock,count=n+n2+1,end_date=stock_time,frequency='daily', \
-                      fields=['money'], skip_paused=True)
-    #print(len(stock_m)) 
-    i=0
-    count=0
-    while i<n:
-        money_MA60=stock_m['money'][i+1:n2+i].mean()
-        money_MA60_before=stock_m['money'][i:n2-1+i].mean()
-        money_MA5=stock_m['money'][i+1+n2-n1:n2+i].mean()
-        money_MA5_before=stock_m['money'][i+n2-n1:n2-1+i].mean()
-        if (money_MA60_before-money_MA5_before)*(money_MA60-money_MA5)<0: 
-            count=count+1
-        i=i+1    
-    return count
-
-    
-#3条移动平均线计算缩量 
-def fall_money_day_3line(stock,n,n1=20,n2=60,n3=120,stock_time=datetime.datetime.now()):
-    if  not ( n3>n2 and n2 >n1 ) : 
-        log.info("fall_money_day 参数错误")
-        return 0 
-    #stock_m=attribute_history(stock, n+n3, '1d', ['money'], True)
-    stock_m=get_price(stock,count=n+n3,end_date=stock_time,frequency='daily', \
-                      fields=['money'], skip_paused=True)
-    #print(len(stock_m)) 
-    i=0
-    count=0
-    while i<n:
-        money_MA200=stock_m['money'][i:n3-1+i].mean()
-        money_MA60=stock_m['money'][i+n3-n2:n3-1+i].mean()
-        money_MA20=stock_m['money'][i+n3-n1:n3-1+i].mean()
-        if money_MA20<=money_MA60 and money_MA60<=money_MA200:
-            count=count+1
-        i=i+1
-    return count
+# #庄股值计算    
+# def cow_stock_value(stock,stock_time) :
+#     q = query(valuation).filter(valuation.code == stock)
+#     try:
+#         pb = get_fundamentals(q, stock_time)['pb_ratio'][0]
+#         cap = get_fundamentals(q, stock_time)['circulating_market_cap'][0]
+#     except:
+#         return 0
+#     if cap>100: return 0
+#     num_fall=fall_money_day_3line(stock,120,20,60,160,stock_time)
+#     num_cross=money_5_cross_60(stock,120,5,160,stock_time)
+#     
+#     return (num_fall*num_cross)/(pb*(cap**0.5))
+# 
+# #计算脉冲（1.0版本）                 
+# def  money_5_cross_60(stock , n,n1=5,n2=60,stock_time=datetime.datetime.now()):
+#     if  not (n2 >n1 ) : 
+#         log.info("fall_money_day 参数错误")
+#         return 0 
+#     #stock_m=attribute_history(stock, n+n2+1, '1d', ['money'], True)
+#     stock_m=get_price(stock,count=n+n2+1,end_date=stock_time,frequency='daily', \
+#                       fields=['money'], skip_paused=True)
+#     #print(len(stock_m)) 
+#     i=0
+#     count=0
+#     while i<n:
+#         money_MA60=stock_m['money'][i+1:n2+i].mean()
+#         money_MA60_before=stock_m['money'][i:n2-1+i].mean()
+#         money_MA5=stock_m['money'][i+1+n2-n1:n2+i].mean()
+#         money_MA5_before=stock_m['money'][i+n2-n1:n2-1+i].mean()
+#         if (money_MA60_before-money_MA5_before)*(money_MA60-money_MA5)<0: 
+#             count=count+1
+#         i=i+1    
+#     return count
+# 
+#     
+# #3条移动平均线计算缩量 
+# def fall_money_day_3line(stock,n,n1=20,n2=60,n3=120,stock_time=datetime.datetime.now()):
+#     if  not ( n3>n2 and n2 >n1 ) : 
+#         log.info("fall_money_day 参数错误")
+#         return 0 
+#     #stock_m=attribute_history(stock, n+n3, '1d', ['money'], True)
+#     stock_m=get_price(stock,count=n+n3,end_date=stock_time,frequency='daily', \
+#                       fields=['money'], skip_paused=True)
+#     #print(len(stock_m)) 
+#     i=0
+#     count=0
+#     while i<n:
+#         money_MA200=stock_m['money'][i:n3-1+i].mean()
+#         money_MA60=stock_m['money'][i+n3-n2:n3-1+i].mean()
+#         money_MA20=stock_m['money'][i+n3-n1:n3-1+i].mean()
+#         if money_MA20<=money_MA60 and money_MA60<=money_MA200:
+#             count=count+1
+#         i=i+1
+#     return count
 
 
 def getCirMcapInfo(context, num_limit=100, cir_cap_limit = 100, max_pe=200):

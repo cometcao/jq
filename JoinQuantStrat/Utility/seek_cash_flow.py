@@ -44,13 +44,13 @@ def money_5_cross_60(security_list,n, n1=5, n2=60):
     df = history(n+n2+1, unit='1d', field='money', security_list=security_list, skip_paused=True)
     s = df.apply(money_5_cross_60_count, args=(n,n1,n2,))
     return s
-
-def cow_stock_value(security_list):
+    
+def cow_stock_value(security_list, score_threthold = 20):
     df = get_fundamentals(query(
                                 valuation.code, valuation.pb_ratio, valuation.circulating_market_cap
                             ).filter(
                                 valuation.code.in_(security_list),
-                                valuation.circulating_market_cap <= 100
+                                valuation.circulating_market_cap <= 200
                             ))
     df.set_index('code', inplace=True, drop=True)
     s_fall = fall_money_day_3line(df.index.tolist(), 120, 20, 60, 160)
@@ -58,5 +58,6 @@ def cow_stock_value(security_list):
     df = pd.concat([df, s_fall, s_cross], axis=1, join='inner')
     df.columns = ['pb', 'cap', 'fall', 'cross']
     df['score'] = df['fall'] * df['cross'] / (df['pb']*(df['cap']**0.5))
+    df = df[df['score'] > score_threthold]
     df.sort(['score'], ascending=False, inplace=True)
     return(df)
