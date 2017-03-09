@@ -18,8 +18,8 @@
         每日指定时间，计算沪深300指数和中证500指数当前的20日涨幅，如果2个指数涨幅都为负，
         则清仓，重置调仓计数，待下次调仓条件满足再操作
 
-版本：v2.0.5
-日期：2016.08.30
+版本：v2.0.6
+日期：2016.08.31
 作者：Morningstar
 '''
 
@@ -28,117 +28,48 @@ from blacklist import *
 from api import *
 from webtrader import WebTrader
 import config
+from trading_module import *
 
-# blacklist.py
-# 建议在研究里建立文件blacklist.py，然后将这段代码拷贝进blacklist.py
-# 模拟运行的时候只需要更新研究里的数据即可，这样可在不修改模拟运行代码的情况下
-# 修改黑名单
-
-# 配置股票黑名单
-# 列出当且极不适宜购买的股票
-# 注：1. 黑名单有时效性，回测的时候最好不使用，模拟交易建议使用
-#     2. 用一模块或者大数据分析收集这类股票，定时更新
-# def get_blacklist():
-
-#   # 黑名单一览表，更新时间 2016.7.10 by 沙米
-#     # 科恒股份、太空板业，一旦2016年继续亏损，直接面临暂停上市风险
-#     blacklist = ["600656.XSHG","300372.XSHE","600403.XSHG","600421.XSHG","600733.XSHG","300399.XSHE",
-#                  "600145.XSHG","002679.XSHE","000020.XSHE","002330.XSHE","300117.XSHE","300135.XSHE",
-#                  "002566.XSHE","002119.XSHE","300208.XSHE","002237.XSHE","002608.XSHE","000691.XSHE",
-#                  "002694.XSHE","002715.XSHE","002211.XSHE","000788.XSHE","300380.XSHE","300028.XSHE",
-#                  "000668.XSHE","300033.XSHE","300126.XSHE","300340.XSHE","300344.XSHE","002473.XSHE"]
-#     return blacklist
-
-################################################# Trade below #########################################
-
-def copy(path):
-    c = read_file(path)
-    with open(path, 'wb') as f:
-        f.write(c)
-
-def loading(broker):
-    ''' 登陆 '''
-    user = use(broker)
+# def loading():
+#     ''' 登陆 '''
+#     user = use(config.trade_acc['use_xq'])
+#     user.prepare(config.trade_acc['json3_xq'])
+#     return user
     
-    if broker == config.trade_acc['use']:
-        user.prepare(config.trade_acc['json'])
-    elif broker == config.trade_acc['use_yjb']:
-        copy(config.trade_acc['jar_yjb'])    
-        user.prepare(config.trade_acc['json_yjb'])
-    elif broker == config.trade_acc['use_ht']:
-        copy(config.trade_acc['jar_ht'])
-        user.prepare(config.trade_acc['json_ht'])
-    return user
-    
-def check(user):
-    ''' 获取信息并输出 '''
-    log.info('获取今日委托单:')
-    log.info('今日委托单:', json.dumps(user.entrust,ensure_ascii=False))
-    log.info('-'*30)
-    log.info('获取资金状况:')
-    log.info('资金状况:', json.dumps(user.balance,ensure_ascii=False) )
-    log.info('enable_balance(可用金额):',  json.dumps(user.balance[0]['enable_balance'],ensure_ascii=False))
-    log.info('-'*30)
-    log.info('持仓:')
-    log.info('获取持仓:', json.dumps(user.position,ensure_ascii=False))
-    log.info('enable_amount(可卖数量):', json.dumps(user.position[0]['enable_amount'],ensure_ascii=False))
+# def check(user):
+#     ''' 获取信息并输出 '''
+#     # log.info('获取今日委托单:')
+#     # log.info('今日委托单:', json.dumps(user.entrust,ensure_ascii=False))
+#     log.info('-'*30)
+#     log.info('获取资金状况:')
+#     log.info('资金状况:', json.dumps(user.balance,ensure_ascii=False) )
+#     log.info('enable_balance(可用金额):',  json.dumps(user.balance[0]['enable_balance'],ensure_ascii=False))
+#     log.info('-'*30)
+#     log.info('持仓:')
+#     log.info('获取持仓:', json.dumps(user.position,ensure_ascii=False))
 
-def realAction(stock, pct):
-    # all actions mimic market order
-    if 'two_eight_real_action' in config.real_action and config.real_action['two_eight_real_action']:
-        current_data = get_current_data()
-        try:
-            realAction_xq(stock[:6], pct)
-            realAction_yjb(stock[:6], pct, current_data[stock].high_limit, current_data[stock].low_limit)
-        except:
-            log.info("We have issue on real actions!!")
+# def realAction(stock, value_pct):
+#     try:
+#         user = loading()
+#         check(user)
+#         log.info("stock [%s] is requested to be adjusted to weight %.2f pct" %(stock, value_pct))
+#         user.adjust_weight(stock[:6], value_pct)
+#     except:
+#         log.info("stock [%s] requested adjustment failed!!!" % (stock))
+#         send_message("Stock [%s] adjustment to %.2f failed for 二八小市值择时买卖_v2.0.6-Clone_easytrader " % (stock, value_pct), channel='weixin')
 
-def realAction_xq(stock, value_pct):
-    user = loading('xq')
-    check(user)
-    log.info("xue qiu stock [%s] is requested to be adjusted to weight %d pct" %(stock, value_pct))
-    user.adjust_weight(stock[:6], int(value_pct))
-    
-def realAction_yjb(stock, value_pct, high, low):
-    user = loading('yjb')
-    check(user)
-    log.info("yong jin bao stock [%s] is requested to be adjusted to weight %d pct" %(stock, value_pct))
-    if value_pct == 0 : # sell stock
-        for pos in user.position:
-            if pos['stock_code'] == stock and pos['enable_amount'] > 0:
-                current_price = pos['last_price']
-                own_amount = pos['current_amount']
-                sellable_amount = pos['enable_amount']
-                if own_amount != sellable_amount:
-                    log.info("we have %d unsellable amount" % (own_amount-sellable_amount))
-                user.sell(stock, price=low, amount=sellable_amount)
-    else:
-        port_value = user.balance[0]['current_balance']
-        cash = user.balance[0]['enable_balance']
-        already_owned = False
-        owned_value = 0.0
-        for pos in user.position:
-            if pos['stock_code'] == stock:
-                already_owned = True
-                owned_value = pos['market_value']
-                break
-        expected_value = port_value * value_pct / 100.0
-        if already_owned:
-            if expected_value > owned_value: # buy some
-                delta_value = expected_value - owned_value
-                user.buy(stock, price=high, volume=min(cash,delta_value))
-            else: # sell some
-                delta_value = owned_value - expected_value
-                user.sell(stock, price=low, volume=delta_value)
-        else:
-            user.buy(stock, price=high, volume=min(cash, expected_value))
-    
-def realAction_ht(stock, value_pct):
-    user = loading('ht')
-    check(user)
-    log.info("hua tai stock [%s] is requested to be adjusted to weight %d pct" %(stock, value_pct))
-    
-######################################################## Trade Above #################################################
+def realAction(stock, value_pct):
+    try:
+        realAction_xq_3(stock[:6], value_pct)
+        #pass
+    except:
+        traceback.print_exc()
+        log.info("We have an issue on xue qiu 3 actions!! for stock %s" % stock)
+        send_message("Stock [%s] adjustment to %.2f failed for 二八小市值择时买卖_v2.0.6-Clone_easytrader" % (stock, value_pct), channel='weixin')
+
+def after_code_changed(context):
+    g.adjust_position_hour = 14
+    g.adjust_position_minute = 45
 
 def before_trading_start(context):
     log.info("---------------------------------------------")
@@ -213,12 +144,12 @@ def initialize(context):
 
 def set_param():
     # 调仓频率，单位：日
-    g.period = 3
+    g.period = 10
     # 调仓日计数器，单位：日
     g.day_count = 0
     # 配置调仓时间（24小时分钟制）
     g.adjust_position_hour = 14
-    g.adjust_position_minute = 50
+    g.adjust_position_minute = 44
 
     # 配置选股参数
 
@@ -227,14 +158,14 @@ def set_param():
     
     # 配置选股参数
     # 是否根据PE选股
-    g.pick_by_pe = False
+    g.pick_by_pe = True
     # 如果根据PE选股，则配置最大和最小PE值
     if g.pick_by_pe:
         g.max_pe = 200
         g.min_pe = 0
 
     # 是否根据EPS选股
-    g.pick_by_eps = True
+    g.pick_by_eps = False
     # 配置选股最小EPS值
     if g.pick_by_eps:
         g.min_eps = 0
@@ -245,24 +176,24 @@ def set_param():
     g.filter_blacklist = True
 
     # 是否对股票评分
-    g.is_rank_stock = True
+    g.is_rank_stock = False
     if g.is_rank_stock:
         # 参与评分的股票数目
         g.rank_stock_count = 20
 
     # 买入股票数目
-    g.buy_stock_count = 2
+    g.buy_stock_count = 5
     
     # 配置二八指数
-    #g.index2 = '000300.XSHG'  # 沪深300指数，表示二，大盘股
-    #g.index8 = '000905.XSHG'  # 中证500指数，表示八，小盘股
-    g.index2 = '000016.XSHG'  # 上证50指数
-    g.index8 = '399333.XSHE'  # 中小板R指数
+    g.index2 = '000300.XSHG'  # 沪深300指数，表示二，大盘股
+    g.index8 = '000905.XSHG'  # 中证500指数，表示八，小盘股
+    #g.index2 = '000016.XSHG'  # 上证50指数
+    #g.index8 = '399333.XSHE'  # 中小板R指数
     #g.index8 = '399006.XSHE'  # 创业板指数
     
     # 判定调仓的二八指数20日增幅
-    #g.index_growth_rate_20 = 0.00
-    g.index_growth_rate_20 = 0.01
+    g.index_growth_rate_20 = 0.00
+    #g.index_growth_rate_20 = 0.01
 
     # 配置是否根据大盘历史价格止损
     # 大盘指数前130日内最高价超过最低价2倍，则清仓止损
@@ -280,10 +211,10 @@ def set_param():
     # 其次，分析历史行情看一般大盘出现三只乌鸦的时候，已经严重滞后了，使用其他止损方式可能会更好
     g.is_market_stop_loss_by_3_black_crows = False
     if g.is_market_stop_loss_by_3_black_crows:
-        g.dst_drop_minute_count = 10
+        g.dst_drop_minute_count = 60
 
     # 配置是否个股止损
-    g.is_stock_stop_loss =False
+    g.is_stock_stop_loss = True
     # 配置是否个股止盈
     g.is_stock_stop_profit = False
     
@@ -364,7 +295,7 @@ def handle_data(context, data):
     hour = context.current_dt.hour
     minute = context.current_dt.minute
     
-    # 每天下午14:50调仓
+    # 每天下午14:52调仓
     if hour == g.adjust_position_hour and minute == g.adjust_position_minute:
         do_handle_data(context, data)
 
@@ -394,10 +325,10 @@ def market_stop_loss_by_price(context, index):
     # 增加此止损，回撤降低，收益降低
 
     if not g.is_day_stop_loss_by_price:
-        h = attribute_history(index, 160, unit='1d', fields=('close', 'high', 'low'), skip_paused=True)
+        h = attribute_history(index, 130, unit='1d', fields=('close', 'high', 'low'), skip_paused=True)
         low_price_130 = h.low.min()
         high_price_130 = h.high.max()
-        if high_price_130 > 2.2 * low_price_130 and h['close'][-1]<h['close'][-4]*1 and  h['close'][-1]> h['close'][-100]:
+        if high_price_130 > 2 * low_price_130:
             # 当日第一次输出日志
             log.info("==> 大盘止损，%s指数前130日内最高价超过最低价2倍, 最高价: %f, 最低价: %f" %(get_security_info(index).display_name, high_price_130, low_price_130))
             g.is_day_stop_loss_by_price = True
@@ -409,8 +340,8 @@ def market_stop_loss_by_price(context, index):
     return g.is_day_stop_loss_by_price
 
 def market_stop_loss_by_3_black_crows(context, index, n):
-    # 前日三黑鸦，累计当日每分钟涨幅<0的分钟计数
-    # 如果分钟计数超过一定值，则开始进行三黑鸦止损
+    # 前日三黑鸦，累计当日大盘指数涨幅<0的分钟计数
+    # 如果分钟计数超过值n，则开始进行三黑鸦止损
     # 避免无效三黑鸦乱止损
     if g.is_last_day_3_black_crows:
         if get_growth_rate(index, 1) < 0:
@@ -418,7 +349,7 @@ def market_stop_loss_by_3_black_crows(context, index, n):
 
         if g.cur_drop_minute_count >= n:
             if g.cur_drop_minute_count == n:
-                log.info("==> 超过三黑鸦止损开始")
+                log.info("==> 当日%s为跌已超过%d分钟，执行三黑鸦止损" %(get_security_info(index).display_name, n))
 
             clear_position(context)
             g.day_count = 0
@@ -440,7 +371,7 @@ def is_3_black_crows(stock):
     # 算法
     # 有效三只乌鸦描述众说纷纭，这里放宽条件，只考虑1和2
     # 根据前4日数据判断
-    # 3根阴线跌幅超过4.5%
+    # 3根阴线跌幅超过4.5%（此条件忽略）
 
     h = attribute_history(stock, 4, '1d', ('close','open'), skip_paused=True, df=False)
     h_close = list(h['close'])
@@ -448,23 +379,15 @@ def is_3_black_crows(stock):
 
     if len(h_close) < 4 or len(h_open) < 4:
         return False
- 
-    # 三根阴线
-    if h_close[-4] > h_open[-4] \
-        and (h_close[-1] < h_close[-2] and h_close[-2] < h_close[-3]) \
-        and (h_close[-1] < h_open[-1] and h_close[-2]< h_open[-2] and h_close[-3] < h_open[-3]) \
-        and h_close[-1] / h_close[-3] - 1 < -0.045 and get_current_data(stock)< h_close[-1]*0.995:
-        return True
-    return False
-'''
- # 一阳三阴
+    
+    # 一阳三阴
     if h_close[-4] > h_open[-4] \
         and (h_close[-1] < h_open[-1] and h_close[-2]< h_open[-2] and h_close[-3] < h_open[-3]):
         #and (h_close[-1] < h_close[-2] and h_close[-2] < h_close[-3]) \
         #and h_close[-1] / h_close[-3] - 1 < -0.045:
         return True
     return False
-'''  
+    
 '''
 def is_3_black_crows(stock, data):
     # talib.CDL3BLACKCROWS
@@ -487,11 +410,10 @@ def is_3_black_crows(stock, data):
 def stock_stop_loss(context, data):
     for stock in context.portfolio.positions.keys():
         cur_price = data[stock].close
-        xi = attribute_history(stock, 2, '1d', 'high', skip_paused=True)
-        ma = xi.max()
+
         if g.last_high[stock] < cur_price:
             g.last_high[stock] = cur_price
-            
+
         threshold = get_stop_loss_threshold(stock, g.period)
         #log.debug("个股止损阈值, stock: %s, threshold: %f" %(stock, threshold))
         if cur_price < g.last_high[stock] * (1 - threshold):
@@ -566,7 +488,7 @@ def get_stop_profit_threshold(security, n = 3):
     # 理论上maxr可能为负
     if (not isnan(maxr)) and maxr != 0:
         return abs(maxr)
-    return 0.30 # 默认配置止盈阈值最大涨幅为20%
+    return 0.20 # 默认配置止盈阈值最大涨幅为20%
 
 # 获取股票n日以来涨幅，根据当前价计算
 # n 默认20日
@@ -822,11 +744,17 @@ def adjust_position(context, buy_stocks):
 
 更新：
 
+2016.08.31
+
+v2.0.6
+完善三黑鸦判定算法，放宽判定条件，在前日三黑鸦形态下，当日为跌的分钟计数达到指定
+值，则进行止损，此方法主要为了增加三黑鸦的有效性
+
 2016.08.30
 
 v2.0.5
-根据百度百科描述修正三黑鸦算法，根据前4日数据判断，然后根据当日较前日的增幅分钟
-计数判断是否止损，修正潜在bug
+根据百度百科描述修正三黑鸦算法，根据前4日数据判断，在三黑鸦形态下当日为跌的分钟计
+数达到指定值后，进行止损，修正潜在bug
 
 2016.08.19
 

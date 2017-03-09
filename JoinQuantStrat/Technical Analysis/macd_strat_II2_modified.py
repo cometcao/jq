@@ -22,6 +22,7 @@ from webtrader import WebTrader
 import tradestat
 import config
 from utility_func import *
+from trading_module import *
 
 # global constants
 macd_func = partial(talib.MACD, fastperiod=12,slowperiod=26,signalperiod=9)
@@ -34,33 +35,14 @@ def MACD(prices):
 
 #enable_profile()
 
-def loading():
-    ''' 登陆 '''
-    user = use(config.trade_acc['use_xq'])
-    user.prepare(config.trade_acc['json2_xq'])
-    return user
-    
-def check(user):
-    ''' 获取信息并输出 '''
-    log.info('获取今日委托单:')
-    log.info('今日委托单:', json.dumps(user.entrust,ensure_ascii=False))
-    log.info('-'*30)
-    log.info('获取资金状况:')
-    log.info('资金状况:', json.dumps(user.balance,ensure_ascii=False) )
-    log.info('enable_balance(可用金额):',  json.dumps(user.balance[0]['enable_balance'],ensure_ascii=False))
-    log.info('-'*30)
-    log.info('持仓:')
-    log.info('获取持仓:', json.dumps(user.position,ensure_ascii=False))
-
-def realAction(stock, value_pct):
-    if False and 'macd_real_action' in config.real_action and config.real_action['macd_real_action']:
+def realAction(stock, value_pct, context):
+    if 'macd_real_action' in config.real_action and config.real_action['macd_real_action'] and context.run_params.type == 'sim_trade':
         try:
-            user = loading()
-            check(user)
-            log.info("stock [%s] is requested to be adjusted to weight %d pct" %(stock, value_pct))
-            user.adjust_weight(stock[:6], int(value_pct))
+            realAction_xq_2(stock[:6], value_pct)
         except:
-            log.info("stock [%s] requested adjustment failed")
+            traceback.print_exc()
+            log.info("We have an issue on xue qiu 2 actions!! for stock %s" % stock)
+            send_message("Stock [%s] adjustment to %.2f failed for xue qiu 2" % (stock, value_pct), channel='weixin')        
 
 ########################################################################################################
 
@@ -112,7 +94,7 @@ def set_variables():
     g.msc = 60 # trigger sell action per X min / day
     g.buy_period_check_super = '5d' # '5d'
     g.buy_period_check = '1d' # '1d'
-    g.sell_period_check = '120m' # '60m'
+    g.sell_period_check = '90m' # '60m'
     g.sell_list = [] # if we have stocks failed to sell, we need to record it and try to sell the next day
     g.to_buy = []
     g.pct_change = {}
@@ -270,6 +252,7 @@ def handle_data(context,data):
                 #log.info("short %s from sell_list" % stock)
                 #order_target_value(stock, 0)
                 close_position(context.portfolio.positions[stock])
+                realAction(context.portfolio.positions[stock], 0, context)
         g.sell_list = []
     
     if g.m%g.msc==0: # try to check to sell 
@@ -298,12 +281,13 @@ def rebalance(to_sell, to_buy, context):
             #log.info("short %s - %s" % (security, get_security_info(security).display_name))
             #order_target_value(security, 0)
             close_position(context.portfolio.positions[security])
+            realAction(context.portfolio.positions[security], 0, context)
     for security in to_buy:
         if context.portfolio.cash > context.portfolio.portfolio_value/g.total_num_of_pos and security not in context.portfolio.positions and not inOpenOrder(security):
             #log.info("long %s - %s" % (security, get_security_info(security).display_name))
             #order_target_value_new(security, context.portfolio.portfolio_value/g.total_num_of_pos)   
             open_position(security, context.portfolio.portfolio_value/g.total_num_of_pos)
-            realAction(security, 100/g.total_num_of_pos)
+            realAction(security, 100/g.total_num_of_pos, context)
 
 
 def check_to_sell(context, data):
@@ -371,10 +355,11 @@ def macd_bottom_divergence(df, df_s, context, stock):
     #macd_raw, _, hist = MACD(df['close'])
     #macd_raw_s, _, hist_s = MACD(df_s['close'])
     
-    #checkResult = checkAtBottomDoubleCross(macd_raw, hist, df['low']) 
     # checkResult, slope = checkAtBottomGoldCross(macd_raw, hist, df['low']) 
     # g.macd_slope[slope] = stock
     # return checkResult
+    
+    #checkResult = checkAtBottomDoubleCross(macd_raw, hist, df['low']) 
     #if np.isnan(hist_s[-1]) or np.isnan(hist_s[-2]):
     #    return False
     #else:
@@ -536,7 +521,6 @@ def open_position(security, amount):
 
 def close_position(position):
     security = position.security
-    realAction(security, 0)
     order = order_target_value_new(security, 0) # 可能会因停牌失败
     if order != None:
         if order.filled > 0:

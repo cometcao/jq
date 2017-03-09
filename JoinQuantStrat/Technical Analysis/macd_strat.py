@@ -21,6 +21,7 @@ from api import *
 from webtrader import WebTrader
 import tradestat
 import config
+from trading_module import *
 
 # global constants
 macd_func = partial(talib.MACD, fastperiod=12,slowperiod=26,signalperiod=9)
@@ -28,33 +29,14 @@ macd_func = partial(talib.MACD, fastperiod=12,slowperiod=26,signalperiod=9)
 
 #enable_profile()
 
-def loading():
-    ''' 登陆 '''
-    user = use(config.trade_acc['use_xq'])
-    user.prepare(config.trade_acc['json2_xq'])
-    return user
-    
-def check(user):
-    ''' 获取信息并输出 '''
-    log.info('获取今日委托单:')
-    log.info('今日委托单:', json.dumps(user.entrust,ensure_ascii=False))
-    log.info('-'*30)
-    log.info('获取资金状况:')
-    log.info('资金状况:', json.dumps(user.balance,ensure_ascii=False) )
-    log.info('enable_balance(可用金额):',  json.dumps(user.balance[0]['enable_balance'],ensure_ascii=False))
-    log.info('-'*30)
-    log.info('持仓:')
-    log.info('获取持仓:', json.dumps(user.position,ensure_ascii=False))
-
 def realAction(stock, value_pct):
-    if False and 'macd_real_action' in config.real_action and config.real_action['macd_real_action']:
+    if 'macd_real_action' in config.real_action and config.real_action['macd_real_action']:
         try:
-            user = loading()
-            check(user)
-            log.info("stock [%s] is requested to be adjusted to weight %d pct" %(stock, value_pct))
-            user.adjust_weight(stock[:6], int(value_pct))
+            realAction_xq_2(stock[:6], value_pct)
         except:
-            log.info("stock [%s] requested adjustment failed")
+            traceback.print_exc()
+            log.info("We have an issue on xue qiu 2 actions!! for stock %s" % stock)
+            send_message("Stock [%s] adjustment to %.2f failed for xue qiu 2" % (stock, value_pct), channel='weixin')        
 
 ########################################################################################################
 
@@ -76,16 +58,16 @@ def displayVar():
     log.info("g.tailing_stop_loss: %f" % g.tailing_stop_loss)
     log.info("################################################")    
     
-# def after_code_changed(context):
-#     g.stock_domain = '000002.XSHG'
-#     g.stock_filter = True
-#     g.dynamic_stop_loss = True
-#     g.allow_stop_loss = True
-#     g.total_num_of_pos = 5
-#     g.trading_hour = 10
-#     g.trading_minute = 42
-#     g.botUseZvalue = True
-#     g.topUseZvalue = True
+def after_code_changed(context):
+    g.stock_domain = '000002.XSHG'
+    g.stock_filter = True
+    g.dynamic_stop_loss = True
+    g.allow_stop_loss = True
+    g.total_num_of_pos = 5
+    g.trading_hour = 10
+    g.trading_minute = 42
+    g.botUseZvalue = True
+    g.topUseZvalue = True
 
 def set_variables():
     g.user = None
@@ -207,7 +189,7 @@ def before_trading_start(context):
         # g.feasible_stocks = pddf.index.values
         filterStockList(context)
         #g.feasible_stocks = set_feasible_stocks(get_index_stocks(g.stock_domain),g.number_of_days,context)
-
+        #g.sell_list += [x for x in context.portfolio.positions.keys() if x not in check_to_hold(context)]
         g.to_buy = check_to_buy(context)
     g.t+=1
 
@@ -289,6 +271,10 @@ def handle_data(context,data):
     """
     Called every period preset.
     """
+    do_handle_data(context, data)
+
+
+def do_handle_data(context,data):
     if g.sell_list:
         for stock in g.sell_list:
             if stock in context.portfolio.positions:
@@ -315,7 +301,8 @@ def handle_data(context,data):
     
     # to_buy = check_to_buy(context)
     # to_sell = check_to_sell(context, data)
-    # rebalance(to_sell, to_buy, context)
+    # rebalance(to_sell, to_buy, context)    
+
 
 def inOpenOrder(security):
     orders = get_open_orders()
@@ -337,6 +324,11 @@ def rebalance(to_sell, to_buy, context):
             open_position(security, context.portfolio.portfolio_value/g.total_num_of_pos)
             realAction(security, 100/g.total_num_of_pos)
 
+
+def check_to_hold(context):
+    # check if current holdings are still qualified for possession
+    to_hold = [x[1] for x in filterByAnal(context.portfolio.positions.keys(), context)]
+    return to_hold
 
 def check_to_sell(context, data):
     to_sell = []
