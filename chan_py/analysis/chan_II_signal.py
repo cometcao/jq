@@ -10,6 +10,9 @@ import config
 import pandas as pd
 import numpy as np
 import datetime
+import talib
+import macd_divergence
+from utility_func import *
 from scipy.signal import argrelextrema
 
 class chan_II_signal():
@@ -53,10 +56,52 @@ class chan_II_signal():
 
         # 2. check we have a deficient of momentum in sub level
         if isAtPrimeLevel:
-            buy_signal = self.checkSubLevelInBuyPoint(dataFrame_s, stock)
+            buy_signal = self.checkSubLevelInBuyPoint(dataFrame_s, stock) 
+    
+        # 3. check we have a deficient of central region divergence in super level (todo)
+        return buy_signal
+
+    def check_II_buy_signal_v2(self, stock):
+        buy_signal = False
+        
+        dataFrame_p = attribute_history(stock, 60, '1d', ('high', 'low', 'close', 'volume'), df=True)
+        
+        dataFrame_s = attribute_history(stock, 60, '30m', ('high', 'low', 'close', 'volume'), df=True)
+        
+        # 1. check we had a primary level of price rise, and fallback followed
+        isAtPrimeLevel = self.checkPrimeLevelInBuyPoint_v2(dataFrame_p, stock)
+
+        # 2. check we have a deficient of momentum in sub level
+        if isAtPrimeLevel:
+            buy_signal = self.checkSubLevelInBuyPoint(dataFrame_s, stock) 
             
         # 3. check we have a deficient of central region divergence in super level (todo)
-    
+        return buy_signal
+        
+    def check_II_buy_signal_v3(self, stock):
+        buy_signal = False
+        
+        dataFrame_p = attribute_history(stock, 60, '1d', ('high', 'low', 'close', 'volume'), df=True)
+        
+        dataFrame_s = attribute_history(stock, 60, '30m', ('high', 'low', 'close', 'volume'), df=True)
+        
+        profit_threthold = get_stop_profit_threshold(stock)  
+        
+        recent_period = findPeriod_v2(stock)
+        loss_threthold = get_stop_loss_threshold(stock, recent_period)
+        
+        # 1. check we had a primary level of price rise, and fallback followed
+        isAtPrimeLevel = self.checkPrimeLevelInBuyPoint_v2(dataFrame_p, stock, profit_threthold, loss_threthold)
+
+        # 2. check we have a deficient of momentum in sub level
+        if isAtPrimeLevel:
+            md = macd_divergence.macd_divergence()
+            dataFrame_s['macd_raw'], _, dataFrame_s['macd'] = MACD(dataFrame_s['close'].values)
+            dataFrame_s.loc[:,'vol_ma'] = talib.SMA(dataFrame_s['volume'].values, 5)
+            buy_signal = self.checkSubLevelInBuyPoint(dataFrame_s, stock) or \
+                        md.checkAtBottomDoubleCross_v2(dataFrame_s)
+            
+        # 3. check we have a deficient of central region divergence in super level (todo)
         return buy_signal
     
     def findMaxMin(self, df):
@@ -78,6 +123,8 @@ class chan_II_signal():
             
             recent_low_datetime = prime_df['low'].index[bottomIndex[-1]]
             recent_high_datetime = prime_df['high'].index[topIndex[-1]]
+            
+            prime_df.loc[:,'vol_ma'] = talib.SMA(prime_df['volume'].values, 5)
 #             if stock == '300035.XSHE':
 #                 print "check stock %s with recent_low %f recent_high %f min %f" % (stock, recent_low, recent_high, minBot)
 #                 print "at time %s, %s, %s" % (recent_low_datetime, recent_high_datetime, minBot_datetime)
@@ -85,7 +132,8 @@ class chan_II_signal():
             if recent_low_datetime > recent_high_datetime > minBot_datetime and \
             recent_high > recent_price >= recent_low > minBot and \
             (recent_high - minBot) / minBot >= advance_margin and \
-            (recent_high - recent_low) / (recent_high - minBot) >= fallback_margin:
+            (recent_high - recent_low) / (recent_high - minBot) >= fallback_margin and \
+            prime_df.loc[recent_high_datetime, 'vol_ma'] > prime_df.vol_ma[-1]:
                 chan_II_signal.recent_prime_level_top[stock] = (recent_high_datetime, recent_low_datetime)
                 return True
         return False
