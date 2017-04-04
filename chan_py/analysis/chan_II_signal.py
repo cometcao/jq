@@ -20,24 +20,23 @@ class chan_II_signal():
     This class analyze II signal (buy/sell) from Chan theory. A simplified version of II signal, 
     without any central region analysis
     '''
-    buy_signal_record = {}
-    recent_prime_level_top= {}
-    recent_prime_level_change_pct = {}
     def __init__(self):
         '''
         Constructor
         '''
+        self.buy_signal_record = {}
+        self.recent_prime_level_top = {}
         pass
     
     def clearDict(self):
         # called at end of trading day
         #chan_II_signal.recent_prime_level_top = {}
-        for stock in chan_II_signal.recent_prime_level_top.keys():
-            if stock not in chan_II_signal.buy_signal_record.keys():
-                del chan_II_signal.recent_prime_level_top[stock]
+        for stock in self.recent_prime_level_top.keys():
+            if stock not in self.buy_signal_record.keys():
+                del self.recent_prime_level_top[stock]
     
     def getPeriod(self, stock):
-        recent_high_datetime, recent_low_datetime = chan_II_signal.recent_prime_level_top[stock]
+        recent_high_datetime, recent_low_datetime = self.recent_prime_level_top[stock]
         delta = recent_low_datetime - recent_high_datetime
         return delta.days
     
@@ -134,7 +133,7 @@ class chan_II_signal():
             (recent_high - minBot) / minBot >= advance_margin and \
             (recent_high - recent_low) / (recent_high - minBot) >= fallback_margin and \
             prime_df.loc[recent_high_datetime, 'vol_ma'] > prime_df.vol_ma[-1]:
-                chan_II_signal.recent_prime_level_top[stock] = (recent_high_datetime, recent_low_datetime)
+                self.recent_prime_level_top[stock] = (recent_high_datetime, recent_low_datetime)
                 return True
         return False
         
@@ -167,7 +166,7 @@ class chan_II_signal():
             if recent_high / previous_low >= config.margin['minimum_advance_margin'] and (recent_high - recent_low) / (recent_high - previous_low) >= config.margin['minimum_fallback_margin']:
                 # check current price hasn't moved to far from recent low
                 if recent_price / recent_low < config.margin['minimum_divergence_margin_upper'] and recent_price / recent_low > config.margin['minimum_divergence_margin_lower']:
-                    chan_II_signal.recent_prime_level_top[stock] = (recent_high_datetime, recent_low_datetime)
+                    self.recent_prime_level_top[stock] = (recent_high_datetime, recent_low_datetime)
                     return True
         return False
 
@@ -187,10 +186,10 @@ class chan_II_signal():
         
         '''
         #recent_price = sub_df['close'][-1]
-        if stock not in chan_II_signal.recent_prime_level_top or stock in chan_II_signal.buy_signal_record:
+        if stock not in self.recent_prime_level_top or stock in self.buy_signal_record:
             return False
         
-        recent_high_datetime, recent_low_datetime = chan_II_signal.recent_prime_level_top[stock]
+        recent_high_datetime, recent_low_datetime = self.recent_prime_level_top[stock]
         
         work_df = sub_df.ix[recent_high_datetime:recent_low_datetime] 
         return self.checkInBuyPoint(work_df, stock)
@@ -231,19 +230,19 @@ class chan_II_signal():
                 if third_high > third_low and third_low_idx > third_high_idx and recent_ratio < second_ratio:
                     third_ratio = (third_high - third_low) / (third_low_idx - third_high_idx)
                     if third_ratio > second_ratio:
-                        chan_II_signal.buy_signal_record[stock] = df.index[-1].strftime("%Y-%m-%d %H:%M:%S")
+                        self.buy_signal_record[stock] = df.index[-1].strftime("%Y-%m-%d %H:%M:%S")
                         return True
         return False        
     
     def checkInSellPoint(self, sub_df, stock):
-        if sub_df.empty or stock not in chan_II_signal.buy_signal_record:
+        if sub_df.empty or stock not in self.buy_signal_record:
             return False
         
-        _, past_low_datetime = chan_II_signal.recent_prime_level_top[stock]
+        _, past_low_datetime = self.recent_prime_level_top[stock]
         
         # the stock to sell has to be in the buy_signal_record dict 
         # otherwise we have some problems
-        work_df = sub_df[sub_df.index > chan_II_signal.buy_signal_record[stock]]
+        work_df = sub_df[sub_df.index > self.buy_signal_record[stock]]
         topIndex, bottomIndex, high, low = self.findMaxMin(work_df)
 
         if len(topIndex) < 2 or len(bottomIndex) < 2:
