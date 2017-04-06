@@ -122,18 +122,21 @@ def select_strategy(context):
             'index':'000001.XSHG',  # 使用的指数,默认 '000001.XSHG'
              'dst_drop_minute_count':60,  # 可选，在三乌鸦触发情况下，一天之内有多少分钟涨幅<0,则触发止损，默认60分钟
             }],
-        # [False,'_Stop_loss_by_growth_rate_','当日指数涨幅止损器',Stop_loss_by_growth_rate,{
-        #     'index':'000001.XSHG',  # 使用的指数,默认 '000001.XSHG'
-        #      'stop_loss_growth_rate':-0.05,
-        #     }],
-        # [False,'','28实时止损',Stop_loss_by_28_index,{
-        #             'index2' : '000016.XSHG',       # 大盘指数
-        #             'index8' : '399333.XSHE',       # 小盘指数
-        #             'index_growth_rate': 0.01,      # 判定调仓的二八指数20日增幅
-        #             'dst_minute_count_28index_drop': 120 # 符合条件连续多少分钟则清仓
-        #         }],
+        [False,'','_Stop_loss_by_growth_rate_','当日指数涨幅止损器',Stop_loss_by_growth_rate,{
+            'index':'000001.XSHG',  # 使用的指数,默认 '000001.XSHG'
+             'stop_loss_growth_rate':-0.05,
+            }],
+        [False,'','28实时止损',Stop_loss_by_28_index,{
+                    'index2' : '000016.XSHG',       # 大盘指数
+                    'index8' : '399333.XSHE',       # 小盘指数
+                    'index_growth_rate': 0.01,      # 判定调仓的二八指数20日增幅
+                    'dst_minute_count_28index_drop': 120 # 符合条件连续多少分钟则清仓
+                }],
         [True,'','调仓时间',Time_condition,{
-                'times': [[14,44]],
+            'sell_hour': 14,  # 调仓时间,小时
+            'sell_minute': 50,  # 调仓时间，分钟
+            'buy_hour': 14,  # 调仓时间,小时
+            'buy_minute': 50 # 调仓时间，分钟
             }],
         [True,'','28调仓择时',Index28_condition,{  # 该调仓条件可能会产生清仓行为
                 'index2' : '000016.XSHG',  # 大盘指数
@@ -149,7 +152,7 @@ def select_strategy(context):
     g.pick_stock_by_query_config = [
         [False,'','选取小市值',Pick_small_cap,{}],
         [True,'','选取庄股',Pick_by_market_cap,{'mcap_limit':300}],
-        [True,'','选取庄股（流通市值）',Pick_by_cir_market_cap,{'cir_mcap_limit':300}],
+        [False,'','选取庄股（流通市值）',Pick_by_cir_market_cap,{'cir_mcap_limit':300}],
         # [False'',,'过滤PE',Filter_pe,{
         #     'pe_min':0                          # 最小PE
         #     ,'pe_max':200                       # 最大PE
@@ -190,7 +193,8 @@ def select_strategy(context):
         [False,'','买入股票',Buy_stocks,{
             'buy_count': 4  # 最终买入股票数
             }],
-        [True,'','按比重买入股票',Buy_stocks_portion,{'buy_count':3}]
+        [False,'','按比重买入股票',Buy_stocks_portion,{'buy_count':3}],
+        [True,'','VaR方式买入股票', Buy_stocks_var, {'buy_count': 3}]
     ]
 
     # 判断是否在模拟盘运行
@@ -249,13 +253,40 @@ def create_rules(config):
     # config里 0.是否启用，1.描述，2.规则实现类名，3.规则传递参数(dict)]
     return [create_rule(c[g.cs_class_name],c[g.cs_name],c[g.cs_param],c[g.cs_memo]) for c in config if c[g.cs_enabled]]
 
+
+
+# 1 设置参数
+def set_params():
+    # 设置基准收益
+    set_benchmark('000300.XSHG')
+
+
+# 2 设置中间变量
+def set_variables(context):
+    # 设置 VaR 仓位控制参数。风险敞口: 0.05,
+    # 正态分布概率表，标准差倍数以及置信率: 0.96, 95%; 2.06, 96%; 2.18, 97%; 2.34, 98%; 2.58, 99%; 5, 99.9999%
+    # 赋闲资金可以买卖银华日利做现金管理: ['511880.XSHG']
+    set_slip_fee(context)
+    context.pc_var = PositionControlVar(context, 0.07, 2.18, [])
+
+
+# 3 设置回测条件
+def set_backtest():
+    set_option('use_real_price', True)  # 用真实价格交易
+    log.set_level('order', 'error')
+    log.set_level('strategy', 'info')
+
+
 def initialize(context):
     log.info("==> initialize @ %s" % (str(context.current_dt)))
     try:
-        set_commission(PerTrade(buy_cost=0.0003,sell_cost=0.0013,min_cost=5))
-        set_benchmark('000300.XSHG')
-        set_option('use_real_price',True)
-        log.set_level('order','error')
+        set_params()  # 1设置策略参数
+        set_variables(context)  # 2设置中间变量
+        set_backtest()  # 3设置回测条件
+        # set_commission(PerTrade(buy_cost=0.0003,sell_cost=0.0013,min_cost=5))
+        # set_benchmark('000300.XSHG')
+        # set_option('use_real_price',True)
+        # log.set_level('order','error')
     except:
         pass
     # 判定是否是模拟盘状态
@@ -597,26 +628,66 @@ class Adjust_position(Rule):
         pass
 
 '''-------------------------调仓时间控制器-----------------------'''
+# class Time_condition(Adjust_condition):
+#     def __init__(self,params):
+#         # 配置调仓时间（24小时分钟制）
+#         self.times = params.get('times',[])
+#     def update_params(self,context,params):
+#         self.times = params.get('times',self.times)
+#         pass
+#     @property
+#     def can_adjust(self):
+#         return self.t_can_adjust
+
+#     def handle_data(self,context,data):
+#         hour = context.current_dt.hour
+#         minute = context.current_dt.minute
+#         self.t_can_adjust = [hour,minute ] in self.times
+#         pass
+
+#     def __str__(self):
+#         return '调仓时间控制器: [调仓时间: %s ]' % (
+#                 str(['%d:%d' % (x[0],x[1]) for x in self.times]))
+                
 class Time_condition(Adjust_condition):
-    def __init__(self,params):
+    """调仓时间控制器"""
+
+    def __init__(self, params):
         # 配置调仓时间（24小时分钟制）
-        self.times = params.get('times',[])
-    def update_params(self,context,params):
-        self.times = params.get('times',self.times)
-        pass
+        self.sell_hour = params.get('sell_hour', 10)
+        self.sell_minute = params.get('sell_minute', 15)
+        self.buy_hour = params.get('buy_hour', 14)
+        self.buy_minute = params.get('buy_minute', 50)
+
+    def update_params(self, context, params):
+        self.sell_hour = params.get('sell_hour', self.sell_hour)
+        self.sell_minute = params.get('sell_minute', self.sell_minute)
+        self.buy_hour = params.get('buy_hour', self.buy_hour)
+        self.buy_minute = params.get('buy_minute', self.buy_minute)
+
     @property
     def can_adjust(self):
         return self.t_can_adjust
 
-    def handle_data(self,context,data):
+    def handle_data(self, context, data):
         hour = context.current_dt.hour
         minute = context.current_dt.minute
-        self.t_can_adjust = [hour,minute ] in self.times
-        pass
+        self.t_can_adjust = False
+        if (hour == self.sell_hour and minute == self.sell_minute):
+            self.t_can_adjust = True
+            context.flags_can_sell = True
+        else:
+            context.flags_can_sell = False
+        if (hour == self.buy_hour and minute == self.buy_minute):
+            self.t_can_adjust = True
+            context.flags_can_buy = True
+        else:
+            context.flags_can_buy = False
 
     def __str__(self):
-        return '调仓时间控制器: [调仓时间: %s ]' % (
-                str(['%d:%d' % (x[0],x[1]) for x in self.times]))
+        return '调仓时间控制器: [卖出时间: %d:%d] [买入时间: %d:%d]' % (
+            self.sell_hour, self.sell_minute, self.buy_hour, self.buy_minute)
+
 '''-------------------------调仓日计数器-----------------------'''
 class Period_condition(Adjust_condition):
     def __init__(self,params):
@@ -1007,6 +1078,44 @@ class Buy_stocks_weighted(Adjust_position):
                 if self.open_position(stock, value):
                     if len(context, portfolio.positions) == self.buy_count:
                         break
+
+class Buy_stocks_var(Adjust_position):
+    """使用 VaR 方法做调仓控制"""
+
+    def __init__(self, params):
+        self.buy_count = params.get('buy_count', 3)
+
+    def update_params(self, context, params):
+        self.buy_count = params.get('buy_count', self.buy_count)
+
+    def adjust(self, context, data, buy_stocks):
+        if not context.flags_can_buy:
+            self.log_warn('无法执行买入!! context.flags_can_buy 未开启')
+            return
+        # 买入股票或者进行调仓
+        # 始终保持持仓数目为g.buy_stock_count
+        position_count = len(context.portfolio.positions)
+        if self.buy_count > position_count:
+            buy_num = self.buy_count - position_count
+            context.pc_var.buy_the_stocks(context, buy_stocks[:buy_num])
+        else:
+            context.pc_var.func_rebalance(context)
+        pass
+
+    def __str__(self):
+        return '股票调仓买入规则：使用 VaR 方式买入或者调整股票达目标股票数'
+
+# 剔除上市时间较短的基金产品
+def delete_new_moneyfund(context, equity, deltaday):
+    deltaDate = context.current_dt.date() - datetime.timedelta(deltaday)
+
+    tmpList = []
+    for stock in equity:
+        if get_security_info(stock).start_date < deltaDate:
+            tmpList.append(stock)
+
+    return tmpList
+
 
 '''---------------个股止损--------------'''
 class Stop_loss_stocks(Rule):
@@ -1637,6 +1746,42 @@ class Shipane_sync_p(Rule):
     def __str__(self):
         return '实盘易对接券商 [host: %s:%d  key: %s client:%s]' % (self.host,self.port,self.key,self._client_param)
 
+'''-----------------根据XueQiuOrder下单------------------------'''
+class XueQiu_order(Rule):
+    def __init__(self,params):
+        pass
+
+    def update_params(self,context,params):
+        pass
+    
+    def get_executor(self):
+        if self.executor == None:
+            # self.executor =
+            pass
+        return self.executor
+        
+    def after_trading_end(self,context):
+        self.executor = None
+        pass
+
+    # 卖出股票时调用的函数
+    def when_sell_stock(self,position,order,is_normal):
+        try:
+            # self.get_executor().execute(order)
+            pass
+        except:
+            self.log_error('实盘易卖股失败:' + str(order))
+        pass
+    
+    # 买入股票时调用的函数
+    def when_buy_stock(self,stock,order):
+        try:
+            # self.get_executor().execute(order)
+            pass
+        except:
+            self.log_error('实盘易卖股失败:' + str(order))
+        pass
+
 '''-----------------根据聚宽Order用实盘易下单------------------'''
 class Shipane_order(Rule):
     def __init__(self,params):
@@ -1752,3 +1897,220 @@ def get_growth_rate(security,n=20):
 # 获取前n个单位时间当时的收盘价
 def get_close_price(security,n,unit='1d'):
     return attribute_history(security,n,unit,('close'),True)['close'][0]
+
+
+# ===================== VaR仓位控制 ===============================================
+
+class PositionControlVar(object):
+    """基于风险价值法（VaR）的仓位控制"""
+
+    def __init__(self, context, risk_money_ratio=0.05, confidencelevel=2.58, moneyfund=['511880.XSHG']):
+        """ 相关参数说明：
+            1. 设置风险敞口
+            risk_money_ratio = 0.05
+
+            2. 正态分布概率表，标准差倍数以及置信率
+                1.96, 95%; 2.06, 96%; 2.18, 97%; 2.34, 98%; 2.58, 99%; 5, 99.9999%
+            confidencelevel = 2.58
+
+            3. 使用赋闲资金做现金管理的基金(银华日利)
+            moneyfund = ['511880.XSHG']
+        """
+        self.risk_money = context.portfolio.portfolio_value * risk_money_ratio
+        self.confidencelevel = confidencelevel
+        self.moneyfund = delete_new_moneyfund(context, moneyfund, 60)
+
+    def __str__(self):
+        return 'VaR仓位控制'
+
+    # 卖出股票
+    def sell_the_stocks(self, context, stocks):
+        for stock in stocks:
+            if stock in context.portfolio.positions.keys():
+                # 这段代码不甚严谨，多产品轮动会有问题，本案例 OK
+                if stock not in self.moneyfund:
+                    equity_ratio = {}
+                    equity_ratio[stock] = 0
+                    trade_ratio = self.func_getequity_value(context, equity_ratio)
+                    self.func_trade(context, trade_ratio)
+
+    # 买入股票
+    def buy_the_stocks(self, context, stocks):
+        equity_ratio = {}
+        ratio = 1.0 / len(stocks)       # TODO 需要比照原始代码确认逻辑是否正确
+        for stock in stocks:
+            equity_ratio[stock] = ratio
+        trade_ratio = self.func_getequity_value(context, equity_ratio)
+        self.func_trade(context, trade_ratio)
+
+    # 股票调仓
+    def func_rebalance(self, context):
+        myholdlist = list(context.portfolio.positions.keys())
+        if myholdlist:
+            for stock in myholdlist:
+                if stock not in self.moneyfund:
+                    equity_ratio = {stock: 1.0}
+                    trade_ratio = self.func_getequity_value(context, equity_ratio)
+                    self.func_trade(context, trade_ratio)
+
+    # 根据预设的 risk_money 和 confidencelevel 来计算，可以买入该多少权益类资产
+    def func_getequity_value(self, context, equity_ratio):
+        def __func_getdailyreturn(stock, freq, lag):
+            hStocks = history(lag, freq, 'close', stock, df=True)
+            dailyReturns = hStocks.resample('D', how='last').pct_change().fillna(value=0, method=None, axis=0).values
+            return dailyReturns
+
+        def __func_getStd(stock, freq, lag):
+            dailyReturns = __func_getdailyreturn(stock, freq, lag)
+            std = np.std(dailyReturns)
+            return std
+
+        def __func_getEquity_value(__equity_ratio, __risk_money, __confidence_ratio):
+            __equity_list = list(__equity_ratio.keys())
+            hStocks = history(1, '1d', 'close', __equity_list, df=False)
+
+            __curVaR = 0
+            __portfolio_VaR = 0
+
+            for stock in __equity_list:
+                # 每股的 VaR，VaR = 上一日的价格 * 置信度换算得来的标准倍数 * 日收益率的标准差
+                __curVaR = hStocks[stock] * __confidence_ratio * __func_getStd(stock, '1d', 120)
+                # 一元会分配买多少股
+                __curAmount = 1 * __equity_ratio[stock] / hStocks[stock]  # 1单位资金，分配时，该股票可以买多少股
+                __portfolio_VaR += __curAmount * __curVaR  # 1单位资金时，该股票上的实际风险敞口
+
+            if __portfolio_VaR:
+                __equity_value = __risk_money / __portfolio_VaR
+            else:
+                __equity_value = 0
+
+            if isnan(__equity_value):
+                __equity_value = 0
+
+            return __equity_value
+
+        risk_money = self.risk_money
+        equity_value, bonds_value = 0, 0
+
+        equity_value = __func_getEquity_value(equity_ratio, risk_money, self.confidencelevel)
+        portfolio_value = context.portfolio.portfolio_value
+        if equity_value > portfolio_value:
+            portfolio_value = equity_value  # TODO: 是否有误？equity_value = portfolio_value?
+            bonds_value = 0
+        else:
+            bonds_value = portfolio_value - equity_value
+
+        trade_ratio = {}
+        equity_list = list(equity_ratio.keys())
+        for stock in equity_list:
+            if stock in trade_ratio:
+                trade_ratio[stock] += round((equity_value * equity_ratio[stock] / portfolio_value), 3)
+            else:
+                trade_ratio[stock] = round((equity_value * equity_ratio[stock] / portfolio_value), 3)
+
+        # 没有对 bonds 做配仓，因为只有一个
+        if self.moneyfund:
+            stock = self.moneyfund[0]
+            if stock in trade_ratio:
+                trade_ratio[stock] += round((bonds_value * 1.0 / portfolio_value), 3)
+            else:
+                trade_ratio[stock] = round((bonds_value * 1.0 / portfolio_value), 3)
+        log.info('trade_ratio: %s' % trade_ratio)
+        return trade_ratio
+
+    # 交易函数
+    def func_trade(self, context, trade_ratio):
+        def __func_trade(context, stock, value):
+            log.info(stock + " 调仓到 " + str(round(value, 2)) + "\n")
+            order_target_value(stock, value)
+
+        def __func_tradeBond(context, stock, Value):
+            hStocks = history(1, '1d', 'close', stock, df=False)
+            curPrice = hStocks[stock]
+            curValue = float(context.portfolio.positions[stock].total_amount * curPrice)
+            deltaValue = abs(Value - curValue)
+            if deltaValue > (curPrice * 100):
+                if Value > curValue:
+                    cash = context.portfolio.cash
+                    if cash > (curPrice * 100):
+                        __func_trade(context, stock, Value)
+                else:
+                    # 如果是银华日利，多卖 100 股，避免个股买少了
+                    if stock == self.moneyfund[0]:
+                        Value -= curPrice * 100
+                    __func_trade(context, stock, Value)
+
+        def __func_tradeStock(context, stock, ratio):
+            total_value = context.portfolio.portfolio_value
+            if stock in self.moneyfund:
+                __func_tradeBond(context, stock, total_value * ratio)
+            else:
+                curPrice = history(1, '1d', 'close', stock, df=False)[stock][-1]
+                curValue = context.portfolio.positions[stock].total_amount * curPrice
+                Quota = total_value * ratio
+                if Quota:
+                    if abs(Quota - curValue) / Quota >= 0.25:
+                        if Quota > curValue:
+                            cash = context.portfolio.cash
+                            if cash >= Quota * 0.25:
+                                __func_trade(context, stock, Quota)
+                        else:
+                            __func_trade(context, stock, Quota)
+                else:
+                    __func_trade(context, stock, Quota)
+
+        trade_list = list(trade_ratio.keys())
+
+        hStocks = history(1, '1d', 'close', trade_list, df=False)
+
+        myholdstock = list(context.portfolio.positions.keys())
+        total_value = context.portfolio.portfolio_value
+
+        # 已有仓位
+        holdDict = {}
+        hholdstocks = history(1, '1d', 'close', myholdstock, df=False)
+        for stock in myholdstock:
+            tmpW = round((context.portfolio.positions[stock].total_amount * hholdstocks[stock]) / total_value, 2)
+            holdDict[stock] = float(tmpW)
+
+        # 对已有仓位做排序
+        tmpDict = {}
+        for stock in holdDict:
+            if stock in trade_ratio:
+                tmpDict[stock] = round((trade_ratio[stock] - holdDict[stock]), 2)
+        tradeOrder = sorted(tmpDict.items(), key=lambda d: d[1], reverse=False)
+
+        _tmplist = []
+        for idx in tradeOrder:
+            stock = idx[0]
+            __func_tradeStock(context, stock, trade_ratio[stock])
+            _tmplist.append(stock)
+
+        # 交易其他股票
+        for i in range(len(trade_list)):
+            stock = trade_list[i]
+            if len(_tmplist) != 0:
+                if stock not in _tmplist:
+                    __func_tradeStock(context, stock, trade_ratio[stock])
+            else:
+                __func_tradeStock(context, stock, trade_ratio[stock])
+
+
+# 根据不同的时间段设置滑点与手续费
+def set_slip_fee(context):
+    # 将滑点设置为0
+    slip_ratio = 0.02
+    set_slippage(FixedSlippage(slip_ratio))
+    log.info('设置滑点率: 固定滑点%f' % slip_ratio)
+
+    # 根据不同的时间段设置手续费
+    dt = context.current_dt
+
+    if dt > datetime.datetime(2013, 1, 1):
+        set_order_cost(OrderCost(open_tax=0, close_tax=0.001, open_commission=0.0003, close_commission=0.0003, close_today_commission=0, min_commission=5), type='stock')
+    elif dt > datetime.datetime(2011, 1, 1):
+        set_order_cost(OrderCost(open_tax=0, close_tax=0, open_commission=0.001, close_commission=0.002, close_today_commission=0, min_commission=5), type='stock')
+    elif dt > datetime.datetime(2009, 1, 1):
+        set_order_cost(OrderCost(open_tax=0, close_tax=0, open_commission=0.002, close_commission=0.003, close_today_commission=0, min_commission=5), type='stock')
+    else:
+        set_order_cost(OrderCost(open_tax=0, close_tax=0, open_commission=0.003, close_commission=0.004, close_today_commission=0, min_commission=5), type='stock')
