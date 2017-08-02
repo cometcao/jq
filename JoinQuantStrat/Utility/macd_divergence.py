@@ -128,7 +128,7 @@ class macd_divergence():
         def zscore(self, series):
             return (series - series.mean()) / np.std(series)
         
-    def checkAtBottomDoubleCross_chan(self, df):
+    def checkAtBottomDoubleCross_chan(self, df, useZvalue=False):
         # shortcut
         if not (df.shape[0] > 2 and df['macd'][-1] < 0 and df['macd'][-1] > df['macd'][-2]):
             return False
@@ -146,7 +146,7 @@ class macd_divergence():
             dkey2 = mask2.keys()[-2]
             dkey1 = mask2.keys()[-1]
             recent_low = previous_low = 0.0
-            if g.botUseZvalue:
+            if useZvalue:
                 low_mean = df.loc[dkey2:,'low'].mean(axis=0)
                 low_std = df.loc[dkey2:,'low'].std(axis=0)
                 df.loc[dkey2:, 'low_z'] = (df.loc[dkey2:,'low'] - low_mean) / low_std
@@ -183,7 +183,7 @@ class macd_divergence():
         except IndexError:
             return False
             
-    def checkAtTopDoubleCross_chan(self, df):
+    def checkAtTopDoubleCross_chan(self, df, useZvalue=False):
         if not (df['macd'][-1] > 0 and df['macd'][-1] < df['macd'][-2] and df['macd'][-1] < df['macd'][-3]):
             return False
         
@@ -200,7 +200,7 @@ class macd_divergence():
             gkey2 = mask.keys()[-2]
             dkey1 = mask2.keys()[-1]
             recent_high = previous_high = 0.0
-            if g.topUseZvalue:
+            if useZvalue:
                 high_mean = df.loc[gkey2:,'high'].mean(axis=0)
                 high_std = df.loc[gkey2:,'high'].std(axis=0)
                 df.loc[gkey2:, 'high_z'] = (df.loc[gkey2:,'high'] - high_mean) / high_std       

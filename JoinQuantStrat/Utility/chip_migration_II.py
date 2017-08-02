@@ -53,6 +53,19 @@ class chip_migration_II(object):
             density = self.chip_sum / wave_range
             self.df.loc[da, 'chip_density'] = density
     
+    def _price_sensitivity(self):
+        bottomIndex = argrelextrema(self.df.low.values, np.less_equal,order=3)[0]
+        topIndex = argrelextrema(self.df.high.values, np.greater,order=3)[0]
+        allIndex = bottomIndex + topIndex
+        total_len = len(allIndex)
+        for i in xrange(0,total_len):
+            j = i + 1
+            if j == total_len:
+                break
+            currentIndex = allIndex[i]
+            nextIndex = allIndex[j]
+        pass
+    
     def _chip_change(self, avg, tr):
         self._work_out_change_portion(avg, tr)
         a1, t1 = zip(*self.view)

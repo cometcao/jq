@@ -81,6 +81,15 @@ def getAllStocks(context):
 #         i=i+1
 #     return count
 
+def getCirMcapThrethold(threthold = 0.95):
+    queryDf = get_fundamentals(query(
+        valuation.circulating_market_cap, valuation.code
+        ).order_by(
+            valuation.market_cap.asc()
+        ))
+    total_num = queryDf.shape[0]
+    threthold_index = int(total_num * threthold)
+    return queryDf['circulating_market_cap'][threthold_index]
 
 def getCirMcapInfo(context, num_limit=100, cir_cap_limit = 100, max_pe=200):
     queryDf = get_fundamentals(query(
