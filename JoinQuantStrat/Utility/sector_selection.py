@@ -46,6 +46,7 @@ class SectorSelection(object):
             print ','.join([get_security_info(s).display_name for s in stocks])  
             
     def sendResult(self, industryStrength, isConcept=False):
+        message = ""
         for sector, strength in industryStrength[:5]:
             stocks = []
             if isConcept:
@@ -54,7 +55,8 @@ class SectorSelection(object):
                 stocks = get_industry_stocks(sector)
             message = sector + ':\n'
             message += ','.join([get_security_info(s).display_name for s in stocks])
-            send_message(message, channel='weixin')      
+            message += '\n'
+        send_message(message, channel='weixin')      
 
     def processAllSectors(self):
         industryStrength = self.processIndustrySectors()

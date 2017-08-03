@@ -1,8 +1,11 @@
+# -*- encoding: utf8 -*-
 '''
 Created on 2 Aug 2017
 
 @author: MetalInvest
 '''
+# from kuanke.user_space_api import *
+from jqdata import *
 
 class drawKChart(object):
     '''
@@ -14,6 +17,32 @@ class drawKChart(object):
         Constructor
         '''
         
+    def middle_num(self, k_data):
+        # é¸¡è‚‹å‡½æ•°ï¼Œå®Œå…¨çš„å¼ºè¿«ç—‡æ‰€ä¸ºï¼Œåªä¸ºä¸‹é¢ç”»å›¾æ—¶candleå›¾ä¸­æŠ˜çº¿æ—¶å¥½çœ‹è€Œå·² - -ï¼
+        # k_data ä¸ºDataFrameæ ¼å¼
+        plot_data=[]
+        for i in xrange(len(k_data)):
+            temp_y = (k_data.high[i]+k_data.low[i])/2.0
+            plot_data.append(temp_y)
+        return plot_data
+
+    def showDfSimple(self, df):
+        import matplotlib as mpl
+        import matplotlib.pyplot as plt
+        import matplotlib.finance as mpf
+        stock_middle_num = self.middle_num(df)
+        fig, ax = plt.subplots(figsize = (50,20))
+        fig.subplots_adjust(bottom=0.2)
+        mpf.candlestick2(ax, list(df.open),list(df.close),list(df.high),list(df.low), width=0.6, colorup='r', colordown='b',alpha=0.75 )
+        plt.grid(True)
+        dates = df.index
+        ax.set_xticklabels(dates) # Label x-axis with dates
+        # ax.autoscale_view()
+        plt.plot(stock_middle_num,'k', lw=1)
+        plt.plot(stock_middle_num,'ko')
+        plt.setp(plt.gca().get_xticklabels(), rotation=30)
+        
+        
     def showInteractiveDf(self, quotes):    
         import time
         from math import pi
@@ -21,6 +50,7 @@ class drawKChart(object):
         from bokeh.io import output_notebook
         from bokeh.plotting import figure, show
         from bokeh.models import ColumnDataSource, Rect, HoverTool, Range1d, LinearAxis, WheelZoomTool, PanTool, ResetTool, ResizeTool, PreviewSaveTool       
+        import numpy as np
         output_notebook()
         quotes[quotes['volume']==0]=np.nan
         quotes= quotes.dropna()
@@ -77,8 +107,8 @@ class drawKChart(object):
         import matplotlib.pyplot as plt
         import time
         ##########        
-        # ´úÂë¿½±´×Ôhttps://www.joinquant.com/post/1756
-        # ¸ĞĞ»alpha-smart-dog
+        # ä»£ç æ‹·è´è‡ªhttps://www.joinquant.com/post/1756
+        # æ„Ÿè°¢alpha-smart-dog
         quotes[quotes['volume']==0]=np.nan
         quotes= quotes.dropna()
         Close=quotes['close']
@@ -95,41 +125,41 @@ class drawKChart(object):
         #ax1 = plt.axes([0,0,3,2])
         
         X=np.array(range(0, length))
-        pad_nan=X+nan
+        pad_nan=X+np.nan
         
-            #¼ÆËãÉÏ ÏÂÓ°Ïß
+            #è®¡ç®—ä¸Š ä¸‹å½±çº¿
         max_clop=Close.copy()
         max_clop[Close<Open]=Open[Close<Open]
         min_clop=Close.copy()
         min_clop[Close>Open]=Open[Close>Open]
         
-            #ÉÏÓ°Ïß
+            #ä¸Šå½±çº¿
         line_up=np.array([High,max_clop,pad_nan])
         line_up=np.ravel(line_up,'F')
-            #ÏÂÓ°Ïß
+            #ä¸‹å½±çº¿
         line_down=np.array([Low,min_clop,pad_nan])
         line_down=np.ravel(line_down,'F')
         
-            #¼ÆËãÉÏÏÂÓ°Ïß¶ÔÓ¦µÄX×ø±ê
-        pad_nan=nan+X
+            #è®¡ç®—ä¸Šä¸‹å½±çº¿å¯¹åº”çš„Xåæ ‡
+        pad_nan=np.nan+X
         pad_X=np.array([X,X,X])
         pad_X=np.ravel(pad_X,'F')
         
-            #»­³öÊµÌå²¿·Ö,ÏÈ»­ÊÕÅÌ¼ÛÔÚÉÏµÄ²¿·Ö
+            #ç”»å‡ºå®ä½“éƒ¨åˆ†,å…ˆç”»æ”¶ç›˜ä»·åœ¨ä¸Šçš„éƒ¨åˆ†
         up_cl=Close.copy()
-        up_cl[Close<=Open]=nan
+        up_cl[Close<=Open]=np.nan
         up_op=Open.copy()
-        up_op[Close<=Open]=nan
+        up_op[Close<=Open]=np.nan
         
         down_cl=Close.copy()
-        down_cl[Open<=Close]=nan
+        down_cl[Open<=Close]=np.nan
         down_op=Open.copy()
-        down_op[Open<=Close]=nan
+        down_op[Open<=Close]=np.nan
         
         even=Close.copy()
-        even[Close!=Open]=nan
+        even[Close!=Open]=np.nan
         
-        #»­³öÊÕºìµÄÊµÌå²¿·Ö
+        #ç”»å‡ºæ”¶çº¢çš„å®ä½“éƒ¨åˆ†
         pad_box_up=np.array([up_op,up_op,up_cl,up_cl,pad_nan])
         pad_box_up=np.ravel(pad_box_up,'F')
         pad_box_down=np.array([down_cl,down_cl,down_op,down_op,pad_nan])
@@ -137,7 +167,7 @@ class drawKChart(object):
         pad_box_even=np.array([even,even,even,even,pad_nan])
         pad_box_even=np.ravel(pad_box_even,'F')
         
-        #XµÄnan¿ÉÒÔ²»ÓÃÓëyÒ»Ò»¶ÔÓ¦
+        #Xçš„nanå¯ä»¥ä¸ç”¨ä¸yä¸€ä¸€å¯¹åº”
         X_left=X-0.25
         X_right=X+0.25
         box_X=np.array([X_left,X_right,X_right,X_left,pad_nan])
@@ -145,9 +175,9 @@ class drawKChart(object):
         
         #Close_handle=plt.plot(pad_X,line_up,color='k') 
         
-        vertices_up=array([box_X,pad_box_up]).T
-        vertices_down=array([box_X,pad_box_down]).T
-        vertices_even=array([box_X,pad_box_even]).T
+        vertices_up=np.array([box_X,pad_box_up]).T
+        vertices_down=np.array([box_X,pad_box_down]).T
+        vertices_even=np.array([box_X,pad_box_even]).T
         
         handle_box_up=mat.patches.Polygon(vertices_up,color='r',zorder=1)
         handle_box_down=mat.patches.Polygon(vertices_down,color='g',zorder=1)
