@@ -54,7 +54,7 @@ class SectorSelection(object):
                 stocks = get_concept_stocks(sector)
             else:
                 stocks = get_industry_stocks(sector)
-            message = sector + ':'
+            message += sector + ':'
             message += ','.join([get_security_info(s).display_name for s in stocks])
             message += '***'
         send_message(message, channel='weixin')      
