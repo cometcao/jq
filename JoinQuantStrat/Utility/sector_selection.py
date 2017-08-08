@@ -37,7 +37,7 @@ class SectorSelection(object):
 
     def displayResult(self, industryStrength, isConcept=False):
         print industryStrength
-        for sector, strength in industryStrength[:5]:
+        for sector, strength in industryStrength[:9]:
             stocks = []
             if isConcept:
                 stocks = get_concept_stocks(sector)
@@ -48,7 +48,7 @@ class SectorSelection(object):
             
     def sendResult(self, industryStrength, isConcept=False):
         message = ""
-        for sector, strength in industryStrength[:5]:
+        for sector, strength in industryStrength[:9]:
             stocks = []
             if isConcept:
                 stocks = get_concept_stocks(sector)
@@ -100,7 +100,7 @@ class SectorSelection(object):
         return conceptStrength
         
     def gaugeSectorStrength(self, sectorStocks):
-        sectorStrength = 0
+        sectorStrength = 0.0
         removed = 0
         for stock in sectorStocks:
             stockStrength = self.gaugeStockUpTrendStrength_MA(stock)
@@ -111,7 +111,7 @@ class SectorSelection(object):
         sectorStrength /= (len(sectorStocks)-removed)
         return sectorStrength
         
-    def gaugeStockUpTrendStrength_MA(self, stock, isWeighted=False):
+    def gaugeStockUpTrendStrength_MA(self, stock, isWeighted=True):
         stock_df = attribute_history(stock, self.period, self.frequency, ('close','paused'), skip_paused=False) if not self.context else self.getlatest_df(stock, self.period, ['close'])
         if 'paused' not in stock_df.columns:
             stock_df.assign(paused=np.nan)
