@@ -238,6 +238,25 @@ def inOpenOrder(security):
 
 ##############
 
+def getlatest_df(stock, count, context, fields, df_flag = True):
+    df = attribute_history(stock, count, '1d', fields, df=df_flag)
+    latest_stock_data = attribute_history(stock, 1, '230m', fields, skip_paused=True, df=df_flag)
+    if df_flag:
+        latest_stock_data = latest_stock_data.reset_index(drop=False)
+        latest_stock_data.ix[0, 'index'] = pd.DatetimeIndex([context.current_dt.date()])[0]
+        latest_stock_data = latest_stock_data.set_index('index')
+        df = df.reset_index().drop_duplicates(subset='index').set_index('index')
+        df = df.append(latest_stock_data, verify_integrity=True) # True
+    else:
+        final_fields = []
+        if isinstance(fields, basestring):
+            final_fields.append(fields)
+        else:
+            final_fields = list(fields)
+        [np.append(df[field], latest_stock_data[field][-1]) for field in final_fields]
+    return df
+
+
 ######################################################## copied filter ###############################################################
 
 def filter_paused_stock(stock_list):

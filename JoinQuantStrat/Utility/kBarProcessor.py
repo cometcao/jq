@@ -17,6 +17,11 @@ class InclusionType(Enum):
     firstCsecond = 2
     secondCfirst = 3
     
+class TopBotType(Enum):
+    noTopBot = 0
+    top = 1
+    bot = -1
+    
 class KBarProcessor(object):
     '''
     This lib takes financial instrument data, and process it according the Chan(Zen) theory
@@ -28,7 +33,7 @@ class KBarProcessor(object):
         '''
         self.kDataFrame_origin = kDf
         self.kDataFrame_modified = copy.deepcopy(kDf)
-        self.kDataFrame_modified = self.kDataFrame_modified.assign(new_high=np.nan, new_low=np.nan, trend_type=np.nan)
+        self.kDataFrame_modified = self.kDataFrame_modified.assign(new_high=np.nan, new_low=np.nan, trend_type=np.nan, tb=TopBotType.noTopBot)
     
     def checkInclusive(self, first, second):
         # output: 0 = no inclusion, 1 = first contains second, 2 second contains first
@@ -46,7 +51,6 @@ class KBarProcessor(object):
             isBull = True
         return isBull
         
-    
     def standardize(self):
         # 1. We need to make sure we start with first two K-bars without inclusive relationship
         # drop the first if there is inclusion, and check again
@@ -60,12 +64,12 @@ class KBarProcessor(object):
                 self.kDataFrame_modified.ix[0,'new_high'] = firstElem.high
                 self.kDataFrame_modified.ix[0,'new_low'] = firstElem.low
                 break
-            
+
         # 2. loop through the whole data set and process inclusive relationship
         for idx in xrange(self.kDataFrame_modified.shape[0]-2):
             currentElem = self.kDataFrame_modified.iloc[idx]
-            firstElem = self.kDataFrame_modified.ix[idx+1]
-            secondElem = self.kDataFrame_modified.ix[idx+2]
+            firstElem = self.kDataFrame_modified.iloc[idx+1]
+            secondElem = self.kDataFrame_modified.iloc[idx+2]
             if self.checkInclusive(firstElem, secondElem) != InclusionType.noInclusion:
                 trend = self.kDataFrame_modified.ix[idx+1,'trend_type'] if not np.isnan(self.kDataFrame_modified.ix[idx+1,'trend_type']) else self.isBullType(currentElem, firstElem)
                 if trend:
@@ -87,18 +91,33 @@ class KBarProcessor(object):
         
         self.kDataFrame_modified['high'] = self.kDataFrame_modified['new_high']
         self.kDataFrame_modified['low'] = self.kDataFrame_modified['new_low']
+
         self.kDataFrame_modified = self.kDataFrame_modified[np.isfinite(self.kDataFrame_modified['high'])]
         self.kDataFrame_modified = self.kDataFrame_modified.drop('new_high', 1)
         self.kDataFrame_modified = self.kDataFrame_modified.drop('new_low', 1)
         self.kDataFrame_modified = self.kDataFrame_modified.drop('trend_type', 1)
         return self.kDataFrame_modified
     
+    def checkTopBot(self, current, first, second):
+        if first.high > current.high and first.high > second.high:
+            return TopBotType.top
+        elif first.low < current.low and first.low < current.low:
+            return TopBotType.bot
+        else:
+            return TopBotType.noTopBot
+        
     def markTopBot(self):
-        
-        pass
-        
+        # This function assume we have done the standardization process (no inclusion)
+        for idx in xrange(self.kDataFrame_modified.shape[0]-2):
+            currentElem = self.kDataFrame_modified.iloc[idx]
+            firstElem = self.kDataFrame_modified.iloc[idx+1]
+            secondElem = self.kDataFrame_modified.iloc[idx+2]
+            topBotType = self.checkTopBot(currentElem, firstElem, secondElem)
+            if topBotType != TopBotType.noTopBot:
+                self.kDataFrame_modified.ix[idx+1, 'tb'] = topBotType
 
     def defineBi(self):
+        self.kDataFrame_modified.reset_index()
         pass
     
     

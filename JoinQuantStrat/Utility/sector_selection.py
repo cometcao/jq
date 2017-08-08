@@ -27,10 +27,11 @@ class SectorSelection(object):
     '''
     This class implement the methods to rank the sectors
     '''
-    def __init__(self):
+    def __init__(self, context = None):
         '''
         Constructor
         '''
+        self.context = context
         self.frequency = '1d' # use day period
         self.period = 250
 
@@ -53,9 +54,9 @@ class SectorSelection(object):
                 stocks = get_concept_stocks(sector)
             else:
                 stocks = get_industry_stocks(sector)
-            message = sector + ':\n'
+            message = sector + ':'
             message += ','.join([get_security_info(s).display_name for s in stocks])
-            message += '\n'
+            message += '***'
         send_message(message, channel='weixin')      
 
     def processAllSectors(self):
@@ -69,7 +70,7 @@ class SectorSelection(object):
     def processIndustrySectors(self):
         industryStrength = []
         # JQ industry , shenwan
-        jqIndustry = HY_ZY_1
+        jqIndustry = SW2+SW3
         
         for industry in jqIndustry:
             try:
@@ -111,7 +112,11 @@ class SectorSelection(object):
         return sectorStrength
         
     def gaugeStockUpTrendStrength_MA(self, stock, isWeighted=False):
-        stock_df = attribute_history(stock, self.period, self.frequency, ('close','paused'), skip_paused=False)
+        stock_df = attribute_history(stock, self.period, self.frequency, ('close','paused'), skip_paused=False) if not self.context else self.getlatest_df(stock, self.period, ['close'])
+        if 'paused' not in stock_df.columns:
+            stock_df.assign(paused=np.nan)
+            cd = get_current_data()
+            stock_df.ix[-1,'paused'] = cd[stock].paused
 #         stock_df = get_price(stock, count=self.period, end_date='2017-08-01', frequency='daily', fields=['close','paused'], skip_paused=False)
         MA_5 = self.simple_moving_avg(stock_df.close.values, 5)
         MA_13 = self.simple_moving_avg(stock_df.close.values, 13)
@@ -145,3 +150,21 @@ class SectorSelection(object):
     def simple_moving_avg(self, series, period):
         total = sum(series[-period:])
         return total/period
+    
+    def getlatest_df(self, stock, count, fields, df_flag = True):
+        df = attribute_history(stock, count, '1d', fields, df=df_flag)
+        latest_stock_data = attribute_history(stock, 1, '230m', fields, skip_paused=True, df=df_flag)
+        if df_flag:
+            latest_stock_data = latest_stock_data.reset_index(drop=False)
+            latest_stock_data.ix[0, 'index'] = pd.DatetimeIndex([self.context.current_dt.date()])[0]
+            latest_stock_data = latest_stock_data.set_index('index')
+            df = df.reset_index().drop_duplicates(subset='index').set_index('index')
+            df = df.append(latest_stock_data, verify_integrity=True) # True
+        else:
+            final_fields = []
+            if isinstance(fields, basestring):
+                final_fields.append(fields)
+            else:
+                final_fields = list(fields)
+            [np.append(df[field], latest_stock_data[field][-1]) for field in final_fields]
+        return df
