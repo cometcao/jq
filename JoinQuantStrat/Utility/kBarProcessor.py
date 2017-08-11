@@ -8,7 +8,6 @@ Created on 1 Aug 2017
 from jqdata import *
 import numpy as np
 import copy
-from drawKChart import drawKChart
 from enum import Enum 
 
 class InclusionType(Enum):
@@ -21,6 +20,12 @@ class TopBotType(Enum):
     noTopBot = 0
     top = 1
     bot = -1
+
+class KBarStatus(Enum):
+    upTrendNode = (1, 0)
+    upTrend = (1, 1)
+    downTrendNode = (-1, 0)
+    downTrend = (-1, 1)
     
 class KBarProcessor(object):
     '''
@@ -117,7 +122,59 @@ class KBarProcessor(object):
                 self.kDataFrame_modified.ix[idx+1, 'tb'] = topBotType
 
     def defineBi(self):
-        self.kDataFrame_modified.reset_index()
-        pass
+        self.kDataFrame_modified.reset_index(drop=False, inplace=True)
+        working_df = self.kDataFrame_modified[self.kDataFrame_modified.tb.notnull()]
+        currentStatus = firstStatus = secondStatus = TopBotType.noTopBot
+        for i in xrange(working_df.shape[0]-2):
+            currentFenXing = working_df.iloc[i]
+            firstFenXing = working_df.iloc[i+1]
+            secondFenXing = working_df.iloc[i+2]
+            
+            currentStatus = TopBotType.bot if currentFenXing.tb == TopBotType.bot else TopBotType.top
+            firstStatus = TopBotType.bot if firstFenXing.tb == TopBotType.bot else TopBotType.top
+            secondStatus = TopBotType.bot if secondFenXing.tb == TopBotType.bot else TopBotType.top
+            
+            if currentStatus == firstStatus:
+                if currentStatus == TopBotType.top:
+                    if currentFenXing['high'] < firstFenXing['high']:
+                        working_df.ix[i,'tb'] = np.nan
+                    else:
+                        working_df.ix[i+1,'tb'] = np.nan
+                elif currentStatus == TopBotType.bot:
+                    if currentFenXing['low'] > firstFenXing['low']:
+                        working_df.ix[i,'tb'] = np.nan
+                    else:
+                        working_df.ix[i+1,'tb'] = np.nan
+            else: 
+                # possible BI status 1 check top high > bot low 2 check more than 3 bars (strict BI) in between
+                enoughKbarGap = (working_df.loc[i+1,'index'] - working_df.loc[i,'index']) >= 4
+                if enoughKbarGap:
+                    if currentStatus == TopBotType.top and currentFenXing['high'] > firstFenXing['low']:
+                        continue
+                    elif currentStatus == TopBotType.top and currentFenXing['high'] <= firstFenXing['low']:
+                        working_df.ix[i,'tb'] = np.nan
+                    elif currentStatus == TopBotType.bot and currentFenXing['low'] < firstFenXing['high']:
+                        continue
+                    elif currentStatus == TopBotType.bot and currentFenXing['low'] >= firstFenXing['high']:
+                        working_df.ix[i,'tb'] = np.nan
+                else:
+                    if firstStatus == secondStatus:
+                        working_df.ix[i+1,'tb'] = np.nan
+                    else:
+                        working_df.ix[i,'tb'] = np.nan
+        self.kDataFrame_modified = working_df[working_df.tb.notnull()]
     
+    def getCurrentKBarStatus(self):
+        #  at Top or Bot FenXing
+        if self.kDataFrame_modified.loc[-1, 'index'] == self.kDataFrame_origin.shape[0]-2:
+            if self.kDataFrame_modified.loc[-1,'tb'] == TopBotType.top:
+                return KBarStatus.downTrendNode
+            else:
+                return KBarStatus.upTrendNode
+        else:
+            if self.kDataFrame_modified.loc[-1,'tb'] == TopBotType.top:
+                return KBarStatus.downTrend
+            else:
+                return KBarStatus.upTrend
+        
     

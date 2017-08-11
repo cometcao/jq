@@ -7,6 +7,7 @@ import datetime
 
 from seek_cash_flow import * 
 from chip_migration_II import *
+from trading_module import *
 from scipy.signal import argrelextrema
 
 try:
@@ -133,10 +134,10 @@ def select_strategy(context):
                     'dst_minute_count_28index_drop': 120 # 符合条件连续多少分钟则清仓
                 }],
         [True,'','调仓时间',Time_condition,{
-            'sell_hour': 14,  # 调仓时间,小时
-            'sell_minute': 50,  # 调仓时间，分钟
+            'sell_hour': 10,  # 调仓时间,小时
+            'sell_minute': 40,  # 调仓时间，分钟
             'buy_hour': 14,  # 调仓时间,小时
-            'buy_minute': 50 # 调仓时间，分钟
+            'buy_minute': 40 # 调仓时间，分钟
             }],
         [True,'','28调仓择时',Index28_condition,{  # 该调仓条件可能会产生清仓行为
                 'index2' : '000016.XSHG',  # 大盘指数
@@ -203,7 +204,7 @@ def select_strategy(context):
     # 配置 6.其它规则
     g.other_config = [
         
-        # [False,'trade_Xq','Xue Qiu Webtrader',XueQiu_order,{}],
+        [g.is_sim_trade,'trade_Xq','Xue Qiu Webtrader',XueQiu_order,{}],
         # 注意：Shipane_order 和 Shipane_sync_p 启用一个就行了。
         # 请配置正确的实盘易IP，端口，Key,client
 
@@ -267,7 +268,7 @@ def set_variables(context):
     # 正态分布概率表，标准差倍数以及置信率: 0.96, 95%; 2.06, 96%; 2.18, 97%; 2.34, 98%; 2.58, 99%; 5, 99.9999%
     # 赋闲资金可以买卖银华日利做现金管理: ['511880.XSHG']
     set_slip_fee(context)
-    context.pc_var = PositionControlVar(context, 0.07, 2.18, [])
+    context.pc_var = PositionControlVar(context, 0.12, 2.58, [])
 
 
 # 3 设置回测条件
@@ -288,7 +289,7 @@ def initialize(context):
         # set_option('use_real_price',True)
         # log.set_level('order','error')
     except:
-        pass
+        print "Unexpected error:", sys.exc_info()[0]
     # 判定是否是模拟盘状态
     g.is_sim_trade = context.run_params.type == 'sim_trade'
 
@@ -348,13 +349,14 @@ def handle_data(context,data):
     # 调仓器的分钟处理
     for rule in g.adjust_position_rules:
         rule.handle_data(context,data)
-    # -----------------------------------------------------------
+    # -----------------------------------------------------------   
 
     # 判断是否满足调仓条件，所有规则以and 逻辑执行
     for rule in g.adjust_condition_rules:
         rule.handle_data(context,data)
         if not rule.can_adjust:
             return
+
     # ---------------------调仓--------------------------
     log.info("handle_data: ==> 满足条件进行调仓")
     # 调仓前预处理
@@ -484,11 +486,11 @@ def log_param():
 # 报单成功并成交（包括全部成交或部分成交，此时成交量大于0），返回True
 # 报单失败或者报单成功但被取消（此时成交量等于0），返回False
 # 报单成功，触发所有规则的when_buy_stock函数
-def open_position(sender,security,value):
+def open_position(sender,security,value,context):
     order = order_target_value_(sender,security,value)
     if order != None and order.filled > 0:
         for rule in g.all_rules:
-            rule.when_buy_stock(security,order)
+            rule.when_buy_stock(security,order,context)
         return True
     return False
 
@@ -496,13 +498,13 @@ def open_position(sender,security,value):
 # 平仓成功并全部成交，返回True
 # 报单失败或者报单成功但被取消（此时成交量等于0），或者报单非全部成交，返回False
 # 报单成功，触发所有规则的when_sell_stock函数
-def close_position(sender,position,is_normal=True):
+def close_position(sender,position,context,is_normal=True):
     security = position.security
     order = order_target_value_(sender,security,0)  # 可能会因停牌失败
     if order != None:
         if order.filled > 0:
             for rule in g.all_rules:
-                rule.when_sell_stock(position,order,is_normal)
+                rule.when_sell_stock(position,order,is_normal,context)
             return True
     return False
 
@@ -513,7 +515,7 @@ def clear_position(sender,context):
         sender.log_info("==> 清仓，卖出所有股票")
         for stock in context.portfolio.positions.keys():
             position = context.portfolio.positions[stock]
-            close_position(sender,position,False)
+            close_position(sender,position,context,False)
     for rule in g.all_rules:
         rule.when_clear_position(context)
 
@@ -562,10 +564,10 @@ class Rule(object):
         pass
     # 卖出股票时调用的函数
     # is_normail正常规则卖出为True，止损卖出为False
-    def when_sell_stock(self,position,order,is_normal):
+    def when_sell_stock(self,position,order,is_normal, context):
         pass
     # 买入股票时调用的函数
-    def when_buy_stock(self,stock,order):
+    def when_buy_stock(self,stock,order, context):
         pass
     # 清仓时调用的函数
     def when_clear_position(self,context):
@@ -581,12 +583,12 @@ class Rule(object):
         pass
 
     # 持仓操作事件的简单判断处理，方便使用。
-    def open_position(self,security,value):
+    def open_position(self,security,value,context):
         if self.on_open_position != None:
-            return self.on_open_position(self,security,value)
-    def close_position(self,position,is_normal=True):
+            return self.on_open_position(self,security,value,context)
+    def close_position(self,position,context,is_normal=True):
         if self.on_close_position != None:
-            return self.on_close_position(self,position,is_normal=True)
+            return self.on_close_position(self,position,context,is_normal=True)
     def clear_position(self,context):
         if self.on_clear_position != None:
             self.on_clear_position(self,context)
@@ -695,31 +697,38 @@ class Period_condition(Adjust_condition):
         self.period = params.get('period',3)
         self.day_count = 0
         self.t_can_adjust = False
+        self.mark_today = {}
 
     def update_params(self,context,params):
         self.period = params.get('period',self.period)
+        self.mark_today = {}
 
     @property
     def can_adjust(self):
         return self.t_can_adjust
 
     def handle_data(self,context,data):
-        self.log_info("调仓日计数 [%d]" % (self.day_count))
-        self.t_can_adjust = self.day_count % self.period == 0
-        self.day_count += 1
-        pass
+        self.t_can_adjust = self.day_count % self.period == 0 or (self.mark_today[context.current_dt.date()] if context.current_dt.date() in self.mark_today else False)
+
+        if context.current_dt.date() not in self.mark_today: # only increment once per day
+            self.log_info("调仓日计数 [%d]" % (self.day_count))
+            self.mark_today[context.current_dt.date()]=self.t_can_adjust
+            self.day_count += 1
+            
 
     def before_trading_start(self,context):
         self.t_can_adjust = False
         pass
-    def when_sell_stock(self,position,order,is_normal):
+    def when_sell_stock(self,position,order,is_normal, context):
         if not is_normal:
             # 个股止损止盈时，即非正常卖股时，重置计数，原策略是这么写的
             self.day_count = 0
+            self.mark_today = {}
         pass
     # 清仓时调用的函数
     def when_clear_position(self,context):
         self.day_count = 0
+        self.mark_today = {}
         pass
 
     def __str__(self):
@@ -998,7 +1007,7 @@ class Sell_stocks(Adjust_position):
             if stock not in buy_stocks:
                 self.log_info("stock [%s] in position is not buyable" % (stock))
                 position = context.portfolio.positions[stock]
-                self.close_position(position)
+                self.close_position(position,context)
             else:
                 self.log_info("stock [%s] is already in position" % (stock))
     def __str__(self):
@@ -1020,7 +1029,7 @@ class Buy_stocks(Adjust_position):
             value = context.portfolio.cash / (self.buy_count - position_count)
             for stock in buy_stocks:
                 if context.portfolio.positions[stock].total_amount == 0:
-                    if self.open_position(stock,value):
+                    if self.open_position(stock,value,context):
                         if len(context.portfolio.positions) == self.buy_count:
                             break
         pass
@@ -1040,10 +1049,6 @@ class Buy_stocks_portion(Adjust_position):
     def update_params(self,context,params):
         self.buy_count = params.get('buy_count',self.buy_count)
     def adjust(self,context,data,buy_stocks):
-        # 买入股票
-        # 始终保持持仓数目为g.buy_stock_count
-        # 根据股票数量分仓
-        # 此处只根据可用金额平均分配购买，不能保证每个仓位平均分配
         position_count = len(context.portfolio.positions)
         if self.buy_count > position_count:
             buy_num = self.buy_count - position_count
@@ -1053,7 +1058,7 @@ class Buy_stocks_portion(Adjust_position):
                 if context.portfolio.positions[stock].total_amount == 0:
                     buy_portion = portion_gen.next()
                     value = available_cash * buy_portion
-                    if self.open_position(stock, value):
+                    if self.open_position(stock, value,context):
                         if len(context.portfolio.positions) == self.buy_count:
                             break
         pass
@@ -1075,7 +1080,7 @@ class Buy_stocks_weighted(Adjust_position):
                 total_weight += weight
             for weight, stock in stock_weighted_list:
                 buy_portion = weight / total_weight * available_cash
-                if self.open_position(stock, value):
+                if self.open_position(stock, value, context):
                     if len(context, portfolio.positions) == self.buy_count:
                         break
 
@@ -1095,12 +1100,16 @@ class Buy_stocks_var(Adjust_position):
         # 买入股票或者进行调仓
         # 始终保持持仓数目为g.buy_stock_count
         position_count = len(context.portfolio.positions)
+        trade_ratio = {}
         if self.buy_count > position_count:
             buy_num = self.buy_count - position_count
-            context.pc_var.buy_the_stocks(context, buy_stocks[:buy_num])
+            trade_ratio = context.pc_var.buy_the_stocks(context, buy_stocks[:buy_num])
         else:
-            context.pc_var.func_rebalance(context)
-        pass
+            trade_ratio = context.pc_var.func_rebalance(context)
+        for stock in trade_ratio:
+            if self.open_position(stock, context.portfolio.total_value*trade_ratio[stock],context):
+                if len(context.portfolio.positions) == self.buy_count:
+                    break
 
     def __str__(self):
         return '股票调仓买入规则：使用 VaR 方式买入或者调整股票达目标股票数'
@@ -1143,7 +1152,7 @@ class Stop_loss_stocks(Rule):
                     % (stock,cur_price,self.last_high[stock],threshold))
 
                 position = context.portfolio.positions[stock]
-                self.close_position(position,False)
+                self.close_position(position,context,False)
 
     # 获取个股前n天的m日增幅值序列
     # 增加缓存避免当日多次获取数据
@@ -1183,12 +1192,12 @@ class Stop_loss_stocks(Rule):
 
         return 0.099  # 默认配置回测止损阈值最大跌幅为-9.9%，阈值高貌似回撤降低
 
-    def when_sell_stock(self,position,order,is_normal):
+    def when_sell_stock(self,position,order,is_normal, context):
         if position.security in self.last_high:
             self.last_high.pop(position.security)
         pass
 
-    def when_buy_stock(self,stock,order):
+    def when_buy_stock(self,stock,order,context):
         if order.status == OrderStatus.held and order.filled == order.amount:
             # 全部成交则删除相关证券的最高价缓存
             self.last_high[stock] = get_close_price(stock,1,'1m')
@@ -1221,7 +1230,7 @@ class Stop_profit_stocks(Rule):
                         % (stock,cur_price,self.last_high[stock],threshold))
 
                     position = context.portfolio.positions[stock]
-                    self.close_position(position,False)
+                    self.close_position(position,context,False)
 
     # 获取个股前n天的m日增幅值序列
     # 增加缓存避免当日多次获取数据
@@ -1248,14 +1257,14 @@ class Stop_profit_stocks(Rule):
             return abs(maxr)
         return 0.30  # 默认配置止盈阈值最大涨幅为30%
 
-    def when_sell_stock(self,position,order,is_normal):
+    def when_sell_stock(self,position,order,is_normal, context):
         if order.status == OrderStatus.held and order.filled == order.amount:
             # 全部成交则删除相关证券的最高价缓存
             if position.security in self.last_high:
                 self.last_high.pop(position.security)
         pass
 
-    def when_buy_stock(self,stock,order):
+    def when_buy_stock(self,stock,order,context):
         self.last_high[stock] = get_close_price(stock,1,'1m')
         pass
 
@@ -1467,7 +1476,7 @@ class Stat(Rule):
 
     def after_trading_end(self,context):
         self.report(context)
-    def when_sell_stock(self,position,order,is_normal):
+    def when_sell_stock(self,position,order,is_normal, context):
         if order.filled > 0:
             # 只要有成交，无论全部成交还是部分成交，则统计盈亏
             self.watch(position.security,order.filled,position.avg_cost,position.price)
@@ -1753,34 +1762,38 @@ class XueQiu_order(Rule):
 
     def update_params(self,context,params):
         pass
-    
-    def get_executor(self):
-        if self.executor == None:
-            # self.executor =
-            pass
-        return self.executor
         
     def after_trading_end(self,context):
         self.executor = None
         pass
 
     # 卖出股票时调用的函数
-    def when_sell_stock(self,position,order,is_normal):
+    def when_sell_stock(self,position,order,is_normal,context):
         try:
-            # self.get_executor().execute(order)
-            pass
+            if not order.is_buy:
+                target_pct = (position.closeable_amount - order.amount) * order.price / context.portfolio.total_value
+                # target_pct = target_amount * order.price / context.portfolio.total_value
+                realAction_xq_3(order.security[:6], target_pct * 100)
+                pass
         except:
-            self.log_error('实盘易卖股失败:' + str(order))
+            self.log_error('雪球交易失败:' + str(order))
         pass
     
     # 买入股票时调用的函数
-    def when_buy_stock(self,stock,order):
+    def when_buy_stock(self,stock,order,context):
         try:
-            # self.get_executor().execute(order)
+            if order.is_buy:
+                target_amount = order.amount
+                if stock in context.portfolio.positions:
+                    target_amount += context.portfolio.positions[stock].amount
+                target_pct = target_amount * order.price / context.portfolio.total_value
+                realAction_xq_3(order.security[:6], target_pct * 100)
             pass
         except:
-            self.log_error('实盘易卖股失败:' + str(order))
+            self.log_error('雪球交易失败:' + str(order))
         pass
+    def __str__(self):
+        return '雪球跟踪盘'
 
 '''-----------------根据聚宽Order用实盘易下单------------------'''
 class Shipane_order(Rule):
@@ -1807,7 +1820,7 @@ class Shipane_order(Rule):
         pass
 
     # 卖出股票时调用的函数
-    def when_sell_stock(self,position,order,is_normal):
+    def when_sell_stock(self,position,order,is_normal,context):
         try:
             self.get_executor().execute(order)
         except:
@@ -1815,7 +1828,7 @@ class Shipane_order(Rule):
         pass
     
     # 买入股票时调用的函数
-    def when_buy_stock(self,stock,order):
+    def when_buy_stock(self,stock,order,context):
         try:
             self.get_executor().execute(order)
         except:
@@ -1925,33 +1938,40 @@ class PositionControlVar(object):
 
     # 卖出股票
     def sell_the_stocks(self, context, stocks):
+        equity_ratio = {}
         for stock in stocks:
             if stock in context.portfolio.positions.keys():
                 # 这段代码不甚严谨，多产品轮动会有问题，本案例 OK
                 if stock not in self.moneyfund:
-                    equity_ratio = {}
                     equity_ratio[stock] = 0
-                    trade_ratio = self.func_getequity_value(context, equity_ratio)
-                    self.func_trade(context, trade_ratio)
+        trade_ratio = self.func_getequity_value(context, equity_ratio)
+        # self.func_trade(context, trade_ratio)
+        return trade_ratio
 
     # 买入股票
     def buy_the_stocks(self, context, stocks):
         equity_ratio = {}
-        ratio = 1.0 / len(stocks)       # TODO 需要比照原始代码确认逻辑是否正确
+        # ratio = 1.0 / len(stocks)       # equal 
+        portion_gen = generate_portion(len(stocks))
         for stock in stocks:
-            equity_ratio[stock] = ratio
+            equity_ratio[stock] = portion_gen.next()
         trade_ratio = self.func_getequity_value(context, equity_ratio)
-        self.func_trade(context, trade_ratio)
+        # self.func_trade(context, trade_ratio)
+        return trade_ratio
 
     # 股票调仓
     def func_rebalance(self, context):
         myholdlist = list(context.portfolio.positions.keys())
+        trade_ratio = {}
         if myholdlist:
             for stock in myholdlist:
                 if stock not in self.moneyfund:
                     equity_ratio = {stock: 1.0}
-                    trade_ratio = self.func_getequity_value(context, equity_ratio)
-                    self.func_trade(context, trade_ratio)
+            trade_ratio = self.func_getequity_value(context, equity_ratio)
+            # self.func_trade(context, trade_ratio)
+        return trade_ratio
+            
+        
 
     # 根据预设的 risk_money 和 confidencelevel 来计算，可以买入该多少权益类资产
     def func_getequity_value(self, context, equity_ratio):
@@ -1978,7 +1998,7 @@ class PositionControlVar(object):
                 # 一元会分配买多少股
                 __curAmount = 1 * __equity_ratio[stock] / hStocks[stock]  # 1单位资金，分配时，该股票可以买多少股
                 __portfolio_VaR += __curAmount * __curVaR  # 1单位资金时，该股票上的实际风险敞口
-
+            
             if __portfolio_VaR:
                 __equity_value = __risk_money / __portfolio_VaR
             else:
@@ -1986,6 +2006,10 @@ class PositionControlVar(object):
 
             if isnan(__equity_value):
                 __equity_value = 0
+
+            # print __equity_list
+            # print __portfolio_VaR
+            # print __equity_value
 
             return __equity_value
 
