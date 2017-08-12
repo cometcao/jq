@@ -123,46 +123,59 @@ class KBarProcessor(object):
 
     def defineBi(self):
         self.kDataFrame_modified.reset_index(drop=False, inplace=True)
-        working_df = self.kDataFrame_modified[self.kDataFrame_modified.tb.notnull()]
-        currentStatus = firstStatus = secondStatus = TopBotType.noTopBot
-        for i in xrange(working_df.shape[0]-2):
+        working_df = self.kDataFrame_modified[self.kDataFrame_modified['tb']!=TopBotType.noTopBot]
+        currentStatus = firstStatus = TopBotType.noTopBot
+        i = 0
+        markedIndex = i + 1
+        while i < working_df.shape[0]-2:
             currentFenXing = working_df.iloc[i]
-            firstFenXing = working_df.iloc[i+1]
-            secondFenXing = working_df.iloc[i+2]
+            firstFenXing = working_df.iloc[markedIndex]
             
             currentStatus = TopBotType.bot if currentFenXing.tb == TopBotType.bot else TopBotType.top
             firstStatus = TopBotType.bot if firstFenXing.tb == TopBotType.bot else TopBotType.top
-            secondStatus = TopBotType.bot if secondFenXing.tb == TopBotType.bot else TopBotType.top
-            
+           
             if currentStatus == firstStatus:
                 if currentStatus == TopBotType.top:
                     if currentFenXing['high'] < firstFenXing['high']:
-                        working_df.ix[i,'tb'] = np.nan
+                        working_df.ix[i,'tb'] = TopBotType.noTopBot
+                        i = markedIndex
+                        markedIndex = i+1
+                        continue
                     else:
-                        working_df.ix[i+1,'tb'] = np.nan
+                        working_df.ix[markedIndex,'tb'] = TopBotType.noTopBot
+                        i = markedIndex+1
+                        markedIndex = i+1
+                        continue
                 elif currentStatus == TopBotType.bot:
                     if currentFenXing['low'] > firstFenXing['low']:
-                        working_df.ix[i,'tb'] = np.nan
+                        working_df.ix[i,'tb'] = TopBotType.noTopBot
+                        i = markedIndex
+                        markedIndex = i+1
+                        continue                        
                     else:
-                        working_df.ix[i+1,'tb'] = np.nan
+                        working_df.ix[markedIndex,'tb'] = TopBotType.noTopBot
+                        i = markedIndex+1
+                        markedIndex = i+1
+                        continue
             else: 
                 # possible BI status 1 check top high > bot low 2 check more than 3 bars (strict BI) in between
-                enoughKbarGap = (working_df.loc[i+1,'index'] - working_df.loc[i,'index']) >= 4
+                enoughKbarGap = (working_df.loc[markedIndex,'index'] - working_df.loc[i,'index']) >= 4
                 if enoughKbarGap:
                     if currentStatus == TopBotType.top and currentFenXing['high'] > firstFenXing['low']:
-                        continue
+                        pass
                     elif currentStatus == TopBotType.top and currentFenXing['high'] <= firstFenXing['low']:
-                        working_df.ix[i,'tb'] = np.nan
+                        working_df.ix[i,'tb'] = TopBotType.noTopBot
                     elif currentStatus == TopBotType.bot and currentFenXing['low'] < firstFenXing['high']:
-                        continue
+                        pass
                     elif currentStatus == TopBotType.bot and currentFenXing['low'] >= firstFenXing['high']:
-                        working_df.ix[i,'tb'] = np.nan
+                        working_df.ix[i,'tb'] = TopBotType.noTopBot
                 else:
-                    if firstStatus == secondStatus:
-                        working_df.ix[i+1,'tb'] = np.nan
-                    else:
-                        working_df.ix[i,'tb'] = np.nan
-        self.kDataFrame_modified = working_df[working_df.tb.notnull()]
+                    working_df.ix[markedIndex,'tb'] = TopBotType.noTopBot
+                    markedIndex += 1
+                    continue # don't increment i
+            i+=1
+            markedIndex = i+1
+        self.kDataFrame_modified = working_df[working_df['tb']!=TopBotType.noTopBot]
     
     def getCurrentKBarStatus(self):
         #  at Top or Bot FenXing
