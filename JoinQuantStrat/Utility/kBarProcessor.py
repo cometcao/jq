@@ -38,7 +38,7 @@ class KBarProcessor(object):
         '''
         self.kDataFrame_origin = kDf
         self.kDataFrame_modified = copy.deepcopy(kDf)
-        self.kDataFrame_modified = self.kDataFrame_modified.assign(new_high=np.nan, new_low=np.nan, trend_type=np.nan, tb=TopBotType.noTopBot)
+        self.kDataFrame_modified = self.kDataFrame_modified.assign(new_high=np.nan, new_low=np.nan, trend_type=np.nan)
     
     def checkInclusive(self, first, second):
         # output: 0 = no inclusion, 1 = first contains second, 2 second contains first
@@ -89,11 +89,14 @@ class KBarProcessor(object):
                 self.kDataFrame_modified.ix[idx+1,'new_high']=np.nan
                 self.kDataFrame_modified.ix[idx+1,'new_low']=np.nan
             else:
-                self.kDataFrame_modified.ix[idx+1,'new_high'] = firstElem.high
-                self.kDataFrame_modified.ix[idx+1,'new_low'] = firstElem.low
+                if np.isnan(self.kDataFrame_modified.ix[idx+1,'new_high']): 
+                    self.kDataFrame_modified.ix[idx+1,'new_high'] = firstElem.high 
+                if np.isnan(self.kDataFrame_modified.ix[idx+1,'new_low']): 
+                    self.kDataFrame_modified.ix[idx+1,'new_low'] = firstElem.low
                 self.kDataFrame_modified.ix[idx+2,'new_high'] = secondElem.high
                 self.kDataFrame_modified.ix[idx+2,'new_low'] = secondElem.low
         
+        print self.kDataFrame_modified
         self.kDataFrame_modified['high'] = self.kDataFrame_modified['new_high']
         self.kDataFrame_modified['low'] = self.kDataFrame_modified['new_low']
 
@@ -112,6 +115,7 @@ class KBarProcessor(object):
             return TopBotType.noTopBot
         
     def markTopBot(self):
+        self.kDataFrame_modified = self.kDataFrame_modified.assign(tb=TopBotType.noTopBot)
         # This function assume we have done the standardization process (no inclusion)
         for idx in xrange(self.kDataFrame_modified.shape[0]-2):
             currentElem = self.kDataFrame_modified.iloc[idx]
