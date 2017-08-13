@@ -78,12 +78,12 @@ class KBarProcessor(object):
             if self.checkInclusive(firstElem, secondElem) != InclusionType.noInclusion:
                 trend = self.kDataFrame_modified.ix[idx+1,'trend_type'] if not np.isnan(self.kDataFrame_modified.ix[idx+1,'trend_type']) else self.isBullType(currentElem, firstElem)
                 if trend:
-                    self.kDataFrame_modified.ix[idx+2,'new_high']=max(firstElem.high, secondElem.high)
-                    self.kDataFrame_modified.ix[idx+2,'new_low']=max(firstElem.low, secondElem.low)
+                    self.kDataFrame_modified.ix[idx+2,'new_high']=max(firstElem.high if np.isnan(firstElem.new_high) else firstElem.new_high, secondElem.high if np.isnan(secondElem.new_high) else secondElem.new_high)
+                    self.kDataFrame_modified.ix[idx+2,'new_low']=max(firstElem.low if np.isnan(firstElem.new_low) else firstElem.new_low, secondElem.low if np.isnan(secondElem.new_low) else secondElem.new_low)
                     pass
                 else: 
-                    self.kDataFrame_modified.ix[idx+2,'new_high']=min(firstElem.high, secondElem.high)
-                    self.kDataFrame_modified.ix[idx+2,'new_low']=min(firstElem.low, secondElem.low)
+                    self.kDataFrame_modified.ix[idx+2,'new_high']=min(firstElem.high if np.isnan(firstElem.new_high) else firstElem.new_high, secondElem.high if np.isnan(secondElem.new_high) else secondElem.new_high)
+                    self.kDataFrame_modified.ix[idx+2,'new_low']=min(firstElem.low if np.isnan(firstElem.new_low) else firstElem.new_low, secondElem.low if np.isnan(secondElem.new_low) else secondElem.new_low)
                     pass
                 self.kDataFrame_modified.ix[idx+2,'trend_type']=trend
                 self.kDataFrame_modified.ix[idx+1,'new_high']=np.nan
