@@ -26,7 +26,19 @@ class KBarStatus(Enum):
     upTrend = (1, 1)
     downTrendNode = (-1, 0)
     downTrend = (-1, 1)
-    
+
+def synchOpenPrice(open, close, high, low):
+    if open > close:
+        return high
+    else:
+        return low
+
+def synchClosePrice(open, close, high, low):
+    if open < close:
+        return high
+    else:
+        return low    
+
 class KBarProcessor(object):
     '''
     This lib takes financial instrument data, and process it according the Chan(Zen) theory
@@ -40,12 +52,21 @@ class KBarProcessor(object):
         self.kDataFrame_modified = copy.deepcopy(kDf)
         self.kDataFrame_modified = self.kDataFrame_modified.assign(new_high=np.nan, new_low=np.nan, trend_type=np.nan)
     
+    def synchOpenClosePrice(self):
+        self.kDataFrame_modified['open'] = self.kDataFrame_modified.apply(lambda row: synchOpenPrice(row['open'], row['close'], row['high'], row['low']), axis=1)
+        self.kDataFrame_modified['close'] = self.kDataFrame_modified.apply(lambda row: synchClosePrice(row['open'], row['close'], row['high'], row['low']), axis=1)        
+    
     def checkInclusive(self, first, second):
         # output: 0 = no inclusion, 1 = first contains second, 2 second contains first
         isInclusion = InclusionType.noInclusion
-        if first.high <= second.high and first.low >= second.low:
+        first_high = first.high if np.isnan(first.new_high) else first.new_high
+        second_high = second.high if np.isnan(second.new_high) else second.new_high
+        first_low = first.low if np.isnan(first.new_low) else first.new_low
+        second_low = second.low if np.isnan(second.new_low) else second.new_low
+        
+        if first_high <= second_high and first_low >= second_low:
             isInclusion = InclusionType.firstCsecond
-        elif first.high >= second.high and first.low <= second.low:
+        elif first_high >= second_high and first_low <= second_low:
             isInclusion = InclusionType.secondCfirst
         return isInclusion
     
@@ -103,6 +124,7 @@ class KBarProcessor(object):
         self.kDataFrame_modified = self.kDataFrame_modified.drop('new_high', 1)
         self.kDataFrame_modified = self.kDataFrame_modified.drop('new_low', 1)
         self.kDataFrame_modified = self.kDataFrame_modified.drop('trend_type', 1)
+        self.synchOpenClosePrice()
         return self.kDataFrame_modified
     
     def checkTopBot(self, current, first, second):
@@ -132,6 +154,8 @@ class KBarProcessor(object):
         markedIndex = i + 1
         while i < working_df.shape[0]-1:
             currentFenXing = working_df.iloc[i]
+            if markedIndex > working_df.shape[0]-1:
+                break
             firstFenXing = working_df.iloc[markedIndex]
             
             currentStatus = TopBotType.bot if currentFenXing.tb == TopBotType.bot else TopBotType.top
