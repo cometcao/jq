@@ -95,8 +95,7 @@ class KBarProcessor(object):
                     self.kDataFrame_modified.ix[idx+1,'new_low'] = firstElem.low
                 self.kDataFrame_modified.ix[idx+2,'new_high'] = secondElem.high
                 self.kDataFrame_modified.ix[idx+2,'new_low'] = secondElem.low
-        
-        print self.kDataFrame_modified
+
         self.kDataFrame_modified['high'] = self.kDataFrame_modified['new_high']
         self.kDataFrame_modified['low'] = self.kDataFrame_modified['new_low']
 
@@ -126,18 +125,18 @@ class KBarProcessor(object):
                 self.kDataFrame_modified.ix[idx+1, 'tb'] = topBotType
 
     def defineBi(self):
-        self.kDataFrame_modified.reset_index(drop=False, inplace=True)
+        self.kDataFrame_modified = self.kDataFrame_modified.assign(new_index=[i for i in xrange(len(self.kDataFrame_modified))])
         working_df = self.kDataFrame_modified[self.kDataFrame_modified['tb']!=TopBotType.noTopBot]
         currentStatus = firstStatus = TopBotType.noTopBot
         i = 0
         markedIndex = i + 1
-        while i < working_df.shape[0]-2:
+        while i < working_df.shape[0]-1:
             currentFenXing = working_df.iloc[i]
             firstFenXing = working_df.iloc[markedIndex]
             
             currentStatus = TopBotType.bot if currentFenXing.tb == TopBotType.bot else TopBotType.top
             firstStatus = TopBotType.bot if firstFenXing.tb == TopBotType.bot else TopBotType.top
-           
+        
             if currentStatus == firstStatus:
                 if currentStatus == TopBotType.top:
                     if currentFenXing['high'] < firstFenXing['high']:
@@ -155,7 +154,7 @@ class KBarProcessor(object):
                         working_df.ix[i,'tb'] = TopBotType.noTopBot
                         i = markedIndex
                         markedIndex = i+1
-                        continue                        
+                        continue
                     else:
                         working_df.ix[markedIndex,'tb'] = TopBotType.noTopBot
                         i = markedIndex+1
@@ -163,7 +162,7 @@ class KBarProcessor(object):
                         continue
             else: 
                 # possible BI status 1 check top high > bot low 2 check more than 3 bars (strict BI) in between
-                enoughKbarGap = (working_df.loc[markedIndex,'index'] - working_df.loc[i,'index']) >= 4
+                enoughKbarGap = (working_df.ix[markedIndex,'new_index'] - working_df.ix[i,'new_index']) >= 4
                 if enoughKbarGap:
                     if currentStatus == TopBotType.top and currentFenXing['high'] > firstFenXing['low']:
                         pass
@@ -183,13 +182,14 @@ class KBarProcessor(object):
     
     def getCurrentKBarStatus(self):
         #  at Top or Bot FenXing
-        if self.kDataFrame_modified.loc[-1, 'index'] == self.kDataFrame_origin.shape[0]-2:
-            if self.kDataFrame_modified.loc[-1,'tb'] == TopBotType.top:
+        print self.kDataFrame_modified
+        if self.kDataFrame_modified.ix[-1, 'new_index'] == self.kDataFrame_origin.shape[0]-2:
+            if self.kDataFrame_modified.ix[-1,'tb'] == TopBotType.top:
                 return KBarStatus.downTrendNode
             else:
                 return KBarStatus.upTrendNode
         else:
-            if self.kDataFrame_modified.loc[-1,'tb'] == TopBotType.top:
+            if self.kDataFrame_modified.ix[-1,'tb'] == TopBotType.top:
                 return KBarStatus.downTrend
             else:
                 return KBarStatus.upTrend
