@@ -130,7 +130,7 @@ class KBarProcessor(object):
     def checkTopBot(self, current, first, second):
         if first.high > current.high and first.high > second.high:
             return TopBotType.top
-        elif first.low < current.low and first.low < current.low:
+        elif first.low < current.low and first.low < second.low:
             return TopBotType.bot
         else:
             return TopBotType.noTopBot
@@ -149,6 +149,7 @@ class KBarProcessor(object):
     def defineBi(self):
         self.kDataFrame_modified = self.kDataFrame_modified.assign(new_index=[i for i in xrange(len(self.kDataFrame_modified))])
         working_df = self.kDataFrame_modified[self.kDataFrame_modified['tb']!=TopBotType.noTopBot]
+#         print working_df
         currentStatus = firstStatus = TopBotType.noTopBot
         i = 0
         markedIndex = i + 1
@@ -206,7 +207,7 @@ class KBarProcessor(object):
     
     def getCurrentKBarStatus(self):
         #  at Top or Bot FenXing
-        print self.kDataFrame_modified
+#         print self.kDataFrame_modified
         if self.kDataFrame_modified.ix[-1, 'new_index'] == self.kDataFrame_origin.shape[0]-2:
             if self.kDataFrame_modified.ix[-1,'tb'] == TopBotType.top:
                 return KBarStatus.downTrendNode
