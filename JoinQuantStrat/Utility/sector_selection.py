@@ -74,7 +74,15 @@ class SectorSelection(object):
         industry = [sector for sector, _ in industryStrength[:self.top_limit]] 
         concept = [sector for sector, _ in conceptStrength[:self.top_limit]]
         return (industry, concept)
-#         return [stock for stock in get_industry_stocks(industry)] + [stock for stock in get_concept_stocks(concept)]
+    
+    def processAllSectorStocks(self):
+        industry, concept = self.processAllSectors()
+        allstocks = []
+        for idu in industry:
+            allstocks += get_industry_stocks(idu)
+        for con in concept:
+            allstocks += get_concept_stocks(con)
+        return allstocks
         
     def processIndustrySectors(self):
         industryStrength = []
