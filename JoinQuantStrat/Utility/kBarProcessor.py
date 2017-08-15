@@ -44,20 +44,22 @@ class KBarProcessor(object):
     This lib takes financial instrument data, and process it according the Chan(Zen) theory
     We need at least 100 K-bars in each input data set
     '''
-    def __init__(self, kDf):
+    def __init__(self, kDf, isdebug=False):
         '''
         dataframe input must contain open, close, high, low columns
         '''
+        self.isdebug = isdebug
         self.kDataFrame_origin = kDf
-        self.kDataFrame_modified = copy.deepcopy(kDf)
-        self.kDataFrame_modified = self.kDataFrame_modified.assign(new_high=np.nan, new_low=np.nan, trend_type=np.nan)
+        self.kDataFrame_standardized = copy.deepcopy(kDf)
+        self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_high=np.nan, new_low=np.nan, trend_type=np.nan)
+        self.kDataFrame_marked = None
     
     def synchForChart(self):
-        self.kDataFrame_modified = self.kDataFrame_modified.drop('new_high', 1)
-        self.kDataFrame_modified = self.kDataFrame_modified.drop('new_low', 1)
-        self.kDataFrame_modified = self.kDataFrame_modified.drop('trend_type', 1)
-        self.kDataFrame_modified['open'] = self.kDataFrame_modified.apply(lambda row: synchOpenPrice(row['open'], row['close'], row['high'], row['low']), axis=1)
-        self.kDataFrame_modified['close'] = self.kDataFrame_modified.apply(lambda row: synchClosePrice(row['open'], row['close'], row['high'], row['low']), axis=1)        
+        self.kDataFrame_standardized = self.kDataFrame_standardized.drop('new_high', 1)
+        self.kDataFrame_standardized = self.kDataFrame_standardized.drop('new_low', 1)
+        self.kDataFrame_standardized = self.kDataFrame_standardized.drop('trend_type', 1)
+        self.kDataFrame_standardized['open'] = self.kDataFrame_standardized.apply(lambda row: synchOpenPrice(row['open'], row['close'], row['high'], row['low']), axis=1)
+        self.kDataFrame_standardized['close'] = self.kDataFrame_standardized.apply(lambda row: synchClosePrice(row['open'], row['close'], row['high'], row['low']), axis=1)        
     
     def checkInclusive(self, first, second):
         # output: 0 = no inclusion, 1 = first contains second, 2 second contains first
@@ -80,54 +82,54 @@ class KBarProcessor(object):
             isBull = True
         return isBull
         
-    def standardize(self, isChart = True):
+    def standardize(self):
         # 1. We need to make sure we start with first two K-bars without inclusive relationship
         # drop the first if there is inclusion, and check again
-        while self.kDataFrame_modified.shape[0] > 2:
-            firstElem = self.kDataFrame_modified.iloc[0]
-            secondElem = self.kDataFrame_modified.iloc[1]
+        while self.kDataFrame_standardized.shape[0] > 2:
+            firstElem = self.kDataFrame_standardized.iloc[0]
+            secondElem = self.kDataFrame_standardized.iloc[1]
             if self.checkInclusive(firstElem, secondElem) != InclusionType.noInclusion:
-                self.kDataFrame_modified.drop(self.kDataFrame_modified.index[0], inplace=True)
+                self.kDataFrame_standardized.drop(self.kDataFrame_standardized.index[0], inplace=True)
                 pass
             else:
-                self.kDataFrame_modified.ix[0,'new_high'] = firstElem.high
-                self.kDataFrame_modified.ix[0,'new_low'] = firstElem.low
+                self.kDataFrame_standardized.ix[0,'new_high'] = firstElem.high
+                self.kDataFrame_standardized.ix[0,'new_low'] = firstElem.low
                 break
 
         # 2. loop through the whole data set and process inclusive relationship
-        for idx in xrange(self.kDataFrame_modified.shape[0]-2):
-            currentElem = self.kDataFrame_modified.iloc[idx]
-            firstElem = self.kDataFrame_modified.iloc[idx+1]
-            secondElem = self.kDataFrame_modified.iloc[idx+2]
+        for idx in xrange(self.kDataFrame_standardized.shape[0]-2):
+            currentElem = self.kDataFrame_standardized.iloc[idx]
+            firstElem = self.kDataFrame_standardized.iloc[idx+1]
+            secondElem = self.kDataFrame_standardized.iloc[idx+2]
             if self.checkInclusive(firstElem, secondElem) != InclusionType.noInclusion:
-                trend = self.kDataFrame_modified.ix[idx+1,'trend_type'] if not np.isnan(self.kDataFrame_modified.ix[idx+1,'trend_type']) else self.isBullType(currentElem, firstElem)
+                trend = self.kDataFrame_standardized.ix[idx+1,'trend_type'] if not np.isnan(self.kDataFrame_standardized.ix[idx+1,'trend_type']) else self.isBullType(currentElem, firstElem)
                 if trend:
-                    self.kDataFrame_modified.ix[idx+2,'new_high']=max(firstElem.high if np.isnan(firstElem.new_high) else firstElem.new_high, secondElem.high if np.isnan(secondElem.new_high) else secondElem.new_high)
-                    self.kDataFrame_modified.ix[idx+2,'new_low']=max(firstElem.low if np.isnan(firstElem.new_low) else firstElem.new_low, secondElem.low if np.isnan(secondElem.new_low) else secondElem.new_low)
+                    self.kDataFrame_standardized.ix[idx+2,'new_high']=max(firstElem.high if np.isnan(firstElem.new_high) else firstElem.new_high, secondElem.high if np.isnan(secondElem.new_high) else secondElem.new_high)
+                    self.kDataFrame_standardized.ix[idx+2,'new_low']=max(firstElem.low if np.isnan(firstElem.new_low) else firstElem.new_low, secondElem.low if np.isnan(secondElem.new_low) else secondElem.new_low)
                     pass
                 else: 
-                    self.kDataFrame_modified.ix[idx+2,'new_high']=min(firstElem.high if np.isnan(firstElem.new_high) else firstElem.new_high, secondElem.high if np.isnan(secondElem.new_high) else secondElem.new_high)
-                    self.kDataFrame_modified.ix[idx+2,'new_low']=min(firstElem.low if np.isnan(firstElem.new_low) else firstElem.new_low, secondElem.low if np.isnan(secondElem.new_low) else secondElem.new_low)
+                    self.kDataFrame_standardized.ix[idx+2,'new_high']=min(firstElem.high if np.isnan(firstElem.new_high) else firstElem.new_high, secondElem.high if np.isnan(secondElem.new_high) else secondElem.new_high)
+                    self.kDataFrame_standardized.ix[idx+2,'new_low']=min(firstElem.low if np.isnan(firstElem.new_low) else firstElem.new_low, secondElem.low if np.isnan(secondElem.new_low) else secondElem.new_low)
                     pass
-                self.kDataFrame_modified.ix[idx+2,'trend_type']=trend
-                self.kDataFrame_modified.ix[idx+1,'new_high']=np.nan
-                self.kDataFrame_modified.ix[idx+1,'new_low']=np.nan
+                self.kDataFrame_standardized.ix[idx+2,'trend_type']=trend
+                self.kDataFrame_standardized.ix[idx+1,'new_high']=np.nan
+                self.kDataFrame_standardized.ix[idx+1,'new_low']=np.nan
             else:
-                if np.isnan(self.kDataFrame_modified.ix[idx+1,'new_high']): 
-                    self.kDataFrame_modified.ix[idx+1,'new_high'] = firstElem.high 
-                if np.isnan(self.kDataFrame_modified.ix[idx+1,'new_low']): 
-                    self.kDataFrame_modified.ix[idx+1,'new_low'] = firstElem.low
-                self.kDataFrame_modified.ix[idx+2,'new_high'] = secondElem.high
-                self.kDataFrame_modified.ix[idx+2,'new_low'] = secondElem.low
+                if np.isnan(self.kDataFrame_standardized.ix[idx+1,'new_high']): 
+                    self.kDataFrame_standardized.ix[idx+1,'new_high'] = firstElem.high 
+                if np.isnan(self.kDataFrame_standardized.ix[idx+1,'new_low']): 
+                    self.kDataFrame_standardized.ix[idx+1,'new_low'] = firstElem.low
+                self.kDataFrame_standardized.ix[idx+2,'new_high'] = secondElem.high
+                self.kDataFrame_standardized.ix[idx+2,'new_low'] = secondElem.low
 
-        self.kDataFrame_modified['high'] = self.kDataFrame_modified['new_high']
-        self.kDataFrame_modified['low'] = self.kDataFrame_modified['new_low']
+        self.kDataFrame_standardized['high'] = self.kDataFrame_standardized['new_high']
+        self.kDataFrame_standardized['low'] = self.kDataFrame_standardized['new_low']
 
-        self.kDataFrame_modified = self.kDataFrame_modified[np.isfinite(self.kDataFrame_modified['high'])]
+        self.kDataFrame_standardized = self.kDataFrame_standardized[np.isfinite(self.kDataFrame_standardized['high'])]
         # lines below is for chart drawing
-        if isChart:
+        if self.isdebug:
             self.synchForChart()
-        return self.kDataFrame_modified
+        return self.kDataFrame_standardized
     
     def checkTopBot(self, current, first, second):
         if first.high > current.high and first.high > second.high:
@@ -138,19 +140,21 @@ class KBarProcessor(object):
             return TopBotType.noTopBot
         
     def markTopBot(self):
-        self.kDataFrame_modified = self.kDataFrame_modified.assign(tb=TopBotType.noTopBot)
+        self.kDataFrame_standardized = self.kDataFrame_standardized.assign(tb=TopBotType.noTopBot)
         # This function assume we have done the standardization process (no inclusion)
-        for idx in xrange(self.kDataFrame_modified.shape[0]-2):
-            currentElem = self.kDataFrame_modified.iloc[idx]
-            firstElem = self.kDataFrame_modified.iloc[idx+1]
-            secondElem = self.kDataFrame_modified.iloc[idx+2]
+        for idx in xrange(self.kDataFrame_standardized.shape[0]-2):
+            currentElem = self.kDataFrame_standardized.iloc[idx]
+            firstElem = self.kDataFrame_standardized.iloc[idx+1]
+            secondElem = self.kDataFrame_standardized.iloc[idx+2]
             topBotType = self.checkTopBot(currentElem, firstElem, secondElem)
             if topBotType != TopBotType.noTopBot:
-                self.kDataFrame_modified.ix[idx+1, 'tb'] = topBotType
+                self.kDataFrame_standardized.ix[idx+1, 'tb'] = topBotType
+        if self.isdebug:
+            print self.kDataFrame_standardized
 
     def defineBi(self):
-        self.kDataFrame_modified = self.kDataFrame_modified.assign(new_index=[i for i in xrange(len(self.kDataFrame_modified))])
-        working_df = self.kDataFrame_modified[self.kDataFrame_modified['tb']!=TopBotType.noTopBot]
+        self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_index=[i for i in xrange(len(self.kDataFrame_standardized))])
+        working_df = self.kDataFrame_standardized[self.kDataFrame_standardized['tb']!=TopBotType.noTopBot]
 #         print working_df
         currentStatus = firstStatus = TopBotType.noTopBot
         i = 0
@@ -205,25 +209,27 @@ class KBarProcessor(object):
                     continue # don't increment i
             i+=1
             markedIndex = i+1
-        self.kDataFrame_modified = working_df[working_df['tb']!=TopBotType.noTopBot]
+        self.kDataFrame_marked = working_df[working_df['tb']!=TopBotType.noTopBot]
+        if self.isdebug:
+            print self.kDataFrame_marked
     
     def getCurrentKBarStatus(self):
         #  at Top or Bot FenXing
         resultStatus = None
-        if self.kDataFrame_modified.ix[-1, 'new_index'] == self.kDataFrame_origin.shape[0]-2:
-            if self.kDataFrame_modified.ix[-1,'tb'] == TopBotType.top:
+        if self.kDataFrame_marked.ix[-1, 'new_index'] == self.kDataFrame_standardized.shape[0]-2:
+            if self.kDataFrame_marked.ix[-1,'tb'] == TopBotType.top:
                 resultStatus = KBarStatus.downTrendNode
             else:
                 resultStatus = KBarStatus.upTrendNode
         else:
-            if self.kDataFrame_modified.ix[-1,'tb'] == TopBotType.top:
+            if self.kDataFrame_marked.ix[-1,'tb'] == TopBotType.top:
                 resultStatus = KBarStatus.downTrend
             else:
                 resultStatus = KBarStatus.upTrend
         return resultStatus
         
     def gaugeStatus(self):
-        self.standardize(False)
+        self.standardize()
         self.markTopBot()
         self.defineBi()
         return self.getCurrentKBarStatus()
