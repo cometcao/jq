@@ -36,12 +36,12 @@ class SectorSelection(object):
         self.frequency = '1d' # use day period
         self.period = 270
         self.gauge_period = 5
-        self.best_effort_period = 5
+        self.top_limit = 5
         self.stock_data_buffer = {}
 
     def displayResult(self, industryStrength, isConcept=False):
-        print industryStrength
-        for sector, strength in industryStrength[:10]:
+#         print industryStrength
+        for sector, strength in industryStrength[:self.top_limit]:
             stocks = []
             if isConcept:
                 stocks = get_concept_stocks(sector)
@@ -52,7 +52,7 @@ class SectorSelection(object):
             
     def sendResult(self, industryStrength, isConcept=False):
         message = ""
-        for sector, strength in industryStrength[:10]:
+        for sector, strength in industryStrength[:self.top_limit]:
             stocks = []
             if isConcept:
                 stocks = get_concept_stocks(sector)
@@ -63,13 +63,18 @@ class SectorSelection(object):
             message += '***'
         send_message(message, channel='weixin')      
 
-    def processAllSectors(self):
+    def processAllSectors(self, sendMsg=False):
         industryStrength = self.processIndustrySectors()
         conceptStrength = self.processConceptSectors()
         self.displayResult(industryStrength)
         self.displayResult(conceptStrength, True)
-        self.sendResult(industryStrength)
-        self.sendResult(conceptStrength, True)
+        if sendMsg:
+            self.sendResult(industryStrength)
+            self.sendResult(conceptStrength, True)
+        industry = [sector for sector, _ in industryStrength[:self.top_limit]] 
+        concept = [sector for sector, _ in conceptStrength[:self.top_limit]]
+        return (industry, concept)
+#         return [stock for stock in get_industry_stocks(industry)] + [stock for stock in get_concept_stocks(concept)]
         
     def processIndustrySectors(self):
         industryStrength = []

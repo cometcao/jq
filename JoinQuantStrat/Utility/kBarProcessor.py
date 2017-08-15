@@ -52,7 +52,10 @@ class KBarProcessor(object):
         self.kDataFrame_modified = copy.deepcopy(kDf)
         self.kDataFrame_modified = self.kDataFrame_modified.assign(new_high=np.nan, new_low=np.nan, trend_type=np.nan)
     
-    def synchOpenClosePrice(self):
+    def synchForChart(self):
+        self.kDataFrame_modified = self.kDataFrame_modified.drop('new_high', 1)
+        self.kDataFrame_modified = self.kDataFrame_modified.drop('new_low', 1)
+        self.kDataFrame_modified = self.kDataFrame_modified.drop('trend_type', 1)
         self.kDataFrame_modified['open'] = self.kDataFrame_modified.apply(lambda row: synchOpenPrice(row['open'], row['close'], row['high'], row['low']), axis=1)
         self.kDataFrame_modified['close'] = self.kDataFrame_modified.apply(lambda row: synchClosePrice(row['open'], row['close'], row['high'], row['low']), axis=1)        
     
@@ -77,7 +80,7 @@ class KBarProcessor(object):
             isBull = True
         return isBull
         
-    def standardize(self):
+    def standardize(self, isChart = True):
         # 1. We need to make sure we start with first two K-bars without inclusive relationship
         # drop the first if there is inclusion, and check again
         while self.kDataFrame_modified.shape[0] > 2:
@@ -121,10 +124,9 @@ class KBarProcessor(object):
         self.kDataFrame_modified['low'] = self.kDataFrame_modified['new_low']
 
         self.kDataFrame_modified = self.kDataFrame_modified[np.isfinite(self.kDataFrame_modified['high'])]
-        self.kDataFrame_modified = self.kDataFrame_modified.drop('new_high', 1)
-        self.kDataFrame_modified = self.kDataFrame_modified.drop('new_low', 1)
-        self.kDataFrame_modified = self.kDataFrame_modified.drop('trend_type', 1)
-        self.synchOpenClosePrice()
+        # lines below is for chart drawing
+        if isChart:
+            self.synchForChart()
         return self.kDataFrame_modified
     
     def checkTopBot(self, current, first, second):
@@ -207,16 +209,21 @@ class KBarProcessor(object):
     
     def getCurrentKBarStatus(self):
         #  at Top or Bot FenXing
-#         print self.kDataFrame_modified
+        resultStatus = None
         if self.kDataFrame_modified.ix[-1, 'new_index'] == self.kDataFrame_origin.shape[0]-2:
             if self.kDataFrame_modified.ix[-1,'tb'] == TopBotType.top:
-                return KBarStatus.downTrendNode
+                resultStatus = KBarStatus.downTrendNode
             else:
-                return KBarStatus.upTrendNode
+                resultStatus = KBarStatus.upTrendNode
         else:
             if self.kDataFrame_modified.ix[-1,'tb'] == TopBotType.top:
-                return KBarStatus.downTrend
+                resultStatus = KBarStatus.downTrend
             else:
-                return KBarStatus.upTrend
+                resultStatus = KBarStatus.upTrend
+        return resultStatus
         
-    
+    def gaugeStatus(self):
+        self.standardize(False)
+        self.markTopBot()
+        self.defineBi()
+        return self.getCurrentKBarStatus()
