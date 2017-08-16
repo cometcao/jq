@@ -42,6 +42,18 @@ class ShortPivotCombo(StatusCombo):
     upNodeUpNode = (KBarStatus.upTrendNode, KBarStatus.upTrendNode)     # (1, 0) (1, 0)
     upNodeDownTrend = (KBarStatus.upTrendNode, KBarStatus.downTrend)      # (1, 0) (-1, 0)
     upNodeDownNode = (KBarStatus.upTrendNode, KBarStatus.downTrendNode)   # (1, 0) (-1, 0)
+    @staticmethod
+    def matchStatus(*params): # at least two parameters
+        first = params[0]
+        second = params[1]
+        if (first == ShortPivotCombo.upNodeUpNode.value[0] or \
+        first == ShortPivotCombo.upNodeDownTrend.value[0] or \
+        first == ShortPivotCombo.upNodeDownNode.value[0]) and \
+        (second == ShortPivotCombo.upNodeUpNode.value[1] or \
+         second == ShortPivotCombo.upNodeDownTrend.value[1] or \
+         second == ShortPivotCombo.upNodeDownNode.value[1]):
+            return True
+        return False
 
 class ShortStatusCombo(StatusCombo):
     downTrendDownTrend = (KBarStatus.downTrend, KBarStatus.downTrend)         # (-1, 1) (-1, 1)
@@ -93,8 +105,9 @@ class ChanMatrix(object):
 #             for (level,s) in zip(ChanMatrix.gauge_level, sc):
 #                 self.trendNodeMatrix.loc[stock,level] = s
         
-    def updateGaugeStockList(self, levels):
-        for stock in self.stockList:
+    def updateGaugeStockList(self, levels, newStockList = None):
+        finalList = [l for l in self.stockList if l in newStockList] if newStockList else self.stockList
+        for stock in finalList:
             sc = self.gaugeStock(stock, levels)
             for (level, s) in zip(levels, sc):
                 self.trendNodeMatrix.loc[stock, level] = s
@@ -126,6 +139,5 @@ class ChanMatrix(object):
 #                                       (working_df[low_level]==LongPivotCombo.downNodeUpNode.value[1]) | \
 #                                       (working_df[low_level]==LongPivotCombo.downNodeUpTrend.value[1]))]
             mask = working_df[[high_level,low_level]].apply(lambda x: LongPivotCombo.matchStatus(*x), axis=1)
-#             print mask
             working_df = working_df[mask]
-        return working_df
+        return working_df.index

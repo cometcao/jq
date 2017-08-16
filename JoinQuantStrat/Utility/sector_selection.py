@@ -82,7 +82,7 @@ class SectorSelection(object):
             allstocks += get_industry_stocks(idu)
         for con in concept:
             allstocks += get_concept_stocks(con)
-        return allstocks
+        return list(set(allstocks))
         
     def processIndustrySectors(self):
         industryStrength = []
