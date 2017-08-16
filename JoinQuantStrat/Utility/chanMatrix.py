@@ -140,4 +140,4 @@ class ChanMatrix(object):
 #                                       (working_df[low_level]==LongPivotCombo.downNodeUpTrend.value[1]))]
             mask = working_df[[high_level,low_level]].apply(lambda x: LongPivotCombo.matchStatus(*x), axis=1)
             working_df = working_df[mask]
-        return working_df.index
+        return list(working_df.index)
