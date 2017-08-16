@@ -216,6 +216,10 @@ class KBarProcessor(object):
     def getCurrentKBarStatus(self):
         #  at Top or Bot FenXing
         resultStatus = None
+        
+        if self.kDataFrame_marked.empty or self.kDataFrame_standardized.shape[0] < 2:
+            return resultStatus
+        
         if self.kDataFrame_marked.ix[-1, 'new_index'] == self.kDataFrame_standardized.shape[0]-2:
             if self.kDataFrame_marked.ix[-1,'tb'] == TopBotType.top:
                 resultStatus = KBarStatus.downTrendNode

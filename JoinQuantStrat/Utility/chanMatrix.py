@@ -25,7 +25,7 @@ class LongPivotCombo(StatusCombo):
     downNodeDownNode = (KBarStatus.downTrendNode, KBarStatus.downTrendNode) # (-1, 0) (-1, 0)
     downNodeUpTrend = (KBarStatus.downTrendNode, KBarStatus.upTrend)      # (-1, 0) (1, 0)
     downNodeUpNode = (KBarStatus.downTrendNode, KBarStatus.upTrendNode)   # (-1, 0) (1, 1)
-    @classmethod
+    @staticmethod
     def matchStatus(*params): # at least two parameters
         first = params[0]
         second = params[1]
@@ -59,6 +59,18 @@ class StatusQueCombo(StatusCombo):
     upTrendDownNode = (KBarStatus.upTrend, KBarStatus.downTrendNode)# (1, 1) (-1, 0)
     upTrendDownTrend = (KBarStatus.upTrend, KBarStatus.downTrend)   # (1, 1) (-1, 1)
     
+# def matchStatus(*params): # at least two parameters
+#     first = params[0]
+#     second = params[1]
+#     if (first == LongPivotCombo.downNodeDownNode.value[0] or \
+#     first == LongPivotCombo.downNodeUpNode.value[0] or \
+#     first == LongPivotCombo.downNodeUpTrend.value[0]) and \
+#     (second == LongPivotCombo.downNodeDownNode.value[1] or \
+#      second == LongPivotCombo.downNodeUpNode.value[1] or \
+#      second == LongPivotCombo.downNodeUpTrend.value[1]):
+#         return True
+#     return False
+    
     
 class ChanMatrix(object):
     '''
@@ -75,10 +87,17 @@ class ChanMatrix(object):
         self.trendNodeMatrix = pd.DataFrame(index=self.stockList, columns=ChanMatrix.gauge_level)
     
     def gaugeStockList(self):
+        self.updateGaugeStockList(ChanMatrix.gauge_level)
+#         for stock in self.stockList:
+#             sc = self.gaugeStock(stock, ChanMatrix.gauge_level)
+#             for (level,s) in zip(ChanMatrix.gauge_level, sc):
+#                 self.trendNodeMatrix.loc[stock,level] = s
+        
+    def updateGaugeStockList(self, levels):
         for stock in self.stockList:
-            sc = self.gaugeStock(stock, ChanMatrix.gauge_level)
-            for (period,s) in zip(ChanMatrix.gauge_level, sc):
-                self.trendNodeMatrix.loc[stock,period] = s
+            sc = self.gaugeStock(stock, levels)
+            for (level, s) in zip(levels, sc):
+                self.trendNodeMatrix.loc[stock, level] = s
         
     def gaugeStock(self, stock, levels):
         gaugeList = []
@@ -91,14 +110,15 @@ class ChanMatrix(object):
     def displayMonitorMatrix(self):
         print self.trendNodeMatrix
         
-    def filterLongPivotCombo(self):
+    def filterLongPivotCombo(self, level_list=None):
         # two column per layer
         working_df = self.trendNodeMatrix
-        for i in xrange(len(ChanMatrix.gauge_level)-1): #2 
+        working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
+        for i in xrange(len(working_level)-1): #2 
             if working_df.empty:
                 break
-            high_level = ChanMatrix.gauge_level[i]
-            low_level = ChanMatrix.gauge_level[i+1]
+            high_level = working_level[i]
+            low_level = working_level[i+1]
 #             working_df = working_df[((working_df[high_level]==LongPivotCombo.downNodeDownNode.value[0]) | \
 #                                      (working_df[high_level]==LongPivotCombo.downNodeUpNode.value[0]) | \
 #                                      (working_df[high_level]==LongPivotCombo.downNodeUpTrend.value[0])) & \
@@ -106,5 +126,6 @@ class ChanMatrix(object):
 #                                       (working_df[low_level]==LongPivotCombo.downNodeUpNode.value[1]) | \
 #                                       (working_df[low_level]==LongPivotCombo.downNodeUpTrend.value[1]))]
             mask = working_df[[high_level,low_level]].apply(lambda x: LongPivotCombo.matchStatus(*x), axis=1)
+#             print mask
             working_df = working_df[mask]
         return working_df
