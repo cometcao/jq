@@ -123,7 +123,7 @@ class ChanMatrix(object):
     def displayMonitorMatrix(self):
         print self.trendNodeMatrix
         
-    def filterLongPivotCombo(self, level_list=None):
+    def filterLongPivotCombo(self, level_list=None, update_df=False):
         # two column per layer
         working_df = self.trendNodeMatrix
         working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
@@ -140,4 +140,21 @@ class ChanMatrix(object):
 #                                       (working_df[low_level]==LongPivotCombo.downNodeUpTrend.value[1]))]
             mask = working_df[[high_level,low_level]].apply(lambda x: LongPivotCombo.matchStatus(*x), axis=1)
             working_df = working_df[mask]
+        if update_df:
+            self.trendNodeMatrix = working_df
         return list(working_df.index)
+    
+    def filterShortPivotCombo(self, level_list=None, update_df=False):
+        # two column per layer
+        working_df = self.trendNodeMatrix
+        working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
+        for i in xrange(len(working_level)-1):
+            if working_df.empty:
+                break
+            high_level = working_level[i]
+            low_level = working_level[i+1]
+            mask = working_df[[high_level,low_level]].apply(lambda x: ShortPivotCombo.matchStatus(*x), axis=1)
+            working_df = working_df[mask]
+        if update_df:
+            self.trendNodeMatrix = working_df
+        return list(working_df.index)            
