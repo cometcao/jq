@@ -117,7 +117,7 @@ class ChanMatrix(object):
         self.updateGaugeStockList(levels=ChanMatrix.gauge_level)
         
     def updateGaugeStockList(self, levels, newStockList = None):
-        finalList = [l for l in self.stockList if l in newStockList] if newStockList else self.stockList
+        finalList = newStockList if newStockList else self.stockList
         for stock in finalList:
             sc = self.gaugeStock_analysis(stock, levels) if self.isAnal else self.gaugeStock(stock, levels)
             for (level, s) in zip(levels, sc):
