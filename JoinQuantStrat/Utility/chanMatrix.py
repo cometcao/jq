@@ -43,7 +43,7 @@ class LongPivotCombo(StatusCombo):
 
 class ShortPivotCombo(StatusCombo):
     upNodeUpNode = (KBarStatus.upTrendNode, KBarStatus.upTrendNode)     # (1, 0) (1, 0)
-    upNodeDownTrend = (KBarStatus.upTrendNode, KBarStatus.downTrend)      # (1, 0) (-1, 0)
+    upNodeDownTrend = (KBarStatus.upTrendNode, KBarStatus.downTrend)      # (1, 0) (-1, 1)
     upNodeDownNode = (KBarStatus.upTrendNode, KBarStatus.downTrendNode)   # (1, 0) (-1, 0)
     @staticmethod
     def matchStatus(*params): # at least two parameters
@@ -113,12 +113,13 @@ class ChanMatrix(object):
         self.stockList = stockList
         self.trendNodeMatrix = pd.DataFrame(index=self.stockList, columns=ChanMatrix.gauge_level)
     
-    def gaugeStockList(self):
-        self.updateGaugeStockList(levels=ChanMatrix.gauge_level)
+    def gaugeStockList(self, l=None):
+        self.updateGaugeStockList(levels=ChanMatrix.gauge_level if not l else l)
         
-    def updateGaugeStockList(self, levels, newStockList = None):
-        finalList = newStockList if newStockList else self.stockList
-        for stock in finalList:
+    def updateGaugeStockList(self, levels, newStockList=None):
+        if newStockList:
+            self.stockList = list(set(newStockList + self.stockList))
+        for stock in self.stockList:
             sc = self.gaugeStock_analysis(stock, levels) if self.isAnal else self.gaugeStock(stock, levels)
             for (level, s) in zip(levels, sc):
                 self.trendNodeMatrix.loc[stock, level] = s
@@ -143,6 +144,24 @@ class ChanMatrix(object):
     def displayMonitorMatrix(self):
         print(self.trendNodeMatrix)
         
+#     class filterCombo(object):    
+#         @staticmethod
+#         def filterCombo_sup(self, filter_method, level_list=None, update_df=False):
+#             # two column per layer
+#             working_df = self.trendNodeMatrix
+#             working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
+#             for i in range(len(working_level)-1): #xrange
+#                 if working_df.empty:
+#                     break
+#                 high_level = working_level[i]
+#                 low_level = working_level[i+1]
+#                 mask = working_df[[high_level,low_level]].apply(lambda x: filter_method(*x), axis=1)
+#                 working_df = working_df[mask]
+#             if update_df:
+#                 self.trendNodeMatrix = working_df
+#             self.stockList=list(working_df.index)
+#             return self.stockList
+        
     def filterLongPivotCombo(self, level_list=None, update_df=False):
         # two column per layer
         working_df = self.trendNodeMatrix
@@ -156,7 +175,8 @@ class ChanMatrix(object):
             working_df = working_df[mask]
         if update_df:
             self.trendNodeMatrix = working_df
-        return list(working_df.index)
+        self.stockList=list(working_df.index)
+        return self.stockList
     
     def filterShortPivotCombo(self, level_list=None, update_df=False):
         # two column per layer
@@ -171,7 +191,8 @@ class ChanMatrix(object):
             working_df = working_df[mask]
         if update_df:
             self.trendNodeMatrix = working_df
-        return list(working_df.index)
+        self.stockList=list(working_df.index)
+        return self.stockList
     
     def filterLongStatusCombo(self, level_list=None, update_df=False):
         # two column per layer
@@ -186,7 +207,8 @@ class ChanMatrix(object):
             working_df = working_df[mask]
         if update_df:
             self.trendNodeMatrix = working_df
-        return list(working_df.index)    
+        self.stockList=list(working_df.index)
+        return self.stockList   
     
     def filterShortStatusCombo(self, level_list=None, update_df=False):
         # two column per layer
@@ -201,4 +223,5 @@ class ChanMatrix(object):
             working_df = working_df[mask]
         if update_df:
             self.trendNodeMatrix = working_df
-        return list(working_df.index)        
+        self.stockList=list(working_df.index)
+        return self.stockList        
