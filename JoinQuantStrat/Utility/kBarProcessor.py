@@ -97,7 +97,7 @@ class KBarProcessor(object):
                 break
 
         # 2. loop through the whole data set and process inclusive relationship
-        for idx in xrange(self.kDataFrame_standardized.shape[0]-2):
+        for idx in range(self.kDataFrame_standardized.shape[0]-2): # xrange
             currentElem = self.kDataFrame_standardized.iloc[idx]
             firstElem = self.kDataFrame_standardized.iloc[idx+1]
             secondElem = self.kDataFrame_standardized.iloc[idx+2]
@@ -142,7 +142,7 @@ class KBarProcessor(object):
     def markTopBot(self):
         self.kDataFrame_standardized = self.kDataFrame_standardized.assign(tb=TopBotType.noTopBot)
         # This function assume we have done the standardization process (no inclusion)
-        for idx in xrange(self.kDataFrame_standardized.shape[0]-2):
+        for idx in range(self.kDataFrame_standardized.shape[0]-2): #xrange
             currentElem = self.kDataFrame_standardized.iloc[idx]
             firstElem = self.kDataFrame_standardized.iloc[idx+1]
             secondElem = self.kDataFrame_standardized.iloc[idx+2]
@@ -150,10 +150,10 @@ class KBarProcessor(object):
             if topBotType != TopBotType.noTopBot:
                 self.kDataFrame_standardized.ix[idx+1, 'tb'] = topBotType
         if self.isdebug:
-            print self.kDataFrame_standardized
+            print(self.kDataFrame_standardized)
 
     def defineBi(self):
-        self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_index=[i for i in xrange(len(self.kDataFrame_standardized))])
+        self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_index=[i for i in range(len(self.kDataFrame_standardized))])
         working_df = self.kDataFrame_standardized[self.kDataFrame_standardized['tb']!=TopBotType.noTopBot]
 #         print working_df
         currentStatus = firstStatus = TopBotType.noTopBot
@@ -211,7 +211,7 @@ class KBarProcessor(object):
             markedIndex = i+1
         self.kDataFrame_marked = working_df[working_df['tb']!=TopBotType.noTopBot]
         if self.isdebug:
-            print self.kDataFrame_marked
+            print(self.kDataFrame_marked)
     
     def getCurrentKBarStatus(self):
         #  at Top or Bot FenXing

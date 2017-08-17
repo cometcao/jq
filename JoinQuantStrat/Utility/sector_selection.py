@@ -5,9 +5,15 @@ Created on 2 Aug 2017
 @author: MetalInvest
 '''
 
-from kuanke.user_space_api import *
+try:
+    from kuanke.user_space_api import *         
+except ImportError as ie:
+    print(str(ie))
 from jqdata import *
+import numpy as np
+import pandas as pd
 import talib
+import datetime
 
 # ֤�����ҵ
 HY_ZJH = ['A01','A02','A03','A04','A05','B06','B07','B08','B09','B11','C13','C14','C15','C17','C18','C19','C20','C21','C22','C23','C24','C25','C26','C27','C28','C29','C30','C31','C32','C33','C34','C35','C36','C37','C38','C39','C40','C41','C42','D44','D45','D46','E47','E48','E50','F51','F52','G53','G54','G55','G56','G58','G59','H61','H62','I63','I64','I65','J66','J67','J68','J69','K70','L71','L72','M73','M74','N77','N78','P82','Q83','R85','R86','R87','S90']
@@ -24,15 +30,25 @@ SW3 = ['850111','850112','850113','850121','850122','850131','850141','850151','
 # ������
 GN = ['GN001','GN028','GN030','GN031','GN032','GN034','GN035','GN036','GN039','GN040','GN041','GN045','GN046','GN050','GN057','GN062','GN069','GN074','GN075','GN076','GN077','GN079','GN080','GN081','GN086','GN087','GN088','GN089','GN090','GN091','GN092','GN093','GN096','GN098','GN099','GN100','GN101','GN103','GN104','GN106','GN107','GN109','GN110','GN111','GN112','GN113','GN114','GN115','GN116','GN119','GN121','GN123','GN124','GN125','GN126','GN127','GN128','GN129','GN130','GN131','GN132','GN133','GN134','GN135','GN136','GN137','GN138','GN139','GN140','GN141','GN142','GN144','GN145','GN146','GN148','GN149','GN151','GN152','GN153','GN154','GN155','GN156','GN157','GN158','GN159','GN160','GN161','GN162','GN163','GN164','GN165','GN166','GN167','GN168','GN169','GN170','GN171','GN172','GN173','GN174','GN175','GN176','GN177','GN178','GN179','GN180','GN181','GN182','GN183','GN184','GN185','GN186','GN187','GN188','GN189','GN190','GN191','GN192','GN193','GN194','GN195','GN196','GN197','GN198','GN199','GN200','GN201','GN202','GN203','GN204','GN205','GN206','GN207','GN208','GN209','GN210','GN211','GN212','GN213','GN214','GN215','GN216','GN217','GN218','GN219','GN220','GN221','GN222','GN223','GN224','GN225','GN226','GN227','GN228','GN229','GN230']
 
+def get_data(stock, count, level, fields, skip_paused=False, df_flag=True, isAnal=False):
+    df = None
+    if isAnal:
+        latest_trading_day = datetime.datetime.now().date()
+        df = get_price(stock, count=count, end_date=latest_trading_day, frequency=level, fields = fields, skip_paused=skip_paused)
+    else:
+        df = attribute_history(stock, count, unit=level, fields = fields, skip_paused=skip_paused, df=df_flag)
+    return df
+
 class SectorSelection(object):
     '''
     This class implement the methods to rank the sectors
     '''
-    def __init__(self, context = None):
+    def __init__(self, context = None, isAnal=False):
         '''
         Constructor
         '''
         self.context = context
+        self.isAnal = isAnal
         self.frequency = '1d' # use day period
         self.period = 270
         self.gauge_period = 5
@@ -47,8 +63,8 @@ class SectorSelection(object):
                 stocks = get_concept_stocks(sector)
             else:
                 stocks = get_industry_stocks(sector)
-            print sector + ':\n'
-            print ','.join([get_security_info(s).display_name for s in stocks])  
+            print (sector + ':\n')
+            print (','.join([get_security_info(s).display_name for s in stocks]))
             
     def sendResult(self, industryStrength, isConcept=False):
         message = ""
@@ -130,7 +146,7 @@ class SectorSelection(object):
             return sectorStrength  
         else:
             avgStrength = 0.0
-            for i in xrange(-1, -self.gauge_period-1, -1):
+            for i in range(-1, -self.gauge_period-1, -1): #range
                 sectorStrength = 0.0
                 removed = 0
                 for stock in sectorStocks:
@@ -144,23 +160,24 @@ class SectorSelection(object):
             avgStrength /= self.gauge_period
             return avgStrength
     
-    def gaugeStockUpTrendStrength_MA_best_effort(self, stock):
-        stock_df = attribute_history(stock, self.period, self.frequency, ('close','paused'), skip_paused=False) if not self.context else self.getlatest_df(stock, self.period, ['close','paused'])
-        MA_5 = talib.SMA(stock_df.close.values, 5)
-        MA_13 = talib.SMA(stock_df.close.values, 13)
-        MA_21 = talib.SMA(stock_df.close.values, 21)
-        MA_34 = talib.SMA(stock_df.close.values, 34)
-        MA_55 = talib.SMA(stock_df.close.values, 55)
-        MA_89 = talib.SMA(stock_df.close.values, 89)
-        MA_144 = talib.SMA(stock_df.close.values, 144)
-        MA_233 = talib.SMA(stock_df.close.values, 233)
-        pass
+#     def gaugeStockUpTrendStrength_MA_best_effort(self, stock):
+#         stock_df = attribute_history(stock, self.period, self.frequency, ('close','paused'), skip_paused=False) if not self.context else self.getlatest_df(stock, self.period, ['close','paused'])
+#         MA_5 = talib.SMA(stock_df.close.values, 5)
+#         MA_13 = talib.SMA(stock_df.close.values, 13)
+#         MA_21 = talib.SMA(stock_df.close.values, 21)
+#         MA_34 = talib.SMA(stock_df.close.values, 34)
+#         MA_55 = talib.SMA(stock_df.close.values, 55)
+#         MA_89 = talib.SMA(stock_df.close.values, 89)
+#         MA_144 = talib.SMA(stock_df.close.values, 144)
+#         MA_233 = talib.SMA(stock_df.close.values, 233)
+#         pass
         
     
     def gaugeStockUpTrendStrength_MA(self, stock, isWeighted=True, index=-1):
 #         stock_df = get_price(stock, count=self.period, end_date='2017-08-01', frequency='daily', fields=['close','paused'], skip_paused=False)
         if index == -1:
-            stock_df = attribute_history(stock, self.period, self.frequency, ('close','paused'), skip_paused=False) if not self.context else self.getlatest_df(stock, self.period, ['close','paused'])
+#             stock_df = attribute_history(stock, self.period, self.frequency, ('close','paused'), skip_paused=False) if not self.context else self.getlatest_df(stock, self.period, ['close','paused'])
+            stock_df = self.getlatest_df(stock, self.period, ['close','paused'], skip_paused=False, df_flag=True)
             MA_5 = self.simple_moving_avg(stock_df.close.values, 5)
             MA_13 = self.simple_moving_avg(stock_df.close.values, 13)
             MA_21 = self.simple_moving_avg(stock_df.close.values, 21)
@@ -192,7 +209,8 @@ class SectorSelection(object):
         else: # take average value of past 20 periods
             stock_df = MA_5 = MA_13 = MA_21 = MA_34 = MA_55 = MA_89 = MA_144 = MA_233 = None
             if stock not in self.stock_data_buffer:
-                stock_df = attribute_history(stock, self.period, self.frequency, ('close','paused'), skip_paused=False) if not self.context else self.getlatest_df(stock, self.period, ['close','paused'])
+#                 stock_df = attribute_history(stock, self.period, self.frequency, ('close','paused'), skip_paused=False) if not self.context else self.getlatest_df(stock, self.period, ['close','paused'])
+                stock_df = self.getlatest_df(stock, self.period, ['close','paused'], skip_paused=False, df_flag=True)
                 MA_5 = talib.SMA(stock_df.close.values, 5)
                 MA_13 = talib.SMA(stock_df.close.values, 13)
                 MA_21 = talib.SMA(stock_df.close.values, 21)
@@ -237,29 +255,31 @@ class SectorSelection(object):
         total = sum(series[-period:])
         return total/period
     
-    def getlatest_df(self, stock, count, fields, df_flag = True):
-        df = attribute_history(stock, count, '1d', fields, df=df_flag)
-        containPaused = 'paused' in fields
-        if containPaused:
-            fields.remove('paused')
-        latest_stock_data = attribute_history(stock, 1, '230m', fields, skip_paused=True, df=df_flag)
-        if containPaused:
-            latest_stock_data.assign(paused=np.nan)
-            cd = get_current_data()
-            latest_stock_data.ix[-1,'paused'] = cd[stock].paused
-
-        if df_flag:
-            latest_stock_data = latest_stock_data.reset_index(drop=False)
-            latest_stock_data.ix[0, 'index'] = pd.DatetimeIndex([self.context.current_dt.date()])[0]
-            latest_stock_data = latest_stock_data.set_index('index')
-            df = df.reset_index().drop_duplicates(subset='index').set_index('index')
-            df = df.append(latest_stock_data, verify_integrity=True) # True
-        else:
-            final_fields = []
-            if isinstance(fields, basestring):
-                final_fields.append(fields)
+    def getlatest_df(self, stock, count, fields, skip_paused=True, df_flag = True):
+#         df = attribute_history(stock, count, '1d', fields, df=df_flag)
+        df = get_data(stock, count, level='1d', fields=fields, skip_paused=skip_paused, df_flag=df_flag, isAnal=self.isAnal)
+        if self.context:
+            containPaused = 'paused' in fields
+            if containPaused:
+                fields.remove('paused')
+            latest_stock_data = attribute_history(stock, 1, '230m', fields, skip_paused=skip_paused, df=df_flag)
+            if containPaused:
+                latest_stock_data.assign(paused=np.nan)
+                cd = get_current_data()
+                latest_stock_data.ix[-1,'paused'] = cd[stock].paused
+    
+            if df_flag:
+                latest_stock_data = latest_stock_data.reset_index(drop=False)
+                latest_stock_data.ix[0, 'index'] = pd.DatetimeIndex([self.context.current_dt.date()])[0]
+                latest_stock_data = latest_stock_data.set_index('index')
+                df = df.reset_index().drop_duplicates(subset='index').set_index('index')
+                df = df.append(latest_stock_data, verify_integrity=True) # True
             else:
-                final_fields = list(fields)
-            [np.append(df[field], latest_stock_data[field][-1]) for field in final_fields]
+                final_fields = []
+                if isinstance(fields, basestring):
+                    final_fields.append(fields)
+                else:
+                    final_fields = list(fields)
+                [np.append(df[field], latest_stock_data[field][-1]) for field in final_fields]
     
         return df

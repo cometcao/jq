@@ -3,8 +3,11 @@ Created on 15 Aug 2017
 
 @author: MetalInvest
 '''
-from kuanke.user_space_api import *
-from jqdata import *
+try:
+    from kuanke.user_space_api import *      
+except ImportError as ie:
+    print(str(ie))
+from jqdata import *    
 import numpy as np
 import pandas as pd
 from enum import Enum 
@@ -59,11 +62,35 @@ class ShortStatusCombo(StatusCombo):
     downTrendDownTrend = (KBarStatus.downTrend, KBarStatus.downTrend)         # (-1, 1) (-1, 1)
     downTrendDownNode = (KBarStatus.downTrend, KBarStatus.downTrendNode)    # (-1, 1) (-1, 0)
     downNodeDownTrend = (KBarStatus.downTrendNode, KBarStatus.downTrend) # (-1, 0) (-1, 1)
+    @staticmethod
+    def matchStatus(*params): # at least two parameters
+        first = params[0]
+        second = params[1]
+        if (first == ShortStatusCombo.downTrendDownTrend.value[0] or \
+        first == ShortStatusCombo.downTrendDownNode.value[0] or \
+        first == ShortStatusCombo.downNodeDownTrend.value[0]) and \
+        (second == ShortStatusCombo.downTrendDownTrend.value[1] or \
+         second == ShortStatusCombo.downTrendDownNode.value[1] or \
+         second == ShortStatusCombo.downNodeDownTrend.value[1]):
+            return True
+        return False
     
 class LongStatusCombo(StatusCombo):
     upTrendUpTrend = (KBarStatus.upTrend, KBarStatus.upTrend)             # (1, 1) (1, 1)
     upTrendUpNode = (KBarStatus.upTrend, KBarStatus.upTrendNode)        # (1, 1) (1, 0)
     upNodeUpTrend = (KBarStatus.upTrendNode, KBarStatus.upTrend)         # (1, 0) (1, 1)
+    @staticmethod
+    def matchStatus(*params): # at least two parameters
+        first = params[0]
+        second = params[1]
+        if (first == LongStatusCombo.upTrendUpTrend.value[0] or \
+        first == LongStatusCombo.upTrendUpNode.value[0] or \
+        first == LongStatusCombo.upNodeUpTrend.value[0]) and \
+        (second == LongStatusCombo.upTrendUpTrend.value[1] or \
+         second == LongStatusCombo.upTrendUpNode.value[1] or \
+         second == LongStatusCombo.upNodeUpTrend.value[1]):
+            return True
+        return False
 
 class StatusQueCombo(StatusCombo):
     downTrendUpNode = (KBarStatus.downTrend, KBarStatus.upTrendNode)# (-1, 1) (1, 0)
@@ -71,44 +98,28 @@ class StatusQueCombo(StatusCombo):
     upTrendDownNode = (KBarStatus.upTrend, KBarStatus.downTrendNode)# (1, 1) (-1, 0)
     upTrendDownTrend = (KBarStatus.upTrend, KBarStatus.downTrend)   # (1, 1) (-1, 1)
     
-# def matchStatus(*params): # at least two parameters
-#     first = params[0]
-#     second = params[1]
-#     if (first == LongPivotCombo.downNodeDownNode.value[0] or \
-#     first == LongPivotCombo.downNodeUpNode.value[0] or \
-#     first == LongPivotCombo.downNodeUpTrend.value[0]) and \
-#     (second == LongPivotCombo.downNodeDownNode.value[1] or \
-#      second == LongPivotCombo.downNodeUpNode.value[1] or \
-#      second == LongPivotCombo.downNodeUpTrend.value[1]):
-#         return True
-#     return False
-    
-    
 class ChanMatrix(object):
     '''
     classdocs
     '''
     gauge_level = ['5d', '1d', '30m']
     
-    def __init__(self, stockList):
+    def __init__(self, stockList, isAnal=False):
         '''
         Constructor
         '''
+        self.isAnal=isAnal
         self.count = 30
         self.stockList = stockList
         self.trendNodeMatrix = pd.DataFrame(index=self.stockList, columns=ChanMatrix.gauge_level)
     
     def gaugeStockList(self):
-        self.updateGaugeStockList(ChanMatrix.gauge_level)
-#         for stock in self.stockList:
-#             sc = self.gaugeStock(stock, ChanMatrix.gauge_level)
-#             for (level,s) in zip(ChanMatrix.gauge_level, sc):
-#                 self.trendNodeMatrix.loc[stock,level] = s
+        self.updateGaugeStockList(levels=ChanMatrix.gauge_level)
         
     def updateGaugeStockList(self, levels, newStockList = None):
         finalList = [l for l in self.stockList if l in newStockList] if newStockList else self.stockList
         for stock in finalList:
-            sc = self.gaugeStock(stock, levels)
+            sc = self.gaugeStock_analysis(stock, levels) if self.isAnal else self.gaugeStock(stock, levels)
             for (level, s) in zip(levels, sc):
                 self.trendNodeMatrix.loc[stock, level] = s
         
@@ -119,25 +130,28 @@ class ChanMatrix(object):
             kb = KBarProcessor(stock_df)
             gaugeList.append(kb.gaugeStatus())
         return gaugeList
+
+    def gaugeStock_analysis(self, stock, levels):
+        gaugeList = []
+        for level in levels:
+            latest_trading_day = get_trade_days()[-1]
+            stock_df = get_price(stock, count=self.count, end_date=latest_trading_day, frequency=level, fields = ['open','close','high','low'], skip_paused=True)
+            kb = KBarProcessor(stock_df)
+            gaugeList.append(kb.gaugeStatus())
+        return gaugeList
     
     def displayMonitorMatrix(self):
-        print self.trendNodeMatrix
+        print(self.trendNodeMatrix)
         
     def filterLongPivotCombo(self, level_list=None, update_df=False):
         # two column per layer
         working_df = self.trendNodeMatrix
         working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
-        for i in xrange(len(working_level)-1): #2 
+        for i in range(len(working_level)-1): #xrange
             if working_df.empty:
                 break
             high_level = working_level[i]
             low_level = working_level[i+1]
-#             working_df = working_df[((working_df[high_level]==LongPivotCombo.downNodeDownNode.value[0]) | \
-#                                      (working_df[high_level]==LongPivotCombo.downNodeUpNode.value[0]) | \
-#                                      (working_df[high_level]==LongPivotCombo.downNodeUpTrend.value[0])) & \
-#                                      ((working_df[low_level]==LongPivotCombo.downNodeDownNode.value[1]) | \
-#                                       (working_df[low_level]==LongPivotCombo.downNodeUpNode.value[1]) | \
-#                                       (working_df[low_level]==LongPivotCombo.downNodeUpTrend.value[1]))]
             mask = working_df[[high_level,low_level]].apply(lambda x: LongPivotCombo.matchStatus(*x), axis=1)
             working_df = working_df[mask]
         if update_df:
@@ -148,7 +162,7 @@ class ChanMatrix(object):
         # two column per layer
         working_df = self.trendNodeMatrix
         working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
-        for i in xrange(len(working_level)-1):
+        for i in range(len(working_level)-1): #xrange
             if working_df.empty:
                 break
             high_level = working_level[i]
@@ -157,4 +171,34 @@ class ChanMatrix(object):
             working_df = working_df[mask]
         if update_df:
             self.trendNodeMatrix = working_df
-        return list(working_df.index)            
+        return list(working_df.index)
+    
+    def filterLongStatusCombo(self, level_list=None, update_df=False):
+        # two column per layer
+        working_df = self.trendNodeMatrix
+        working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
+        for i in range(len(working_level)-1): #xrange
+            if working_df.empty:
+                break
+            high_level = working_level[i]
+            low_level = working_level[i+1]
+            mask = working_df[[high_level,low_level]].apply(lambda x: LongStatusCombo.matchStatus(*x), axis=1)
+            working_df = working_df[mask]
+        if update_df:
+            self.trendNodeMatrix = working_df
+        return list(working_df.index)    
+    
+    def filterShortStatusCombo(self, level_list=None, update_df=False):
+        # two column per layer
+        working_df = self.trendNodeMatrix
+        working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
+        for i in range(len(working_level)-1): #xrange
+            if working_df.empty:
+                break
+            high_level = working_level[i]
+            low_level = working_level[i+1]
+            mask = working_df[[high_level,low_level]].apply(lambda x: ShortStatusCombo.matchStatus(*x), axis=1)
+            working_df = working_df[mask]
+        if update_df:
+            self.trendNodeMatrix = working_df
+        return list(working_df.index)        
