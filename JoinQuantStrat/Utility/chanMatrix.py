@@ -98,6 +98,22 @@ class StatusQueCombo(StatusCombo):
     upTrendDownNode = (KBarStatus.upTrend, KBarStatus.downTrendNode)# (1, 1) (-1, 0)
     upTrendDownTrend = (KBarStatus.upTrend, KBarStatus.downTrend)   # (1, 1) (-1, 1)
     
+def filterCombo_sup(stockList, trendNodeMatrix, filter_method, level_list=None, update_df=False):
+    # two column per layer
+    working_df = trendNodeMatrix
+    working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
+    for i in range(len(working_level)-1): #xrange
+        if working_df.empty:
+            break
+        high_level = working_level[i]
+        low_level = working_level[i+1]
+        mask = working_df[[high_level,low_level]].apply(lambda x: filter_method(*x), axis=1)
+        working_df = working_df[mask]
+    if update_df:
+        trendNodeMatrix = working_df
+    stockList=list(trendNodeMatrix.index)
+    return stockList    
+    
 class ChanMatrix(object):
     '''
     classdocs
@@ -133,6 +149,7 @@ class ChanMatrix(object):
         return gaugeList
 
     def gaugeStock_analysis(self, stock, levels):
+        print("retrieving data using get_price!!!")
         gaugeList = []
         for level in levels:
             latest_trading_day = get_trade_days()[-1]
@@ -143,85 +160,72 @@ class ChanMatrix(object):
     
     def displayMonitorMatrix(self):
         print(self.trendNodeMatrix)
-        
-#     class filterCombo(object):    
-#         @staticmethod
-#         def filterCombo_sup(self, filter_method, level_list=None, update_df=False):
-#             # two column per layer
-#             working_df = self.trendNodeMatrix
-#             working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
-#             for i in range(len(working_level)-1): #xrange
-#                 if working_df.empty:
-#                     break
-#                 high_level = working_level[i]
-#                 low_level = working_level[i+1]
-#                 mask = working_df[[high_level,low_level]].apply(lambda x: filter_method(*x), axis=1)
-#                 working_df = working_df[mask]
-#             if update_df:
-#                 self.trendNodeMatrix = working_df
-#             self.stockList=list(working_df.index)
-#             return self.stockList
-        
+                
     def filterLongPivotCombo(self, level_list=None, update_df=False):
-        # two column per layer
-        working_df = self.trendNodeMatrix
-        working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
-        for i in range(len(working_level)-1): #xrange
-            if working_df.empty:
-                break
-            high_level = working_level[i]
-            low_level = working_level[i+1]
-            mask = working_df[[high_level,low_level]].apply(lambda x: LongPivotCombo.matchStatus(*x), axis=1)
-            working_df = working_df[mask]
-        if update_df:
-            self.trendNodeMatrix = working_df
-        self.stockList=list(working_df.index)
-        return self.stockList
+        filterCombo_sup(self.stockList, self.trendNodeMatrix, LongPivotCombo.matchStatus, level_list, update_df)
+        
+#         # two column per layer
+#         working_df = self.trendNodeMatrix
+#         working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
+#         for i in range(len(working_level)-1): #xrange
+#             if working_df.empty:
+#                 break
+#             high_level = working_level[i]
+#             low_level = working_level[i+1]
+#             mask = working_df[[high_level,low_level]].apply(lambda x: LongPivotCombo.matchStatus(*x), axis=1)
+#             working_df = working_df[mask]
+#         if update_df:
+#             self.trendNodeMatrix = working_df
+#         self.stockList=list(self.trendNodeMatrix.index)
+#         return self.stockList
     
     def filterShortPivotCombo(self, level_list=None, update_df=False):
-        # two column per layer
-        working_df = self.trendNodeMatrix
-        working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
-        for i in range(len(working_level)-1): #xrange
-            if working_df.empty:
-                break
-            high_level = working_level[i]
-            low_level = working_level[i+1]
-            mask = working_df[[high_level,low_level]].apply(lambda x: ShortPivotCombo.matchStatus(*x), axis=1)
-            working_df = working_df[mask]
-        if update_df:
-            self.trendNodeMatrix = working_df
-        self.stockList=list(working_df.index)
-        return self.stockList
+        filterCombo_sup(self.stockList, self.trendNodeMatrix, ShortPivotCombo.matchStatus, level_list, update_df)
+#         # two column per layer
+#         working_df = self.trendNodeMatrix
+#         working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
+#         for i in range(len(working_level)-1): #xrange
+#             if working_df.empty:
+#                 break
+#             high_level = working_level[i]
+#             low_level = working_level[i+1]
+#             mask = working_df[[high_level,low_level]].apply(lambda x: ShortPivotCombo.matchStatus(*x), axis=1)
+#             working_df = working_df[mask]
+#         if update_df:
+#             self.trendNodeMatrix = working_df
+#         self.stockList=list(self.trendNodeMatrix.index)
+#         return self.stockList
     
     def filterLongStatusCombo(self, level_list=None, update_df=False):
-        # two column per layer
-        working_df = self.trendNodeMatrix
-        working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
-        for i in range(len(working_level)-1): #xrange
-            if working_df.empty:
-                break
-            high_level = working_level[i]
-            low_level = working_level[i+1]
-            mask = working_df[[high_level,low_level]].apply(lambda x: LongStatusCombo.matchStatus(*x), axis=1)
-            working_df = working_df[mask]
-        if update_df:
-            self.trendNodeMatrix = working_df
-        self.stockList=list(working_df.index)
-        return self.stockList   
+        filterCombo_sup(self.stockList, self.trendNodeMatrix, LongStatusCombo.matchStatus, level_list, update_df)
+#         # two column per layer
+#         working_df = self.trendNodeMatrix
+#         working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
+#         for i in range(len(working_level)-1): #xrange
+#             if working_df.empty:
+#                 break
+#             high_level = working_level[i]
+#             low_level = working_level[i+1]
+#             mask = working_df[[high_level,low_level]].apply(lambda x: LongStatusCombo.matchStatus(*x), axis=1)
+#             working_df = working_df[mask]
+#         if update_df:
+#             self.trendNodeMatrix = working_df
+#         self.stockList=list(self.trendNodeMatrix.index)
+#         return self.stockList   
     
     def filterShortStatusCombo(self, level_list=None, update_df=False):
-        # two column per layer
-        working_df = self.trendNodeMatrix
-        working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
-        for i in range(len(working_level)-1): #xrange
-            if working_df.empty:
-                break
-            high_level = working_level[i]
-            low_level = working_level[i+1]
-            mask = working_df[[high_level,low_level]].apply(lambda x: ShortStatusCombo.matchStatus(*x), axis=1)
-            working_df = working_df[mask]
-        if update_df:
-            self.trendNodeMatrix = working_df
-        self.stockList=list(working_df.index)
-        return self.stockList        
+        filterCombo_sup(self.stockList, self.trendNodeMatrix, ShortStatusCombo.matchStatus, level_list, update_df)
+#         # two column per layer
+#         working_df = self.trendNodeMatrix
+#         working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
+#         for i in range(len(working_level)-1): #xrange
+#             if working_df.empty:
+#                 break
+#             high_level = working_level[i]
+#             low_level = working_level[i+1]
+#             mask = working_df[[high_level,low_level]].apply(lambda x: ShortStatusCombo.matchStatus(*x), axis=1)
+#             working_df = working_df[mask]
+#         if update_df:
+#             self.trendNodeMatrix = working_df
+#         self.stockList=list(self.trendNodeMatrix.index)
+#         return self.stockList        
