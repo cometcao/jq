@@ -159,8 +159,8 @@ class ChanMatrix(object):
             working_df = working_df[mask]
         if update_df:
             self.trendNodeMatrix = working_df
-        self.stockList=list(self.trendNodeMatrix.index)
-        return self.stockList
+            self.stockList=list(working_df.index)
+        return list(working_df)
     
     def filterShortPivotCombo(self, level_list=None, update_df=False):
 #         self.filterCombo_sup(ShortPivotCombo.matchStatus, level_list, update_df)
@@ -176,8 +176,8 @@ class ChanMatrix(object):
             working_df = working_df[mask]
         if update_df:
             self.trendNodeMatrix = working_df
-        self.stockList=list(self.trendNodeMatrix.index)
-        return self.stockList
+            self.stockList=list(working_df.index)
+        return list(working_df)
     
     def filterLongStatusCombo(self, level_list=None, update_df=False):
 #         self.filterCombo_sup(LongStatusCombo.matchStatus, level_list, update_df)
@@ -193,8 +193,8 @@ class ChanMatrix(object):
             working_df = working_df[mask]
         if update_df:
             self.trendNodeMatrix = working_df
-        self.stockList=list(self.trendNodeMatrix.index)
-        return self.stockList   
+            self.stockList=list(working_df.index)
+        return list(working_df)
     
     def filterShortStatusCombo(self, level_list=None, update_df=False):
 #         self.filterCombo_sup(ShortStatusCombo.matchStatus, level_list, update_df)
@@ -210,8 +210,8 @@ class ChanMatrix(object):
             working_df = working_df[mask]
         if update_df:
             self.trendNodeMatrix = working_df
-        self.stockList=list(self.trendNodeMatrix.index)
-        return self.stockList        
+            self.stockList=list(working_df.index)
+        return list(working_df)      
 
 #     def filterCombo_sup(self, filter_method, level_list=None, update_df=False):
 #         # two column per layer
@@ -226,5 +226,5 @@ class ChanMatrix(object):
 #             working_df = working_df[mask]
 #         if update_df:
 #             self.trendNodeMatrix = working_df
-#         self.stockList=list(self.trendNodeMatrix.index)
-#         return self.stockList  
+#             self.stockList=list(working_df.index)
+#         return list(working_df)
