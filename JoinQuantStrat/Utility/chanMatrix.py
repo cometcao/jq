@@ -160,7 +160,7 @@ class ChanMatrix(object):
         if update_df:
             self.trendNodeMatrix = working_df
             self.stockList=list(working_df.index)
-        return list(working_df)
+        return list(working_df.index)
     
     def filterShortPivotCombo(self, level_list=None, update_df=False):
 #         self.filterCombo_sup(ShortPivotCombo.matchStatus, level_list, update_df)
@@ -177,7 +177,7 @@ class ChanMatrix(object):
         if update_df:
             self.trendNodeMatrix = working_df
             self.stockList=list(working_df.index)
-        return list(working_df)
+        return list(working_df.index)
     
     def filterLongStatusCombo(self, level_list=None, update_df=False):
 #         self.filterCombo_sup(LongStatusCombo.matchStatus, level_list, update_df)
@@ -194,7 +194,7 @@ class ChanMatrix(object):
         if update_df:
             self.trendNodeMatrix = working_df
             self.stockList=list(working_df.index)
-        return list(working_df)
+        return list(working_df.index)
     
     def filterShortStatusCombo(self, level_list=None, update_df=False):
 #         self.filterCombo_sup(ShortStatusCombo.matchStatus, level_list, update_df)
@@ -211,7 +211,7 @@ class ChanMatrix(object):
         if update_df:
             self.trendNodeMatrix = working_df
             self.stockList=list(working_df.index)
-        return list(working_df)      
+        return list(working_df.index)
 
 #     def filterCombo_sup(self, filter_method, level_list=None, update_df=False):
 #         # two column per layer
@@ -227,4 +227,4 @@ class ChanMatrix(object):
 #         if update_df:
 #             self.trendNodeMatrix = working_df
 #             self.stockList=list(working_df.index)
-#         return list(working_df)
+#         return list(working_df.index)
