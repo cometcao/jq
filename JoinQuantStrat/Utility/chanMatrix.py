@@ -151,11 +151,11 @@ class ChanMatrix(object):
             gaugeList.append(kb.gaugeStatus())
         return gaugeList
     
-    def displayMonitorMatrix(self):
-        print(self.trendNodeMatrix)
+    def displayMonitorMatrix(self, stock_list=None):
+        print(self.trendNodeMatrix[stock_list] if stock_list else self.trendNodeMatrix)
                 
     def filterLongPivotCombo(self, stock_list=None, level_list=None, update_df=False):
-        self.filterCombo_sup(LongPivotCombo.matchStatus, stock_list, level_list, update_df)  
+        return self.filterCombo_sup(LongPivotCombo.matchStatus, stock_list, level_list, update_df)  
         # two column per layer
 #         working_df = self.trendNodeMatrix
 #         working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
@@ -172,7 +172,7 @@ class ChanMatrix(object):
 #         return list(working_df.index)
     
     def filterShortPivotCombo(self, stock_list=None, level_list=None, update_df=False):
-        self.filterCombo_sup(ShortPivotCombo.matchStatus, stock_list, level_list, update_df)
+        return self.filterCombo_sup(ShortPivotCombo.matchStatus, stock_list, level_list, update_df)
         # two column per layer
 #         working_df = self.trendNodeMatrix
 #         working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
@@ -189,7 +189,7 @@ class ChanMatrix(object):
 #         return list(working_df.index)
     
     def filterLongStatusCombo(self, stock_list=None, level_list=None, update_df=False):
-        self.filterCombo_sup(LongStatusCombo.matchStatus, stock_list, level_list, update_df)
+        return self.filterCombo_sup(LongStatusCombo.matchStatus, stock_list, level_list, update_df)
         # two column per layer
 #         working_df = self.trendNodeMatrix
 #         working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
@@ -206,7 +206,7 @@ class ChanMatrix(object):
 #         return list(working_df.index)
     
     def filterShortStatusCombo(self, stock_list=None, level_list=None, update_df=False):
-        self.filterCombo_sup(ShortStatusCombo.matchStatus, stock_list, level_list, update_df)
+        return self.filterCombo_sup(ShortStatusCombo.matchStatus, stock_list, level_list, update_df)
         # two column per layer
 #         working_df = self.trendNodeMatrix
 #         working_level = [l1 for l1 in ChanMatrix.gauge_level if l1 in level_list] if level_list else ChanMatrix.gauge_level
