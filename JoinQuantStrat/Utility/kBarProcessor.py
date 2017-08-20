@@ -206,6 +206,11 @@ class KBarProcessor(object):
                 else:
                     working_df.ix[markedIndex,'tb'] = TopBotType.noTopBot
                     markedIndex += 1
+                    # if marketIndex is the last one
+                    if markedIndex > working_df.shape[0]-1 \
+                    and ((working_df.ix[i,'tb']==TopBotType.top and self.kDataFrame_origin.ix[-1,'high'] > working_df.ix[i, 'high']) \
+                    or (working_df.ix[i,'tb']==TopBotType.bot and self.kDataFrame_origin.ix[-1, 'low'] < working_df.ix[i, 'low']) ):
+                        working_df.ix[i, 'tb'] = TopBotType.noTopBot
                     continue # don't increment i
             i+=1
             markedIndex = i+1
