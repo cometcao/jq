@@ -63,8 +63,7 @@ class SectorSelection(object):
                 stocks = get_concept_stocks(sector)
             else:
                 stocks = get_industry_stocks(sector)
-            print (sector + ':\n')
-            print (','.join([get_security_info(s).display_name for s in stocks]))
+            print (sector+':'+','.join([get_security_info(s).display_name for s in stocks]))
             
     def sendResult(self, industryStrength, isConcept=False):
         message = ""
@@ -155,7 +154,10 @@ class SectorSelection(object):
                         removed+=1
                     else:
                         sectorStrength += stockStrength
-                sectorStrength /= (len(sectorStocks)-removed)      
+                if len(sectorStocks)==removed:
+                    sectorStrength = 0.0
+                else:
+                    sectorStrength /= (len(sectorStocks)-removed)
                 avgStrength += sectorStrength
             avgStrength /= self.gauge_period
             return avgStrength
