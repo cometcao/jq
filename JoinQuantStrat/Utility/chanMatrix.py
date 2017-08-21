@@ -109,7 +109,7 @@ class ChanMatrix(object):
         Constructor
         '''
         self.isAnal=isAnal
-        self.count = 30
+        self.count = 15 # 30
         self.stockList = stockList
         self.trendNodeMatrix = pd.DataFrame(index=self.stockList, columns=ChanMatrix.gauge_level)
     
@@ -117,9 +117,8 @@ class ChanMatrix(object):
         self.updateGaugeStockList(levels=ChanMatrix.gauge_level if not l else l)
         
     def updateGaugeStockList(self, levels, newStockList=None):
-        if newStockList:
-            self.stockList = list(set(newStockList + self.stockList))
-        for stock in self.stockList:
+        candidate_list = newStockList if newStockList else self.stockList
+        for stock in candidate_list:
             sc = self.gaugeStock_analysis(stock, levels) if self.isAnal else self.gaugeStock(stock, levels)
             for (level, s) in zip(levels, sc):
                 self.trendNodeMatrix.loc[stock, level] = s
