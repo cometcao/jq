@@ -32,12 +32,9 @@ class LongPivotCombo(StatusCombo):
     def matchStatus(*params): # at least two parameters
         first = params[0]
         second = params[1]
-        if (first == LongPivotCombo.downNodeDownNode.value[0] or \
-        first == LongPivotCombo.downNodeUpNode.value[0] or \
-        first == LongPivotCombo.downNodeUpTrend.value[0]) and \
-        (second == LongPivotCombo.downNodeDownNode.value[1] or \
-         second == LongPivotCombo.downNodeUpNode.value[1] or \
-         second == LongPivotCombo.downNodeUpTrend.value[1]):
+        if (first == LongPivotCombo.downNodeDownNode.value[0] and second == LongPivotCombo.downNodeDownNode.value[1]) or \
+            (first == LongPivotCombo.downNodeUpNode.value[0] and second == LongPivotCombo.downNodeUpNode.value[1]) or \
+            (first == LongPivotCombo.downNodeUpTrend.value[0] and second == LongPivotCombo.downNodeUpTrend.value[1]):
             return True
         return False
 
@@ -49,12 +46,9 @@ class ShortPivotCombo(StatusCombo):
     def matchStatus(*params): # at least two parameters
         first = params[0]
         second = params[1]
-        if (first == ShortPivotCombo.upNodeUpNode.value[0] or \
-        first == ShortPivotCombo.upNodeDownTrend.value[0] or \
-        first == ShortPivotCombo.upNodeDownNode.value[0]) and \
-        (second == ShortPivotCombo.upNodeUpNode.value[1] or \
-         second == ShortPivotCombo.upNodeDownTrend.value[1] or \
-         second == ShortPivotCombo.upNodeDownNode.value[1]):
+        if (first == ShortPivotCombo.upNodeUpNode.value[0] and second == ShortPivotCombo.upNodeUpNode.value[1]) or \
+            (first == ShortPivotCombo.upNodeDownTrend.value[0] and second == ShortPivotCombo.upNodeDownTrend.value[1]) or \
+            (first == ShortPivotCombo.upNodeDownNode.value[0] and second == ShortPivotCombo.upNodeDownNode.value[1]):
             return True
         return False
 
@@ -66,12 +60,9 @@ class ShortStatusCombo(StatusCombo):
     def matchStatus(*params): # at least two parameters
         first = params[0]
         second = params[1]
-        if (first == ShortStatusCombo.downTrendDownTrend.value[0] or \
-        first == ShortStatusCombo.downTrendDownNode.value[0] or \
-        first == ShortStatusCombo.downNodeDownTrend.value[0]) and \
-        (second == ShortStatusCombo.downTrendDownTrend.value[1] or \
-         second == ShortStatusCombo.downTrendDownNode.value[1] or \
-         second == ShortStatusCombo.downNodeDownTrend.value[1]):
+        if (first == ShortStatusCombo.downTrendDownTrend.value[0] and second == ShortStatusCombo.downTrendDownTrend.value[1]) or \
+            (first == ShortStatusCombo.downTrendDownNode.value[0] and second == ShortStatusCombo.downTrendDownNode.value[1]) or \
+            (first == ShortStatusCombo.downNodeDownTrend.value[0] and second == ShortStatusCombo.downNodeDownTrend.value[1]):
             return True
         return False
     
@@ -83,12 +74,9 @@ class LongStatusCombo(StatusCombo):
     def matchStatus(*params): # at least two parameters
         first = params[0]
         second = params[1]
-        if (first == LongStatusCombo.upTrendUpTrend.value[0] or \
-        first == LongStatusCombo.upTrendUpNode.value[0] or \
-        first == LongStatusCombo.upNodeUpTrend.value[0]) and \
-        (second == LongStatusCombo.upTrendUpTrend.value[1] or \
-         second == LongStatusCombo.upTrendUpNode.value[1] or \
-         second == LongStatusCombo.upNodeUpTrend.value[1]):
+        if (first == LongStatusCombo.upTrendUpTrend.value[0] and second == LongStatusCombo.upTrendUpTrend.value[1]) or \
+            (first == LongStatusCombo.upTrendUpNode.value[0] and second == LongStatusCombo.upTrendUpNode.value[1]) or \
+            (first == LongStatusCombo.upNodeUpTrend.value[0] and second == LongStatusCombo.upNodeUpTrend.value[1]):
             return True
         return False
 
