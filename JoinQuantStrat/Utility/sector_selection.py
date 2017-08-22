@@ -210,28 +210,32 @@ class SectorSelection(object):
                 return 233 if isWeighted else 9
         else: # take average value of past 20 periods
             stock_df = MA_5 = MA_13 = MA_21 = MA_34 = MA_55 = MA_89 = MA_144 = MA_233 = None
-            if stock not in self.stock_data_buffer:
-#                 stock_df = attribute_history(stock, self.period, self.frequency, ('close','paused'), skip_paused=False) if not self.context else self.getlatest_df(stock, self.period, ['close','paused'])
-                stock_df = self.getlatest_df(stock, self.period, ['close','paused'], skip_paused=False, df_flag=True)
-                MA_5 = talib.SMA(stock_df.close.values, 5)
-                MA_13 = talib.SMA(stock_df.close.values, 13)
-                MA_21 = talib.SMA(stock_df.close.values, 21)
-                MA_34 = talib.SMA(stock_df.close.values, 34)
-                MA_55 = talib.SMA(stock_df.close.values, 55)
-                MA_89 = talib.SMA(stock_df.close.values, 89)
-                MA_144 = talib.SMA(stock_df.close.values, 144)
-                MA_233 = talib.SMA(stock_df.close.values, 233)
-                self.stock_data_buffer[stock]=[stock_df, MA_5, MA_13, MA_21, MA_34, MA_55, MA_89, MA_144, MA_233]
-            else:
-                stock_df = self.stock_data_buffer[stock][0]
-                MA_5 = self.stock_data_buffer[stock][1]
-                MA_13 = self.stock_data_buffer[stock][2]
-                MA_21 = self.stock_data_buffer[stock][3]
-                MA_34 = self.stock_data_buffer[stock][4]
-                MA_55 = self.stock_data_buffer[stock][5]
-                MA_89 = self.stock_data_buffer[stock][6]
-                MA_144 = self.stock_data_buffer[stock][7]
-                MA_233 = self.stock_data_buffer[stock][8]
+            try:
+                if stock not in self.stock_data_buffer:
+    #                 stock_df = attribute_history(stock, self.period, self.frequency, ('close','paused'), skip_paused=False) if not self.context else self.getlatest_df(stock, self.period, ['close','paused'])
+                    stock_df = self.getlatest_df(stock, self.period, ['close','paused'], skip_paused=False, df_flag=True)
+                    MA_5 = talib.SMA(stock_df.close.values, 5)
+                    MA_13 = talib.SMA(stock_df.close.values, 13)
+                    MA_21 = talib.SMA(stock_df.close.values, 21)
+                    MA_34 = talib.SMA(stock_df.close.values, 34)
+                    MA_55 = talib.SMA(stock_df.close.values, 55)
+                    MA_89 = talib.SMA(stock_df.close.values, 89)
+                    MA_144 = talib.SMA(stock_df.close.values, 144)
+                    MA_233 = talib.SMA(stock_df.close.values, 233)
+                    self.stock_data_buffer[stock]=[stock_df, MA_5, MA_13, MA_21, MA_34, MA_55, MA_89, MA_144, MA_233]
+                else:
+                    stock_df = self.stock_data_buffer[stock][0]
+                    MA_5 = self.stock_data_buffer[stock][1]
+                    MA_13 = self.stock_data_buffer[stock][2]
+                    MA_21 = self.stock_data_buffer[stock][3]
+                    MA_34 = self.stock_data_buffer[stock][4]
+                    MA_55 = self.stock_data_buffer[stock][5]
+                    MA_89 = self.stock_data_buffer[stock][6]
+                    MA_144 = self.stock_data_buffer[stock][7]
+                    MA_233 = self.stock_data_buffer[stock][8]
+            except Exception as e:
+                print (str(e))
+                return -1
             if stock_df.paused[index]: # paused we need to remove it from calculation
                 return -1 
             elif stock_df.close[index] < MA_5[index] or np.isnan(MA_5[index]):

@@ -130,7 +130,8 @@ class ChanMatrix(object):
         return self.trendNodeMatrix.loc[stock_list]
     
     def appendStockList(self, stock_list_df):
-        self.trendNodeMatrix=self.trendNodeMatrix.append(stock_list_df, verify_integrity=True)
+        to_append = [stock for stock in stock_list_df.index if stock not in self.trendNodeMatrix.index]
+        self.trendNodeMatrix=self.trendNodeMatrix.append(stock_list_df.loc[to_append], verify_integrity=True)
         
     def gaugeStock(self, stock, levels):
         gaugeList = []
