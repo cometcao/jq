@@ -222,6 +222,7 @@ class KBarProcessor(object):
         #  at Top or Bot FenXing
         resultStatus = None
         
+        # TODO, if not enough data given, long trend status can't be gauged here. We ignore it
         if self.kDataFrame_marked.empty or self.kDataFrame_standardized.shape[0] < 2:
             return resultStatus
         
