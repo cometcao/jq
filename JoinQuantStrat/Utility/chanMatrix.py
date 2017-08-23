@@ -113,6 +113,7 @@ class ChanMatrix(object):
     
     def removeGaugeStockList(self, to_be_removed):
         self.trendNodeMatrix.drop(to_be_removed, inplace=True)
+        self.stockList = list(self.trendNodeMatrix.index)
         
     def getGaugeStockList(self, stock_list):
         return self.trendNodeMatrix.loc[stock_list]
@@ -120,6 +121,7 @@ class ChanMatrix(object):
     def appendStockList(self, stock_list_df):
         to_append = [stock for stock in stock_list_df.index if stock not in self.trendNodeMatrix.index]
         self.trendNodeMatrix=self.trendNodeMatrix.append(stock_list_df.loc[to_append], verify_integrity=True)
+        self.stockList = list(self.trendNodeMatrix.index)
         
     def gaugeStock(self, stock, levels):
         gaugeList = []
