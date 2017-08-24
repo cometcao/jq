@@ -8,24 +8,7 @@ Created on 1 Aug 2017
 from jqdata import *
 import numpy as np
 import copy
-from enum import Enum 
-
-class InclusionType(Enum):
-    # output: 0 = no inclusion, 1 = first contains second, 2 second contains first
-    noInclusion = 0
-    firstCsecond = 2
-    secondCfirst = 3
-    
-class TopBotType(Enum):
-    noTopBot = 0
-    top = 1
-    bot = -1
-
-class KBarStatus(Enum):
-    upTrendNode = (1, 0)
-    upTrend = (1, 1)
-    downTrendNode = (-1, 0)
-    downTrend = (-1, 1)
+from biaoLiStatus import * 
 
 def synchOpenPrice(open, close, high, low):
     if open > close:
