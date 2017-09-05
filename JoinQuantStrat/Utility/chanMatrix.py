@@ -85,7 +85,13 @@ class ChanMatrix(object):
         return self.filterCombo_sup(ShortStatusCombo.matchStatus, stock_list, level_list, update_df)
     
     def filterDownNodeDownNode(self, stock_list=None, level_list=None, update_df=False):
-        return self.filterCombo_sup(DownNodeDownNode.matchBiaoLiStatus(), stock_list, level_list, update_df)
+        return self.filterCombo_sup(DownNodeDownNode.matchBiaoLiStatus, stock_list, level_list, update_df)
+    
+    def filterDownNodeUpTrend(self, stock_list=None, level_list=None, update_df=False):
+        return self.filterCombo_sup(DownNodeUpTrend.matchBiaoLiStatus, stock_list, level_list, update_df)
+
+    def filterUpTrendDownNode(self, stock_list=None, level_list=None, update_df=False):
+        return self.filterCombo_sup(UpTrendDownNode.matchBiaoLiStatus, stock_list, level_list, update_df)
 
     def filterCombo_sup(self, filter_method, stock_list=None, level_list=None, update_df=False):
         # two column per layer
