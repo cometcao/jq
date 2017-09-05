@@ -224,8 +224,9 @@ class KBarProcessor(object):
                 resultStatus = KBarStatus.upTrend
         return resultStatus
         
-    def gaugeStatus(self):
+    def gaugeStatus(self, isSimple=True):
         self.standardize()
         self.markTopBot()
-        self.defineBi()
+        if not isSimple:
+            self.defineBi() # not necessary for biaoli status
         return self.getCurrentKBarStatus()

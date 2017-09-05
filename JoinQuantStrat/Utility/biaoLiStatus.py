@@ -16,7 +16,6 @@ It defines classes_and_methods
 @contact:    user_email
 @deffield    updated: Updated
 '''
-
 from enum import Enum 
 
 class InclusionType(Enum):
@@ -40,63 +39,63 @@ class StatusCombo(Enum):
     @staticmethod
     def matchStatus(*parameters):
         pass
+    
+class StatusValue(object):
     @classmethod
     def matchBiaoLiStatus(cls, *params):
         first = params[0]
         second = params[1]
-        return first == cls.status.value[0] and second == cls.status.value[1]
+        return first == cls.status[0] and second == cls.status[1]
+    @classmethod
+    def testClassmethod(cls):
+        print(type(cls.status[0]))
 
-class DownNodeDownNode(StatusCombo):
+class DownNodeDownNode(StatusValue):
     status = (KBarStatus.downTrendNode, KBarStatus.downTrendNode) # (-1, 0) (-1, 0)
-    @staticmethod
-    def matchStatus(*params):
-        first = params[0]
-        second = params[1]
-        return first == DownNodeDownNode.status.value[0] and second == DownNodeDownNode.status.value[1]
     
-class DownNodeUpTrend(StatusCombo):
+class DownNodeUpTrend(StatusValue):
     status = (KBarStatus.downTrendNode, KBarStatus.upTrend) # (-1, 0) (1, 1)
     
-class DownNodeUpNode(StatusCombo):
+class DownNodeUpNode(StatusValue):
     status = (KBarStatus.downTrendNode, KBarStatus.upTrendNode) # (-1, 0) (-1, 0)
     
-class UpNodeUpNode(StatusCombo):
+class UpNodeUpNode(StatusValue):
     status = (KBarStatus.upTrendNode, KBarStatus.upTrendNode)     # (1, 0) (1, 0)
     
-class UpNodeDownTrend(StatusCombo):
+class UpNodeDownTrend(StatusValue):
     status = (KBarStatus.upTrendNode, KBarStatus.downTrend)      # (1, 0) (-1, 1)
     
-class UpNodeDownNode(StatusCombo):
+class UpNodeDownNode(StatusValue):
     status = (KBarStatus.upTrendNode, KBarStatus.downTrendNode)   # (1, 0) (-1, 0)
 
-class DownTrendDownTrend(StatusCombo):
+class DownTrendDownTrend(StatusValue):
     status = (KBarStatus.downTrend, KBarStatus.downTrend)         # (-1, 1) (-1, 1)
     
-class DownTrendDownNode(StatusCombo):
+class DownTrendDownNode(StatusValue):
     status = (KBarStatus.downTrend, KBarStatus.downTrendNode)    # (-1, 1) (-1, 0)
 
-class DownNodeDownTrend(StatusCombo):
+class DownNodeDownTrend(StatusValue):
     status = (KBarStatus.downTrendNode, KBarStatus.downTrend) # (-1, 0) (-1, 1)
 
-class UpTrendUpTrend(StatusCombo):
+class UpTrendUpTrend(StatusValue):
     status = (KBarStatus.upTrend, KBarStatus.upTrend)             # (1, 1) (1, 1)
     
-class UpTrendUpNode(StatusCombo):
+class UpTrendUpNode(StatusValue):
     status = (KBarStatus.upTrend, KBarStatus.upTrendNode)        # (1, 1) (1, 0)
     
-class UpNodeUpTrend(StatusCombo):
+class UpNodeUpTrend(StatusValue):
     status = (KBarStatus.upTrendNode, KBarStatus.upTrend)         # (1, 0) (1, 1)
 
-class DownTrendUpNode(StatusCombo):
+class DownTrendUpNode(StatusValue):
     status = (KBarStatus.downTrend, KBarStatus.upTrendNode)# (-1, 1) (1, 0)
     
-class DownTrendUpTrend(StatusCombo): 
+class DownTrendUpTrend(StatusValue): 
     status = (KBarStatus.downTrend, KBarStatus.upTrend)   # (-1, 1) (1, 1)
 
-class UpTrendDownNode(StatusCombo):
+class UpTrendDownNode(StatusValue):
     status = (KBarStatus.upTrend, KBarStatus.downTrendNode)# (1, 1) (-1, 0)
     
-class UpTrendDownTrend(StatusCombo):
+class UpTrendDownTrend(StatusValue):
     status = (KBarStatus.upTrend, KBarStatus.downTrend)   # (1, 1) (-1, 1)  
 
 class LongPivotCombo(StatusCombo):
@@ -161,3 +160,4 @@ class StatusQueCombo(StatusCombo):
     upTrendDownNode = (KBarStatus.upTrend, KBarStatus.downTrendNode)# (1, 1) (-1, 0)
     upTrendDownTrend = (KBarStatus.upTrend, KBarStatus.downTrend)   # (1, 1) (-1, 1)  
     
+# DownNodeDownNode.testClassmethod()

@@ -55,7 +55,7 @@ class ChanMatrix(object):
         gaugeList = []
         for level in levels:
             stock_df = attribute_history(stock, self.count, level, fields = ['open','close','high','low'], skip_paused=True, df=True)
-            kb = KBarProcessor(stock_df)
+            kb = KBarProcessor(stock_df, isdebug=False)
             gaugeList.append(kb.gaugeStatus())
         return gaugeList
 
