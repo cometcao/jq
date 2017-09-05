@@ -206,8 +206,11 @@ class KBarProcessor(object):
         resultStatus = None
         
         # TODO, if not enough data given, long trend status can't be gauged here. We ignore it
-        if self.kDataFrame_marked.empty or self.kDataFrame_standardized.shape[0] < 2:
+        if self.kDataFrame_standardized.shape[0] < 2:
             return resultStatus
+    
+        if self.kDataFrame_marked.empty:
+            return KBarStatus.upTrend if self.kDataFrame_standardized.ix[-1, 'high'] > self.kDataFrame_standardized.ix[-2, 'high'] else KBarStatus.downTrend
         
         if self.kDataFrame_marked.ix[-1, 'new_index'] == self.kDataFrame_standardized.shape[0]-2:
             if self.kDataFrame_marked.ix[-1,'tb'] == TopBotType.top:

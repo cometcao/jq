@@ -41,7 +41,7 @@ class StatusCombo(Enum):
     def matchStatus(*parameters):
         pass
     @classmethod
-    def matchComboStatus(cls, *params):
+    def matchBiaoLiStatus(cls, *params):
         first = params[0]
         second = params[1]
         return first == cls.status.value[0] and second == cls.status.value[1]

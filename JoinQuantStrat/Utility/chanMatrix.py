@@ -8,6 +8,7 @@ try:
 except ImportError as ie:
     print(str(ie))
 from jqdata import *    
+import types
 import numpy as np
 import pandas as pd
 from biaoLiStatus import * 
@@ -82,6 +83,9 @@ class ChanMatrix(object):
     
     def filterShortStatusCombo(self, stock_list=None, level_list=None, update_df=False):
         return self.filterCombo_sup(ShortStatusCombo.matchStatus, stock_list, level_list, update_df)
+    
+    def filterDownNodeDownNode(self, stock_list=None, level_list=None, update_df=False):
+        return self.filterCombo_sup(DownNodeDownNode.matchBiaoLiStatus(), stock_list, level_list, update_df)
 
     def filterCombo_sup(self, filter_method, stock_list=None, level_list=None, update_df=False):
         # two column per layer
@@ -98,3 +102,32 @@ class ChanMatrix(object):
             self.trendNodeMatrix = working_df
             self.stockList=list(working_df.index)
         return list(working_df.index)
+    
+    def filterByStatusAndLevel(self, level, status, stock_list=None, update_df=False): # level recursive filter 
+        working_df = self.trendNodeMatrix.loc[stock_list] if stock_list else self.trendNodeMatrix
+        if type(status) is list:
+            working_df = working_df[working_df[level].isin(status)]
+        else:
+            working_df = working_df[working_df[level] == status]
+        if update_df:
+            self.trendNodeMatrix = working_df
+            self.stockList = list(working_df.index)
+        return list(working_df.index)
+    
+    def weeklyLongFilter(self):
+        return self.filterByStatusAndLevel(level='5d', status=[KBarStatus.upTrend, KBarStatus.downTrendNode], update_df=True)
+    
+    def dailyLongFilter(self, stockList=None):
+        return self.filterByStatusAndLevel(level='1d', status=[KBarStatus.upTrend, KBarStatus.downTrendNode], stock_list=stockList, update_df=False)
+    
+    def intraDayLongFilter(self, stockList=None):
+        return self.filterByStatusAndLevel(level='30m', status=KBarStatus.downTrendNode, stock_list=stockList, update_df=False)
+        
+    def weeklyShortFilter(self):
+        return self.filterByStatusAndLevel(level='5d', status=[KBarStatus.upTrendNode, KBarStatus.downTrend], update_df=False)
+    
+    def dailyShortFilter(self, stockList=None):
+        return self.filterByStatusAndLevel(level='1d', status=[KBarStatus.upTrendNode, KBarStatus.downTrend], stock_list=stockList, update_df=False)
+    
+    def intraDayShortFilter(self, stockList=None):
+        return self.filterByStatusAndLevel(level='30m', status=KBarStatus.upTrendNode, stock_list=stockList, update_df=False)

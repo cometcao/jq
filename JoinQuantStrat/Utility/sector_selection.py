@@ -43,7 +43,7 @@ class SectorSelection(object):
     '''
     This class implement the methods to rank the sectors
     '''
-    def __init__(self, context = None, isAnal=False):
+    def __init__(self, context = None, isAnal=False, limit=5):
         '''
         Constructor
         '''
@@ -52,7 +52,7 @@ class SectorSelection(object):
         self.frequency = '1d' # use day period
         self.period = 270
         self.gauge_period = 5
-        self.top_limit = 5
+        self.top_limit = limit
         self.stock_data_buffer = {}
 
     def displayResult(self, industryStrength, isConcept=False):
