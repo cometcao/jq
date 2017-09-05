@@ -201,27 +201,37 @@ class KBarProcessor(object):
         if self.isdebug:
             print(self.kDataFrame_marked)
     
-    def getCurrentKBarStatus(self):
+    def getCurrentKBarStatus(self, isSimple=True):
         #  at Top or Bot FenXing
         resultStatus = None
         
         # TODO, if not enough data given, long trend status can't be gauged here. We ignore it
         if self.kDataFrame_standardized.shape[0] < 2:
             return resultStatus
-    
-        if self.kDataFrame_marked.empty:
-            return KBarStatus.upTrend if self.kDataFrame_standardized.ix[-1, 'high'] > self.kDataFrame_standardized.ix[-2, 'high'] else KBarStatus.downTrend
         
-        if self.kDataFrame_marked.ix[-1, 'new_index'] == self.kDataFrame_standardized.shape[0]-2:
-            if self.kDataFrame_marked.ix[-1,'tb'] == TopBotType.top:
+        if isSimple:
+            if self.kDataFrame_standardized.ix[-1,'tb'] == TopBotType.top:
                 resultStatus = KBarStatus.upTrendNode
-            else:
+            elif self.kDataFrame_standardized.ix[-1,'tb'] == TopBotType.bot:
                 resultStatus = KBarStatus.downTrendNode
-        else:
-            if self.kDataFrame_marked.ix[-1,'tb'] == TopBotType.top:
-                resultStatus = KBarStatus.downTrend
-            else:
+            elif self.kDataFrame_standardized.ix[-1, 'high'] > self.kDataFrame_standardized.ix[-2, 'high']:
                 resultStatus = KBarStatus.upTrend
+            elif self.kDataFrame_standardized.ix[-1, 'low'] < self.kDataFrame_standardized.ix[-2, 'low']:
+                resultStatus = KBarStatus.downTrend
+        else:
+            if self.kDataFrame_marked.empty:
+                return KBarStatus.upTrend if self.kDataFrame_standardized.ix[-1, 'high'] > self.kDataFrame_standardized.ix[-2, 'high'] else KBarStatus.downTrend
+            
+            if self.kDataFrame_marked.ix[-1, 'new_index'] == self.kDataFrame_standardized.shape[0]-2:
+                if self.kDataFrame_marked.ix[-1,'tb'] == TopBotType.top:
+                    resultStatus = KBarStatus.upTrendNode
+                else:
+                    resultStatus = KBarStatus.downTrendNode
+            else:
+                if self.kDataFrame_marked.ix[-1,'tb'] == TopBotType.top:
+                    resultStatus = KBarStatus.downTrend
+                else:
+                    resultStatus = KBarStatus.upTrend
         return resultStatus
         
     def gaugeStatus(self, isSimple=True):
@@ -229,4 +239,4 @@ class KBarProcessor(object):
         self.markTopBot()
         if not isSimple:
             self.defineBi() # not necessary for biaoli status
-        return self.getCurrentKBarStatus()
+        return self.getCurrentKBarStatus(isSimple)
