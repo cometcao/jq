@@ -210,9 +210,9 @@ class KBarProcessor(object):
             return resultStatus
         
         if isSimple:
-            if self.kDataFrame_standardized.ix[-1,'tb'] == TopBotType.top:
+            if self.kDataFrame_standardized.ix[-2,'tb'] == TopBotType.top:
                 resultStatus = KBarStatus.upTrendNode
-            elif self.kDataFrame_standardized.ix[-1,'tb'] == TopBotType.bot:
+            elif self.kDataFrame_standardized.ix[-2,'tb'] == TopBotType.bot:
                 resultStatus = KBarStatus.downTrendNode
             elif self.kDataFrame_standardized.ix[-1, 'high'] > self.kDataFrame_standardized.ix[-2, 'high']:
                 resultStatus = KBarStatus.upTrend
