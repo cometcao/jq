@@ -25,7 +25,7 @@ class ChanMatrix(object):
         Constructor
         '''
         self.isAnal=isAnal
-        self.count = 15 # 30
+        self.count = 30 # 30
         self.stockList = stockList
         self.trendNodeMatrix = pd.DataFrame(index=self.stockList, columns=ChanMatrix.gauge_level)
     
@@ -43,8 +43,15 @@ class ChanMatrix(object):
         self.trendNodeMatrix.drop(to_be_removed, inplace=True)
         self.stockList = list(self.trendNodeMatrix.index)
         
+    def keepGaugeStockList(self, to_be_kept):
+        self.trendNodeMatrix = self.trendNodeMatrix.loc[to_be_kept]
+        self.stockList = to_be_kept
+        
     def getGaugeStockList(self, stock_list):
         return self.trendNodeMatrix.loc[stock_list]
+    
+    def check_non_exists(self, stock_list): # find out stocks not in current list
+        return [stock for stock in stock_list if stock not in self.stockList]
     
     def appendStockList(self, stock_list_df):
         to_append = [stock for stock in stock_list_df.index if stock not in self.trendNodeMatrix.index]
@@ -56,7 +63,7 @@ class ChanMatrix(object):
         for level in levels:
             stock_df = attribute_history(stock, self.count, level, fields = ['open','close','high','low'], skip_paused=True, df=True)
             kb = KBarProcessor(stock_df, isdebug=False)
-            gaugeList.append(kb.gaugeStatus())
+            gaugeList.append(kb.gaugeStatus(isSimple=False))
         return gaugeList
 
     def gaugeStock_analysis(self, stock, levels):
@@ -66,7 +73,7 @@ class ChanMatrix(object):
             latest_trading_day = get_trade_days()[-1]
             stock_df = get_price(stock, count=self.count, end_date=latest_trading_day, frequency=level, fields = ['open','close','high','low'], skip_paused=True)
             kb = KBarProcessor(stock_df)
-            gaugeList.append(kb.gaugeStatus())
+            gaugeList.append(kb.gaugeStatus(isSimple=False))
         return gaugeList
     
     def displayMonitorMatrix(self, stock_list=None):

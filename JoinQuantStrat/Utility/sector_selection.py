@@ -90,7 +90,7 @@ class SectorSelection(object):
         concept = [sector for sector, _ in conceptStrength[:self.top_limit]]
         return (industry, concept)
     
-    def processAllSectorStocks(self):
+    def processAllSectorStocks(self, isReverse=True):
         industry, concept = self.processAllSectors()
         allstocks = []
         for idu in industry:
@@ -99,7 +99,7 @@ class SectorSelection(object):
             allstocks += get_concept_stocks(con)
         return list(set(allstocks))
         
-    def processIndustrySectors(self):
+    def processIndustrySectors(self, isReverse=True):
         industryStrength = []
         # JQ industry , shenwan
         jqIndustry = SW3
@@ -112,10 +112,10 @@ class SectorSelection(object):
                 continue
             if len(stocks) > 3:
                 industryStrength.append((industry, self.gaugeSectorStrength(stocks)))
-        industryStrength = sorted(industryStrength, key=lambda x: x[1], reverse=True)
+        industryStrength = sorted(industryStrength, key=lambda x: x[1], reverse=isReverse)
         return industryStrength
     
-    def processConceptSectors(self):
+    def processConceptSectors(self, isReverse=True):
         # concept
         conceptStrength = []
         conceptSectors = GN
@@ -128,7 +128,7 @@ class SectorSelection(object):
             if len(stocks) > 3:
                 conceptStrength.append((concept, self.gaugeSectorStrength(stocks)))
             
-        conceptStrength = sorted(conceptStrength, key=lambda x: x[1], reverse=True)
+        conceptStrength = sorted(conceptStrength, key=lambda x: x[1], reverse=isReverse)
         return conceptStrength
         
     def gaugeSectorStrength(self, sectorStocks,isSimpleMA=False):
