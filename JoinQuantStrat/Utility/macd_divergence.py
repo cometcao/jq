@@ -1,3 +1,4 @@
+# -*- encoding: utf8 -*-
 '''
 Created on 21 Sep 2016
 
@@ -7,7 +8,6 @@ import talib
 import numpy as np
 from functools import partial
 import pandas as pd
-
 lower_ratio_range = 0.98
 
 
@@ -254,3 +254,47 @@ class macd_divergence():
             return result
         except IndexError:
             return False
+        
+    def checkFast(self, stock, fastperiod=12, slowperiod=26, signalperiod=9, checkBot=True):    
+        rows = (fastperiod + slowperiod + signalperiod) * 5
+        h = attribute_history(security=stock, count=rows, unit='1d', fields=['close'], df=False)
+        _close = h['close']  # type: np.ndarray
+        _dif, _dea, _macd = talib.MACD(_close, fastperiod, slowperiod, signalperiod)
+        if checkBot:
+            return self.checkBottomFast(_close, _macd, _dif)
+        else:
+            return self.checkTopFast(_close, _macd, _dif)
+        
+    def checkAtBottomDoubleCross_v3(self, df, fastperiod=12, slowperiod=26, signalperiod=9,):
+        _close = df['close']  # type: np.ndarray
+        _dif, _dea, _macd = talib.MACD(_close, fastperiod, slowperiod, signalperiod)
+        return self.checkBottomFast(_close, _macd, _dif)     
+        
+    def checkBottomFast(self, close, macd, dif):
+        ret_val = False
+        # ----------- 底背离 ------------------------
+        # 1.昨天[-1]金叉
+        # 1.昨天[-1]金叉close < 上一次[-2]金叉close
+        # 2.昨天[-1]金叉Dif值 > 上一次[-2]金叉Dif值
+        if macd[-1] > 0 > macd[-2]:  # 昨天金叉
+            # idx_gold: 各次金叉出现的位置
+            idx_gold = np.where((macd[:-1] < 0) & (macd[1:] > 0))[0] + 1  # type: np.ndarray
+            if len(idx_gold) > 1:
+                if close[idx_gold[-1]] < close[idx_gold[-2]] and dif[idx_gold[-1]] > dif[idx_gold[-2]]:
+                    ret_val = True
+        return ret_val
+
+
+    def checkTopFast(self, close, macd, dif):
+        ret_val = False
+        # ----------- 顶背离 ------------------------
+        # 1.昨天[-1]死叉
+        # 1.昨天[-1]死叉close > 上一次[-2]死叉close
+        # 2.昨天[-1]死叉Dif值 < 上一次[-2]死叉Dif值
+        if macd[-1] < 0 < macd[-2]:  # 昨天死叉
+            # idx_dead: 各次死叉出现的位置
+            idx_dead = np.where((macd[:-1] > 0) & (macd[1:] < 0))[0] + 1  # type: np.ndarray
+            if len(idx_dead) > 1:
+                if close[idx_dead[-1]] > close[idx_dead[-2]] and dif[idx_dead[-1]] < dif[idx_dead[-2]]:
+                    ret_val = True
+        return ret_val  
