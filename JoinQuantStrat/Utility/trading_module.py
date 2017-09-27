@@ -5,13 +5,16 @@ Created on 10 Oct 2016
 @author: MetalInvest
 '''
 
-from api import *
-from webtrader import WebTrader
+from easytrader.api import *
+from easytrader.webtrader import WebTrader
+import easytrader.config
+# from kuanke.user_space_api import *
+# from api import *
+# from webtrader import WebTrader
 import config
 import smtplib
 from email.mime.text import MIMEText
 from email.header import Header
-from kuanke.user_space_api import *
 import traceback
 import Crypto
 from Crypto.PublicKey import RSA
@@ -29,6 +32,20 @@ def copy(path):
 def loading(broker, version = 1):
     ''' ��½ '''
     user = use(broker)
+    
+    # 设置代理IP
+    proxy_user = None
+    proxy_pwd = None
+    proxy_ip = '111.13.7.42'
+    proxy_port = 81
+    if proxy_ip is not None:
+        s = "%s:%s" % (proxy_ip, proxy_port)
+        if proxy_user is not None and proxy_pwd is not None:
+            s = '%s:%s@%s'%(proxy_user,proxy_pwd,s)
+        user.session.proxies = {
+            "http": "http://" + s,
+            "https": "https://" + s,
+        }
     
     if broker == config.trade_acc['use_xq']:
         if version == 1:
@@ -51,13 +68,12 @@ def check(user):
     ''' 获取信息并输出 '''
 #     log.info('获取今日委托单:')
 #     log.info('今日委托单:', json.dumps(user.entrust,ensure_ascii=False))
-    log.info('-'*30)
+#     log.info('-'*30)
     log.info('获取资金状况:')
-    log.info('资金状况:', json.dumps(user.balance,ensure_ascii=False) )
-    log.info('enable_balance(可用金额):',  json.dumps(user.balance[0]['enable_balance'],ensure_ascii=False))
+    log.info('enable_balance(可用金额):{0}'.format(user.balance[0]['enable_balance']))
     log.info('-'*30)
     log.info('持仓:')
-    log.info('获取持仓:', json.dumps(user.position,ensure_ascii=False))
+    log.info('获取持仓:{0}'.format(str(user.position[0])))
 
 # def realAction(stock, pct, data):
 #     # all actions mimic market order
@@ -121,10 +137,10 @@ def realAction_email_final():
             #server.connect() # ssl��������
             server.login(username, password) 
             server.sendmail(sender, receiver, msg.as_string()) 
-            print 'order mail success'
+            print('order mail success')
         except:
             traceback.print_exc()
-            print 'order mail failed'
+            print('order mail failed')
         server.quit() 
     except:
         traceback.print_exc()
@@ -189,8 +205,50 @@ def stock_adjust_weight(user, stock, value_pct, high, low):
         else:
             user.buy(stock, price=high, volume=min(cash, expected_value))
             
-            
 def realAction_ht(stock, value_pct):
     user = loading('ht')
     check(user)
     log.info("hua tai stock [%s] is requested to be adjusted to weight %d pct" %(stock, value_pct))
+    
+    
+class XueQiuAction:
+    def __init__(self, cfg, version=1):
+        self.config = cfg
+        self.version = version
+        self.order_list = []
+        self.user = None
+    
+    def reset(self):
+        self.order_list = []
+        if self.user:
+            self.user.exit()
+        self.user = None
+    
+    def connect(self):
+        self.user = loading(self.config, self.version)
+        check(self.user)
+        
+    def appendOrder(self, stock, value_pct, stock_price):
+        self.order_list.append((stock, value_pct, stock_price))
+    
+    def hasOrder(self):
+        return not self.order_list
+    
+    def adjustStock(self):
+        if self.order_list:
+            try:
+                if not self.user:
+                    self.connect()
+            except:
+                log.warn("Xueqiu login failed")
+                return
+            for stock, value_pct, _ in self.order_list:
+                try:
+                    self.user.adjust_weight(stock, int(value_pct))
+                    log.info("xue qiu stock [%s] is requested to be adjusted to weight %d pct" %(stock, value_pct))
+                except:
+                    log.info('order failed:{0} {1}'.format(stock, value_pct))
+
+xq = XueQiuAction('xq', 2)
+xq.connect()
+xq.reset()

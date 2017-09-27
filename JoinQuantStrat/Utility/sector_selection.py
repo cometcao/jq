@@ -43,7 +43,7 @@ class SectorSelection(object):
     '''
     This class implement the methods to rank the sectors
     '''
-    def __init__(self, context = None, isAnal=False, limit=5):
+    def __init__(self, context = None, isAnal=False, limit_pct=5, isStrong=True, min_max_strength = 0):
         '''
         Constructor
         '''
@@ -52,22 +52,28 @@ class SectorSelection(object):
         self.frequency = '1d' # use day period
         self.period = 270
         self.gauge_period = 5
-        self.top_limit = limit
+        self.top_limit = float(limit_pct) / 100.0
+        self.isReverse = isStrong
         self.stock_data_buffer = {}
+        self.min_max_strength = min_max_strength
+        self.jqIndustry = SW2 # SW3
+        self.conceptSectors = GN
 
     def displayResult(self, industryStrength, isConcept=False):
 #         print industryStrength
-        for sector, strength in industryStrength[:self.top_limit]:
+        limit_value = int(self.top_limit * len(self.conceptSectors) if isConcept else self.top_limit * len(self.jqIndustry))
+        for sector, strength in industryStrength[:limit_value]:
             stocks = []
             if isConcept:
                 stocks = get_concept_stocks(sector)
             else:
                 stocks = get_industry_stocks(sector)
-            print (sector+':'+','.join([get_security_info(s).display_name for s in stocks]))
+            print (sector+'@'+str(strength)+':'+','.join([get_security_info(s).display_name for s in stocks]))
             
     def sendResult(self, industryStrength, isConcept=False):
         message = ""
-        for sector, strength in industryStrength[:self.top_limit]:
+        limit_value = int(self.top_limit * len(self.conceptSectors) if isConcept else self.top_limit * len(self.jqIndustry))
+        for sector, strength in industryStrength[:limit_value]:
             stocks = []
             if isConcept:
                 stocks = get_concept_stocks(sector)
@@ -86,11 +92,13 @@ class SectorSelection(object):
         if sendMsg:
             self.sendResult(industryStrength)
             self.sendResult(conceptStrength, True)
-        industry = [sector for sector, _ in industryStrength[:self.top_limit]] 
-        concept = [sector for sector, _ in conceptStrength[:self.top_limit]]
+        concept_limit_value = int(self.top_limit * len(self.conceptSectors))
+        industry_limit_value = int(self.top_limit * len(self.jqIndustry))
+        industry = [sector for sector, strength in industryStrength[:industry_limit_value] if (strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)] 
+        concept = [sector for sector, strength in conceptStrength[:concept_limit_value] if (strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)]
         return (industry, concept)
     
-    def processAllSectorStocks(self, isReverse=True):
+    def processAllSectorStocks(self):
         industry, concept = self.processAllSectors()
         allstocks = []
         for idu in industry:
@@ -99,12 +107,11 @@ class SectorSelection(object):
             allstocks += get_concept_stocks(con)
         return list(set(allstocks))
         
-    def processIndustrySectors(self, isReverse=True):
+    def processIndustrySectors(self):
         industryStrength = []
         # JQ industry , shenwan
-        jqIndustry = SW3
         
-        for industry in jqIndustry:
+        for industry in self.jqIndustry:
             try:
                 stocks = get_industry_stocks(industry)
             except Exception as e:
@@ -112,14 +119,14 @@ class SectorSelection(object):
                 continue
             if len(stocks) > 3:
                 industryStrength.append((industry, self.gaugeSectorStrength(stocks)))
-        industryStrength = sorted(industryStrength, key=lambda x: x[1], reverse=isReverse)
+        industryStrength = sorted(industryStrength, key=lambda x: x[1], reverse=self.isReverse)
         return industryStrength
     
-    def processConceptSectors(self, isReverse=True):
+    def processConceptSectors(self):
         # concept
         conceptStrength = []
-        conceptSectors = GN
-        for concept in conceptSectors:
+
+        for concept in self.conceptSectors:
             try:
                 stocks = get_concept_stocks(concept)
             except Exception as e:
@@ -128,7 +135,7 @@ class SectorSelection(object):
             if len(stocks) > 3:
                 conceptStrength.append((concept, self.gaugeSectorStrength(stocks)))
             
-        conceptStrength = sorted(conceptStrength, key=lambda x: x[1], reverse=isReverse)
+        conceptStrength = sorted(conceptStrength, key=lambda x: x[1], reverse=self.isReverse)
         return conceptStrength
         
     def gaugeSectorStrength(self, sectorStocks,isSimpleMA=False):

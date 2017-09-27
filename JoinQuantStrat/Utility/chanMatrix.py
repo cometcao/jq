@@ -53,6 +53,9 @@ class ChanMatrix(object):
     def check_non_exists(self, stock_list): # find out stocks not in current list
         return [stock for stock in stock_list if stock not in self.stockList]
     
+    def check_exists(self, stock_list):
+        return [stock for stock in stock_list if stock in self.stockList]
+    
     def appendStockList(self, stock_list_df):
         to_append = [stock for stock in stock_list_df.index if stock not in self.trendNodeMatrix.index]
         self.trendNodeMatrix=self.trendNodeMatrix.append(stock_list_df.loc[to_append], verify_integrity=True)
@@ -70,7 +73,7 @@ class ChanMatrix(object):
         print("retrieving data using get_price!!!")
         gaugeList = []
         for level in levels:
-            latest_trading_day = get_trade_days()[-1]
+            latest_trading_day = get_trade_days(count=1)[-1]
             stock_df = get_price(stock, count=self.count, end_date=latest_trading_day, frequency=level, fields = ['open','close','high','low'], skip_paused=True)
             kb = KBarProcessor(stock_df)
             gaugeList.append(kb.gaugeStatus(isSimple=False))
@@ -99,6 +102,9 @@ class ChanMatrix(object):
 
     def filterUpTrendDownNode(self, stock_list=None, level_list=None, update_df=False):
         return self.filterCombo_sup(UpTrendDownNode.matchBiaoLiStatus, stock_list, level_list, update_df)
+
+    def filterUpTrendUpTrend(self, stock_list=None, level_list=None, update_df=False):
+        return self.filterCombo_sup(UpTrendUpTrend.matchBiaoLiStatus, stock_list, level_list, update_df)
 
     def filterCombo_sup(self, filter_method, stock_list=None, level_list=None, update_df=False):
         # two column per layer
@@ -136,11 +142,20 @@ class ChanMatrix(object):
     def intraDayLongFilter(self, stockList=None):
         return self.filterByStatusAndLevel(level='30m', status=KBarStatus.downTrendNode, stock_list=stockList, update_df=False)
         
-    def weeklyShortFilter(self):
-        return self.filterByStatusAndLevel(level='5d', status=[KBarStatus.upTrendNode, KBarStatus.downTrend], update_df=False)
+    def weeklyShortFilter(self, stockList=None):
+        return self.filterByStatusAndLevel(level='5d', status=[KBarStatus.upTrendNode, KBarStatus.downTrend], stock_list=stockList, update_df=False)
+    
+    def weeklyShortDownTrend(self, stockList=None):
+        return self.filterByStatusAndLevel(level='5d', status=KBarStatus.downTrend, stock_list=stockList, update_df=False)        
     
     def dailyShortFilter(self, stockList=None):
         return self.filterByStatusAndLevel(level='1d', status=[KBarStatus.upTrendNode, KBarStatus.downTrend], stock_list=stockList, update_df=False)
     
+    def dailyShortUpTendNode(self, stockList=None):
+        return self.filterByStatusAndLevel(level='1d', status=KBarStatus.upTrendNode, stock_list=stockList, update_df=False)
+
+    def dailyShortdownTrend(self, stockList=None):
+        return self.filterByStatusAndLevel(level='1d', status=KBarStatus.downTrend, stock_list=stockList, update_df=False)
+            
     def intraDayShortFilter(self, stockList=None):
         return self.filterByStatusAndLevel(level='30m', status=KBarStatus.upTrendNode, stock_list=stockList, update_df=False)

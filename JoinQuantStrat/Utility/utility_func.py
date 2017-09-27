@@ -85,11 +85,25 @@ def getCirMcapThrethold(threthold = 0.95):
     queryDf = get_fundamentals(query(
         valuation.circulating_market_cap, valuation.code
         ).order_by(
-            valuation.market_cap.asc()
+            valuation.circulating_market_cap.asc()
         ))
     total_num = queryDf.shape[0]
     threthold_index = int(total_num * threthold)
     return queryDf['circulating_market_cap'][threthold_index]
+
+def getPSThrethold(threthold = 0.5):
+    return getFundamentalThrethold('valuation.ps_ratio')
+
+def getFundamentalThrethold(factor, threthold = 0.95):
+    eval_factor = eval(factor)
+    queryDf = get_fundamentals(query(
+        eval_factor, valuation.code
+        ).order_by(
+            eval_factor.asc()
+        ))
+    total_num = queryDf.shape[0]
+    threthold_index = int(total_num * threthold)
+    return queryDf[factor.split('.')[1]][threthold_index]    
 
 def getCirMcapInfo(context, num_limit=100, cir_cap_limit = 100, max_pe=200):
     queryDf = get_fundamentals(query(
@@ -395,3 +409,9 @@ def order_target_value_new(security, value):
     # �����Ʊ�ǵ�ͣ������������ɹ���order_target_value ����Order�����Ǳ�����ȡ��
     # ���ɲ����ı������ۿ�״̬���ѳ�����ʱ�ɽ���>0����ͨ���ɽ����ж��Ƿ��гɽ�
     return order_target_value(security, value)
+
+def isFirstTradingDayOfWeek(context):
+    trading_days = get_trade_days(end_date=context.current_dt.date(), count=2)
+    today = trading_days[-1]
+    last_trading_day = trading_days[-2]
+    return (today.isocalendar()[1] != last_trading_day.isocalendar()[1])

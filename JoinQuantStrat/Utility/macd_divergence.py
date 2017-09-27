@@ -56,31 +56,6 @@ class macd_divergence():
             return True
         return False
     
-    def checkAtTopDoubleCross(self, macd_raw, macd_hist, prices):
-        # hist height less than 0.5 should be considered a crossing candidate
-        # return True if we are close at MACD top reverse
-        indexOfGoldCross = [i for i, j in enumerate(macd_hist) if self.isGoldCross(i,j,macd_hist)]   
-        indexOfDeathCross = [i for i, j in enumerate(macd_hist) if self.isDeathCross(i,j,macd_hist)] 
-        #print indexOfCross
-        if (not indexOfGoldCross) or (not indexOfDeathCross) or (len(indexOfDeathCross)<2) or (len(indexOfGoldCross)<2) or \
-        abs(indexOfGoldCross[-1]-indexOfDeathCross[-1]) <= 2 or \
-        abs(indexOfGoldCross[-1]-indexOfDeathCross[-2]) <= 2 or \
-        abs(indexOfGoldCross[-2]-indexOfDeathCross[-1]) <= 2 or \
-        abs(indexOfGoldCross[-2]-indexOfDeathCross[-2]) <= 2:
-            return False
-        
-        if macd_raw[-1] > 0 and macd_hist[-1] > 0 and macd_hist[-1] < macd_hist[-2]: 
-            latest_hist_area = macd_hist[indexOfGoldCross[-1]:]
-            max_val_Index = latest_hist_area.tolist().index(max(latest_hist_area))
-            recentArea_est = abs(sum(latest_hist_area[:max_val_Index])) * 2
-            
-            previousArea = macd_hist[indexOfGoldCross[-2]:indexOfDeathCross[-1]]
-            previousArea_sum = abs(sum(previousArea))
-            
-            prices_z = zscore(prices)
-            if recentArea_est < previousArea_sum and (max(prices_z[indexOfGoldCross[-1]:]) / max(prices_z[indexOfGoldCross[-2]:indexOfDeathCross[-1]]) > lower_ratio_range ) :
-                return True
-        return False
     
     def checkAtBottomDoubleCross(self, macd_raw, macd_hist, prices):
         # find cross index for gold and death
@@ -182,7 +157,64 @@ class macd_divergence():
             return result
         except IndexError:
             return False
+
+    def checkAtBottomDoubleCross_v2(self, df):
+        # bottom divergence gold
+        mask = df['macd'] > 0
+        mask = mask[mask==True][mask.shift(1) == False]#[mask.shift(2)==False]
+        
+        mask2 = df['macd'] < 0
+        mask2 = mask2[mask2==True][mask2.shift(1)==False]#[mask2.shift(2)==False]#[mask2.shift(-1)==True]
+        try:
+            dkey2 = mask2.keys()[-2]
+            dkey1 = mask2.keys()[-1]
             
+            gkey2 = mask.keys()[-2]
+            gkey1 = mask.keys()[-1]
+            
+            previous_raise_area = abs(df.loc[gkey2:dkey1,'macd'].sum(axis=0))
+            previous_area = abs(df.loc[dkey2:gkey2, 'macd'].sum(axis=0))
+            recent_area = abs(df.loc[dkey1:gkey1, 'macd'].sum(axis=0))
+            
+            result = df.loc[dkey2:gkey2, 'low'].min(axis=0) > df.loc[dkey1:gkey1, 'low'].min(axis=0) * 1.01 and \
+                   df.macd_raw[gkey2] < df.macd_raw[gkey1] < 0 and \
+                   df.loc[dkey2:gkey2, 'macd_raw'].min(axis=0) < df.loc[dkey1:gkey1, 'macd_raw'].min(axis=0) and \
+                   df.macd[-2] < 0 < df.macd[-1] and \
+                   df.loc[dkey2,'vol_ma'] > df.vol_ma[-1] and \
+                   recent_area * 1.191 < previous_area and \
+                   previous_raise_area > recent_area * 1.096 #and \
+                #   previous_raise_area * 1.191 > previous_area
+                #   recent_area * 3.618 >= previous_area
+            return result
+        except IndexError:
+            return False
+            
+    def checkAtTopDoubleCross(self, macd_raw, macd_hist, prices):
+        # hist height less than 0.5 should be considered a crossing candidate
+        # return True if we are close at MACD top reverse
+        indexOfGoldCross = [i for i, j in enumerate(macd_hist) if self.isGoldCross(i,j,macd_hist)]   
+        indexOfDeathCross = [i for i, j in enumerate(macd_hist) if self.isDeathCross(i,j,macd_hist)] 
+        #print indexOfCross
+        if (not indexOfGoldCross) or (not indexOfDeathCross) or (len(indexOfDeathCross)<2) or (len(indexOfGoldCross)<2) or \
+        abs(indexOfGoldCross[-1]-indexOfDeathCross[-1]) <= 2 or \
+        abs(indexOfGoldCross[-1]-indexOfDeathCross[-2]) <= 2 or \
+        abs(indexOfGoldCross[-2]-indexOfDeathCross[-1]) <= 2 or \
+        abs(indexOfGoldCross[-2]-indexOfDeathCross[-2]) <= 2:
+            return False
+        
+        if macd_raw[-1] > 0 and macd_hist[-1] > 0 and macd_hist[-1] < macd_hist[-2]: 
+            latest_hist_area = macd_hist[indexOfGoldCross[-1]:]
+            max_val_Index = latest_hist_area.tolist().index(max(latest_hist_area))
+            recentArea_est = abs(sum(latest_hist_area[:max_val_Index])) * 2
+            
+            previousArea = macd_hist[indexOfGoldCross[-2]:indexOfDeathCross[-1]]
+            previousArea_sum = abs(sum(previousArea))
+            
+            prices_z = zscore(prices)
+            if recentArea_est < previousArea_sum and (max(prices_z[indexOfGoldCross[-1]:]) / max(prices_z[indexOfGoldCross[-2]:indexOfDeathCross[-1]]) > lower_ratio_range ) :
+                return True
+        return False            
+
     def checkAtTopDoubleCross_chan(self, df, useZvalue=False):
         if not (df['macd'][-1] > 0 and df['macd'][-1] < df['macd'][-2] and df['macd'][-1] < df['macd'][-3]):
             return False
@@ -224,36 +256,6 @@ class macd_divergence():
         except IndexError:
             return False
     
-    def checkAtBottomDoubleCross_v2(self, df):
-        # bottom divergence gold
-        mask = df['macd'] > 0
-        mask = mask[mask==True][mask.shift(1) == False]#[mask.shift(2)==False]
-        
-        mask2 = df['macd'] < 0
-        mask2 = mask2[mask2==True][mask2.shift(1)==False]#[mask2.shift(2)==False]#[mask2.shift(-1)==True]
-        try:
-            dkey2 = mask2.keys()[-2]
-            dkey1 = mask2.keys()[-1]
-            
-            gkey2 = mask.keys()[-2]
-            gkey1 = mask.keys()[-1]
-            
-            previous_raise_area = abs(df.loc[gkey2:dkey1,'macd'].sum(axis=0))
-            previous_area = abs(df.loc[dkey2:gkey2, 'macd'].sum(axis=0))
-            recent_area = abs(df.loc[dkey1:gkey1, 'macd'].sum(axis=0))
-            
-            result = df.loc[dkey2:gkey2, 'low'].min(axis=0) > df.loc[dkey1:gkey1, 'low'].min(axis=0) * 1.01 and \
-                   df.macd_raw[gkey2] < df.macd_raw[gkey1] < 0 and \
-                   df.loc[dkey2:gkey2, 'macd_raw'].min(axis=0) < df.loc[dkey1:gkey1, 'macd_raw'].min(axis=0) and \
-                   df.macd[-2] < 0 < df.macd[-1] and \
-                   df.loc[dkey2,'vol_ma'] > df.vol_ma[-1] and \
-                   recent_area * 1.191 < previous_area and \
-                   previous_raise_area > recent_area * 1.096 #and \
-                #   previous_raise_area * 1.191 > previous_area
-                #   recent_area * 3.618 >= previous_area
-            return result
-        except IndexError:
-            return False
         
     def checkFast(self, stock, fastperiod=12, slowperiod=26, signalperiod=9, checkBot=True):    
         rows = (fastperiod + slowperiod + signalperiod) * 5
@@ -269,6 +271,11 @@ class macd_divergence():
         _close = df['close']  # type: np.ndarray
         _dif, _dea, _macd = talib.MACD(_close, fastperiod, slowperiod, signalperiod)
         return self.checkBottomFast(_close, _macd, _dif)     
+
+    def checkAtTopDoubleCross_v3(self, df, fastperiod=12, slowperiod=26, signalperiod=9,):
+        _close = df['close']  # type: np.ndarray
+        _dif, _dea, _macd = talib.MACD(_close, fastperiod, slowperiod, signalperiod)
+        return self.checkTopFast(_close, _macd, _dif) 
         
     def checkBottomFast(self, close, macd, dif):
         ret_val = False
