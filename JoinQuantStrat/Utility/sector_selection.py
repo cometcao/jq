@@ -58,6 +58,8 @@ class SectorSelection(object):
         self.min_max_strength = min_max_strength
         self.jqIndustry = SW2 # SW3
         self.conceptSectors = GN
+        self.filtered_industry = []
+        self.filtered_concept = []
 
     def displayResult(self, industryStrength, isConcept=False):
 #         print industryStrength
@@ -84,22 +86,27 @@ class SectorSelection(object):
             message += '***'
         send_message(message, channel='weixin')      
 
-    def processAllSectors(self, sendMsg=False):
+    def processAllSectors(self, sendMsg=False, display=False):
+        if self.filtered_concept and self.filtered_industry:
+            print ("use cached sectors")
+            return (self.filtered_industry, self.filtered_concept)
+        
         industryStrength = self.processIndustrySectors()
         conceptStrength = self.processConceptSectors()
-        self.displayResult(industryStrength)
-        self.displayResult(conceptStrength, True)
+        if display:
+            self.displayResult(industryStrength)
+            self.displayResult(conceptStrength, True)
         if sendMsg:
             self.sendResult(industryStrength)
             self.sendResult(conceptStrength, True)
         concept_limit_value = int(self.top_limit * len(self.conceptSectors))
         industry_limit_value = int(self.top_limit * len(self.jqIndustry))
-        industry = [sector for sector, strength in industryStrength[:industry_limit_value] if (strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)] 
-        concept = [sector for sector, strength in conceptStrength[:concept_limit_value] if (strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)]
-        return (industry, concept)
+        self.filtered_industry = [sector for sector, strength in industryStrength[:industry_limit_value] if (strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)] 
+        self.filtered_concept = [sector for sector, strength in conceptStrength[:concept_limit_value] if (strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)]
+        return (self.filtered_industry, self.filtered_concept)
     
-    def processAllSectorStocks(self):
-        industry, concept = self.processAllSectors()
+    def processAllSectorStocks(self, isDisplay=False):
+        industry, concept = self.processAllSectors(display=isDisplay)
         allstocks = []
         for idu in industry:
             allstocks += get_industry_stocks(idu)

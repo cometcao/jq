@@ -18,7 +18,7 @@ class ChanMatrix(object):
     '''
     classdocs
     '''
-    gauge_level = ['5d', '1d', '30m']
+    gauge_level = ['5d', '1d', '60m']
     
     def __init__(self, stockList, isAnal=False):
         '''
@@ -28,6 +28,10 @@ class ChanMatrix(object):
         self.count = 30 # 30
         self.stockList = stockList
         self.trendNodeMatrix = pd.DataFrame(index=self.stockList, columns=ChanMatrix.gauge_level)
+    
+    @classmethod
+    def updateGauge_level(cls, value):
+        cls.gauge_level = value
     
     def gaugeStockList(self, l=None):
         self.updateGaugeStockList(levels=ChanMatrix.gauge_level if not l else l)

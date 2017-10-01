@@ -22,7 +22,7 @@ class HerdHead(object):
     def findLeadStock(self,index,method = 0,isConcept=False):
         # 规则
         # 1.涨幅大于阈值的股票；
-        # 2.指数涨幅在阈值的二分之一以上；
+        # 2.指数涨幅在阈值的四分之一以上；
         # 3.过去一周成交量大于过去两周成交量；
         # 4.个股流通市值占总市值百分比达到阈值
         
@@ -34,7 +34,7 @@ class HerdHead(object):
         gainIndex = self.calIndustryGain(oriStocks)
         
         # 根据规则筛选龙头股
-        if float(gainIndex)/self.gainThre > 0.5:
+        if float(gainIndex)/self.gainThre > 0.25:
             if method == 0:
                 # 基本限制
                 return filtStocks
