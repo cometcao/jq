@@ -98,17 +98,58 @@ class ChanMatrix(object):
     def filterShortStatusCombo(self, stock_list=None, level_list=None, update_df=False):
         return self.filterCombo_sup(ShortStatusCombo.matchStatus, stock_list, level_list, update_df)
     
+    
     def filterDownNodeDownNode(self, stock_list=None, level_list=None, update_df=False):
         return self.filterCombo_sup(DownNodeDownNode.matchBiaoLiStatus, stock_list, level_list, update_df)
     
     def filterDownNodeUpTrend(self, stock_list=None, level_list=None, update_df=False):
         return self.filterCombo_sup(DownNodeUpTrend.matchBiaoLiStatus, stock_list, level_list, update_df)
 
+    def filterDownNodeDownTrend(self, stock_list=None, level_list=None, update_df=False):
+        return self.filterCombo_sup(DownNodeDownTrend.matchBiaoLiStatus, stock_list, level_list, update_df)  
+
+    def filterDownNodeUpNode(self, stock_list=None, level_list=None, update_df=False):
+        return self.filterCombo_sup(DownNodeUpNode.matchBiaoLiStatus, stock_list, level_list, update_df)  
+
+
     def filterUpTrendDownNode(self, stock_list=None, level_list=None, update_df=False):
         return self.filterCombo_sup(UpTrendDownNode.matchBiaoLiStatus, stock_list, level_list, update_df)
 
     def filterUpTrendUpTrend(self, stock_list=None, level_list=None, update_df=False):
         return self.filterCombo_sup(UpTrendUpTrend.matchBiaoLiStatus, stock_list, level_list, update_df)
+    
+    def filterUpTrendUpNode(self, stock_list=None, level_list=None, update_df=False):
+        return self.filterCombo_sup(UpTrendUpNode.matchBiaoLiStatus, stock_list, level_list, update_df)
+
+    def filterUpTrendDownTrend(self, stock_list=None, level_list=None, update_df=False):
+        return self.filterCombo_sup(UpTrendDownTrend.matchBiaoLiStatus, stock_list, level_list, update_df)
+    
+    
+    def filterDownTrendDownTrend(self, stock_list=None, level_list=None, update_df=False):
+        return self.filterCombo_sup(DownTrendDownTrend.matchBiaoLiStatus, stock_list, level_list, update_df)    
+
+    def filterDownTrendDownNode(self, stock_list=None, level_list=None, update_df=False):
+        return self.filterCombo_sup(DownTrendDownNode.matchBiaoLiStatus, stock_list, level_list, update_df)    
+
+    def filterDownTrendUpTrend(self, stock_list=None, level_list=None, update_df=False):
+        return self.filterCombo_sup(DownTrendUpTrend.matchBiaoLiStatus, stock_list, level_list, update_df)    
+
+    def filterDownTrendUpNode(self, stock_list=None, level_list=None, update_df=False):
+        return self.filterCombo_sup(DownTrendUpNode.matchBiaoLiStatus, stock_list, level_list, update_df)    
+
+
+    def filterUpNodeDownTrend(self, stock_list=None, level_list=None, update_df=False):
+        return self.filterCombo_sup(UpNodeDownTrend.matchBiaoLiStatus, stock_list, level_list, update_df)
+    
+    def filterUpNodeDownNode(self, stock_list=None, level_list=None, update_df=False):
+        return self.filterCombo_sup(UpNodeDownNode.matchBiaoLiStatus, stock_list, level_list, update_df)
+    
+    def filterUpNodeUpTrend(self, stock_list=None, level_list=None, update_df=False):
+        return self.filterCombo_sup(UpNodeUpTrend.matchBiaoLiStatus, stock_list, level_list, update_df)
+
+    def filterUpNodeUpNode(self, stock_list=None, level_list=None, update_df=False):
+        return self.filterCombo_sup(UpNodeUpNode.matchBiaoLiStatus, stock_list, level_list, update_df)
+
 
     def filterCombo_sup(self, filter_method, stock_list=None, level_list=None, update_df=False):
         # two column per layer

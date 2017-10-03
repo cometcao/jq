@@ -43,11 +43,11 @@ class SectorSelection(object):
     '''
     This class implement the methods to rank the sectors
     '''
-    def __init__(self, context = None, isAnal=False, limit_pct=5, isStrong=True, min_max_strength = 0):
+    def __init__(self, isAnal=False, limit_pct=5, isStrong=True, min_max_strength = 0, useIntradayData=True):
         '''
         Constructor
         '''
-        self.context = context
+        self.useIntradayData = useIntradayData
         self.isAnal = isAnal
         self.frequency = '1d' # use day period
         self.period = 270
@@ -174,25 +174,10 @@ class SectorSelection(object):
                     sectorStrength /= (len(sectorStocks)-removed)
                 avgStrength += sectorStrength
             avgStrength /= self.gauge_period
-            return avgStrength
-    
-#     def gaugeStockUpTrendStrength_MA_best_effort(self, stock):
-#         stock_df = attribute_history(stock, self.period, self.frequency, ('close','paused'), skip_paused=False) if not self.context else self.getlatest_df(stock, self.period, ['close','paused'])
-#         MA_5 = talib.SMA(stock_df.close.values, 5)
-#         MA_13 = talib.SMA(stock_df.close.values, 13)
-#         MA_21 = talib.SMA(stock_df.close.values, 21)
-#         MA_34 = talib.SMA(stock_df.close.values, 34)
-#         MA_55 = talib.SMA(stock_df.close.values, 55)
-#         MA_89 = talib.SMA(stock_df.close.values, 89)
-#         MA_144 = talib.SMA(stock_df.close.values, 144)
-#         MA_233 = talib.SMA(stock_df.close.values, 233)
-#         pass
-        
+            return avgStrength    
     
     def gaugeStockUpTrendStrength_MA(self, stock, isWeighted=True, index=-1):
-#         stock_df = get_price(stock, count=self.period, end_date='2017-08-01', frequency='daily', fields=['close','paused'], skip_paused=False)
         if index == -1:
-#             stock_df = attribute_history(stock, self.period, self.frequency, ('close','paused'), skip_paused=False) if not self.context else self.getlatest_df(stock, self.period, ['close','paused'])
             stock_df = self.getlatest_df(stock, self.period, ['close','paused'], skip_paused=False, df_flag=True)
             MA_5 = self.simple_moving_avg(stock_df.close.values, 5)
             MA_13 = self.simple_moving_avg(stock_df.close.values, 13)
@@ -226,7 +211,6 @@ class SectorSelection(object):
             stock_df = MA_5 = MA_13 = MA_21 = MA_34 = MA_55 = MA_89 = MA_144 = MA_233 = None
             try:
                 if stock not in self.stock_data_buffer:
-    #                 stock_df = attribute_history(stock, self.period, self.frequency, ('close','paused'), skip_paused=False) if not self.context else self.getlatest_df(stock, self.period, ['close','paused'])
                     stock_df = self.getlatest_df(stock, self.period, ['close','paused'], skip_paused=False, df_flag=True)
                     MA_5 = talib.SMA(stock_df.close.values, 5)
                     MA_13 = talib.SMA(stock_df.close.values, 13)
@@ -278,7 +262,7 @@ class SectorSelection(object):
     def getlatest_df(self, stock, count, fields, skip_paused=True, df_flag = True):
 #         df = attribute_history(stock, count, '1d', fields, df=df_flag)
         df = get_data(stock, count, level='1d', fields=fields, skip_paused=skip_paused, df_flag=df_flag, isAnal=self.isAnal)
-        if self.context:
+        if self.useIntradayData:
             containPaused = 'paused' in fields
             if containPaused:
                 fields.remove('paused')
@@ -287,10 +271,11 @@ class SectorSelection(object):
                 latest_stock_data.assign(paused=np.nan)
                 cd = get_current_data()
                 latest_stock_data.ix[-1,'paused'] = cd[stock].paused
-    
+
             if df_flag:
+                current_date = latest_stock_data.index[-1].date()
                 latest_stock_data = latest_stock_data.reset_index(drop=False)
-                latest_stock_data.ix[0, 'index'] = pd.DatetimeIndex([self.context.current_dt.date()])[0]
+                latest_stock_data.ix[0, 'index'] = pd.DatetimeIndex([current_date])[0]
                 latest_stock_data = latest_stock_data.set_index('index')
                 df = df.reset_index().drop_duplicates(subset='index').set_index('index')
                 df = df.append(latest_stock_data, verify_integrity=True) # True
@@ -300,6 +285,7 @@ class SectorSelection(object):
                     final_fields.append(fields)
                 else:
                     final_fields = list(fields)
-                [np.append(df[field], latest_stock_data[field][-1]) for field in final_fields]
-    
+#                 [np.append(df[field], latest_stock_data[field][-1]) for field in final_fields]
+                for field in final_fields:
+                    df[field] = np.append(df[field], latest_stock_data[field][-1])
         return df
