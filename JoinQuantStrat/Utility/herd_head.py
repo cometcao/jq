@@ -142,6 +142,8 @@ class HerdHead(object):
     # 计算行业涨幅
     def calIndustryGain(self, stocks):
         gainIndex = 0
+        if not stocks:
+            return 0
         for security in stocks:
 #             stocksPrice = get_price(security, start_date = preDate, end_date = curDate, frequency = '1d', fields = 'close')
 #             stocksPrice = attribute_history(security, self.count, unit=self.period, fields = ['close'], skip_paused=True, df=True)

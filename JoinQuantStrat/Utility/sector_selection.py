@@ -43,11 +43,12 @@ class SectorSelection(object):
     '''
     This class implement the methods to rank the sectors
     '''
-    def __init__(self, isAnal=False, limit_pct=5, isStrong=True, min_max_strength = 0, useIntradayData=True):
+    def __init__(self, isAnal=False, limit_pct=5, isStrong=True, min_max_strength = 0, useIntradayData=True, useAvg=True):
         '''
         Constructor
         '''
         self.useIntradayData = useIntradayData
+        self.useAvg = useAvg
         self.isAnal = isAnal
         self.frequency = '1d' # use day period
         self.period = 270
@@ -145,8 +146,8 @@ class SectorSelection(object):
         conceptStrength = sorted(conceptStrength, key=lambda x: x[1], reverse=self.isReverse)
         return conceptStrength
         
-    def gaugeSectorStrength(self, sectorStocks,isSimpleMA=False):
-        if isSimpleMA:
+    def gaugeSectorStrength(self, sectorStocks):
+        if not self.useAvg:
             sectorStrength = 0.0
             removed = 0
             for stock in sectorStocks:
