@@ -20,6 +20,7 @@ class HerdHead(object):
         self.period = params.get('period', '1d')
         self.useIntraday = params.get('useIntraday', True)
         self.intraday_period = params.get('intraday_period', '230m')
+        self.isAnal = params.get('isAnal', False)
     
     def filterStocks(self, stock_list):
         current_data = get_current_data()
@@ -41,7 +42,8 @@ class HerdHead(object):
         
         # 取出该指数的股票:
         oriStocks = get_industry_stocks(index) if not isConcept else get_concept_stocks(index)
-        oriStocks = self.filterStocks(oriStocks)
+        if not self.isAnal:
+            oriStocks = self.filterStocks(oriStocks)
         # 根据个股涨幅筛选
         filtStocks = self.filtGain(oriStocks)
         # 计算指数涨幅

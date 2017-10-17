@@ -43,7 +43,7 @@ class SectorSelection(object):
     '''
     This class implement the methods to rank the sectors
     '''
-    def __init__(self, isAnal=False, limit_pct=5, isStrong=True, min_max_strength = 0, useIntradayData=True, useAvg=True):
+    def __init__(self, isAnal=False, limit_pct=5, isStrong=True, min_max_strength = 0, useIntradayData=True, useAvg=True, avgPeriod=5, intraday_period='230m'):
         '''
         Constructor
         '''
@@ -52,12 +52,13 @@ class SectorSelection(object):
         self.isAnal = isAnal
         self.frequency = '1d' # use day period
         self.period = 270
-        self.gauge_period = 5
+        self.gauge_period = avgPeriod
         self.top_limit = float(limit_pct) / 100.0
         self.isReverse = isStrong
         self.stock_data_buffer = {}
         self.min_max_strength = min_max_strength
         self.jqIndustry = SW2 # SW3
+        self.intraday_period = intraday_period
         self.conceptSectors = GN
         self.filtered_industry = []
         self.filtered_concept = []
@@ -156,7 +157,10 @@ class SectorSelection(object):
                     removed+=1
                 else:
                     sectorStrength += stockStrength
-            sectorStrength /= (len(sectorStocks)-removed)
+            if len(sectorStocks)==removed:
+                sectorStrength = 0.0
+            else:
+                sectorStrength /= (len(sectorStocks)-removed)
             return sectorStrength  
         else:
             avgStrength = 0.0
@@ -267,7 +271,7 @@ class SectorSelection(object):
             containPaused = 'paused' in fields
             if containPaused:
                 fields.remove('paused')
-            latest_stock_data = attribute_history(stock, 1, '230m', fields, skip_paused=skip_paused, df=df_flag)
+            latest_stock_data = attribute_history(stock, 1, self.intraday_period, fields, skip_paused=skip_paused, df=df_flag)
             if containPaused:
                 latest_stock_data.assign(paused=np.nan)
                 cd = get_current_data()
@@ -279,7 +283,10 @@ class SectorSelection(object):
                 latest_stock_data.ix[0, 'index'] = pd.DatetimeIndex([current_date])[0]
                 latest_stock_data = latest_stock_data.set_index('index')
                 df = df.reset_index().drop_duplicates(subset='index').set_index('index')
-                df = df.append(latest_stock_data, verify_integrity=True) # True
+                try:
+                    df = df.append(latest_stock_data, verify_integrity=True) # True
+                except:
+                    pass
             else:
                 final_fields = []
                 if isinstance(fields, basestring):
