@@ -33,15 +33,15 @@ class StrategyStats(object):
     def getPnL(self, record):
         open_record = record[record['trade_action']=='open']
         if not open_record.empty:
-            self.open_pos = self.open_pos.append(open_record, verify_integrity=True)
+            self.open_pos = self.open_pos.append(open_record)
         
         closed_record = record[record['trade_action']=='close']
         if not closed_record.empty:
             to_be_closed_pos, close_record = self.getOrderPnl(closed_record)
             
             self.open_pos = self.open_pos.loc[-self.open_pos['stock'].isin(close_record['stock'].values)]
-            self.past_open_pos = self.past_open_pos.append(to_be_closed_pos, verify_integrity=True)
-            self.closed_pos = self.closed_pos.append(close_record, verify_integrity=True)
+            self.past_open_pos = self.past_open_pos.append(to_be_closed_pos)
+            self.closed_pos = self.closed_pos.append(close_record)
             
     def convertRecord(self, order_record):
         # trade_record contains dict with order as key tuple of biaoli and TA signal as value
@@ -60,7 +60,6 @@ class StrategyStats(object):
                 pd_series = pd.Series([order_id, order_tms, order_action, order_side, order_stock, order_price, BL_status, TA_type, TA_period, pnl],index=StrategyStats.stats_columns)
                 list_of_series += [pd_series]
         df = pd.DataFrame(list_of_series, columns=StrategyStats.stats_columns)
-        df.set_index(StrategyStats.stats_columns[:2], verify_integrity=True,inplace=True)
         return df
     
     def processOrder(self, order_record):
