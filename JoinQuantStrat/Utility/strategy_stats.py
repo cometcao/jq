@@ -18,17 +18,23 @@ class StrategyStats(object):
     class used to monitor/record all trades, and provide statistics. 
     Two Pandas dataframe kept at the same time, one for open position, one for closed position
     '''
-    stats_columns = ['order_id','timestamp', 'trade_action', 'trade_type', 'stock', 'trade_price', 'biaoli_status', 'TA_signal', 'TA_period', 'pnl']
+    new_stats_columns = ['order_id','timestamp', 'trade_action', 'trade_type', 'stock', 'trade_value', 'biaoli_status', 'TA_signal', 'TA_period']
+    old_stats_columns = ['order_id','timestamp', 'stock', 'biaoli_status_long', 'TA_signal_long', 'TA_period_long', 'biaoli_status_short', 'TA_signal_short', 'TA_period_short', 'pnl']
     def __init__(self):
-        self.open_pos = pd.DataFrame(columns=StrategyStats.stats_columns)
-        self.past_open_pos = pd.DataFrame(columns=StrategyStats.stats_columns)
-        self.closed_pos = pd.DataFrame(columns=StrategyStats.stats_columns)
+        self.open_pos = pd.DataFrame(columns=StrategyStats.new_stats_columns)
+        self.closed_pos = pd.DataFrame(columns=StrategyStats.old_stats_columns)
         
     def getOrderPnl(self, close_record):
         stocks_to_be_closed = close_record['stock'].values
-        to_be_closed_pos = self.open_pos.loc[self.open_pos['stock'].isin(stocks_to_be_closed)]
-        close_record['pnl'] = (close_record['trade_price'].values - to_be_closed_pos['trade_price'].values) / to_be_closed_pos['trade_price'].values
-        return to_be_closed_pos, close_record
+        close_record.drop('trade_action', axis=1, inplace=True)
+        close_record.drop('trade_type', axis=1, inplace=True)
+        
+        to_be_closed_pos = self.open_pos.loc[self.open_pos['stock'].isin(stocks_to_be_closed), ['stock','trade_value', 'biaoli_status', 'TA_signal', 'TA_period']]
+        close_record = pd.merge(close_record, to_be_closed_pos, how='left', on='stock', suffixes=('_short', '_long'))
+        close_record['pnl'] = (close_record['trade_value_short'] - close_record['trade_value_long']) / close_record['trade_value_long']
+        close_record.drop('trade_value_short', axis=1, inplace=True)
+        close_record.drop('trade_value_long', axis=1, inplace=True)
+        return close_record
     
     def getPnL(self, record):
         open_record = record[record['trade_action']=='open']
@@ -37,10 +43,8 @@ class StrategyStats(object):
         
         closed_record = record[record['trade_action']=='close']
         if not closed_record.empty:
-            to_be_closed_pos, close_record = self.getOrderPnl(closed_record)
-            
+            close_record = self.getOrderPnl(closed_record)
             self.open_pos = self.open_pos.loc[-self.open_pos['stock'].isin(close_record['stock'].values)]
-            self.past_open_pos = self.past_open_pos.append(to_be_closed_pos)
             self.closed_pos = self.closed_pos.append(close_record)
             
     def convertRecord(self, order_record):
@@ -51,15 +55,14 @@ class StrategyStats(object):
             if order.status == OrderStatus.held:
                 order_id = order.order_id
                 order_tms = np.datetime64(order.add_time) 
-                order_price = order.price
+                order_value = order.price * order.filled
                 order_action = order.action
                 order_side = order.side
                 order_stock = order.security
                 BL_status, TA_type, TA_period = condition
-                pnl = 0
-                pd_series = pd.Series([order_id, order_tms, order_action, order_side, order_stock, order_price, BL_status, TA_type, TA_period, pnl],index=StrategyStats.stats_columns)
+                pd_series = pd.Series([order_id, order_tms, order_action, order_side, order_stock, order_value, BL_status, TA_type, TA_period],index=StrategyStats.new_stats_columns)
                 list_of_series += [pd_series]
-        df = pd.DataFrame(list_of_series, columns=StrategyStats.stats_columns)
+        df = pd.DataFrame(list_of_series, columns=StrategyStats.new_stats_columns)
         return df
     
     def processOrder(self, order_record):
@@ -69,7 +72,6 @@ class StrategyStats(object):
     
     def displayRecords(self):    
         print self.open_pos
-        print self.past_open_pos
         print self.closed_pos
         pass
     
