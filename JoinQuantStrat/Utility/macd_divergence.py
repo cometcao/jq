@@ -105,7 +105,7 @@ class macd_divergence():
         
     def checkAtBottomDoubleCross_chan(self, df, useZvalue=False):
         # shortcut
-        if not (df.shape[0] > 2 and df['macd'][-1] < 0 and df['macd'][-1] > df['macd'][-2]):
+        if not (df.shape[0] > 2 and df['macd'][-1] < 0 and df['macd'][-1] > df['macd'][-2] and df['macd'][-1] > df['macd'][-3]):
             return False
         
         # gold
@@ -175,6 +175,7 @@ class macd_divergence():
             previous_raise_area = abs(df.loc[gkey2:dkey1,'macd'].sum(axis=0))
             previous_area = abs(df.loc[dkey2:gkey2, 'macd'].sum(axis=0))
             recent_area = abs(df.loc[dkey1:gkey1, 'macd'].sum(axis=0))
+            previous_close = df['close'][-1]
             
             result = df.loc[dkey2:gkey2, 'low'].min(axis=0) > df.loc[dkey1:gkey1, 'low'].min(axis=0) * 1.01 and \
                    df.macd_raw[gkey2] < df.macd_raw[gkey1] < 0 and \
@@ -182,7 +183,8 @@ class macd_divergence():
                    df.macd[-2] < 0 < df.macd[-1] and \
                    df.loc[dkey2,'vol_ma'] > df.vol_ma[-1] and \
                    recent_area * 1.191 < previous_area and \
-                   previous_raise_area > recent_area * 1.096 #and \
+                   previous_raise_area > recent_area * 1.096 and \
+                   previous_close < df.loc[dkey2:gkey2, 'low'].min(axis=0)
                 #   previous_raise_area * 1.191 > previous_area
                 #   recent_area * 3.618 >= previous_area
             return result
@@ -216,7 +218,7 @@ class macd_divergence():
         return False            
 
     def checkAtTopDoubleCross_chan(self, df, useZvalue=False):
-        if not (df['macd'][-1] > 0 and df['macd'][-1] < df['macd'][-2] and df['macd'][-1] < df['macd'][-3]):
+        if not (df.shape[0] > 2 and df['macd'][-1] > 0 and df['macd'][-1] < df['macd'][-2] and df['macd'][-1] < df['macd'][-3]):
             return False
         
         # gold

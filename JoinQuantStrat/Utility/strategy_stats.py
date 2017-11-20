@@ -73,7 +73,7 @@ class StrategyStats(object):
                 order_stock = order.security
                 BL_status, TA_type, TA_period = condition
                 if BL_status is None or len(BL_status) != 3: # hack
-                    BL_status = [(nan,nan),(nan,nan),(nan,nan)]
+                    BL_status = [(np.nan,np.nan),(np.nan,np.nan),(np.nan,np.nan)]
                 else:
                     BL_status = [item.value for item in BL_status]
                 if TA_type is not None:

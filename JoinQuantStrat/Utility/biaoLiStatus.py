@@ -34,6 +34,18 @@ class KBarStatus(Enum):
     upTrend = (1, 1)
     downTrendNode = (-1, 0)
     downTrend = (-1, 1)
+    def __le__(self, b):
+        result = False
+        if self.value[0] < b.value[0]:
+            result = True
+        elif self.value[0] > b.value[0]:
+            result = False
+        else: # == case
+            if self.value[1] <= b.value[1]:
+                result = True
+            else:
+                result = False
+        return result
 
 class StatusCombo(Enum):
     @staticmethod
