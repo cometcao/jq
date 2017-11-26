@@ -182,9 +182,9 @@ class macd_divergence():
                    df.loc[dkey2:gkey2, 'macd_raw'].min(axis=0) < df.loc[dkey1:gkey1, 'macd_raw'].min(axis=0) and \
                    df.macd[-2] < 0 < df.macd[-1] and \
                    df.loc[dkey2,'vol_ma'] > df.vol_ma[-1] and \
-                   recent_area * 1.191 < previous_area and \
-                   previous_raise_area > recent_area * 1.096 and \
                    previous_close < df.loc[dkey2:gkey2, 'low'].min(axis=0)
+#                    recent_area * 1.191 < previous_area and \
+#                    previous_raise_area > recent_area * 1.096 and \
                 #   previous_raise_area * 1.191 > previous_area
                 #   recent_area * 3.618 >= previous_area
             return result

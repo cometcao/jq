@@ -85,7 +85,7 @@ class value_factor_lib():
         df = get_fundamentals(query(indicator.code, indicator.net_profit_to_total_revenue    ), date = statsDate)
         df = df.fillna(value=0)
 
-        #industry_list = self.quantlib.fun_get_industry(cycle=True)
+        industry_list = self.quantlib.fun_get_industry(cycle=True)
         #industry_list = self.quantlib.fun_get_industry_levelI()
 
         profit_ratio_list = []
@@ -97,47 +97,24 @@ class value_factor_lib():
 
         good_stock_list = list(set(good_stock_list) & set(profit_ratio_list))
         
-        '''
+        
         stock_list = []
         for stock in relative_ps:
         #for stock in low_ps:
             if stock in good_stock_list:
                 stock_list.append(stock)
-        '''
-        
-        stock_list = good_stock_list
+
         positions_list = context.portfolio.positions.keys()
         stock_list = self.quantlib.unpaused(stock_list, positions_list)
         stock_list = self.quantlib.remove_st(stock_list, statsDate)
-        stock_list = self.quantlib.fun_delNewShare(context, stock_list, 80)
+        stock_list = self.quantlib.fun_delNewShare(context, stock_list, 30)
 
         #stock_list = stock_list[:hold_number*10]
         stock_list = self.quantlib.remove_bad_stocks(stock_list, bad_stock_list)
         stock_list = self.quantlib.remove_limit_up(stock_list, positions_list)
         stock_list = self.quantlib.fun_diversity_by_industry(stock_list, int(hold_number*0.4), statsDate)
-        
-        
-        
-        dic_vol = {}
-        for stock in stock_list:
-            price = attribute_history(stock, 60, '1d', ('close'))   #取60日收盘价并计算波动率
-            #vol = (price.pct_change().mean()/price.pct_change().std())['close']
-            vol = price.pct_change().std()['close']
-            #vol = (sqrt(price.pct_change().var())/price.pct_change().mean())['close']
-            #vol = price.pct_change()['close'][-1]
-            if vol >0:
-                dic_vol[stock] = vol
-
-        sort_vol = sorted(dic_vol.items(), key=(lambda d:d[1]),reverse=False)         #将波动率从大到小排列
-        
-        stockpool = []
-        for (m,n) in sort_vol:
             
-            stockpool.append(m)
-            
-        
-        
-        return stockpool[:hold_number]
+        return stock_list[:hold_number]
 
 
     def fun_get_relative_ps(self, context, statsDate=None):
@@ -231,39 +208,3 @@ class value_factor_lib():
             stock_list.append(stock)
 
         return stock_list[:int(len(stock_list)*0.5)]
-    
-    def isMACDGold(self, context, security):
-        '''
-        判断是否 MACD 金叉
-        return True or False
-        '''
-        #当天和前一个交易日的日期
-        check_date = context.current_dt.strftime('%Y-%m-%d')
-        previous_date = context.previous_date
-        
-        # 计算并输出 security 的 MACD 值
-        macd_dif, macd_dea, macd_macd = MACD(security,check_date=check_date, SHORT = 12, LONG = 26, MID = 9)
-        previous_date_macd_dif, previous_date_macd_dea, previous_date_macd_macd = MACD(security,check_date=previous_date, SHORT = 12, LONG = 26, MID = 9)
-        
-        if previous_date_macd_macd[security] < 0  and macd_macd[security] > 0:
-            return True
-        else:
-            return False
-            
-    def isMACDDead(self, context, security):
-        '''
-        判断是否 MACD 死叉
-        return True or False
-        '''
-        #当天和前一个交易日的日期
-        check_date = context.current_dt.strftime('%Y-%m-%d')
-        previous_date = context.previous_date
-        
-        # 计算并输出 security 的 MACD 值
-        macd_dif, macd_dea, macd_macd = MACD(security,check_date=check_date, SHORT = 12, LONG = 26, MID = 9)
-        previous_date_macd_dif, previous_date_macd_dea, previous_date_macd_macd = MACD(security,check_date=previous_date, SHORT = 12, LONG = 26, MID = 9)
-        
-        if previous_date_macd_macd[security] > 0 and macd_macd[security] < 0:
-            return True
-        else:
-            return False

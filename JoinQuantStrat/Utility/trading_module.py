@@ -4,13 +4,19 @@ Created on 10 Oct 2016
 
 @author: MetalInvest
 '''
+try:
+    from easytrader.api import *
+    from easytrader.webtrader import WebTrader
+    import easytrader.config
+except:
+    pass
+try:
+    from kuanke.user_space_api import *
+except:
+    pass
 
-from easytrader.api import *
-from easytrader.webtrader import WebTrader
-import easytrader.config
-# from kuanke.user_space_api import *
-# from api import *
-# from webtrader import WebTrader
+from api import *
+from webtrader import WebTrader
 import config
 import smtplib
 from email.mime.text import MIMEText
@@ -34,10 +40,10 @@ def loading(broker, version = 1):
     user = use(broker)
     
     # 设置代理IP
-    proxy_user = None
-    proxy_pwd = None
-    proxy_ip = '111.13.7.42'
-    proxy_port = 81
+    proxy_user = 'user'
+    proxy_pwd = 'pwd'
+    proxy_ip = '120.78.209.13'
+    proxy_port = 9595
     if proxy_ip is not None:
         s = "%s:%s" % (proxy_ip, proxy_port)
         if proxy_user is not None and proxy_pwd is not None:
