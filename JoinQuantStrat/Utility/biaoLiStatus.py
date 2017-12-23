@@ -17,6 +17,7 @@ It defines classes_and_methods
 @deffield    updated: Updated
 '''
 from enum import Enum 
+import numpy as np
 
 class InclusionType(Enum):
     # output: 0 = no inclusion, 1 = first contains second, 2 second contains first
@@ -34,6 +35,7 @@ class KBarStatus(Enum):
     upTrend = (1, 1)
     downTrendNode = (-1, 0)
     downTrend = (-1, 1)
+    none_status = (np.nan, np.nan)
     def __le__(self, b):
         result = False
         if self.value[0] < b.value[0]:

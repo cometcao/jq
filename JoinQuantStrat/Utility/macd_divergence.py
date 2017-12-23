@@ -103,7 +103,7 @@ class macd_divergence():
         def zscore(self, series):
             return (series - series.mean()) / np.std(series)
         
-    def checkAtBottomDoubleCross_chan(self, df, useZvalue=False):
+    def checkAtBottomDoubleCross_chan_old(self, df, useZvalue=False):
         # shortcut
         if not (df.shape[0] > 2 and df['macd'][-1] < 0 and df['macd'][-1] > df['macd'][-2] and df['macd'][-1] > df['macd'][-3]):
             return False
@@ -157,6 +157,50 @@ class macd_divergence():
             return result
         except IndexError:
             return False
+
+    def checkAtBottomDoubleCross_chan(self, df):
+        # shortcut
+        if not (df.shape[0] > 2 and df['macd'][-1] < 0 and df['macd'][-1] > df['macd'][-2] and df['macd'][-1] > df['macd'][-3]):
+            return False
+        
+        # gold
+        mask = df['macd'] > 0
+        mask = mask[mask==True][mask.shift(1) == False]
+        
+        # death
+        mask2 = df['macd'] < 0
+        mask2 = mask2[mask2==True][mask2.shift(1)==False]
+        
+        try:
+            gkey1 = mask.keys()[-1]
+            dkey2 = mask2.keys()[-2]
+            dkey1 = mask2.keys()[-1]
+
+            recent_low = df.loc[dkey1:,'low'].min(axis=0)
+            previous_low = df.loc[dkey2:gkey1, 'low'].min(axis=0)
+                
+            recent_min_idx = df.loc[dkey1:,'low'].idxmin()
+            previous_min_idx = df.loc[dkey2:gkey1,'low'].idxmin()
+            loc = df.index.get_loc(recent_min_idx)
+            recent_min_idx_nx = df.index[loc+1]
+            recent_area_est = abs(df.loc[dkey1:recent_min_idx_nx, 'macd'].sum(axis=0)) * 2
+            
+            previous_area = abs(df.loc[dkey2:gkey1, 'macd'].sum(axis=0))
+            recent_high = df.loc[dkey1:, 'high'].max(axis=0)
+            
+            result =  df.macd[-2] < df.macd[-1] < 0 and \
+                    df.macd[-3] < df.macd[-1] and \
+                    0 > df.macd_raw[-1] and \
+                    df.macd[recent_min_idx] > df.macd[previous_min_idx] and \
+                    recent_area_est < previous_area and \
+                    previous_low >= recent_low and \
+                    recent_high < previous_low and \
+                    recent_low <= df.lower[recent_min_idx]
+                    
+            return result
+        except IndexError:
+            return False
+
 
     def checkAtBottomDoubleCross_v2(self, df):
         # bottom divergence gold
@@ -217,7 +261,7 @@ class macd_divergence():
                 return True
         return False            
 
-    def checkAtTopDoubleCross_chan(self, df, useZvalue=False):
+    def checkAtTopDoubleCross_chan_old(self, df, useZvalue=False):
         if not (df.shape[0] > 2 and df['macd'][-1] > 0 and df['macd'][-1] < df['macd'][-2] and df['macd'][-1] < df['macd'][-3]):
             return False
         
@@ -258,7 +302,44 @@ class macd_divergence():
         except IndexError:
             return False
     
+    def checkAtTopDoubleCross_chan(self, df):
+        if not (df.shape[0] > 2 and df['macd'][-1] > 0 and df['macd'][-1] < df['macd'][-2] and df['macd'][-1] < df['macd'][-3]):
+            return False
         
+        # gold
+        mask = df['macd'] > 0
+        mask = mask[mask==True][mask.shift(1) == False]
+        
+        # death
+        mask2 = df['macd'] < 0
+        mask2 = mask2[mask2==True][mask2.shift(1)==False]
+        
+        try:
+            gkey1 = mask.keys()[-1]
+            gkey2 = mask.keys()[-2]
+            dkey1 = mask2.keys()[-1]
+            
+            recent_high = df.loc[gkey1:,'high'].max(axis=0)
+            previous_high = df.loc[gkey2:dkey1, 'high'].max(axis=0)
+            
+            recent_high_idx = df.loc[gkey1:,'high'].idxmax()
+            previous_high_idx = df.loc[gkey2:dkey1,'high'].idxmax()
+            loc = df.index.get_loc(recent_high_idx)
+            recent_high_idx_nx = df.index[loc+1]
+            recent_area_est = abs(df.loc[gkey1:recent_high_idx_nx, 'macd'].sum(axis=0) * 2)
+            previous_area = abs(df.loc[gkey2:dkey1, 'macd'].sum(axis=0))
+      
+            return df.macd[-2] > df.macd[-1] > 0 and \
+                    df.macd[-3] > df.macd[-1] and \
+                    df.macd_raw[recent_high_idx] > df.macd_raw[-1] > 0 and \
+                    (df.macd[recent_high_idx] < df.macd[previous_high_idx] or recent_area_est < previous_area) and \
+                    (recent_high >= previous_high or recent_high >= df.upper[recent_high_idx])
+
+        except IndexError:
+            return False
+
+
+
     def checkFast(self, stock, fastperiod=12, slowperiod=26, signalperiod=9, checkBot=True):    
         rows = (fastperiod + slowperiod + signalperiod) * 5
         h = attribute_history(security=stock, count=rows, unit='1d', fields=['close'], df=False)

@@ -37,8 +37,13 @@ class StrategyStats(object):
         close_record.drop('trade_type', axis=1, inplace=True)
         
         to_be_closed_pos = self.open_pos.loc[self.open_pos['stock'].isin(stocks_to_be_closed), ['stock','trade_value', 'biaoli_status', 'TA_signal', 'TA_period']]
+        if to_be_closed_pos.empty: # if data corrupted return empty
+            return (None, None)
         close_record = pd.merge(close_record, to_be_closed_pos, how='left', on='stock', suffixes=('_short', '_long'))
         close_record['pnl'] = (close_record['trade_value_short'] - close_record['trade_value_long']) / close_record['trade_value_long']
+#         print close_record
+#         print to_be_closed_pos
+#         print self.open_pos
         long_values = close_record.biaoli_status_long.values
         close_record[['5d_status_long','1d_status_long', '60m_status_long']] = pd.DataFrame(long_values.tolist())
         short_values = close_record.biaoli_status_short.values
@@ -71,11 +76,13 @@ class StrategyStats(object):
         closed_record = record[record['trade_action']=='close']
         if not closed_record.empty:
             close_record, deduct_record = self.getOrderPnl(closed_record, context)
-            self.open_pos = self.open_pos.loc[-self.open_pos['stock'].isin(close_record['stock'].values)]
-            self.closed_pos = self.closed_pos.append(close_record)
-            self.closed_pos.reset_index(drop=True, inplace=True)
-            self.open_pos.loc[self.open_pos['stock'].isin(deduct_record['stock'].values), 'trade_value'] = \
-                self.open_pos.loc[self.open_pos['stock'].isin(deduct_record['stock'].values), 'trade_value'] - deduct_record['trade_value_short']
+            if close_record is not None:
+                self.open_pos = self.open_pos.loc[-self.open_pos['stock'].isin(close_record['stock'].values)]
+                self.closed_pos = self.closed_pos.append(close_record)
+                self.closed_pos.reset_index(drop=True, inplace=True)
+            if deduct_record is not None:
+                self.open_pos.loc[self.open_pos['stock'].isin(deduct_record['stock'].values), 'trade_value'] = \
+                    self.open_pos.loc[self.open_pos['stock'].isin(deduct_record['stock'].values), 'trade_value'] - deduct_record['trade_value_short']
             
     def check_stock_in_pos(self, stock, context):
         return stock in context.portfolio.positions
@@ -93,10 +100,18 @@ class StrategyStats(object):
                 order_side = order.side
                 order_stock = order.security
                 BL_status, TA_type, TA_period = condition
-                if BL_status is None or len(BL_status) != 3 or BL_status == [(np.nan,np.nan),(np.nan,np.nan),(np.nan,np.nan)]: # hack
+                try:
+                    BL_status = [item.value if item is not None else (np.nan,np.nan) for item in BL_status]
+                except Exception as e:
+                    print str(e)
+                    print condition
                     BL_status = [(np.nan,np.nan),(np.nan,np.nan),(np.nan,np.nan)]
-                else:
-                    BL_status = [item.value for item in BL_status]
+#                 if BL_status is None or len(BL_status) != 3 \
+#                     or BL_status == [(np.nan,np.nan),(np.nan,np.nan),(np.nan,np.nan)]: # hack
+#                     BL_status = [(np.nan,np.nan),(np.nan,np.nan),(np.nan,np.nan)]
+#                 else:
+#                     BL_status = [item.value if item is not None else (np.nan,np.nan) for item in BL_status]
+                    
                 if TA_type is not None:
                     TA_type = TA_type.value
                 pd_series = pd.Series([order_id, order_tms, order_action, order_side, order_stock, order_value, BL_status, TA_type, TA_period],index=StrategyStats.new_stats_columns)
@@ -112,10 +127,11 @@ class StrategyStats(object):
     def displayRecords(self):    
         print self.open_pos
         self.getStats()
+        print self.closed_pos[self.closed_pos['TA_signal_long']==TaType.RSI.value]
+        print self.closed_pos[self.closed_pos['TA_signal_long']==TaType.KDJ_CROSS.value]
     
     def getStats(self):
         self.closed_pos['pnl_sign'] = np.sign(self.closed_pos.pnl)
-#         print self.closed_pos
         # success rate on each long/short condition
 #         print self.closed_pos[self.closed_pos['pnl_sign']>=0].groupby(self.closed_pos.biaoli_status_long.apply(tuple)).agg({'pnl_sign':sum})
         print self.closed_pos[['5d_status_long','1d_status_long','60m_status_long','pnl_sign']].groupby(('5d_status_long','1d_status_long','60m_status_long')).pnl_sign.value_counts()

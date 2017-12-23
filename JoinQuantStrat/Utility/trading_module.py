@@ -17,6 +17,7 @@ except:
 
 from api import *
 from webtrader import WebTrader
+
 import config
 import smtplib
 from email.mime.text import MIMEText
@@ -77,9 +78,13 @@ def check(user):
 #     log.info('-'*30)
     log.info('获取资金状况:')
     log.info('enable_balance(可用金额):{0}'.format(user.balance[0]['enable_balance']))
-    log.info('-'*30)
-    log.info('持仓:')
-    log.info('获取持仓:{0}'.format(str(user.position[0])))
+    try:
+        if user.position:
+            log.info('-'*30)
+            log.info('持仓:')
+            log.info('获取持仓:{0}'.format(str(user.position[0])))
+    except:
+        pass
 
 # def realAction(stock, pct, data):
 #     # all actions mimic market order
@@ -219,6 +224,7 @@ def realAction_ht(stock, value_pct):
     
 class XueQiuAction:
     def __init__(self, cfg, version=1):
+        self.retry = 3
         self.config = cfg
         self.version = version
         self.order_list = []
@@ -242,11 +248,16 @@ class XueQiuAction:
     
     def adjustStock(self):
         if self.order_list:
-            try:
-                if not self.user:
-                    self.connect()
-            except:
-                log.warn("Xueqiu login failed")
+            count = 0
+            while count < 3:
+                count += 1
+                try:
+                    if not self.user:
+                        self.connect()
+                        break
+                except Exception as e:
+                    log.warn("Xueqiu login failed:" + str(e))
+            if count == 3:
                 return
             for stock, value_pct, _ in self.order_list:
                 try:
@@ -255,6 +266,6 @@ class XueQiuAction:
                 except:
                     log.info('order failed:{0} {1}'.format(stock, value_pct))
 
-xq = XueQiuAction('xq', 2)
-xq.connect()
-xq.reset()
+# xq = XueQiuAction('xq', 2)
+# xq.connect()
+# xq.reset()
