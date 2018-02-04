@@ -1,6 +1,8 @@
 from kBarProcessor import *
 from jqdata import *
 from biaoLiStatus import TopBotType
+from pickle import dump
+from pickle import load
 import pandas as pd
 import numpy as np
 import talib
@@ -14,12 +16,19 @@ class MLKbarPrep(object):
     '''
 
     monitor_level = ['1d', '30m']
-    def __init__(self, count=100, isAnal=False, isNormalize=False, manual_select=False):
+    def __init__(self, count=100, isAnal=False, isNormalize=True, manual_select=False, useMinMax=True):
         self.isAnal = isAnal
         self.count = count
         self.isNormalize = isNormalize
+        self.useMinMax = useMinMax
         self.manual_select = manual_select
         self.stock_df_dict = {}
+        self.sub_level_min_count = 2
+        self.sub_max_count = 21 * 8
+#         self.data_set = None
+#         self.label_set = None
+        self.data_set = []
+        self.label_set = []
     
     def retrieve_stock_data(self, stock):
         for level in MLKbarPrep.monitor_level:
@@ -45,26 +54,29 @@ class MLKbarPrep(object):
         kb = KBarProcessor(stock_df)
         kb_marked = kb.getMarkedBL()
         stock_df = stock_df.join(kb_marked[['new_index', 'tb']])
-        if self.isAnal:
-            print stock_df
         return stock_df
     
     def prepare_training_data(self):
         higher_df = self.stock_df_dict[MLKbarPrep.monitor_level[0]]
         lower_df = self.stock_df_dict[MLKbarPrep.monitor_level[1]]
         high_df_tb = higher_df.dropna(subset=['new_index'])
-        if self.isAnal:
-            print high_df_tb
         high_dates = high_df_tb.index
         for i in range(0, len(high_dates)-1):
             first_date = high_dates[i]
             second_date = high_dates[i+1]
             trunk_lower_df = lower_df.loc[first_date:second_date,:]
-            if self.isAnal:
-                print trunk_lower_df
-            self.create_ml_data_set(trunk_lower_df, high_df_tb.ix[i, 'tb'])
+            self.create_ml_data_set(trunk_lower_df, high_df_tb.ix[i+1, 'tb'].value)
+        return self.data_set, self.label_set
         
     def create_ml_data_set(self, trunk_df, label): 
+        # at least 3 parts in the sub level
+        sub_level_count = len(trunk_df['tb']) - trunk_df['tb'].isnull().sum()
+        if sub_level_count < self.sub_level_min_count:
+            return
+        
+        if trunk_df.shape[0] > self.sub_max_count:
+            return
+        
         if self.manual_select:
             trunk_df = self.manual_select(trunk_df)
         else:
@@ -72,34 +84,171 @@ class MLKbarPrep(object):
         if self.isNormalize:
             trunk_df = self.normalize(trunk_df)
         
-        
+#         if self.data_set:
+#             self.data_set = np.append(self.data_set, np.array(trunk_df.as_matrix()), axis=0)
+#         else:
+#             self.data_set = np.array(trunk_df.values)
+#         if self.label_set:
+#             self.label_set = np.append(self.label_set, np.array(label), axis=0)
+#         else:
+#             self.label_set = np.array(label)
+        self.data_set.append(trunk_df.values)
+        self.label_set.append(label)
         
         
     def manual_select(self, df):
         df = df.dropna()
         df['new_index'] = df['new_index'].shift(-1) - df['new_index'] 
         df['tb'] = df.apply(lambda row: row['tb'].value, axis = 1)
+        df['price'] = df.apply(lambda row: row['high'] if row['tb'] == 1 else row['low'])
+        df.drop(['open', 'high', 'low'], 1)
         return df
         
     def manual_wash(self, df):
         df = df.drop(['new_index','tb'], 1)
         return df
         
-        
     def normalize(self, df):
         for column in df: 
             if column == 'new_index' or column == 'tb':
                 continue
-            col_mean = df[column].mean()
-            col_std = df[column].std
-            df[column] = df[column] - col_mean / col_std
-#             # min-max
-#             df[column]=(df[column]-df[column].min())/(df[column].max()-df[column].min())
+            if self.useMinMax:
+                # min-max
+                col_min = df[column].min()
+                col_max = df[column].max()
+                df[column]=(df[column]-col_min)/(col_max-col_min)
+            else:
+                # mean std
+                col_mean = df[column].mean()
+                col_std = df[column].std()
+                df[column] = (df[column] - col_mean) / col_std
         return df
+    
+    
+class MLDataPrep(object):
+    def __init__(self, isAnal=False):
+        self.isAnal = isAnal
+    
+    def retrieve_stocks_data(self, stocks, period_count=60, filename='cnn_training.pkl'):
+        data_list = label_list = []
+        for stock in stocks:
+            mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True)
+            mlk.retrieve_stock_data(stock)
+            dl, ll = mlk.prepare_training_data()
+            data_list = data_list + dl
+            label_list = label_list + ll
+#             if data_list:
+#                 data_list = np.append(data_list, dl, axis=0)  
+#             else:
+#                 data_list = dl
+#             if label_list:
+#                 label_list = np.append(label_list, ll, axis=0)    
+#             else:
+#                 label_list = ll       
+        
+        data_list = self.pad_each_training_array(data_list)
+        
+        self.save_dataset((np.array(data_list), np.array(label_list)), filename)
+        
+        # save a dataset to file
+    def save_dataset(self, dataset, filename):
+        dump(dataset, open(filename, 'wb'))
+        print('Saved: %s' % filename)
+        
+    # load a clean dataset
+    def load_dataset(self, filename):
+        return load(open(filename, 'rb'))
 
+    def pad_each_training_array(self, data_list):
+        new_shape = self.findmaxshape(data_list)
+        new_data_list = self.fillwithzeros(data_list, new_shape)
+        return new_data_list
+    
+    def fillwithzeros(self, inputarray, outputshape):
+        """
+        Fills input array with dtype 'object' so that all arrays have the same shape as 'outputshape'
+        inputarray: input numpy array
+        outputshape: max dimensions in inputarray (obtained with the function 'findmaxshape')
+    
+        output: inputarray filled with zeros
+        """
+        length = len(inputarray)
+        output = np.zeros((length,)+outputshape)
+        for i in range(length):
+            output[i][:inputarray[i].shape[0],:inputarray[i].shape[1]] = inputarray[i]
+        return output
+    
+    def findmaxshape(self, inputarray):
+        """
+        Finds maximum x and y in an inputarray with dtype 'object' and 3 dimensions
+        inputarray: input numpy array
+    
+        output: detected maximum shape
+        """
+        max_x, max_y = 0, 0
+        for array in inputarray:
+            x, y = array.shape
+            if x > max_x:
+                max_x = x
+            if y > max_y:
+                max_y = y
+        return(max_x, max_y)
+
+
+# class MLDataProcess(object):
+#     def __init__(self):
+#         pass
+#     
+#     def define_model(self):
+#         x_train, x_test, y_train, y_test = train_test_split(A, B, test_size=0.2, random_state=42)
+#         
+#         #####################################################################################################
+#         
+#         # convert class vectors to binary class matrices
+#         num_classes = 3
+#         y_train = keras.utils.to_categorical(y_train, num_classes)
+#         y_test = keras.utils.to_categorical(y_test, num_classes)
+#         
+#         
+#         model = Sequential()
+#         
+#         # we add a Convolution1D, which will learn filters
+#         # word group filters of size filter_length:
+#         model.add(Conv1D(250,
+#                          3,
+#                          padding='valid',
+#                          activation='relu',
+#                          strides=1,
+#                          input_shape=(None, 7)))
+#         # we use max pooling:
+#         model.add(GlobalMaxPooling1D())
+#         
+#         # We add a vanilla hidden layer:
+#         model.add(Dense(250))
+#         model.add(Dropout(0.2))
+#         model.add(Activation('relu'))
+#         
+#         # We project onto a single unit output layer, and squash it with a sigmoid:
+#         model.add(Dense(3))
+#         model.add(Activation('sigmoid'))
+#         
+#         model.compile(loss='binary_crossentropy',
+#                       optimizer='adam',
+#                       metrics=['accuracy'])
+#         model.fit(x_train, y_train,
+#                   batch_size=20,
+#                   epochs=2,
+#                   validation_data=(x_test, y_test))
+#         
+#         score = model.evaluate(x_test, y_test, verbose=0)
+#         print('Test loss:', score[0])
+#         print('Test accuracy:', score[1])        
+        
+        
         
     
-        
+#     trainLines, trainLabels = load_dataset('train.pkl')
+
 #                           open      close       high        low        money  \
 # 2017-11-14 10:00:00  3446.5500  3436.1400  3450.3400  3436.1400  60749246464   
 # 2017-11-14 10:30:00  3436.7000  3433.1700  3438.7300  3431.2600  39968927744   
