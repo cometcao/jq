@@ -137,11 +137,21 @@ class MLDataPrep(object):
             dl, ll = mlk.prepare_training_data()
             data_list = data_list + dl
             label_list = label_list + ll   
+        self.save_dataset((data_list, label_list), filename)
         
-        self.save_dataset((np.array(data_list), np.array(label_list)), filename)
-        
-    def prepare_stock_data_cnn(self, filename, padData=True, test_portion=0.1, random_seed=42):
-        A, B = self.load_dataset(filename)
+    def prepare_stock_data_cnn(self, filenames, padData=True, test_portion=0.1, random_seed=42):
+        data_list = label_list = []
+        for file in filenames:
+            A, B = self.load_dataset(file)
+            data_list = A + data_list 
+            label_list = B + label_list
+
+        if not data_list or not label_list:
+            print("Invalid file content")
+            return
+
+        data_list = np.array(data_list)
+        label_list = np.array(label_list)
 
         if padData:
             A = self.pad_each_training_array(A)
