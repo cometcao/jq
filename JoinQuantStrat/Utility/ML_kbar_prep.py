@@ -7,10 +7,14 @@ import pandas as pd
 import numpy as np
 import talib
 import keras
+from keras.utils.np_utils import to_categorical
+from keras.models import load_model
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Flatten
 from keras.layers import Conv2D, MaxPooling2D
 from sklearn.model_selection import train_test_split
+
+# pd.options.mode.chained_assignment = None 
 
 class MLKbarPrep(object):
     '''
@@ -77,8 +81,8 @@ class MLKbarPrep(object):
         if sub_level_count < self.sub_level_min_count:
             return
         
-        if trunk_df.shape[0] > self.sub_max_count:
-            return
+        if trunk_df.shape[0] > self.sub_max_count: # truncate
+            trunk_df = trunk_df.iloc[-self.sub_max_count:,:]
         
         if self.manual_select:
             trunk_df = self.manual_select(trunk_df)
@@ -127,20 +131,20 @@ class MLDataPrep(object):
     def retrieve_stocks_data(self, stocks, period_count=60, filename='cnn_training.pkl'):
         data_list = label_list = []
         for stock in stocks:
+            print ("working on stock: {0}".format(stock))
             mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True)
             mlk.retrieve_stock_data(stock)
             dl, ll = mlk.prepare_training_data()
             data_list = data_list + dl
             label_list = label_list + ll   
         
-#         data_list = self.pad_each_training_array(data_list)
-        
         self.save_dataset((np.array(data_list), np.array(label_list)), filename)
         
     def prepare_stock_data_cnn(self, filename, padData=True, test_portion=0.1, random_seed=42):
         A, B = self.load_dataset(filename)
 
-        A = self.pad_each_training_array(A)
+        if padData:
+            A = self.pad_each_training_array(A)
         A = np.expand_dims(A, axis=2) # reshape (36, 168, 7) to (36, 168, 1, 7)
         
         x_train, x_test, y_train, y_test = train_test_split(A, B, test_size=test_portion, random_state=random_seed)
@@ -198,16 +202,17 @@ class MLDataPrep(object):
 
 
 class MLDataProcess(object):
-    def __init__(self):
-        pass
+    def __init__(self, model_name='ml_model.h5'):
+        self.model_name = model_name
+        self.model = None
      
-    def define_conv2d_model(self, x_train, x_test, y_train, y_test, num_classes, batch_size = 10,epochs = 12):
+    def define_conv2d_model(self, x_train, x_test, y_train, y_test, num_classes, batch_size = 50,epochs = 5):
         # convert class vectors to binary class matrices
         a, b, c, d = x_train.shape
         input_shape = (b, c, d)
         
-        y_train = keras.utils.to_categorical(y_train, num_classes)
-        y_test = keras.utils.to_categorical(y_test, num_classes)
+        y_train = to_categorical(y_train, num_classes)
+        y_test = to_categorical(y_test, num_classes)
         
         model = Sequential()
         model.add(Conv2D(32, kernel_size=(3, 1),
@@ -233,9 +238,15 @@ class MLDataProcess(object):
         score = model.evaluate(x_test, y_test, verbose=1)
         print('Test loss:', score[0])
         print('Test accuracy:', score[1])
-        return model
+        
+        self.model = model
+        if self.model_name:
+            model.save(self.model_name)
     
-    
+    def load_model(self, model_name):
+        self.model = load_model(model_name)
+        self.model_name = model_name
+
 #     def define_model(self):
 #         x_train, x_test, y_train, y_test = train_test_split(A, B, test_size=0.2, random_state=42)
 #          
@@ -318,4 +329,6 @@ class MLDataProcess(object):
 # 2017-11-16 14:30:00  -7.446391 -0.813237         57  TopBotType.top  
 # 2017-11-16 15:00:00  -7.247972 -0.491854        NaN             NaN  
 # 2017-11-17 10:00:00  -7.885018 -0.903120        NaN             NaN  
+
+
 
