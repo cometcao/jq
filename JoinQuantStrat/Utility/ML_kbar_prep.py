@@ -1,17 +1,19 @@
+try:
+    from rqdatac import *
+except:
+    pass
+try:
+    from jqdata import *
+except:
+    pass
 from kBarProcessor import *
-from jqdata import *
 from biaoLiStatus import TopBotType
 from pickle import dump
 from pickle import load
 import pandas as pd
 import numpy as np
 import talib
-import keras
-from keras.utils.np_utils import to_categorical
-from keras.models import load_model
-from keras.models import Sequential
-from keras.layers import Dense, Dropout, Flatten
-from keras.layers import Conv2D, MaxPooling2D
+import datetime
 from sklearn.model_selection import train_test_split
 
 # pd.options.mode.chained_assignment = None 
@@ -25,7 +27,7 @@ class MLKbarPrep(object):
     '''
 
     monitor_level = ['1d', '30m']
-    def __init__(self, count=100, isAnal=False, isNormalize=True, manual_select=False, useMinMax=True):
+    def __init__(self, count=100, isAnal=False, isNormalize=True, manual_select=False, useMinMax=True, sub_max_count=168):
         self.isAnal = isAnal
         self.count = count
         self.isNormalize = isNormalize
@@ -33,7 +35,7 @@ class MLKbarPrep(object):
         self.manual_select = manual_select
         self.stock_df_dict = {}
         self.sub_level_min_count = 2
-        self.sub_max_count = 21 * 8
+        self.sub_max_count = sub_max_count
         self.data_set = []
         self.label_set = []
     
@@ -48,6 +50,14 @@ class MLKbarPrep(object):
                 stock_df = get_price(stock, count=local_count, end_date=latest_trading_day, frequency=level, fields = ['open','close','high','low', 'money'], skip_paused=True)          
             stock_df = self.prepare_df_data(stock_df)
             self.stock_df_dict[level] = stock_df
+    
+    def retrieve_stock_data_rq(self, stock):
+        for level in MLKbarPrep.monitor_level:
+            today = datetime.datetime.today()
+            previous_trading_day=get_trading_dates(start_date='2010-01-01', end_date=datetime.datetime.today())[-self.count]
+            stock_df = get_price(stock, start_date=previous_trading_day, end_date=today, frequency=level, fields = ['open','close','high','low', 'total_turnover'], skip_suspended=True)          
+            stock_df = self.prepare_df_data(stock_df)
+            self.stock_df_dict[level] = stock_df    
     
     def prepare_df_data(self, stock_df):
         # MACD
@@ -96,7 +106,7 @@ class MLKbarPrep(object):
         
         
     def manual_select(self, df):
-        df = df.dropna()
+        df = df.dropna() # only concern BI
         df['new_index'] = df['new_index'].shift(-1) - df['new_index'] 
         df['tb'] = df.apply(lambda row: row['tb'].value, axis = 1)
         df['price'] = df.apply(lambda row: row['high'] if row['tb'] == 1 else row['low'])
@@ -105,6 +115,7 @@ class MLKbarPrep(object):
         
     def manual_wash(self, df):
         df = df.drop(['new_index','tb'], 1)
+        df = df.dropna()
         return df
         
     def normalize(self, df):
@@ -122,17 +133,18 @@ class MLKbarPrep(object):
                 col_std = df[column].std()
                 df[column] = (df[column] - col_mean) / col_std
         return df
-    
-    
+
+
 class MLDataPrep(object):
-    def __init__(self, isAnal=False):
+    def __init__(self, isAnal=False, max_length_for_pad=168):
         self.isAnal = isAnal
+        self.max_sequence_length = max_length_for_pad
     
     def retrieve_stocks_data(self, stocks, period_count=60, filename='cnn_training.pkl'):
         data_list = label_list = []
         for stock in stocks:
             print ("working on stock: {0}".format(stock))
-            mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True)
+            mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True, sub_max_count=self.max_sequence_length)
             mlk.retrieve_stock_data(stock)
             dl, ll = mlk.prepare_training_data()
             data_list = data_list + dl
@@ -143,6 +155,13 @@ class MLDataPrep(object):
         data_list = label_list = []
         for file in filenames:
             A, B = self.load_dataset(file)
+            
+            if pd.isnull(np.array(A)).any() or pd.isnull(np.array(B)).any(): 
+                print("Data contains nan")
+                print(A)
+                print(B)
+                continue
+
             data_list = A + data_list 
             label_list = B + label_list
 
@@ -150,19 +169,19 @@ class MLDataPrep(object):
             print("Invalid file content")
             return
 
-        data_list = np.array(data_list)
-        label_list = np.array(label_list)
+#         data_list = np.array(data_list)
+#         label_list = np.array(label_list)
 
         if padData:
-            A = self.pad_each_training_array(A)
-        A = np.expand_dims(A, axis=2) # reshape (36, 168, 7) to (36, 168, 1, 7)
+            data_list = self.pad_each_training_array(data_list)
+        data_list = np.expand_dims(data_list, axis=2) # reshape (36, 168, 7) to (36, 168, 1, 7)
         
-        x_train, x_test, y_train, y_test = train_test_split(A, B, test_size=test_portion, random_state=random_seed)
+        x_train, x_test, y_train, y_test = train_test_split(data_list, label_list, test_size=test_portion, random_state=random_seed)
         
         if self.isAnal:
             print (x_train.shape)
-            for i in range(x_train.shape[0]):
-                print (x_train[i].shape)
+            print (x_train)
+            print (y_train)
         
         return x_train, x_test, y_train, y_test
     
@@ -177,6 +196,8 @@ class MLDataPrep(object):
 
     def pad_each_training_array(self, data_list):
         new_shape = self.findmaxshape(data_list)
+        if self.max_sequence_length != 0: # force padding to global max length
+            new_shape = (self.max_sequence_length, new_shape[1])
         new_data_list = self.fillwithzeros(data_list, new_shape)
         return new_data_list
     
@@ -209,104 +230,6 @@ class MLDataPrep(object):
             if y > max_y:
                 max_y = y
         return(max_x, max_y)
-
-
-class MLDataProcess(object):
-    def __init__(self, model_name='ml_model.h5'):
-        self.model_name = model_name
-        self.model = None
-     
-    def define_conv2d_model(self, x_train, x_test, y_train, y_test, num_classes, batch_size = 50,epochs = 5):
-        # convert class vectors to binary class matrices
-        a, b, c, d = x_train.shape
-        input_shape = (b, c, d)
-        
-        y_train = to_categorical(y_train, num_classes)
-        y_test = to_categorical(y_test, num_classes)
-        
-        model = Sequential()
-        model.add(Conv2D(32, kernel_size=(3, 1),
-                         activation='relu',
-                         input_shape=input_shape))
-        model.add(Conv2D(64, (3, 1), activation='relu'))
-        model.add(MaxPooling2D(pool_size=(2, 1)))
-        model.add(Dropout(0.25))
-        model.add(Flatten())
-        model.add(Dense(128, activation='relu'))
-        model.add(Dropout(0.5))
-        model.add(Dense(num_classes, activation='softmax'))
-        
-        model.compile(loss=keras.losses.categorical_crossentropy,
-                      optimizer=keras.optimizers.Adadelta(),
-                      metrics=['accuracy'])
-        
-        model.fit(x_train, y_train,
-                  batch_size=batch_size,
-                  epochs=epochs,
-                  verbose=1,
-                  validation_data=(x_test, y_test))
-        score = model.evaluate(x_test, y_test, verbose=1)
-        print('Test loss:', score[0])
-        print('Test accuracy:', score[1])
-        
-        self.model = model
-        if self.model_name:
-            model.save(self.model_name)
-    
-    def load_model(self, model_name):
-        self.model = load_model(model_name)
-        self.model_name = model_name
-
-#     def define_model(self):
-#         x_train, x_test, y_train, y_test = train_test_split(A, B, test_size=0.2, random_state=42)
-#          
-#         #####################################################################################################
-#          
-#         # convert class vectors to binary class matrices
-#         num_classes = 3
-#         y_train = keras.utils.to_categorical(y_train, num_classes)
-#         y_test = keras.utils.to_categorical(y_test, num_classes)
-#          
-#          
-#         model = Sequential()
-#          
-#         # we add a Convolution1D, which will learn filters
-#         # word group filters of size filter_length:
-#         model.add(Conv1D(250,
-#                          3,
-#                          padding='valid',
-#                          activation='relu',
-#                          strides=1,
-#                          input_shape=(None, 7)))
-#         # we use max pooling:
-#         model.add(GlobalMaxPooling1D())
-#          
-#         # We add a vanilla hidden layer:
-#         model.add(Dense(250))
-#         model.add(Dropout(0.2))
-#         model.add(Activation('relu'))
-#          
-#         # We project onto a single unit output layer, and squash it with a sigmoid:
-#         model.add(Dense(3))
-#         model.add(Activation('sigmoid'))
-#          
-#         model.compile(loss='binary_crossentropy',
-#                       optimizer='adam',
-#                       metrics=['accuracy'])
-#         model.fit(x_train, y_train,
-#                   batch_size=20,
-#                   epochs=2,
-#                   validation_data=(x_test, y_test))
-#          
-#         score = model.evaluate(x_test, y_test, verbose=0)
-#         print('Test loss:', score[0])
-#         print('Test accuracy:', score[1])        
-        
-
-
-
-
-
 #                           open      close       high        low        money  \
 # 2017-11-14 10:00:00  3446.5500  3436.1400  3450.3400  3436.1400  60749246464   
 # 2017-11-14 10:30:00  3436.7000  3433.1700  3438.7300  3431.2600  39968927744   
