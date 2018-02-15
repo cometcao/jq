@@ -84,6 +84,16 @@ class MLKbarPrep(object):
             trunk_lower_df = lower_df.loc[first_date:second_date,:]
             self.create_ml_data_set(trunk_lower_df, high_df_tb.ix[i+1, 'tb'].value)
         return self.data_set, self.label_set
+    
+    def prepare_predict_data(self):    
+        higher_df = self.stock_df_dict[MLKbarPrep.monitor_level[0]]
+        lower_df = self.stock_df_dict[MLKbarPrep.monitor_level[1]]
+        high_df_tb = higher_df.dropna(subset=['new_index'])
+        high_dates = high_df_tb.index
+        last_high_date = high_dates[-1]
+        trunk_lower_df = lower_df.loc[last_high_date:, :]
+        self.create_ml_data_set(trunk_lower_df, None)
+        return self.data_set
         
     def create_ml_data_set(self, trunk_df, label): 
         # at least 3 parts in the sub level
@@ -101,8 +111,11 @@ class MLKbarPrep(object):
         if self.isNormalize:
             trunk_df = self.normalize(trunk_df)
         
-        self.data_set.append(trunk_df.values)
-        self.label_set.append(label)
+        if label: # differentiate training and predicting
+            self.data_set.append(trunk_df.values)
+            self.label_set.append(label)
+        else:
+            self.data_set.append(trunk_df.values)
         
         
     def manual_select(self, df):
@@ -136,25 +149,47 @@ class MLKbarPrep(object):
 
 
 class MLDataPrep(object):
-    def __init__(self, isAnal=False, max_length_for_pad=168):
+    def __init__(self, isAnal=False, max_length_for_pad=168, rq=False):
         self.isAnal = isAnal
         self.max_sequence_length = max_length_for_pad
+        self.isRQ = rq
     
     def retrieve_stocks_data(self, stocks, period_count=60, filename='cnn_training.pkl'):
         data_list = label_list = []
         for stock in stocks:
             print ("working on stock: {0}".format(stock))
             mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True, sub_max_count=self.max_sequence_length)
-            mlk.retrieve_stock_data(stock)
+            if self.isRQ:
+                mlk.retrieve_stock_data_rq(stock)
+            else:
+                mlk.retrieve_stock_data(stock)
             dl, ll = mlk.prepare_training_data()
             data_list = data_list + dl
             label_list = label_list + ll   
         self.save_dataset((data_list, label_list), filename)
+    
+    def prepare_stock_data_predict(self, stock, period_count=60):
+        mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True, sub_max_count=self.max_sequence_length)
+        if self.isRQ:
+            mlk.retrieve_stock_data_rq(stock)
+        else:
+            mlk.retrieve_stock_data(stock)
+        predict_dataset = mlk.prepare_predict_data()
         
-    def prepare_stock_data_cnn(self, filenames, padData=True, test_portion=0.1, random_seed=42):
+        predict_dataset = self.pad_each_training_array(predict_dataset)
+        predict_dataset = np.expand_dims(predict_dataset, axis=2)
+        if self.isAnal:
+            print (predict_dataset.shape)
+            print (predict_dataset)
+        return predict_dataset
+        
+    
+    def prepare_stock_data_cnn(self, filenames, padData=True, test_portion=0.1, random_seed=42, background_data_generation=True):
         data_list = label_list = []
         for file in filenames:
             A, B = self.load_dataset(file)
+            if background_data_generation:
+                A, B = self.prepare_background_data(A, B)
             
             if pd.isnull(np.array(A)).any() or pd.isnull(np.array(B)).any(): 
                 print("Data contains nan")
@@ -169,9 +204,6 @@ class MLDataPrep(object):
             print("Invalid file content")
             return
 
-#         data_list = np.array(data_list)
-#         label_list = np.array(label_list)
-
         if padData:
             data_list = self.pad_each_training_array(data_list)
         data_list = np.expand_dims(data_list, axis=2) # reshape (36, 168, 7) to (36, 168, 1, 7)
@@ -184,6 +216,29 @@ class MLDataPrep(object):
             print (y_train)
         
         return x_train, x_test, y_train, y_test
+    
+    def prepare_background_data(self, data_set, label_set):
+        # split existing samples to create sample for 0 label
+        split_ratio = [0.191, 0.382, 0.5, 0.618, 0.809]
+        new_background_data = []
+        new_label_data = []
+        for sample in data_set:
+            length = sample.shape[0]
+            for split_index in split_ratio:
+                si = int(split_index * length)
+                new_data = sample[:si,:]
+                new_background_data.append(new_data)
+                new_label_data.append(TopBotType.noTopBot.value)
+#                 if self.isAnal:
+#                     print(sample.shape)
+#                     print(new_background_data[-1].shape)
+#                     print(new_label_data[-1])
+        
+        
+        data_set = data_set + new_background_data
+        label_set = label_set + new_label_data
+        return data_set, label_set
+                
     
         # save a dataset to file
     def save_dataset(self, dataset, filename):

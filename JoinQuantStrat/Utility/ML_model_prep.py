@@ -43,28 +43,26 @@ class MLDataProcess(object):
         model.add(Dropout(0.5))
         model.add(Dense(num_classes, activation='softmax'))
         
-        print (model.summary())
-        
-#         sgd = optimizers.SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True)
-#         sgd = optimizers.SGD(lr=0.0008, decay=1e-6, momentum=0.9, nesterov=True)
-#         sgd = optimizers.SGD(lr=0.01, clipvalue=1.) # keras.optimizers.Adadelta()
-        #keras.losses.categorical_crossentropy
         model.compile(loss=keras.losses.categorical_crossentropy,
                       optimizer=keras.optimizers.Adadelta(),
                       metrics=['accuracy'])
+                
+        print (model.summary())
         
-        model.fit(x_train, y_train,
-                  batch_size=batch_size,
-                  epochs=epochs,
-                  verbose=1,
-                  validation_data=(x_test, y_test))
-        score = model.evaluate(x_test, y_test, verbose=1)
-        print('Test loss:', score[0])
-        print('Test accuracy:', score[1])
+        self.process_model(model, x_train, x_test, y_train, y_test, num_classes, batch_size, epochs)
         
-        self.model = model
-        if self.model_name:
-            model.save(self.model_name)
+#         model.fit(x_train, y_train,
+#                   batch_size=batch_size,
+#                   epochs=epochs,
+#                   verbose=1,
+#                   validation_data=(x_test, y_test))
+#         score = model.evaluate(x_test, y_test, verbose=1)
+#         print('Test loss:', score[0])
+#         print('Test accuracy:', score[1])
+#         
+#         self.model = model
+#         if self.model_name:
+#             model.save(self.model_name)
     
     
     def define_conv_lstm_model(self, x_train, x_test, y_train, y_test, num_classes, batch_size = 50,epochs = 5):
@@ -106,16 +104,15 @@ class MLDataProcess(object):
         model.add(Dense(128, activation='relu'))
         model.add(Dense(num_classes, activation='softmax'))
         
+        model.compile(loss=keras.losses.categorical_crossentropy,
+                      optimizer=keras.optimizers.Adadelta(),
+                      metrics=['accuracy'])        
+        
         print (model.summary())
         
         self.process_model(model, x_train, x_test, y_train, y_test, num_classes, batch_size, epochs)
     
-    
     def process_model(self, model, x_train, x_test, y_train, y_test, num_classes, batch_size = 50,epochs = 5):  
-        model.compile(loss=keras.losses.categorical_crossentropy,
-                      optimizer=keras.optimizers.Adadelta(),
-                      metrics=['accuracy'])
-        
         model.fit(x_train, y_train,
                   batch_size=batch_size,
                   epochs=epochs,
@@ -133,7 +130,14 @@ class MLDataProcess(object):
         self.model = load_model(model_name)
         self.model_name = model_name
 
-
+    def model_predict(self, data_set):
+        if self.model:
+            prediction = self.model.predict(data_set)
+            print(prediction)
+            
+            y_classes = prediction.argmax(axis=-1)
+        else:
+            print("Invalid model")
 #         model.add(TimeDistributed(Conv2D(32, kernel_size=(3, 1),
 #                          activation='relu',
 #                          input_shape=input_shape)))
