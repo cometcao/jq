@@ -203,6 +203,11 @@ class Buy_stocks(Rule):
         self.g.sell_stocks = []
         self.to_buy = []
 
+    def send_port_info(self, context):
+        port_msg = [(context.portfolio.positions[stock].security, context.portfolio.positions[stock].total_amount * context.portfolio.positions[stock].price / context.portfolio.total_value) for stock in context.portfolio.positions]
+        print(port_msg)
+        send_message(port_msg, channel='weixin')
+
     def __str__(self):
         return '股票调仓买入规则：现金平分式买入股票达目标股票数'
 

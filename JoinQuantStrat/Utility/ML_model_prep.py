@@ -16,6 +16,9 @@ class MLDataProcess(object):
         self.model = None
      
     def define_conv2d_model(self, x_train, x_test, y_train, y_test, num_classes, batch_size = 50,epochs = 5):
+        x_train = np.expand_dims(x_train, axis=2) 
+        x_test = np.expand_dims(x_test, axis=2) 
+        
         input_shape = None
         if K.image_data_format() == 'channels_first':
             # convert class vectors to binary class matrices
@@ -27,8 +30,8 @@ class MLDataProcess(object):
             input_shape = (b, c, d)
 
         
-        y_train = to_categorical(y_train, num_classes)
-        y_test = to_categorical(y_test, num_classes)
+#         y_train = to_categorical(y_train, num_classes)
+#         y_test = to_categorical(y_test, num_classes)
         
         model = Sequential()
         model.add(Conv2D(32, kernel_size=(3, 1),
@@ -49,23 +52,13 @@ class MLDataProcess(object):
                 
         print (model.summary())
         
-        self.process_model(model, x_train, x_test, y_train, y_test, num_classes, batch_size, epochs)
-        
-#         model.fit(x_train, y_train,
-#                   batch_size=batch_size,
-#                   epochs=epochs,
-#                   verbose=1,
-#                   validation_data=(x_test, y_test))
-#         score = model.evaluate(x_test, y_test, verbose=1)
-#         print('Test loss:', score[0])
-#         print('Test accuracy:', score[1])
-#         
-#         self.model = model
-#         if self.model_name:
-#             model.save(self.model_name)
+        self.process_model(model, x_train, x_test, y_train, y_test, batch_size, epochs)
     
     
     def define_conv_lstm_model(self, x_train, x_test, y_train, y_test, num_classes, batch_size = 50,epochs = 5):
+        x_train = np.expand_dims(x_train, axis=2) 
+        x_test = np.expand_dims(x_test, axis=2) 
+        
         x_train = np.expand_dims(x_train, axis=1)
         x_test = np.expand_dims(x_test, axis=1)
         
@@ -78,8 +71,8 @@ class MLDataProcess(object):
             # convert class vectors to binary class matrices
             input_shape = (b, c, d, e)
         
-        y_train = to_categorical(y_train, num_classes)
-        y_test = to_categorical(y_test, num_classes)
+#         y_train = to_categorical(y_train, num_classes)
+#         y_test = to_categorical(y_test, num_classes)
         
         # define CNN model
         model = Sequential()
@@ -110,9 +103,9 @@ class MLDataProcess(object):
         
         print (model.summary())
         
-        self.process_model(model, x_train, x_test, y_train, y_test, num_classes, batch_size, epochs)
+        self.process_model(model, x_train, x_test, y_train, y_test, batch_size, epochs)
     
-    def process_model(self, model, x_train, x_test, y_train, y_test, num_classes, batch_size = 50,epochs = 5):  
+    def process_model(self, model, x_train, x_test, y_train, y_test, batch_size = 50,epochs = 5):  
         model.fit(x_train, y_train,
                   batch_size=batch_size,
                   epochs=epochs,
@@ -130,68 +123,24 @@ class MLDataProcess(object):
         self.model = load_model(model_name)
         self.model_name = model_name
 
-    def model_predict(self, data_set):
+    def model_predict_cnn(self, data_set, unique_id):
         if self.model:
-            prediction = self.model.predict(data_set)
+            data_set = np.expand_dims(data_set, axis=2)
+            prediction = np.array(self.model.predict(data_set))
             print(prediction)
-            
-            y_classes = prediction.argmax(axis=-1)
+            y_class = unique_id[prediction.argmax(axis=-1)]
+            print(y_class)
         else:
             print("Invalid model")
-#         model.add(TimeDistributed(Conv2D(32, kernel_size=(3, 1),
-#                          activation='relu',
-#                          input_shape=input_shape)))
-#         model.add(TimeDistributed(Conv2D(64, (3, 1), activation='relu')))
-#         model.add(TimeDistributed(MaxPooling2D(pool_size=(2, 1))))
-#         model.add(TimeDistributed(Dropout(0.25)))
-#         model.add(Permute((0, 3, 2, 1)))
-#         model.add(LSTM(100, dropout=0.2, recurrent_dropout=0.2))
-#         model.add(Dense(num_classes, activation='softmax'))
-
-#     def define_model(self):
-#         x_train, x_test, y_train, y_test = train_test_split(A, B, test_size=0.2, random_state=42)
-#          
-#         #####################################################################################################
-#          
-#         # convert class vectors to binary class matrices
-#         num_classes = 3
-#         y_train = keras.utils.to_categorical(y_train, num_classes)
-#         y_test = keras.utils.to_categorical(y_test, num_classes)
-#          
-#          
-#         model = Sequential()
-#          
-#         # we add a Convolution1D, which will learn filters
-#         # word group filters of size filter_length:
-#         model.add(Conv1D(250,
-#                          3,
-#                          padding='valid',
-#                          activation='relu',
-#                          strides=1,
-#                          input_shape=(None, 7)))
-#         # we use max pooling:
-#         model.add(GlobalMaxPooling1D())
-#          
-#         # We add a vanilla hidden layer:
-#         model.add(Dense(250))
-#         model.add(Dropout(0.2))
-#         model.add(Activation('relu'))
-#          
-#         # We project onto a single unit output layer, and squash it with a sigmoid:
-#         model.add(Dense(3))
-#         model.add(Activation('sigmoid'))
-#          
-#         model.compile(loss='binary_crossentropy',
-#                       optimizer='adam',
-#                       metrics=['accuracy'])
-#         model.fit(x_train, y_train,
-#                   batch_size=20,
-#                   epochs=2,
-#                   validation_data=(x_test, y_test))
-#          
-#         score = model.evaluate(x_test, y_test, verbose=0)
-#         print('Test loss:', score[0])
-#         print('Test accuracy:', score[1])        
-        
-
+    
+    def model_predict_cnn_lstm(self, data_set, unique_id):
+        if self.model:
+            data_set = np.expand_dims(data_set, axis=2)
+            data_set = np.expand_dims(data_set, axis=1)
+            prediction = np.array(self.model.predict(data_set))
+            print(prediction)
+            y_class = unique_id[prediction.argmax(axis=-1)]
+            print(y_class)
+        else:
+            print("Invalid model")
 

@@ -240,3 +240,10 @@ class KBarProcessor(object):
         if not isSimple:
             self.defineBi() # not necessary for biaoli status
         return self.getCurrentKBarStatus(isSimple)
+    
+    def getMarkedBL(self):
+        self.standardize()
+        self.markTopBot()
+        self.defineBi()
+        return self.kDataFrame_marked
+        

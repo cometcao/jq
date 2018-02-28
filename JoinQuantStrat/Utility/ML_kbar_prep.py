@@ -8,6 +8,7 @@ except:
     pass
 from kBarProcessor import *
 from biaoLiStatus import TopBotType
+from keras.utils.np_utils import to_categorical
 from pickle import dump
 from pickle import load
 import pandas as pd
@@ -90,7 +91,13 @@ class MLKbarPrep(object):
         lower_df = self.stock_df_dict[MLKbarPrep.monitor_level[1]]
         high_df_tb = higher_df.dropna(subset=['new_index'])
         high_dates = high_df_tb.index
+        
+        previous_high_date = high_dates[-2]
         last_high_date = high_dates[-1]
+        
+        trunk_lower_df_pivot = lower_df.loc[previous_high_date:last_high_date, :]
+        self.create_ml_data_set(trunk_lower_df_pivot, None)
+
         trunk_lower_df = lower_df.loc[last_high_date:, :]
         self.create_ml_data_set(trunk_lower_df, None)
         return self.data_set
@@ -153,6 +160,7 @@ class MLDataPrep(object):
         self.isAnal = isAnal
         self.max_sequence_length = max_length_for_pad
         self.isRQ = rq
+        self.unique_index = []
     
     def retrieve_stocks_data(self, stocks, period_count=60, filename='cnn_training.pkl'):
         data_list = label_list = []
@@ -177,12 +185,17 @@ class MLDataPrep(object):
         predict_dataset = mlk.prepare_predict_data()
         
         predict_dataset = self.pad_each_training_array(predict_dataset)
-        predict_dataset = np.expand_dims(predict_dataset, axis=2)
+#         predict_dataset = np.expand_dims(predict_dataset, axis=2)
         if self.isAnal:
             print (predict_dataset.shape)
             print (predict_dataset)
         return predict_dataset
         
+    def encode_category(self, label_set):
+        uniques, ids = np.unique(label_set, return_inverse=True)
+        y_code = to_categorical(ids, len(uniques))
+        self.unique_index = uniques
+        return y_code
     
     def prepare_stock_data_cnn(self, filenames, padData=True, test_portion=0.1, random_seed=42, background_data_generation=True):
         data_list = label_list = []
@@ -206,7 +219,9 @@ class MLDataPrep(object):
 
         if padData:
             data_list = self.pad_each_training_array(data_list)
-        data_list = np.expand_dims(data_list, axis=2) # reshape (36, 168, 7) to (36, 168, 1, 7)
+        
+        label_list = self.encode_category(label_list)  
+#         data_list = np.expand_dims(data_list, axis=2) # reshape (36, 168, 7) to (36, 168, 1, 7)
         
         x_train, x_test, y_train, y_test = train_test_split(data_list, label_list, test_size=test_portion, random_state=random_seed)
         
