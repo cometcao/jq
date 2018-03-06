@@ -1,3 +1,4 @@
+# -*- encoding: utf8 -*-
 try:
     from rqdatac import *
 except:
@@ -28,7 +29,8 @@ class MLKbarPrep(object):
     '''
 
     monitor_level = ['1d', '30m']
-    def __init__(self, count=100, isAnal=False, isNormalize=True, manual_select=False, useMinMax=True, sub_max_count=168):
+    def __init__(self, count=100, isAnal=False, isNormalize=True, manual_select=False, useMinMax=True, sub_max_count=168, isDebug=False):
+        self.isDebug = isDebug
         self.isAnal = isAnal
         self.count = count
         self.isNormalize = isNormalize
@@ -80,8 +82,8 @@ class MLKbarPrep(object):
         high_df_tb = higher_df.dropna(subset=['new_index'])
         high_dates = high_df_tb.index
         for i in range(0, len(high_dates)-1):
-            first_date = high_dates[i]
-            second_date = high_dates[i+1]
+            first_date = str(high_dates[i].date())
+            second_date = str(high_dates[i+1].date())
             trunk_lower_df = lower_df.loc[first_date:second_date,:]
             self.create_ml_data_set(trunk_lower_df, high_df_tb.ix[i+1, 'tb'].value)
         return self.data_set, self.label_set
@@ -90,15 +92,21 @@ class MLKbarPrep(object):
         higher_df = self.stock_df_dict[MLKbarPrep.monitor_level[0]]
         lower_df = self.stock_df_dict[MLKbarPrep.monitor_level[1]]
         high_df_tb = higher_df.dropna(subset=['new_index'])
+        if self.isDebug:
+            print(high_df_tb)
         high_dates = high_df_tb.index
         
-        previous_high_date = high_dates[-2]
-        last_high_date = high_dates[-1]
+        previous_high_date = str(high_dates[-2].date())
+        last_high_date = str(high_dates[-1].date())
         
         trunk_lower_df_pivot = lower_df.loc[previous_high_date:last_high_date, :]
+        if self.isDebug:
+            print(trunk_lower_df_pivot)
         self.create_ml_data_set(trunk_lower_df_pivot, None)
 
         trunk_lower_df = lower_df.loc[last_high_date:, :]
+        if self.isDebug:
+            print(trunk_lower_df)
         self.create_ml_data_set(trunk_lower_df, None)
         return self.data_set
         
@@ -156,7 +164,8 @@ class MLKbarPrep(object):
 
 
 class MLDataPrep(object):
-    def __init__(self, isAnal=False, max_length_for_pad=168, rq=False):
+    def __init__(self, isAnal=False, max_length_for_pad=168, rq=False, isDebug=False):
+        self.isDebug = isDebug
         self.isAnal = isAnal
         self.max_sequence_length = max_length_for_pad
         self.isRQ = rq
@@ -166,7 +175,7 @@ class MLDataPrep(object):
         data_list = label_list = []
         for stock in stocks:
             print ("working on stock: {0}".format(stock))
-            mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True, sub_max_count=self.max_sequence_length)
+            mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True, sub_max_count=self.max_sequence_length, isDebug=self.isDebug)
             if self.isRQ:
                 mlk.retrieve_stock_data_rq(stock)
             else:
@@ -177,7 +186,7 @@ class MLDataPrep(object):
         self.save_dataset((data_list, label_list), filename)
     
     def prepare_stock_data_predict(self, stock, period_count=60):
-        mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True, sub_max_count=self.max_sequence_length)
+        mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True, sub_max_count=self.max_sequence_length, isDebug=self.isDebug)
         if self.isRQ:
             mlk.retrieve_stock_data_rq(stock)
         else:
@@ -185,10 +194,9 @@ class MLDataPrep(object):
         predict_dataset = mlk.prepare_predict_data()
         
         predict_dataset = self.pad_each_training_array(predict_dataset)
-#         predict_dataset = np.expand_dims(predict_dataset, axis=2)
-        if self.isAnal:
-            print (predict_dataset.shape)
-            print (predict_dataset)
+#         if self.isDebug:
+#             print (predict_dataset.shape)
+#             print (predict_dataset)
         return predict_dataset
         
     def encode_category(self, label_set):
@@ -212,6 +220,7 @@ class MLDataPrep(object):
 
             data_list = A + data_list 
             label_list = B + label_list
+            print("loaded data set: {0}".format(file))
 
         if not data_list or not label_list:
             print("Invalid file content")
@@ -221,11 +230,10 @@ class MLDataPrep(object):
             data_list = self.pad_each_training_array(data_list)
         
         label_list = self.encode_category(label_list)  
-#         data_list = np.expand_dims(data_list, axis=2) # reshape (36, 168, 7) to (36, 168, 1, 7)
         
         x_train, x_test, y_train, y_test = train_test_split(data_list, label_list, test_size=test_portion, random_state=random_seed)
         
-        if self.isAnal:
+        if self.isDebug:
             print (x_train.shape)
             print (x_train)
             print (y_train)
@@ -244,7 +252,7 @@ class MLDataPrep(object):
                 new_data = sample[:si,:]
                 new_background_data.append(new_data)
                 new_label_data.append(TopBotType.noTopBot.value)
-#                 if self.isAnal:
+#                 if self.isDebug:
 #                     print(sample.shape)
 #                     print(new_background_data[-1].shape)
 #                     print(new_label_data[-1])

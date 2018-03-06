@@ -126,6 +126,12 @@ class Sell_stocks(Rule):
                 if stock not in buy_stocks and stock not in self.money_fund:
                     position = context.subportfolios[pindex].long_positions[stock]
                     self.g.close_position(self, position, True, pindex)
+                    
+    def recordTrade(self, stock_list):
+        for stock in stock_list:
+            biaoLiStatus = self.g.monitor_short_cm.getGaugeStockList(stock).values
+            _, ta_type, period = self.g.short_record[stock] if stock in self.g.short_record else ([(nan, nan), (nan, nan), (nan, nan)], None, None)
+            self.g.short_record[stock] = (biaoLiStatus, ta_type, period)
 
     def __str__(self):
         return '股票调仓卖出规则：卖出不在buy_stocks的股票'
@@ -205,8 +211,14 @@ class Buy_stocks(Rule):
 
     def send_port_info(self, context):
         port_msg = [(context.portfolio.positions[stock].security, context.portfolio.positions[stock].total_amount * context.portfolio.positions[stock].price / context.portfolio.total_value) for stock in context.portfolio.positions]
-        print(port_msg)
+        self.log.info(str(port_msg))
         send_message(port_msg, channel='weixin')
+        
+    def recordTrade(self, stock_list):
+        for stock in stock_list:
+            biaoLiStatus = self.g.monitor_long_cm.getGaugeStockList(stock).values
+            _, ta_type, period = self.g.long_record[stock] if stock in self.g.long_record else ([(nan, nan), (nan, nan), (nan, nan)], None, None)
+            self.g.long_record[stock] = (biaoLiStatus, ta_type, period)
 
     def __str__(self):
         return '股票调仓买入规则：现金平分式买入股票达目标股票数'

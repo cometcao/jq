@@ -1,3 +1,4 @@
+# -*- encoding: utf8 -*-
 import keras
 import numpy as np
 from keras import backend as K
@@ -117,11 +118,13 @@ class MLDataProcess(object):
         
         self.model = model
         if self.model_name:
-            model.save(self.model_name)    
+            model.save(self.model_name)
+            print("saved to file {0}".format(self.model_name))
     
     def load_model(self, model_name):
         self.model = load_model(model_name)
         self.model_name = model_name
+        print("loaded model: {0}".format(self.model_name))
 
     def model_predict_cnn(self, data_set, unique_id):
         if self.model:
@@ -141,6 +144,8 @@ class MLDataProcess(object):
             print(prediction)
             y_class = unique_id[prediction.argmax(axis=-1)]
             print(y_class)
+            return (y_class, prediction)
         else:
             print("Invalid model")
+            return None
 
