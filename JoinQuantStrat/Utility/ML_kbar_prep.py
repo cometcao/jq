@@ -57,7 +57,7 @@ class MLKbarPrep(object):
     def retrieve_stock_data_rq(self, stock):
         for level in MLKbarPrep.monitor_level:
             today = datetime.datetime.today()
-            previous_trading_day=get_trading_dates(start_date='2010-01-01', end_date=datetime.datetime.today())[-self.count]
+            previous_trading_day=get_trading_dates(start_date='2006-01-01', end_date=today)[-self.count]
             stock_df = get_price(stock, start_date=previous_trading_day, end_date=today, frequency=level, fields = ['open','close','high','low', 'total_turnover'], skip_suspended=True)          
             stock_df = self.prepare_df_data(stock_df)
             self.stock_df_dict[level] = stock_df    
