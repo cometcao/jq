@@ -279,13 +279,13 @@ class equity_curve_protect(Rule):
         if self.is_day_curve_protect:
             # self.g.curve_protect = True
             self.g.clear_position(self, context, self.g.op_pindexs)
-            self.port_value_record = []
+#             self.port_value_record = []
             self.is_day_curve_protect = False
 
     def on_clear_position(self, context, pindexs=[0]):
         pass
 
-    def after_trading_end(self, context):
+    def before_trading_start(self, context):
         self.port_value_record.append(context.portfolio.total_value)
         if len(self.port_value_record) > self.day_count:
             self.port_value_record.pop(0)
