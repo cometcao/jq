@@ -96,8 +96,14 @@ class MLKbarPrep(object):
             print(high_df_tb)
         high_dates = high_df_tb.index
         
+        first_high_date = str(high_dates[-3].date())
         previous_high_date = str(high_dates[-2].date())
         last_high_date = str(high_dates[-1].date())
+        
+        trunk_lower_df_first = lower_df.loc[first_high_date:previous_high_date, :]
+        if self.isDebug:
+            print(trunk_lower_df_first)
+        self.create_ml_data_set(trunk_lower_df_first, None)  
         
         trunk_lower_df_pivot = lower_df.loc[previous_high_date:last_high_date, :]
         if self.isDebug:

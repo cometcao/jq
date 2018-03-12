@@ -14,8 +14,8 @@ from oop_trading_sync import *
 
 
 # 不同步的白名单，主要用于实盘易同步持仓时，不同步中的新股，需把新股代码添加到这里。https://www.joinquant.com/algorithm/index/edit?algorithmId=23c589f4594f827184d4f6f01a11b2f2
-# 可把while_list另外放到研究的一个py文件里
-def while_list():
+# 可把white_list另外放到研究的一个py文件里
+def white_list():
     return ['000001.XSHE']
 
 # ==================================策略配置==============================================
@@ -273,7 +273,7 @@ def select_strategy(context):
         #     'strong_op':False,   # 强力同步模式，开启会强行同步两次。
         #     'col_names':col_names, # 指定实盘易返回的持仓字段映射
         #     'cost':context.portfolio.starting_cash, # 实盘的初始资金
-        #     'get_white_list_func':while_list, # 不同步的白名单
+        #     'get_white_list_func':white_list, # 不同步的白名单
         #     'sync_scale': 1,  # 实盘资金/模拟盘资金比例，建议1为好
         #     'log_level': ['debug', 'waring', 'error'],  # 实盘易日志输出级别
         #     'sync_with_change': True,  # 是否指定只有发生了股票操作时才进行同步 , 这里重要，避免无效同步！！！！
