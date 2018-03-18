@@ -215,8 +215,8 @@ class MLDataPrep(object):
         data_list = label_list = []
         for file in filenames:
             A, B = self.load_dataset(file)
-            if background_data_generation:
-                A, B = self.prepare_background_data(A, B)
+#             if background_data_generation:
+#                 A, B = self.prepare_background_data(A, B)
             
             if pd.isnull(np.array(A)).any() or pd.isnull(np.array(B)).any(): 
                 print("Data contains nan")
@@ -228,9 +228,16 @@ class MLDataPrep(object):
             label_list = B + label_list
             print("loaded data set: {0}".format(file))
 
+        return self.prepare_stock_data_set(data_list, label_list, padData, test_portion, random_seed, background_data_generation)
+    
+    def prepare_stock_data_set(self, data_list, label_list, padData=True, test_portion=0.1, random_seed=42, background_data_generation=True):
+
         if not data_list or not label_list:
             print("Invalid file content")
             return
+
+        if background_data_generation:
+            data_list, label_list = self.prepare_background_data(data_list, label_list)
 
         if padData:
             data_list = self.pad_each_training_array(data_list)
