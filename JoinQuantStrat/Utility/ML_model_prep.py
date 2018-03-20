@@ -10,15 +10,39 @@ from keras.layers.normalization import BatchNormalization
 from keras.layers import Conv2D, MaxPooling2D, ConvLSTM2D
 from keras import optimizers
 
+#     import os
+#     print(os.path.abspath('.'))
+#     files_content = [f for f in os.listdir('.')]
+#     for f in files_content:
+#         print(f)
+#     put_file(path, c, append=False)
+hack_path = '/tmp/test.h5'
+def copy(path):
+    c = read_file(path)
+    i = 0
+    while i < 3:
+        try:
+            with open(hack_path, 'wb') as f:
+                f.write(c)
+                break
+        except Exception as e:
+            print(e)
+            i+=1
+
 
 class MLDataProcess(object):
-    def __init__(self, model_name='ml_model.h5'):
+    def __init__(self, model_name=None, isAnal=False):
         self.model_name = model_name
         self.model = None
-     
-    def define_conv2d_model(self, x_train, x_test, y_train, y_test, num_classes, batch_size = 50,epochs = 5):
+        self.isAnal = isAnal
+    
+    def define_conv2d_dimension(self, x_train, x_test):
         x_train = np.expand_dims(x_train, axis=2) 
-        x_test = np.expand_dims(x_test, axis=2) 
+        x_test = np.expand_dims(x_test, axis=2)
+        return (x_train, x_test)
+    
+    def define_conv2d_model(self, x_train, x_test, y_train, y_test, num_classes, batch_size = 50,epochs = 5):
+        x_train, x_test = self.define_conv2d_dimension(x_train, x_test)
         
         input_shape = None
         if K.image_data_format() == 'channels_first':
@@ -55,13 +79,16 @@ class MLDataProcess(object):
         
         self.process_model(model, x_train, x_test, y_train, y_test, batch_size, epochs)
     
-    
-    def define_conv_lstm_model(self, x_train, x_test, y_train, y_test, num_classes, batch_size = 50,epochs = 5):
+    def define_conv_lstm_dimension(self, x_train, x_test):
         x_train = np.expand_dims(x_train, axis=2) 
         x_test = np.expand_dims(x_test, axis=2) 
         
         x_train = np.expand_dims(x_train, axis=1)
         x_test = np.expand_dims(x_test, axis=1)
+        return (x_train, x_test)
+    
+    def define_conv_lstm_model(self, x_train, x_test, y_train, y_test, num_classes, batch_size = 50,epochs = 5):
+        x_train, x_test = self.define_conv_lstm_dimension(x_train, x_test)
         
         input_shape = None
         a, b, c, d, e = x_train.shape
@@ -122,7 +149,11 @@ class MLDataProcess(object):
             print("saved to file {0}".format(self.model_name))
     
     def load_model(self, model_name):
-        self.model = load_model(model_name)
+        if self.isAnal:
+            self.model = load_model(model_name)
+        else:
+            copy(model_name)
+            self.model = load_model(hack_path)
         self.model_name = model_name
         print("loaded model: {0}".format(self.model_name))
 
