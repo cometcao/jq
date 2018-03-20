@@ -156,9 +156,7 @@ class ML_biaoli_check(object):
             return ([0],[[0]])
         try:
             if self.extra_training:
-                mld = MLDataPrep(isAnal=self.isAnal, rq=self.rq)
-                tmp_data, tmp_label = mld.retrieve_stocks_data([stock], period_count=120, filename=None)
-        
+                tmp_data, tmp_label = mld.retrieve_stocks_data([stock], period_count=120, filename=None, today_date=today_date)
                 x_train, x_test, y_train, y_test = mld.prepare_stock_data_set(tmp_data, tmp_label)
                 x_train, x_test = self.mdp.define_conv_lstm_dimension(x_train, x_test)
                 self.mdp.process_model(self.mdp.model, x_train, x_test, y_train, y_test, batch_size = 30,epochs = 3)

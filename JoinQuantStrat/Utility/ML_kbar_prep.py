@@ -185,16 +185,16 @@ class MLDataPrep(object):
         self.isRQ = rq
         self.unique_index = []
     
-    def retrieve_stocks_data(self, stocks, period_count=60, filename=None):
+    def retrieve_stocks_data(self, stocks, period_count=60, filename=None, today_date=None):
         data_list = label_list = []
         for stock in stocks:
             if self.isAnal:
                 print ("working on stock: {0}".format(stock))
             mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True, sub_max_count=self.max_sequence_length, isDebug=self.isDebug)
             if self.isRQ:
-                mlk.retrieve_stock_data_rq(stock)
+                mlk.retrieve_stock_data_rq(stock, today_date)
             else:
-                mlk.retrieve_stock_data(stock)
+                mlk.retrieve_stock_data(stock, today_date)
             dl, ll = mlk.prepare_training_data()
             data_list = data_list + dl
             label_list = label_list + ll   
