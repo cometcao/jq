@@ -89,6 +89,7 @@ class sectorSpider(object):
                     sector_data = pd.DataFrame(result[1:], columns=sectorSpider.sector_data_column[:-1])
                 sector_data = sector_data.set_index(sectorSpider.sector_data_column[0])
                 sector_data['start_date'] = pd.to_datetime(sector_data['start_date'])
+#                 print(sector_data)
                 mydict[sectorSpider.sector_type_column[counter]] = sector_data
                 counter += 1
         except Exception as e:
@@ -122,3 +123,9 @@ class sectorSpider(object):
         
     def getSectorCode(self, sector_type):
         return self.jq_sector_data[sector_type].index.values
+
+    def getSectorCodeName(self, sector_type, sector_code=None):
+        if sector_code:
+            return self.jq_sector_data[sector_type].loc[sector_code, 'sector_name'].values
+        else:
+            return self.jq_sector_data[sector_type]['sector_name'].values

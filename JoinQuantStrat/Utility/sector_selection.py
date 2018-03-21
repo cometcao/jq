@@ -18,11 +18,14 @@ from sector_spider import *
 
 def get_data(stock, count, level, fields, skip_paused=False, df_flag=True, isAnal=False):
     df = None
-    if isAnal:
-        latest_trading_day = datetime.datetime.now().date()
-        df = get_price(stock, count=count, end_date=latest_trading_day, frequency=level, fields = fields, skip_paused=skip_paused)
-    else:
-        df = attribute_history(stock, count, unit=level, fields = fields, skip_paused=skip_paused, df=df_flag)
+    try:
+        if isAnal:
+            latest_trading_day = datetime.datetime.now().date()
+            df = get_price(stock, count=count, end_date=latest_trading_day, frequency=level, fields = fields, skip_paused=skip_paused)
+        else:
+            df = attribute_history(stock, count, unit=level, fields = fields, skip_paused=skip_paused, df=df_flag)
+    except:
+        df = pd.DataFrame(columns=fields)
     return df
 
 class SectorSelection(object):
@@ -45,9 +48,9 @@ class SectorSelection(object):
         self.min_max_strength = min_max_strength
         self.intraday_period = intraday_period
         
-        ss = sectorSpider()
-        self.jqIndustry = ss.getSectorCode('sw2') # SW2
-        self.conceptSectors = ss.getSectorCode('gn')
+        self.ss = sectorSpider()
+        self.jqIndustry = self.ss.getSectorCode('sw2') # SW2
+        self.conceptSectors = self.ss.getSectorCode('gn')
         self.filtered_industry = []
         self.filtered_concept = []
 
@@ -93,7 +96,7 @@ class SectorSelection(object):
         industry_limit_value = int(self.top_limit * len(self.jqIndustry))
         self.filtered_industry = [sector for sector, strength in industryStrength[:industry_limit_value] if (strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)] 
         self.filtered_concept = [sector for sector, strength in conceptStrength[:concept_limit_value] if (strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)]
-        return (self.filtered_industry, self.filtered_concept)
+        return (self.ss.getSectorCodeName('sw2', self.filtered_industry).tolist(), self.ss.getSectorCodeName('gn', self.filtered_concept).tolist())
     
     def processAllSectorStocks(self, isDisplay=False):
         industry, concept = self.processAllSectors(display=isDisplay)
@@ -180,7 +183,7 @@ class SectorSelection(object):
             MA_89 = self.simple_moving_avg(stock_df.close.values, 89)
             MA_144 = self.simple_moving_avg(stock_df.close.values, 144)
             MA_233 = self.simple_moving_avg(stock_df.close.values, 233)
-            if stock_df.paused[index]: # paused we need to remove it from calculation
+            if stock_df.empty or stock_df.paused[index]: # paused we need to remove it from calculation
                 return -1 
             elif stock_df.close[index] < MA_5 or np.isnan(MA_5):
                 return 0 if isWeighted else 1
@@ -255,6 +258,8 @@ class SectorSelection(object):
     def getlatest_df(self, stock, count, fields, skip_paused=True, df_flag = True):
 #         df = attribute_history(stock, count, '1d', fields, df=df_flag)
         df = get_data(stock, count, level='1d', fields=fields, skip_paused=skip_paused, df_flag=df_flag, isAnal=self.isAnal)
+        if df.empty:
+            return df
         if self.useIntradayData:
             containPaused = 'paused' in fields
             if containPaused:
