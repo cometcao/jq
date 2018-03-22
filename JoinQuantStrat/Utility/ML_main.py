@@ -103,6 +103,9 @@ class ML_biaoli_check(object):
         self.rq = params.get('rq', True)
         self.isAnal = params.get('isAnal', False)
         self.extra_training = params.get('extra_training', False)
+        self.extra_training_period = params.get('extra_training_period', 120)
+        self.extra_training_file = params.get('extra_training_file', None)
+        self.save_new_model = params.get('save_new_model', False)
         self.model = params.get('model', None)
         if not self.model and self.model_path is not None:
             self.prepare_model()
@@ -110,8 +113,9 @@ class ML_biaoli_check(object):
     
     def prepare_model(self):
         self.mdp = MLDataProcess(model_name=self.model_path, isAnal=self.isAnal)
-        self.mdp.load_model(model_name=self.model_path)
-        self.mdp.model_name = None # we don't want to save the modified model
+        self.mdp.load_model(model_name=self.model_path)#
+        if not self.save_new_model:
+            self.mdp.model_name = None # we don't want to save the modified model
         
     def gauge_stocks(self, stocks, isLong=True, today_date=None):    
         if not stocks:
@@ -156,7 +160,7 @@ class ML_biaoli_check(object):
             return ([0],[[0]])
         try:
             if self.extra_training:
-                tmp_data, tmp_label = mld.retrieve_stocks_data([stock], period_count=120, filename=None, today_date=today_date)
+                tmp_data, tmp_label = mld.retrieve_stocks_data([stock], period_count=self.extra_training_period, filename=self.extra_training_file, today_date=today_date)
                 x_train, x_test, y_train, y_test = mld.prepare_stock_data_set(tmp_data, tmp_label)
                 x_train, x_test = self.mdp.define_conv_lstm_dimension(x_train, x_test)
                 self.mdp.process_model(self.mdp.model, x_train, x_test, y_train, y_test, batch_size = 30,epochs = 3)
