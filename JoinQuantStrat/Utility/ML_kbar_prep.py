@@ -108,7 +108,7 @@ class MLKbarPrep(object):
         print(high_df_tb)
         high_dates = high_df_tb.index
         
-        for i in range(-3, 0, 1):
+        for i in range(-5, 0, 1):
             try:
                 previous_date = str(high_dates[i].date())
             except IndexError:
@@ -202,7 +202,7 @@ class MLDataPrep(object):
             self.save_dataset((data_list, label_list), filename)
         return (data_list, label_list)
     
-    def prepare_stock_data_predict(self, stock, period_count=60, today_date=None):
+    def prepare_stock_data_predict(self, stock, period_count=100, today_date=None):
         mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True, sub_max_count=self.max_sequence_length, isDebug=self.isDebug)
         if self.isRQ:
             mlk.retrieve_stock_data_rq(stock, today_date)

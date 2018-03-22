@@ -137,7 +137,7 @@ class ML_biaoli_check(object):
     def gauge_stocks_analysis(self, stocks, today_date=None):
         if not stocks:
             return [] 
-        return [self.gauge_stock(stock, today_date) for stock in stocks]
+        return [(stock, self.gauge_stock(stock, today_date)) for stock in stocks]
     
     def gauge_stock(self, stock, today_date=None):    
         y_class, pred = self.model_predict(stock, today_date)
