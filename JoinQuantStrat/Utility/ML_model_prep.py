@@ -99,10 +99,6 @@ class MLDataProcess(object):
             # convert class vectors to binary class matrices
             input_shape = (b, c, d, e)
         
-#         y_train = to_categorical(y_train, num_classes)
-#         y_test = to_categorical(y_test, num_classes)
-        
-        # define CNN model
         model = Sequential()
         model.add(ConvLSTM2D(32, 
                              kernel_size=(3, 1), 
@@ -161,9 +157,9 @@ class MLDataProcess(object):
         if self.model:
             data_set = np.expand_dims(data_set, axis=2)
             prediction = np.array(self.model.predict(data_set))
-            print(prediction)
+#             print(prediction)
             y_class = unique_id[prediction.argmax(axis=-1)]
-            print(y_class)
+#             print(y_class)
         else:
             print("Invalid model")
     
@@ -172,9 +168,9 @@ class MLDataProcess(object):
             data_set = np.expand_dims(data_set, axis=2)
             data_set = np.expand_dims(data_set, axis=1)
             prediction = np.array(self.model.predict(data_set))
-            print(prediction)
+#             print(prediction)
             y_class = unique_id[prediction.argmax(axis=-1)]
-            print(y_class)
+#             print(y_class)
             return (y_class, prediction)
         else:
             print("Invalid model")

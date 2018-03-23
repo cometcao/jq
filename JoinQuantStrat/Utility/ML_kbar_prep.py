@@ -105,7 +105,10 @@ class MLKbarPrep(object):
         higher_df = self.stock_df_dict[MLKbarPrep.monitor_level[0]]
         lower_df = self.stock_df_dict[MLKbarPrep.monitor_level[1]]
         high_df_tb = higher_df.dropna(subset=['new_index'])
-        print(high_df_tb)
+        if high_df_tb.shape[0] > 5:
+            print(high_df_tb.tail(5)[['tb', 'new_index']])
+        else:
+            print(high_df_tb[['tb', 'new_index']])
         high_dates = high_df_tb.index
         
         for i in range(-5, 0, 1):
@@ -119,6 +122,23 @@ class MLKbarPrep(object):
                 trunk_df = lower_df.loc[previous_date:next_date, :]
             else:
                 trunk_df = lower_df.loc[previous_date:, :]
+            if self.isDebug:
+                print(trunk_df)
+            self.create_ml_data_set(trunk_df, None)
+        return self.data_set
+            
+    def prepare_predict_data_extra(self):
+        higher_df = self.stock_df_dict[MLKbarPrep.monitor_level[0]]
+        lower_df = self.stock_df_dict[MLKbarPrep.monitor_level[1]]
+        high_df_tb = higher_df.dropna(subset=['new_index'])
+        high_dates = high_df_tb.index
+        # additional check trunk
+        for i in range(-3, -1, 2):#-5
+            try:
+                previous_date = str(high_dates[i].date())
+            except IndexError:
+                continue
+            trunk_df = lower_df.loc[previous_date:,:]
             if self.isDebug:
                 print(trunk_df)
             self.create_ml_data_set(trunk_df, None)
@@ -209,14 +229,14 @@ class MLDataPrep(object):
         else:
             mlk.retrieve_stock_data(stock, today_date)
         predict_dataset = mlk.prepare_predict_data()
-        if len(predict_dataset) == 0:
-            return None
-        
+        origin_pred_size = len(predict_dataset)
+        if origin_pred_size == 0:
+            return None, 0
+        predict_dataset = mlk.prepare_predict_data_extra()
+
         predict_dataset = self.pad_each_training_array(predict_dataset)
-#         if self.isDebug:
-#             print (predict_dataset.shape)
-#             print (predict_dataset)
-        return predict_dataset
+        print("original size:{0}".format(origin_pred_size))
+        return predict_dataset, origin_pred_size
         
     def encode_category(self, label_set):
         uniques, ids = np.unique(label_set, return_inverse=True)
