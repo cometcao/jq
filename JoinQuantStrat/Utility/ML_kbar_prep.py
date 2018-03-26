@@ -30,7 +30,7 @@ class MLKbarPrep(object):
     '''
 
     monitor_level = ['1d', '30m']
-    def __init__(self, count=100, isAnal=False, isNormalize=True, manual_select=False, useMinMax=True, sub_max_count=168, isDebug=False, include_now=False):
+    def __init__(self, count=100, isAnal=False, isNormalize=True, manual_select=False, useMinMax=True, sub_max_count=168, isDebug=False, include_now=False, sub_level_min_count = 2):
         self.isDebug = isDebug
         self.isAnal = isAnal
         self.count = count
@@ -38,7 +38,7 @@ class MLKbarPrep(object):
         self.useMinMax = useMinMax
         self.manual_select = manual_select
         self.stock_df_dict = {}
-        self.sub_level_min_count = 2
+        self.sub_level_min_count = sub_level_min_count
         self.sub_max_count = sub_max_count
         self.data_set = []
         self.label_set = []
@@ -210,7 +210,7 @@ class MLDataPrep(object):
         for stock in stocks:
             if self.isAnal:
                 print ("working on stock: {0}".format(stock))
-            mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True, sub_max_count=self.max_sequence_length, isDebug=self.isDebug)
+            mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True, sub_max_count=self.max_sequence_length, isDebug=self.isDebug, sub_level_min_count=0)
             if self.isRQ:
                 mlk.retrieve_stock_data_rq(stock, today_date)
             else:
@@ -223,7 +223,7 @@ class MLDataPrep(object):
         return (data_list, label_list)
     
     def prepare_stock_data_predict(self, stock, period_count=100, today_date=None):
-        mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True, sub_max_count=self.max_sequence_length, isDebug=self.isDebug)
+        mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True, sub_max_count=self.max_sequence_length, isDebug=self.isDebug, sub_level_min_count=0)
         if self.isRQ:
             mlk.retrieve_stock_data_rq(stock, today_date)
         else:

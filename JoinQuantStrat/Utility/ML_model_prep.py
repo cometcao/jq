@@ -157,9 +157,9 @@ class MLDataProcess(object):
         if self.model:
             data_set = np.expand_dims(data_set, axis=2)
             prediction = np.array(self.model.predict(data_set))
-#             print(prediction)
+            print(prediction)
             y_class = unique_id[prediction.argmax(axis=-1)]
-#             print(y_class)
+            print(y_class)
         else:
             print("Invalid model")
     
