@@ -14,6 +14,7 @@ from oop_strategy_frame import *
 from chanMatrix import *
 from sector_selection import *
 from herd_head import *
+from ml_factor_rank import *
 
 
 '''=========================选股规则相关==================================='''
@@ -33,11 +34,6 @@ class Pick_stocks2(Group_rules):
             # self.log.info('设置一天只选一次，跳过选股。')
             return
 
-        # q = None
-        # for rule in self.rules:
-        #     if isinstance(rule, Filter_query):
-        #         q = rule.filter(context, data, q)
-        # stock_list = list(get_fundamentals(q)['code']) if q != None else []
         stock_list = []
 
         for rule in self.rules:
@@ -320,6 +316,18 @@ class Pick_rank_sector(Create_stock_list):
         else:
             return '弱势板块股票 %s%% 阈值 %s' % (self.sector_limit_pct, self.strength_threthold)
 
+
+class Pick_Rank_Factor(Create_stock_list):
+    def __init__(self, params):
+        pass
+    
+    def filter(self, context, data):    
+        mfr = ML_Factor_Rank({'stock_num':20, 'index_scope':'000985.XSHG'})
+        new_list = mfr.gaugeStocks()
+        return new_list
+
+    def __str__(self):
+        return "多因子回归公式选股"
 
 class Filter_Week_Day_Long_Pivot_Stocks(Filter_stock_list):
     def __init__(self, params):
