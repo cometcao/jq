@@ -4,8 +4,11 @@ Created on 2 Aug 2017
 
 @author: MetalInvest
 '''
-
-import jqdata
+try:
+    from kuanke.user_space_api import *         
+except ImportError as ie:
+    print(str(ie))
+from jqdata import *
 import numpy as np
 import pandas as pd
 import math
@@ -26,6 +29,9 @@ class ML_Factor_Rank(object):
     
     def gaugeStocks(self):
         sample = get_index_stocks(self.index_scope, date = None)
+        if not sample:
+            print("empty stock list")
+            return []
         q = query(valuation.code, valuation.market_cap, 
                   balance.total_assets - balance.total_liability,
                   balance.total_assets / balance.total_liability, 
@@ -62,7 +68,6 @@ class ML_Factor_Rank(object):
         Y = df[['log_mcap']]
         X = X.fillna(0)
         Y = Y.fillna(0)
-        
         svr = SVR(kernel='rbf', gamma=0.1) 
         model = svr.fit(X, Y)
         factor = Y - pd.DataFrame(svr.predict(X), index = Y.index, columns = ['log_mcap'])

@@ -291,10 +291,13 @@ class Pick_rank_sector(Create_stock_list):
         self.useIntradayData = params.get('useIntradayData', False)
         self.useAvg = params.get('useAvg', True)
         self.avgPeriod = params.get('avgPeriod', 5)
+        self.new_list = []
         
     def filter(self, context, data):
+        return self.new_list
+    
+    def before_trading_start(context):
         # new_list = ['002714.XSHE', '603159.XSHG', '603703.XSHG','000001.XSHE','000002.XSHE','600309.XSHG','002230.XSHE','600392.XSHG','600291.XSHG']
-        new_list=[]
         if self.g.isFirstTradingDayOfWeek(context) or not self.g.buy_stocks or self.isDaily:
             self.log.info("选取前 %s%% 板块" % str(self.sector_limit_pct))
             ss = SectorSelection(limit_pct=self.sector_limit_pct, 
@@ -305,10 +308,10 @@ class Pick_rank_sector(Create_stock_list):
                     avgPeriod=self.avgPeriod)
             new_list = ss.processAllSectorStocks()
             self.g.filtered_sectors = ss.processAllSectors()
-        return new_list 
+            self.new_list = new_list
     
-    def before_trading_start(context):
-        pass
+    def after_trading_end(self, context):
+        self.new_list = []
     
     def __str__(self):
         if self.strong_sector:
@@ -319,15 +322,48 @@ class Pick_rank_sector(Create_stock_list):
 
 class Pick_Rank_Factor(Create_stock_list):
     def __init__(self, params):
+        self.stock_num = params.get('stock_num', 20)
+        self.index_scope = params.get('index_scope', '000985.XSHG')
         pass
     
     def filter(self, context, data):    
-        mfr = ML_Factor_Rank({'stock_num':20, 'index_scope':'000985.XSHG'})
+        mfr = ML_Factor_Rank({'stock_num':self.stock_num, 
+                              'index_scope':self.index_scope})
         new_list = mfr.gaugeStocks()
         return new_list
 
     def __str__(self):
         return "多因子回归公式选股"
+    
+class Filter_Rank_Sector(Filter_stock_list):
+    def __init__(self, params):
+        Filter_stock_list.__init__(self, params)
+        self.strong_sector = params.get('strong_sector', False)
+        self.sector_limit_pct = params.get('sector_limit_pct', 5)
+        self.strength_threthold = params.get('strength_threthold', 4)
+        self.isDaily = params.get('isDaily', False)
+        self.useIntradayData = params.get('useIntradayData', False)
+        self.useAvg = params.get('useAvg', True)
+        self.avgPeriod = params.get('avgPeriod', 5)
+        self.new_list = []
+    
+    def filter(self, context, data, stock_list):
+        if self.g.isFirstTradingDayOfWeek(context) or self.new_list or self.isDaily:
+            self.log.info("选取前 %s%% 板块" % str(self.sector_limit_pct))
+            ss = SectorSelection(limit_pct=self.sector_limit_pct, 
+                    isStrong=self.strong_sector, 
+                    min_max_strength=self.strength_threthold, 
+                    useIntradayData=self.useIntradayData,
+                    useAvg=self.useAvg,
+                    avgPeriod=self.avgPeriod)
+            self.new_list = ss.processAllSectorStocks()
+        return [stock for stock in stock_list if stock in self.new_list]
+
+    def __str__(self):
+        if self.strong_sector:
+            return '强势板块股票 %s%% 阈值 %s' % (self.sector_limit_pct, self.strength_threthold)
+        else:
+            return '弱势板块股票 %s%% 阈值 %s' % (self.sector_limit_pct, self.strength_threthold)
 
 class Filter_Week_Day_Long_Pivot_Stocks(Filter_stock_list):
     def __init__(self, params):
