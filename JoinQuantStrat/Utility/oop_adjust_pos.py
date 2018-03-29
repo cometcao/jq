@@ -115,8 +115,8 @@ class Sell_stocks(Rule):
                                 ],
                 'isLong':False})
             to_sell = cta.filter(context, data,to_sell)
-        self.g.buy_stocks = [stock for stock in self.g.buy_stocks if stock not in to_sell]
-        self.adjust(context, data, self.g.buy_stocks)
+        self.g.monitor_buy_list = [stock for stock in self.g.monitor_buy_list if stock not in to_sell]
+        self.adjust(context, data, self.g.monitor_buy_list)
 
     def adjust(self, context, data, buy_stocks):
         # 卖出不在待买股票列表中的股票
@@ -152,7 +152,7 @@ class Buy_stocks(Rule):
 
     def handle_data(self, context, data):
         if context.current_dt.hour < 11:
-            self.to_buy = self.g.buy_stocks
+            self.to_buy = self.g.monitor_buy_list
         self.log.info("待选股票: "+join_list([show_stock(stock) for stock in self.to_buy], ' ', 10))
         if self.use_short_filter:
             self.to_buy = self.ta_short_filter(context, data, self.to_buy)
@@ -230,7 +230,7 @@ class Buy_stocks_portion(Buy_stocks):
     def update_params(self,context,params):
         self.buy_count = params.get('buy_count',self.buy_count)
     def handle_data(self, context, data):
-        self.adjust(context, data, self.g.buy_stocks)
+        self.adjust(context, data, self.g.monitor_buy_list)
     def adjust(self,context,data,buy_stocks):
         if self.is_to_return:
             self.log_warn('无法执行买入!! self.is_to_return 未开启')

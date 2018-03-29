@@ -9,6 +9,7 @@ try:
 except:
     pass
 import enum
+import numpy as np
 
 evs_query_string = '(valuation.market_cap*100000000+balance.total_liability+balance.minority_interests+balance.capital_reserve_fund-balance.cash_equivalents)/(income.total_operating_revenue)'
 eve_query_string = '(valuation.market_cap*100000000+balance.total_liability+balance.minority_interests+balance.capital_reserve_fund-balance.cash_equivalents)/(indicator.eps*valuation.capitalization*10000)'
@@ -47,7 +48,7 @@ def get_growth_rate(security, n=20):
     lc = get_close_price(security, n)
     c = get_close_price(security, 1, '1m')
 
-    if not isnan(lc) and not isnan(c) and lc != 0:
+    if not np.isnan(lc) and not np.isnan(c) and lc != 0:
         return (c - lc) / lc
     else:
         log.error("数据非法, security: %s, %d日收盘价: %f, 当前价: %f" % (security, n, lc, c))
