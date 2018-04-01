@@ -151,8 +151,7 @@ class Buy_stocks(Rule):
         self.buy_count = params.get('buy_count', self.buy_count)
 
     def handle_data(self, context, data):
-        if context.current_dt.hour < 11:
-            self.to_buy = self.g.monitor_buy_list
+        self.to_buy = self.g.monitor_buy_list
         self.log.info("待选股票: "+join_list([show_stock(stock) for stock in self.to_buy], ' ', 10))
         if self.use_short_filter:
             self.to_buy = self.ta_short_filter(context, data, self.to_buy)
@@ -169,20 +168,22 @@ class Buy_stocks(Rule):
                             # (TaType.MACD_STATUS, '240m', 100),
                             (TaType.RSI, '240m', 100)
                             ],
-            'isLong':True})
+            'isLong':True,
+            'use_latest_data':True})
         to_buy = cta.filter(context, data,to_buy)
         return to_buy
 
     def ta_short_filter(self, context, data, to_buy):
         cti = checkTAIndicator_OR({
             'TA_Indicators':[
-                            (TaType.MACD,'240m',233),
-                            (TaType.MACD,'60m',233),
-                            (TaType.MACD,'120m',233),
-                            (TaType.BOLL, '240m',100),
-                            (TaType.BOLL_UPPER, '1d',100),
+                            (TaType.MACD,'1d',233),
+                            (TaType.BOLL, '1d',100),
+                            (TaType.TRIX_STATUS, '1d', 100),
+                            (TaType.BOLL_MACD,'1d',233),
+                            (TaType.KDJ_CROSS, '1d', 100)
                             ],
-            'isLong':False})
+            'isLong':False, 
+            'use_latest_data':True})
         not_to_buy = cti.filter(context, data, to_buy)
         to_buy = [stock for stock in to_buy if stock not in not_to_buy]
         return to_buy

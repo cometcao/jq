@@ -192,6 +192,6 @@ class ML_biaoli_check(object):
         """Our confidence level must be above the threthold"""
         max_val = np.max(pred, axis=1)
         if thre == 0:
-            return max_val > self.threthold
+            return max_val >= self.threthold
         else:
-            return max_val > thre
+            return max_val >= thre

@@ -506,10 +506,11 @@ class checkTAIndicator_OR(checkTAIndicator):
         checkTAIndicator.__init__(self, params)
         self.filters = params.get('TA_Indicators', None)
         self.isLong = params.get('isLong', True)
+        self.use_latest_data = params.get('use_latest_data', False)
     def filter(self, context, data, stock_list):
         result_list = []
         for fil,period,count in self.filters:
-            ta = TA_Factor_Long({'ta_type':fil, 'period':period, 'count':count, 'isLong':self.isLong}) if self.isLong else TA_Factor_Short({'ta_type':fil, 'period':period, 'count':count, 'isLong':self.isLong})
+            ta = TA_Factor_Long({'ta_type':fil, 'period':period, 'count':count, 'isLong':self.isLong, 'use_latest_data':self.use_latest_data}) if self.isLong else TA_Factor_Short({'ta_type':fil, 'period':period, 'count':count, 'isLong':self.isLong, 'use_latest_data':self.use_latest_data})
             result_list += ta.filter(stock_list)
         return [stock for stock in stock_list if stock in result_list]
 
@@ -521,10 +522,11 @@ class checkTAIndicator_AND(checkTAIndicator):
         checkTAIndicator.__init__(self, params)
         self.filters = params.get('TA_Indicators', None)
         self.isLong = params.get('isLong', True)
+        self.use_latest_data = params.get('use_latest_data', False)
     def filter(self, context, data, stock_list):
         result_list = stock_list
         for fil,period,count in self.filters:
-            ta = TA_Factor_Long({'ta_type':fil, 'period':period, 'count':count, 'isLong':self.isLong}) if self.isLong else TA_Factor_Short({'ta_type':fil, 'period':period, 'count':count, 'isLong':self.isLong})
+            ta = TA_Factor_Long({'ta_type':fil, 'period':period, 'count':count, 'isLong':self.isLong, 'use_latest_data':self.use_latest_data}) if self.isLong else TA_Factor_Short({'ta_type':fil, 'period':period, 'count':count, 'isLong':self.isLong, 'use_latest_data':self.use_latest_data})
             filtered_list = ta.filter(stock_list)
             result_list = [stock for stock in result_list if stock in filtered_list]
             if not result_list:

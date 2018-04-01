@@ -129,13 +129,13 @@ class MLDataProcess(object):
         
         self.process_model(model, x_train, x_test, y_train, y_test, batch_size, epochs)
     
-    def process_model(self, model, x_train, x_test, y_train, y_test, batch_size = 50,epochs = 5):  
+    def process_model(self, model, x_train, x_test, y_train, y_test, batch_size = 50,epochs = 5, verbose=0):  
         model.fit(x_train, y_train,
                   batch_size=batch_size,
                   epochs=epochs,
-                  verbose=2,
+                  verbose=verbose,
                   validation_data=(x_test, y_test))
-        score = model.evaluate(x_test, y_test, verbose=1)
+        score = model.evaluate(x_test, y_test, verbose=verbose)
         print('Test loss:', score[0])
         print('Test accuracy:', score[1])
         

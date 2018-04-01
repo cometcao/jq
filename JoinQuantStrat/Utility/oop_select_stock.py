@@ -348,7 +348,7 @@ class Filter_Rank_Sector(Filter_stock_list):
         self.new_list = []
     
     def filter(self, context, data, stock_list):
-        if self.g.isFirstTradingDayOfWeek(context) or self.new_list or self.isDaily:
+        if self.g.isFirstTradingDayOfWeek(context) or not self.new_list or self.isDaily:
             self.log.info("选取前 %s%% 板块" % str(self.sector_limit_pct))
             ss = SectorSelection(limit_pct=self.sector_limit_pct, 
                     isStrong=self.strong_sector, 
@@ -359,6 +359,9 @@ class Filter_Rank_Sector(Filter_stock_list):
             self.new_list = ss.processAllSectorStocks()
         return [stock for stock in stock_list if stock in self.new_list]
 
+    def before_trading_start(context):
+        pass
+            
     def __str__(self):
         if self.strong_sector:
             return '强势板块股票 %s%% 阈值 %s' % (self.sector_limit_pct, self.strength_threthold)

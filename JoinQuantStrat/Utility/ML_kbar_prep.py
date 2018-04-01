@@ -105,10 +105,11 @@ class MLKbarPrep(object):
         higher_df = self.stock_df_dict[MLKbarPrep.monitor_level[0]]
         lower_df = self.stock_df_dict[MLKbarPrep.monitor_level[1]]
         high_df_tb = higher_df.dropna(subset=['new_index'])
-        if high_df_tb.shape[0] > 5:
-            print(high_df_tb.tail(5)[['tb', 'new_index']])
-        else:
-            print(high_df_tb[['tb', 'new_index']])
+        if self.isDebug:
+            if high_df_tb.shape[0] > 5:
+                print(high_df_tb.tail(5)[['tb', 'new_index']])
+            else:
+                print(high_df_tb[['tb', 'new_index']])
         high_dates = high_df_tb.index
         
         for i in range(-5, 0, 1):
