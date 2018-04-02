@@ -123,8 +123,8 @@ class MLKbarPrep(object):
                 trunk_df = lower_df.loc[previous_date:next_date, :]
             else:
                 trunk_df = lower_df.loc[previous_date:, :]
-            if self.isDebug:
-                print(trunk_df)
+#             if self.isDebug:
+#                 print(trunk_df.tail(5))
             self.create_ml_data_set(trunk_df, None)
         return self.data_set
             
@@ -140,8 +140,8 @@ class MLKbarPrep(object):
             except IndexError:
                 continue
             trunk_df = lower_df.loc[previous_date:,:]
-            if self.isDebug:
-                print(trunk_df)
+#             if self.isDebug:
+#                 print(trunk_df.tail(5))
             self.create_ml_data_set(trunk_df, None)
         return self.data_set
         

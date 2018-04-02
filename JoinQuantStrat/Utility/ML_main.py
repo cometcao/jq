@@ -98,7 +98,8 @@ class ML_biaoli_train(object):
 class ML_biaoli_check(object):
     """use CNNLSTM to predict biaoli level"""
     def __init__(self, params):
-        self.threthold = params.get('threthold', 0.9)
+        self.long_threthold = params.get('long_threthold', 0.999)
+        self.short_threthold = params.get('short_threthold', 0.99)
         self.model_path = params.get('model_path', None)
         self.rq = params.get('rq', True)
         self.isAnal = params.get('isAnal', False)
@@ -138,11 +139,12 @@ class ML_biaoli_check(object):
     
     def gauge_stock(self, stock, today_date=None):    
         (y_class, pred), origin_size = self.model_predict(stock, today_date)
-        conf = self.interpret(pred)    
+        long_conf, short_conf = self.interpret(pred)    
         
         old_pred = pred[:origin_size]
         old_y_class = y_class[:origin_size]
-        old_conf = conf[:origin_size]    
+        old_long_conf = long_conf[:origin_size]    
+        old_short_conf = short_conf[:origin_size]
         
         long_pred = short_pred = False
         # make sure current check is adequate
@@ -150,19 +152,20 @@ class ML_biaoli_check(object):
         # 2 all past pivots were confident
         try:
             if (old_y_class[-3:-1] != 0).all():  #and old_conf.all()
-                long_pred = (old_y_class[-1] == -1 and old_conf[-1])
-                short_pred = (len(old_y_class) >= 2 and old_y_class[-2] == 1 and old_y_class[-1] == 0 and old_conf[-1] and old_conf[-2]) or\
-                        (old_y_class[-1] == 1 and old_conf[-1])
+                long_pred = (old_y_class[-1] == -1 and old_long_conf[-1])
+                short_pred = (old_y_class[-1] == 1 and old_short_conf[-1]) #or\
+#                         (len(old_y_class) >= 2 and old_y_class[-2] == 1 and old_y_class[-1] == 0 and old_short_conf[-1] and old_short_conf[-2])
                 if self.isDebug:
                     print(old_pred)
                     print(old_y_class)
             else:
                 print("use gapped pivots for prediction")
                 new_y_class = y_class[origin_size:]
-                new_conf = conf[origin_size:]
+                new_long_conf = long_conf[origin_size:]
+                new_short_conf = short_conf[origin_size:]
                 new_pred = pred[origin_size:]
-                long_pred = (new_y_class[-1] == -1 and new_conf[-1])# or (new_y_class[-2] == -1 and new_conf[-2])
-                short_pred = (new_y_class[-1] == 1 and new_conf[-1])# or (new_y_class[-2] == 1 and new_conf[-2])
+                long_pred = (new_y_class[-1] == -1 and new_long_conf[-1])# or (new_y_class[-2] == -1 and new_conf[-2])
+                short_pred = (new_y_class[-1] == 1 and new_short_conf[-1])# or (new_y_class[-2] == 1 and new_conf[-2])
                 if self.isDebug:
                     print(new_pred)
                     print(new_y_class)
@@ -173,7 +176,7 @@ class ML_biaoli_check(object):
         
     def model_predict(self, stock, today_date=None):
         print("ML working on {0} at date {1}".format(stock, today_date if today_date else ""))
-        mld = MLDataPrep(isAnal=self.isAnal, rq=self.rq)
+        mld = MLDataPrep(isAnal=self.isAnal, rq=self.rq, isDebug=self.isDebug)
         data_set, origin_data_length = mld.prepare_stock_data_predict(stock, today_date=today_date) # 000001.XSHG
         if data_set is None: # can't predict
             return ([0],[[0]], 0)
@@ -191,10 +194,7 @@ class ML_biaoli_check(object):
             print(e)
             return ([0],[[0]], 0)
     
-    def interpret(self, pred, thre=0):
+    def interpret(self, pred):
         """Our confidence level must be above the threthold"""
         max_val = np.max(pred, axis=1)
-        if thre == 0:
-            return max_val >= self.threthold
-        else:
-            return max_val >= thre
+        return max_val >= self.long_threthold, max_val >= self.short_threthold

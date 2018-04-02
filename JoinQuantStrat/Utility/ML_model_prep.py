@@ -87,7 +87,7 @@ class MLDataProcess(object):
         x_test = np.expand_dims(x_test, axis=1)
         return (x_train, x_test)
     
-    def define_conv_lstm_model(self, x_train, x_test, y_train, y_test, num_classes, batch_size = 50,epochs = 5):
+    def define_conv_lstm_model(self, x_train, x_test, y_train, y_test, num_classes, batch_size = 50,epochs = 5, verbose=0):
         x_train, x_test = self.define_conv_lstm_dimension(x_train, x_test)
         
         input_shape = None
@@ -127,7 +127,7 @@ class MLDataProcess(object):
         
         print (model.summary())
         
-        self.process_model(model, x_train, x_test, y_train, y_test, batch_size, epochs)
+        self.process_model(model, x_train, x_test, y_train, y_test, batch_size, epochs, verbose)
     
     def process_model(self, model, x_train, x_test, y_train, y_test, batch_size = 50,epochs = 5, verbose=0):  
         model.fit(x_train, y_train,
