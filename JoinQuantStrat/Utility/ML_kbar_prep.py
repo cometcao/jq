@@ -30,7 +30,7 @@ class MLKbarPrep(object):
     '''
 
     monitor_level = ['1d', '30m']
-    def __init__(self, count=100, isAnal=False, isNormalize=True, manual_select=False, useMinMax=True, sub_max_count=168, isDebug=False, include_now=False, sub_level_min_count = 2):
+    def __init__(self, count=100, isAnal=False, isNormalize=True, manual_select=False, useMinMax=True, sub_max_count=272, isDebug=False, include_now=False, sub_level_min_count = 2):
         self.isDebug = isDebug
         self.isAnal = isAnal
         self.count = count
