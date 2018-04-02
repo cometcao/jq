@@ -107,6 +107,7 @@ class ML_biaoli_check(object):
         self.extra_training_file = params.get('extra_training_file', None)
         self.save_new_model = params.get('save_new_model', False)
         self.model = params.get('model', None)
+        self.isDebug = params.get('isDebug', False)
         if not self.model and self.model_path is not None:
             self.prepare_model()
 
@@ -152,8 +153,9 @@ class ML_biaoli_check(object):
                 long_pred = (old_y_class[-1] == -1 and old_conf[-1])
                 short_pred = (len(old_y_class) >= 2 and old_y_class[-2] == 1 and old_y_class[-1] == 0 and old_conf[-1] and old_conf[-2]) or\
                         (old_y_class[-1] == 1 and old_conf[-1])
-                print(old_pred)
-                print(old_y_class)
+                if self.isDebug:
+                    print(old_pred)
+                    print(old_y_class)
             else:
                 print("use gapped pivots for prediction")
                 new_y_class = y_class[origin_size:]
@@ -161,8 +163,9 @@ class ML_biaoli_check(object):
                 new_pred = pred[origin_size:]
                 long_pred = (new_y_class[-1] == -1 and new_conf[-1])# or (new_y_class[-2] == -1 and new_conf[-2])
                 short_pred = (new_y_class[-1] == 1 and new_conf[-1])# or (new_y_class[-2] == 1 and new_conf[-2])
-                print(new_pred)
-                print(new_y_class)
+                if self.isDebug:
+                    print(new_pred)
+                    print(new_y_class)
         except:
             long_pred = short_pred = False
         return (long_pred, short_pred)

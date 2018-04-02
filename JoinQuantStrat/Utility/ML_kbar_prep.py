@@ -236,7 +236,8 @@ class MLDataPrep(object):
         predict_dataset = mlk.prepare_predict_data_extra()
 
         predict_dataset = self.pad_each_training_array(predict_dataset)
-        print("original size:{0}".format(origin_pred_size))
+        if self.isDebug:
+            print("original size:{0}".format(origin_pred_size))
         return predict_dataset, origin_pred_size
         
     def encode_category(self, label_set):
