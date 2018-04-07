@@ -61,6 +61,7 @@ class Global_variable(object):
     filtered_sectors = None # 记录筛选出的强势板块
     head_stocks = [] # 记录强势票 每日轮换
     intraday_long_stock = []
+    pair_zscore = np.nan
 
     def __init__(self, owner):
         self._owner = owner

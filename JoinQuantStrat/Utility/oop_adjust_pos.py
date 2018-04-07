@@ -200,7 +200,7 @@ class Buy_stocks(Rule):
                 for stock in buy_stocks:
                     if stock in self.g.sell_stocks:
                         continue
-                    if context.subportfolios[pindex].long_positions[stock].total_amount == 0:
+                    if stock not in context.subportfolios[pindex].long_positions.keys():
                         if self.g.open_position(self, stock, value, pindex):
                             if len(context.subportfolios[pindex].long_positions) == self.buy_count:
                                 break
@@ -257,3 +257,127 @@ class Buy_stocks_portion(Buy_stocks):
     def __str__(self):
         return '股票调仓买入规则：现金比重式买入股票达目标股票数'  
 
+class Buy_stocks_var(Buy_stocks):
+    """使用 VaR 方法做调仓控制"""
+    def __init__(self, params):
+        Buy_stocks.__init__(self, params)
+        self.money_fund = params.get('money_fund', ['511880.XSHG'])
+        self.adjust_pos = params.get('adjust_pos', True)
+        self.equal_pos = params.get('equal_pos', False)
+        self.p_value = params.get('p_val', 2.58)
+        self.risk_var = params.get('risk_var', 0.13)
+        self.pc_var = None
+
+    def adjust(self, context, data, buy_stocks):
+        if not self.pc_var:
+            # 设置 VaR 仓位控制参数。风险敞口: 0.05,
+            # 正态分布概率表，标准差倍数以及置信率: 0.96, 95%; 2.06, 96%; 2.18, 97%; 2.34, 98%; 2.58, 99%; 5, 99.9999%
+            # 赋闲资金可以买卖银华日利做现金管理: ['511880.XSHG']
+            self.pc_var = PositionControlVar(context, self.risk_var, self.p_value, self.money_fund, self.equal_pos)
+        if self.is_to_return:
+            self.log_warn('无法执行买入!! self.is_to_return 未开启')
+            return
+        
+        if self.adjust_pos:
+            self.adjust_all_pos(context, data, buy_stocks)
+        else:
+            self.adjust_new_pos(context, data, buy_stocks)
+    
+    def adjust_new_pos(self, context, data, buy_stocks):
+        for pindex in self.g.op_pindexs:
+            position_count = len([stock for stock in context.subportfolios[pindex].positions.keys() if stock not in self.money_fund and stock not in buy_stocks])
+            trade_ratio = {}
+            if self.buy_count > position_count:
+                buy_num = self.buy_count - position_count
+                trade_ratio = self.pc_var.buy_the_stocks(context, buy_stocks[:buy_num])
+            else:
+                trade_ratio = self.pc_var.func_rebalance(context)
+
+            # sell money_fund if not in list
+            for stock in context.subportfolios[pindex].long_positions.keys():
+                position = context.subportfolios[pindex].long_positions[stock]
+                if stock in self.money_fund: 
+                    if (stock not in trade_ratio or trade_ratio[stock] == 0.0):
+                        self.g.close_position(self, position, True, pindex)
+                    else:
+                        self.g.open_position(self, stock, context.subportfolios[pindex].total_value*trade_ratio[stock],pindex)
+                        
+            for stock in trade_ratio:
+                if stock in self.g.sell_stocks and stock not in self.money_fund:
+                    continue
+                if context.subportfolios[pindex].long_positions[stock].total_amount == 0:
+                    if self.g.open_position(self, stock, context.subportfolios[pindex].total_value*trade_ratio[stock],pindex):
+                        if len(context.subportfolios[pindex].long_positions) == self.buy_count+1:
+                            break        
+        
+    def adjust_all_pos(self, context, data, buy_stocks):
+        # 买入股票或者进行调仓
+        # 始终保持持仓数目为g.buy_count
+        for pindex in self.g.op_pindexs:
+            to_buy_num = len(buy_stocks)
+            # exclude money_fund
+            holding_positon_exclude_money_fund = [stock for stock in context.subportfolios[pindex].positions.keys() if stock not in self.money_fund]
+            position_count = len(holding_positon_exclude_money_fund)
+            trade_ratio = {}
+            if self.buy_count <= position_count+to_buy_num: # 满仓数
+                buy_num = self.buy_count - position_count
+                trade_ratio = self.pc_var.buy_the_stocks(context, holding_positon_exclude_money_fund+buy_stocks[:buy_num])
+            else: # 分仓数
+                trade_ratio = self.pc_var.buy_the_stocks(context, holding_positon_exclude_money_fund+buy_stocks)
+
+            current_ratio = self.g.getCurrentPosRatio(context)
+            order_stocks = self.getOrderByRatio(current_ratio, trade_ratio)
+            for stock in order_stocks:
+                if stock in self.g.sell_stocks:
+                    continue
+                if self.g.open_position(self, stock, context.subportfolios[pindex].total_value*trade_ratio[stock],pindex):
+                    pass
+    
+    def getOrderByRatio(self, current_ratio, target_ratio):
+        diff_ratio = [(stock, target_ratio[stock]-current_ratio[stock]) for stock in target_ratio if stock in current_ratio] \
+                    + [(stock, target_ratio[stock]) for stock in target_ratio if stock not in current_ratio] \
+                    + [(stock, 0.0) for stock in current_ratio if stock not in target_ratio]
+        diff_ratio.sort(key=lambda x: x[1]) # asc
+        return [stock for stock,_ in diff_ratio]
+    
+    def __str__(self):
+        return '股票调仓买入规则：使用 VaR 方式买入或者调整股票达目标股票数'
+    
+class Sell_stocks_pair(Sell_stocks):
+    def __init__(self,params):
+        Sell_stocks.__init__(self, params)
+        
+    def handle_data(self, context, data):
+        if not np.isnan(self.g.pair_zscore):
+            if self.g.pair_zscore > 1:
+                self.adjust(context, data, self.g.monitor_buy_list[0])  
+            elif self.g.pair_zscore < -1:
+                self.adjust(context, data, self.g.monitor_buy_list[1])
+            else:
+                if self.g.pair_zscore >= 0:
+                    self.adjust(context, data, self.g.monitor_buy_list)
+                else:
+                    self.adjust(context, data, self.g.monitor_buy_list)
+
+    def __str__(self):
+        return '股票调仓买入规则：配对交易卖出'
+
+class Buy_stocks_pair(Buy_stocks_var):
+    def __init__(self,params):
+        Buy_stocks_var.__init__(self, params)
+        self.buy_count = 2
+        
+    def handle_data(self, context, data):
+        if not np.isnan(self.g.pair_zscore):
+            if self.g.pair_zscore > 1:
+                self.adjust(context, data, [self.g.monitor_buy_list[0]])  
+            elif self.g.pair_zscore < -1:
+                self.adjust(context, data, [self.g.monitor_buy_list[1]])
+            else:
+                if self.g.pair_zscore >= 0:
+                    self.adjust(context, data, self.g.monitor_buy_list)
+                else:
+                    self.adjust(context, data, self.g.monitor_buy_list)
+
+    def __str__(self):
+        return '股票调仓买入规则：配对交易买入'

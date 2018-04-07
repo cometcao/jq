@@ -157,7 +157,7 @@ class KBarProcessor(object):
                         working_df.ix[loop_index+2, 'tb'] = TopBotType.noTopBot
                     else:
                         working_df.ix[loop_index, 'tb'] = TopBotType.noTopBot
-                loop_index += 3
+                loop_index += 2
             else:
                 loop_index += 1
         working_df.drop('new_index_offset', axis = 1, inplace=True)

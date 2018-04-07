@@ -21,6 +21,9 @@ from sklearn.model_selection import train_test_split
 
 # pd.options.mode.chained_assignment = None 
 
+fixed_length = 272
+
+
 class MLKbarPrep(object):
     '''
     Turn multiple level of kbar data into Chan Biaoli status,
@@ -30,7 +33,7 @@ class MLKbarPrep(object):
     '''
 
     monitor_level = ['1d', '30m']
-    def __init__(self, count=100, isAnal=False, isNormalize=True, manual_select=False, useMinMax=True, sub_max_count=272, isDebug=False, include_now=False, sub_level_min_count = 2):
+    def __init__(self, count=100, isAnal=False, isNormalize=True, manual_select=False, useMinMax=True, sub_max_count=fixed_length, isDebug=False, include_now=False, sub_level_min_count = 2):
         self.isDebug = isDebug
         self.isAnal = isAnal
         self.count = count
@@ -75,7 +78,7 @@ class MLKbarPrep(object):
     
     def prepare_df_data(self, stock_df):
         # MACD
-        stock_df.loc[:,'macd_raw'], _, stock_df.loc[:,'macd']  = talib.MACD(stock_df['close'].values)
+#         stock_df.loc[:,'macd_raw'], _, stock_df.loc[:,'macd']  = talib.MACD(stock_df['close'].values)
         # BiaoLi
         stock_df = self.prepare_biaoli(stock_df)
         return stock_df
@@ -199,7 +202,7 @@ class MLKbarPrep(object):
 
 
 class MLDataPrep(object):
-    def __init__(self, isAnal=False, max_length_for_pad=168, rq=False, isDebug=False):
+    def __init__(self, isAnal=False, max_length_for_pad=fixed_length, rq=False, isDebug=False):
         self.isDebug = isDebug
         self.isAnal = isAnal
         self.max_sequence_length = max_length_for_pad

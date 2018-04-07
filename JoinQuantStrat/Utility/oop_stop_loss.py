@@ -12,6 +12,9 @@ from jqdata import *
 from ta_analysis import *
 from oop_strategy_frame import *
 from common_include import *
+import statsmodels.api as sm
+from pandas import Series, DataFrame
+from pandas.stats.api import ols
 
 class Stop_loss_by_price(Rule):
     def __init__(self, params):
@@ -466,85 +469,72 @@ class RSRS_timing(Rule):
         
         # 设置RSRS指标中N, M的值
         self.N = params.get('N', 18)
-        self.M = params.get('M', 1100)
+        self.M = params.get('M', 600)
+        
+        self.beta_list = []
+        self.R2 = []
         
         self.market_symbol = params.get('market_symbol', '000300.XSHG')
+        self.init = False
         
 
     def handle_data(self, context, data):
-        self.calculate_RSRS(context, data)
-        # print self.RSRS_stdratio_rightdev_list
-        # print self.RSRS_stdratio_rev_list
+        if not self.init:
+            self.calculate_RSRS(context, data)
+            self.init=True
+        else:
+            self.add_new_RSRS(context, data)
+
+        section = self.beta_list[-self.M:]
+        mu = np.mean(section)
+        sigma = np.std(section)
+        zscore = (section-mu)/sigma
+        
         # 获得前10日交易量
         trade_vol10 = attribute_history(self.market_symbol, 10, '1d', 'volume')
         
-        if self.RSRS_stdratio_rightdev_list[context.previous_date] > self.buy and \
-          corrcoef(array([trade_vol10['volume'], self.RSRS_stdratio_rev_list[:context.previous_date].tail(10)]))[0,1] > 0:
+        if zscore[-1] > self.buy \
+            and np.corrcoef(np.array([trade_vol10['volume'].values, (np.array(self.R2[-10:]) * np.array(zscore[-10:]))]))[0,1] > 0:
             self.log.info("RSRS右偏标准分大于买入阈值, 且修正标准分与前10日交易量相关系数为正")
             
         # 如果上一时间点的右偏RSRS标准分小于卖出阈值, （且修正标准分与前10日交易量相关系数为正）则空仓卖出
-        elif self.RSRS_stdratio_rightdev_list[context.previous_date] < self.sell and context.portfolio.positions[self.market_symbol].closeable_amount > 0:
-          # and corrcoef(array([trade_vol10['volume'], g.RSRS_stdratio_rev_list[:context.previous_date].tail(10)]))[0,1] > 0
+        elif zscore[-1] < self.sell:
             self.log.info("RSRS右偏标准分小于卖出阈值, 且修正标准分与前10日交易量相关系数为正")
             self.g.clear_position(self, context, self.g.op_pindexs)
-            self.is_to_return = True    
-            
-        # # 如果上一时间点的右偏RSRS标准分大于买入阈值, 则全仓买入
-        # if self.RSRS_stdratio_rightdev_list[context.previous_date] > self.buy:
-        #     pass
-        # # 如果上一时间点的右偏RSRS标准分小于卖出阈值, 则空仓卖出
-        # elif self.RSRS_stdratio_rightdev_list[context.previous_date] < self.sell and context.portfolio.positions[self.market_symbol].closeable_amount > 0:
-        #     self.log.info("RSRS右偏标准分小于卖出阈值, 且修正标准分与前10日交易量相关系数为正")
-        #     self.g.clear_position(self, context, self.g.op_pindexs)
-        #     self.is_to_return = True    
+            self.is_to_return = True 
+        
+
 
     def on_clear_position(self, context, pindexs=[0]):
-        self.g.buy_stocks = []
+        self.g.monitor_buy_list = []
 
     def after_trading_end(self, context):
         Rule.after_trading_end(self, context)
 
     def calculate_RSRS(self, context, data):
-        # 计算出所有需要的RSRS斜率指标
-        # 计算交易日期区间长度(包括开始前一天)
-        trade_date_range = len(get_trade_days(start_date = context.run_params.start_date, end_date = context.run_params.end_date)) + 1
-        # 取出交易日期时间序列(包括开始前一天)
-        trade_date_series = get_trade_days(end_date = context.run_params.end_date, count = trade_date_range)
-        # 计算RSRS斜率的时间区间长度
-        date_range = len(get_trade_days(start_date = context.run_params.start_date, end_date = context.run_params.end_date)) + self.M
-        # 取出计算RSRS斜率的时间序列
-        date_series = get_trade_days(end_date = context.run_params.end_date, count = date_range)
-        # 建立RSRS斜率空表
-        RSRS_ratio_list = Series(np.zeros(len(date_series)), index = date_series)
-        # 填入各个日期的RSRS斜率值
-        for i in date_series:
-            RSRS_ratio_list[i] = self.RSRS_ratio(self.N, i)[0]
-        
-        # 计算交易日期的标准化RSRS指标
-        # 计算均值序列
-        trade_mean_series =  pd.rolling_mean(RSRS_ratio_list, self.M)[-trade_date_range:]
-        # 计算标准差序列
-        trade_std_series = pd.rolling_std(RSRS_ratio_list, self.M)[-trade_date_range:]
-        # 计算交易日期的标准化RSRS指标序列
-        RSRS_stdratio_list = (RSRS_ratio_list[-trade_date_range:] - trade_mean_series) /  trade_std_series
-        
-        # 计算右偏RSRS标准分
-        # 填入各个日期的RSRS相关系数
-        RSRS_ratio_R2_list = Series(np.zeros(len(date_series)), index = date_series)
-        for i in date_series:
-            RSRS_ratio_R2_list[i] = self.RSRS_ratio(self.N, i)[1]
-        # 计算交易日期的右偏RSRS指标序列  
-        self.RSRS_stdratio_rightdev_list = RSRS_stdratio_list * RSRS_ratio_R2_list[-trade_date_range:] * RSRS_ratio_list[-trade_date_range:]
-        
-        # 计算修正RSRS标准分（即在标准分基础上乘以相关系数）
-        self.RSRS_stdratio_rev_list = RSRS_stdratio_list * RSRS_ratio_R2_list[-trade_date_range:]
-      
-    # 附: RSRS斜率指标定义，第一个返回值为斜率，第二个返回值为相关系数（右偏标准分需要用到）
-    def RSRS_ratio(self, N, date):
-        stock_price_high = get_price(self.market_symbol, end_date = date, count = N)['high']
-        stock_price_low = get_price(self.market_symbol, end_date = date, count = N)['low']
-        ols_reg = ols(y = stock_price_high, x = stock_price_low)
-        return ols_reg.beta.x, ols_reg.r2
+        prices = attribute_history(self.market_symbol, self.M, '1d', ['high', 'low'])
+        highs = prices.high
+        lows = prices.low
+        for i in range(len(highs))[self.N:]:
+            data_high = highs.iloc[i-self.N+1:i+1]
+            data_low = lows.iloc[i-self.N+1:i+1]
+            X = sm.add_constant(data_low)
+            model = sm.OLS(data_high,X).fit()
+            beta = model.params[1]
+            r2 = model.rsquared
+            self.beta_list.append(beta)
+            self.R2.append(r2)
+    
+    def add_new_RSRS(self, context, data):
+        prices = attribute_history(self.market_symbol, self.N, '1d', ['high', 'low'])
+        highs = prices.high
+        lows = prices.low
+        X = sm.add_constant(lows)
+        model = sm.OLS(highs, X).fit()
+        beta = model.params[1]
+        r2 = model.rsquared
+        self.beta_list.append(beta)
+        self.R2.append(r2)
 
     def __str__(self):
         return 'RSRS_rightdev[指数:%s]' % (str(self.market_symbol))
