@@ -27,7 +27,7 @@ class PairTradingOls(object):
         model = (sm.OLS(stock_df2, X)).fit()
         p_value = model.params[1]
         print("regression p_value: {0}".format(p_value))
-        return self.zscore(p_value * stock_df1 - stock_df2)[-1]
+        return self.zscore(stock_df2 - p_value * stock_df1)[-1]
         
     def zscore(self, value_diff):
         diff_mean = np.mean(value_diff)
