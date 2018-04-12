@@ -17,17 +17,21 @@ class PairTradingOls(object):
         '''
         Pair Trading module
         '''
+        self.return_pair = params.get('return_pair', 1)
         pass
     
     
-    def get_regression_ratio(self, data_frame, pair):
-        stock_df1 = data_frame[pair[0]]
-        stock_df2 = data_frame[pair[1]]
-        X = sm.add_constant(stock_df1)
-        model = (sm.OLS(stock_df2, X)).fit()
-        p_value = model.params[1]
-        print("regression p_value: {0}".format(p_value))
-        return self.zscore(stock_df2 - p_value * stock_df1)[-1]
+    def get_regression_ratio(self, data_frame, pairs):
+        zscores = []
+        for pair in pairs:
+            stock_df1 = data_frame[pair[0]]
+            stock_df2 = data_frame[pair[1]]
+            X = sm.add_constant(stock_df1)
+            model = (sm.OLS(stock_df2, X)).fit()
+            p_value = model.params[1]
+            print("regression p_value: {0}".format(p_value))
+            zscores.append(self.zscore(stock_df2 - p_value * stock_df1)[-1])
+        return zscores
         
     def zscore(self, value_diff):
         diff_mean = np.mean(value_diff)
@@ -36,9 +40,16 @@ class PairTradingOls(object):
     
     def get_top_pair(self, dataframe):
         _, pairs = self.find_cointegrated_pairs(dataframe)
+        if len(pairs) < 2:
+            return []
         sorted_pair = sorted(pairs, key=lambda x: x[2])
-        print("cointegrated_pair: {0}".format(sorted_pair[0]))
-        new_pair = [sorted_pair[0][0], sorted_pair[0][1]]
+        new_pair = []
+        i = 0
+        while i < self.return_pair:
+            current_pair = sorted_pair[i]
+            print("cointegrated_pair: {0}".format(current_pair))
+            new_pair.append((current_pair[0], current_pair[1]))
+            i+=1
         return new_pair
     
     # 输入是一DataFrame，每一列是一支股票在每一日的价格

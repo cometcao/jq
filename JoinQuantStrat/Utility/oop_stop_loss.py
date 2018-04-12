@@ -443,7 +443,7 @@ class Mul_index_stop_loss_ta(Rule):
         if self._ta == TaType.TRIX_PURE:
             ta_trix_long = TA_Factor_Long({'ta_type':TaType.TRIX_PURE, 'period':self._period, 'count':self._n, 'isLong':True})
             long_list = ta_trix_long.filter(self._indexs)
-            print long_list
+            print(long_list)
             if len(long_list) == 0:
                 self.log.warn('不符合持仓条件，清仓')
                 self.g.clear_position(self, context, self.g.op_pindexs)
@@ -457,7 +457,6 @@ class Mul_index_stop_loss_ta(Rule):
 
     def __str__(self):
         return '多指数技术分析止损器[指数:%s] [TA:%s]' % (str(self._indexs), self._ta)
-
 
 # '''-------------RSRS------------'''
 class RSRS_timing(Rule):
@@ -480,11 +479,15 @@ class RSRS_timing(Rule):
 
     def handle_data(self, context, data):
         if not self.init:
-            self.calculate_RSRS(context, data)
+            self.calculate_RSRS()
             self.init=True
         else:
-            self.add_new_RSRS(context, data)
+            self.add_new_RSRS()
+            
+        self.check_timing(context)
 
+
+    def check_timing(self, context):
         section = self.beta_list[-self.M:]
         mu = np.mean(section)
         sigma = np.std(section)
@@ -511,8 +514,8 @@ class RSRS_timing(Rule):
     def after_trading_end(self, context):
         Rule.after_trading_end(self, context)
 
-    def calculate_RSRS(self, context, data):
-        prices = attribute_history(self.market_symbol, self.M, '1d', ['high', 'low'])
+    def calculate_RSRS(self):
+        prices = attribute_history(self.market_symbol, self.M+self.N, '1d', ['high', 'low'])
         highs = prices.high
         lows = prices.low
         for i in range(len(highs))[self.N:]:
@@ -525,7 +528,7 @@ class RSRS_timing(Rule):
             self.beta_list.append(beta)
             self.R2.append(r2)
     
-    def add_new_RSRS(self, context, data):
+    def add_new_RSRS(self):
         prices = attribute_history(self.market_symbol, self.N, '1d', ['high', 'low'])
         highs = prices.high
         lows = prices.low
@@ -538,3 +541,5 @@ class RSRS_timing(Rule):
 
     def __str__(self):
         return 'RSRS_rightdev[指数:%s]' % (str(self.market_symbol))
+    
+

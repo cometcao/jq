@@ -13,6 +13,7 @@ from common_include import *
 from ta_analysis import *
 from oop_strategy_frame import *
 from position_control_analysis import *
+from rsrs_timing import *
 
 '''==================================调仓条件相关规则========================================='''
 
@@ -92,7 +93,6 @@ class Period_condition(Weight_Base):
 
 
 '''===================================调仓相关============================'''
-
 
 
 # '''---------------卖出股票规则--------------'''
@@ -213,7 +213,8 @@ class Buy_stocks(Rule):
     def send_port_info(self, context):
         port_msg = [(context.portfolio.positions[stock].security, context.portfolio.positions[stock].total_amount * context.portfolio.positions[stock].price / context.portfolio.total_value) for stock in context.portfolio.positions]
         self.log.info(str(port_msg))
-        send_message(port_msg, channel='weixin')
+        if context.run_params.type == 'sim_trade':
+            send_message(port_msg, channel='weixin')
         
     def recordTrade(self, stock_list):
         for stock in stock_list:
@@ -346,18 +347,26 @@ class Buy_stocks_var(Buy_stocks):
 class Sell_stocks_pair(Sell_stocks):
     def __init__(self,params):
         Sell_stocks.__init__(self, params)
+        self.buy_count = params.get('buy_count', 2)
         
     def handle_data(self, context, data):
-        if not np.isnan(self.g.pair_zscore):
-            if self.g.pair_zscore > 1:
-                self.adjust(context, data, self.g.monitor_buy_list[0])  
-            elif self.g.pair_zscore < -1:
-                self.adjust(context, data, self.g.monitor_buy_list[1])
-            else:
-                if self.g.pair_zscore >= 0:
-                    self.adjust(context, data, self.g.monitor_buy_list)
+        if self.g.pair_zscore and len(self.g.monitor_buy_list)>1:
+            final_buy_list = []
+            i = 0
+            while i < len(self.g.monitor_buy_list) and i < self.buy_count:
+                if self.g.pair_zscore[int(i/2)] > 1:
+                    final_buy_list.append(self.g.monitor_buy_list[i])  
+                elif self.g.pair_zscore[int(i/2)] < -1:
+                    final_buy_list.append(self.g.monitor_buy_list[i+1])
                 else:
-                    self.adjust(context, data, self.g.monitor_buy_list)
+                    if self.g.pair_zscore[int(i/2)] >= 0:
+                        final_buy_list = final_buy_list + self.g.monitor_buy_list
+                    else:
+                        final_buy_list = final_buy_list + self.g.monitor_buy_list
+                i += 2
+            self.adjust(context, data, final_buy_list)
+        else:
+            self.adjust(context, data, [])
 
     def __str__(self):
         return '股票调仓买入规则：配对交易卖出'
@@ -365,19 +374,98 @@ class Sell_stocks_pair(Sell_stocks):
 class Buy_stocks_pair(Buy_stocks_var):
     def __init__(self,params):
         Buy_stocks_var.__init__(self, params)
-        self.buy_count = 2
+        self.buy_count = params.get('buy_count', 2)
         
     def handle_data(self, context, data):
-        if not np.isnan(self.g.pair_zscore):
-            if self.g.pair_zscore > 1:
-                self.adjust(context, data, [self.g.monitor_buy_list[0]])  
-            elif self.g.pair_zscore < -1:
-                self.adjust(context, data, [self.g.monitor_buy_list[1]])
-            else:
-                if self.g.pair_zscore >= 0:
-                    self.adjust(context, data, self.g.monitor_buy_list)
+        if self.g.pair_zscore and len(self.g.monitor_buy_list) > 1:
+            final_buy_list = []
+            i = 0
+            while i < len(self.g.monitor_buy_list) and i < self.buy_count:            
+                if self.g.pair_zscore[int(i/2)] > 1:
+                    final_buy_list.append(self.g.monitor_buy_list[i])  
+                elif self.g.pair_zscore[int(i/2)] < -1:
+                    final_buy_list.append(self.g.monitor_buy_list[i+1])
                 else:
-                    self.adjust(context, data, self.g.monitor_buy_list)
+                    if self.g.pair_zscore[int(i/2)] >= 0:
+                        final_buy_list = final_buy_list + self.g.monitor_buy_list
+                    else:
+                        final_buy_list = final_buy_list + self.g.monitor_buy_list
+                i += 2
+            self.adjust(context, data, final_buy_list)
+        else:
+            self.adjust(context, data, [])
+            
+        self.send_port_info(context)
+        
 
     def __str__(self):
         return '股票调仓买入规则：配对交易买入'
+    
+
+class Relative_Index_Timing(Rule):
+    def __init__(self, params):
+        self.market_list = params.get('market_list', ['000300.XSHG', '000016.XSHG', '399333.XSHE', '000905.XSHG', '399673.XSHE'])
+        self.M = params.get('M', 600)
+        self.N = params.get('N', 18)
+        self.buy = params.get('buy', 0.7)
+        self.sell = params.get('sell', -0.7)
+        self.default_index = self.market_list[0]
+        self.rsrs_check = RSRS_Market_Timing({'market_list': self.market_list,
+                                              'M':self.M,
+                                              'N':self.N,
+                                              'buy':self.buy,
+                                              'sell':self.sell})
+        self.isInitialized = False
+        
+    def before_trading_start(self, context):
+        Rule.before_trading_start(self, context)
+        if not self.isInitialized:
+            self.rsrs_check.calculate_RSRS()
+            self.isInitialized = True
+        else:
+            self.rsrs_check.add_new_RSRS()
+            
+        for market in self.market_list:
+            self.g.market_timing_check[market]=self.rsrs_check.check_timing(market)
+        self.log.info("Index timing check: {0}".format(self.g.market_timing_check))
+        
+    def after_trading_end(self, context):
+        Rule.after_trading_end(self, context)
+        self.g.stock_index_dict = {}
+        self.g.market_timing_check = {}
+        
+    def build_stock_index_dict(self, context):
+        # find the index for candidate stock by largest correlation
+        period = 250
+        stock_symbol_list = [stock for stock in list(set(context.portfolio.positions.keys() + self.g.monitor_buy_list)) if stock not in g.money_fund]
+        for stock in stock_symbol_list:
+            current_max_corr = 0
+            stock_df = attribute_history(stock, period, '1d', 'close', df=False)
+            for idx in self.market_list:
+                index_df = attribute_history(idx, period, '1d', 'close', df=False)
+                corr = np.corrcoef(stock_df['close'],index_df['close'])[0,1]
+                if corr >= current_max_corr:
+                    self.g.stock_index_dict[stock] = idx
+                    current_max_corr = corr
+            if stock not in self.g.stock_index_dict:
+                self.g.stock_index_dict[stock] = self.default_index
+                self.log.info("{0} set to default index {1}".format(stock, self.default_index))
+        self.log.info("stock index correlation matrix: {0}".format(self.g.stock_index_dict))
+        
+    def handle_data(self, context, data):
+        self.build_stock_index_dict(context)
+        stocks_to_check = [stock for stock in list(set(context.portfolio.positions.keys() + self.g.monitor_buy_list)) if stock not in g.money_fund]
+        for stock in stocks_to_check:
+            market = self.g.stock_index_dict[stock]
+            if self.g.market_timing_check[market] == -1:
+                self.g.sell_stocks.append(stock)
+                if stock in context.portfolio.positions.keys():
+                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+                if stock in self.g.monitor_buy_list:
+                    self.g.monitor_buy_list.remove(stock)
+#             if self.g.market_timing_check[market] != 1:
+#                 if stock in self.g.monitor_buy_list:
+#                     self.g.monitor_buy_list.remove(stock)
+        self.log.info("candidate stocks: {0} closed position: {1}".format(self.g.monitor_buy_list, self.g.sell_stocks))
+    def __str__(self):
+        return '股票精确择时'
