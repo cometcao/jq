@@ -21,7 +21,7 @@ from sklearn.model_selection import train_test_split
 
 # pd.options.mode.chained_assignment = None 
 
-fixed_length = 272
+fixed_length = 1200
 
 
 class MLKbarPrep(object):
@@ -58,7 +58,8 @@ class MLKbarPrep(object):
                 stock_df = get_price(stock, count=local_count, end_date=latest_trading_day, frequency=level, fields = ['open','close','high','low', 'money'], skip_paused=True)          
             if stock_df.empty:
                 continue
-            stock_df = self.prepare_df_data(stock_df)
+            if self.sub_level_min_count != 0 or level == '1d':
+                stock_df = self.prepare_df_data(stock_df)
             self.stock_df_dict[level] = stock_df
     
     def retrieve_stock_data_rq(self, stock, end_date=None):
@@ -73,7 +74,8 @@ class MLKbarPrep(object):
                 stock_df = SecurityDataManager.get_research_data_rq(stock, start_date=previous_trading_day, end_date=today, period=level, fields = ['open','close','high','low', 'total_turnover'], skip_suspended=True)
             if stock_df.empty:
                 continue
-            stock_df = self.prepare_df_data(stock_df)
+            if self.sub_level_min_count != 0 or level == '1d':
+                stock_df = self.prepare_df_data(stock_df)
             self.stock_df_dict[level] = stock_df    
     
     def prepare_df_data(self, stock_df):
@@ -150,9 +152,10 @@ class MLKbarPrep(object):
         
     def create_ml_data_set(self, trunk_df, label): 
         # at least 3 parts in the sub level
-        sub_level_count = len(trunk_df['tb']) - trunk_df['tb'].isnull().sum()
-        if sub_level_count < self.sub_level_min_count:
-            return
+        if self.sub_level_min_count != 0: # we won't process sub level df
+            sub_level_count = len(trunk_df['tb']) - trunk_df['tb'].isnull().sum()
+            if sub_level_count < self.sub_level_min_count:
+                return
         
         if trunk_df.shape[0] > self.sub_max_count: # truncate
             trunk_df = trunk_df.iloc[-self.sub_max_count:,:]
@@ -180,7 +183,8 @@ class MLKbarPrep(object):
         return df
         
     def manual_wash(self, df):
-        df = df.drop(['new_index','tb'], 1)
+        if self.sub_level_min_count != 0:
+            df = df.drop(['new_index','tb'], 1, errors='ignore')
         df = df.dropna()
         return df
         
@@ -270,6 +274,10 @@ class MLDataPrep(object):
         if not data_list or not label_list:
             print("Invalid file content")
             return
+
+        if self.isDebug:
+            print (data_list)
+            print (label_list)
 
         if background_data_generation:
             data_list, label_list = self.prepare_background_data(data_list, label_list)
