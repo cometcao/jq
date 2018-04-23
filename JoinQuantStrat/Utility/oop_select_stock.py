@@ -25,6 +25,10 @@ class Pick_stocks2(Group_rules):
     def __init__(self, params):
         Group_rules.__init__(self, params)
         self.has_run = False
+        self.file_path = params.get('write_to_file', None)
+
+    def update_params(self, context, params):
+        self.file_path = params.get('write_to_file', None)
 
     def handle_data(self, context, data):
         try:
@@ -52,8 +56,16 @@ class Pick_stocks2(Group_rules):
                 self.g.buy_stocks = rule.before_trading_start(context)
         
         for rule in self.rules:
-            if isinstance(rule, Filter_stock_list):
+            if isinstance(rule, Early_Filter_stock_list):
                 rule.before_trading_start(context)
+                
+        for rule in self.rules:
+            if isinstance(rule, Early_Filter_stock_list):
+                self.g.buy_stocks = rule.filter(context, self.g.buy_stocks)
+                
+        if self.file_path:
+            checking_stocks = [stock for stock in list(set(self.g.buy_stocks+context.portfolio.positions.keys())) if stock not in g.money_fund]
+            write_file(self.file_path, ",".join(checking_stocks))
         
 
     def __str__(self):
@@ -122,8 +134,8 @@ class Pick_financial_data(Filter_query):
             s += '[限制选股数:%s]' % (limit)
         return '多因子选股:' + s
 
-class Filter_financial_data2(Filter_stock_list):
-    def normal_filter(self, context, data, stock_list):
+class Filter_financial_data2(Early_Filter_stock_list):
+    def normal_filter(self, context, stock_list):
         is_by_sector = self._params.get('by_sector', False)
         q = query(
             valuation
@@ -163,7 +175,7 @@ class Filter_financial_data2(Filter_stock_list):
         stock_list = list(get_fundamentals(q)['code'])
         return stock_list    
     
-    def filter_by_sector(self, context, data):
+    def filter_by_sector(self, context):
         final_list = []
         threthold_limit = self._params.get('limit', None)
         industry_sectors, concept_sectors = self.g.filtered_sectors
@@ -171,20 +183,20 @@ class Filter_financial_data2(Filter_stock_list):
         limit_num = threthold_limit/total_sector_num if threthold_limit is not None else 3
         for sector in industry_sectors:
             stock_list = get_industry_stocks(sector)
-            stock_list = self.normal_filter(context, data, stock_list)
+            stock_list = self.normal_filter(context, stock_list)
             final_list += stock_list[:limit_num]
         
         for con in concept_sectors:
             stock_list = get_concept_stocks(con)
-            stock_list = self.normal_filter(context, data, stock_list)
+            stock_list = self.normal_filter(context, stock_list)
             final_list += stock_list[:limit_num]
         return final_list
     
-    def filter(self, context, data, stock_list):
+    def filter(self, context, stock_list):
         if self._params.get('by_sector', False):
-            return self.filter_by_sector(context, data)
+            return self.filter_by_sector(context)
         else:
-            return self.normal_filter(context, data, stock_list)
+            return self.normal_filter(context, stock_list)
 
     def __str__(self):
         s = ''
@@ -214,13 +226,13 @@ class Filter_financial_data2(Filter_stock_list):
         return '多因子筛选:' + s
 
 
-class Filter_FX_data(Filter_stock_list):
+class Filter_FX_data(Early_Filter_stock_list):
     def __init__(self, params):
         self.limit = params.get('limit', 100)
         self.quantlib = quantlib()
         self.value_factor = value_factor_lib()
     
-    def filter(self, context, data, stock_list):
+    def filter(self, context, stock_list):
         import datetime as dt
         statsDate = context.current_dt.date() - dt.timedelta(1)
         #获取坏股票列表，将会剔除
@@ -233,8 +245,8 @@ class Filter_FX_data(Filter_stock_list):
         return '小佛雪选股 选取:%s' % self.limit
 
 # 根据财务数据对Stock_list进行过滤。返回符合条件的stock_list
-class Filter_financial_data(Filter_stock_list):
-    def filter(self, context, data, stock_list):
+class Filter_financial_data(Early_Filter_stock_list):
+    def filter(self, context, stock_list):
         q = query(valuation).filter(
             valuation.code.in_(stock_list)
         )
@@ -398,9 +410,9 @@ class Filter_Pair_Trading(Filter_stock_list):
     def __str__(self):
         return "配对交易选对股"    
     
-class Filter_Rank_Sector(Filter_stock_list):
+class Filter_Rank_Sector(Early_Filter_stock_list):
     def __init__(self, params):
-        Filter_stock_list.__init__(self, params)
+        Early_Filter_stock_list.__init__(self, params)
         self.strong_sector = params.get('strong_sector', False)
         self.sector_limit_pct = params.get('sector_limit_pct', 5)
         self.strength_threthold = params.get('strength_threthold', 4)
@@ -410,7 +422,7 @@ class Filter_Rank_Sector(Filter_stock_list):
         self.avgPeriod = params.get('avgPeriod', 5)
         self.new_list = []
     
-    def filter(self, context, data, stock_list):
+    def filter(self, context, stock_list):
         return [stock for stock in stock_list if stock in self.new_list]
 
     def before_trading_start(self, context):
@@ -537,8 +549,8 @@ class Filter_Herd_head_stocks(Filter_stock_list):
 #######################################################
 
 # '''------------------创业板过滤器-----------------'''
-class Filter_gem(Filter_stock_list):
-    def filter(self, context, data, stock_list):
+class Filter_gem(Early_Filter_stock_list):
+    def filter(self, context, stock_list):
         self.log.info("过滤创业板股票")
         return [stock for stock in stock_list if stock[0:3] != '300']
 

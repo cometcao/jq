@@ -14,6 +14,7 @@ from ta_analysis import *
 from oop_strategy_frame import *
 from position_control_analysis import *
 from rsrs_timing import *
+import json
 
 '''==================================调仓条件相关规则========================================='''
 
@@ -344,6 +345,319 @@ class Buy_stocks_var(Buy_stocks):
     def __str__(self):
         return '股票调仓买入规则：使用 VaR 方式买入或者调整股票达目标股票数'
     
+# adjust stocks ###########
+
+class Sell_stocks_chan(Sell_stocks):
+    def __init__(self, params):
+        Sell_stocks.__init__(self, params)
+        self.monitor_levels = params.get('monitor_levels', ['5d','1d','60m'])
+        self.money_fund = params.get('money_fund', ['511880.XSHG'])
+    def handle_data(self, context, data):
+        # 日线级别卖点
+        cti = None
+        TA_Factor.global_var = self.g
+        self.g.monitor_short_cm.updateGaugeStockList(newStockList=context.portfolio.positions.keys(), levels=[self.monitor_levels[-1]]) # gauge 30m level status
+        if context.current_dt.hour < 11: # 10点之前
+            cti = checkTAIndicator_OR({
+                'TA_Indicators':[
+                                (TaType.BOLL_MACD,'1d',233),
+                                # (TaType.BOLL_MACD,'60m',233),
+                                # (TaType.MACD,'60m',233),
+                                (TaType.MACD,'1d',233),
+                                # (TaType.BOLL,'1d',100), 
+                                ],
+                'isLong':False}) 
+        elif context.current_dt.hour >= 14: # after 14:00
+            cti = checkTAIndicator_OR({
+                'TA_Indicators':[
+                                # (TaType.BOLL,'240m',100), 
+                                (TaType.BOLL_MACD,'240m',233), # moved from morning check
+                                # (TaType.BOLL_MACD,'60m',233),
+                                # (TaType.MACD,'60m',233),
+                                (TaType.MACD,'240m',233),
+                                # (TaType.TRIX_STATUS, '240m', 100),
+                                (TaType.KDJ_CROSS, '240m', 100)
+                    ], 
+                'isLong':False}) 
+        else:
+            cti = checkTAIndicator_OR({
+                'TA_Indicators':[
+                                # (TaType.BOLL_MACD,'60m',233),
+                                # (TaType.MACD,'60m',233),
+                                ], 
+                'isLong':False}) 
+        to_sell = cti.filter(context, data, context.portfolio.positions.keys())
+        to_sell = [stock for stock in to_sell if stock not in self.money_fund] # money fund only adjusted by buy method
+        to_sell_intraday = self.intradayShortFilter(context, data)
+        # to_sell_intraday = []
+        try:
+            to_sell = [stock for stock in to_sell if data[stock].close < data[stock].high_limit] # 涨停不卖
+        except:
+            pass
+
+        # ML check
+        # mlb = ML_biaoli_check()
+        # to_sell_biaoli = mlb.gauge_stocks(context.portfolio.positions.keys(), isLong=False)
+        to_sell_biaoli = []
+        
+        to_sell = list(set(to_sell+to_sell_biaoli+to_sell_intraday))
+        if to_sell:
+            self.log.info('准备卖出:\n' + join_list(["[%s]" % (show_stock(x)) for x in to_sell], ' ', 10))
+            self.adjust(context, data, to_sell)
+            # remove stocks from short gauge
+            sold_stocks = [stock for stock in to_sell if stock not in context.portfolio.positions.keys()] # make sure stock sold successfully
+            self.g.monitor_short_cm.displayMonitorMatrix(to_sell)
+            self.recordTrade(to_sell) # record all selling candidate
+            self.g.monitor_short_cm.removeGaugeStockList(sold_stocks)
+        self.g.intraday_long_stock = [stock for stock in self.g.intraday_long_stock if stock in context.portfolio.positions.keys()]
+
+    def intradayShortFilter(self, context, data):
+        cti_short_check = None
+        if context.current_dt.hour < 11:
+            cti_short_check = checkTAIndicator_OR({
+                'TA_Indicators':[
+                                # (TaType.BOLL,'60m',40),
+                                (TaType.BOLL_MACD,'60m',233),
+                                (TaType.MACD,'60m',233),
+                                (TaType.TRIX_STATUS, '60m', 100),
+                                ], 
+                'isLong':False})
+        elif context.current_dt.hour >= 14:
+            cti_short_check = checkTAIndicator_OR({
+                'TA_Indicators':[
+                                (TaType.BOLL_MACD,'60m',233),
+                                (TaType.MACD,'60m',233),
+                                # (TaType.BOLL,'60m',40),
+                                (TaType.TRIX_STATUS, '60m', 100),
+                                ], 
+                'isLong':False})            
+        else:
+            # pass
+            cti_short_check = checkTAIndicator_OR({
+                'TA_Indicators':[
+                                (TaType.BOLL_MACD,'60m',233),
+                                (TaType.MACD,'60m',233),
+                                # (TaType.BOLL,'60m',40),
+                                (TaType.TRIX_STATUS, '60m', 100),
+                                ], 
+                'isLong':False})
+        intraday_short_check = [stock for stock in context.portfolio.positions.keys() if stock in self.g.intraday_long_stock]
+        to_sell = cti_short_check.filter(context, data, intraday_short_check) if cti_short_check else []
+        return to_sell
+
+    def adjust(self, context, data, sell_stocks):
+        # 卖出在待卖股票列表中的股票
+        # 对于因停牌等原因没有卖出的股票则继续持有
+        for pindex in self.g.op_pindexs:
+            for stock in context.subportfolios[pindex].long_positions.keys():
+                if stock in sell_stocks:
+                    position = context.subportfolios[pindex].long_positions[stock]
+                    self.g.close_position(self, position, True, pindex)
+
+    def __str__(self):
+        return '股票调仓卖出规则：卖出在对应级别卖点'
+
+class Buy_stocks_chan(Buy_stocks_var):
+    def __init__(self, params):
+        Buy_stocks.__init__(self, params)
+        self.buy_count = params.get('buy_count', 3)
+        self.monitor_levels = params.get('monitor_levels', ['5d','1d','60m'])
+        self.pos_control = params.get('pos_control', 1.0)
+        self.daily_list = []
+        
+    def update_params(self, context, params):
+        self.buy_count = params.get('buy_count', 3)
+        self.pos_control = params.get('pos_control', 1.0)
+        
+    def handle_data(self, context, data):
+        if self.is_to_return:
+            self.log_warn('无法执行买入!! self.is_to_return 未开启')
+            return
+        if len([stock for stock in context.portfolio.positions if stock not in g.money_fund])==self.buy_count:
+            self.log.info("满仓等卖")
+            return
+
+        if context.current_dt.hour <= 10:
+            self.daily_list = self.g.monitor_buy_list
+            
+        if not self.daily_list:
+            self.log.info("现时无选股")
+            return
+
+        to_buy = self.daily_list
+        self.g.monitor_long_cm.updateGaugeStockList(newStockList=self.daily_list, levels=[self.monitor_levels[-1]])
+        # 技术分析用于不买在卖点
+        not_to_buy = self.dailyShortFilter(context, data, to_buy)
+        
+        self.daily_list = [stock for stock in self.daily_list if stock not in not_to_buy]
+
+        to_buy = [stock for stock in to_buy if stock not in not_to_buy] 
+        to_buy = [stock for stock in to_buy if stock not in context.portfolio.positions.keys()] 
+        to_buy = [stock for stock in self.g.monitor_buy_list if stock in to_buy]
+        try:
+            to_buy = [stock for stock in to_buy if data[stock].close > data[stock].low_limit] # 跌停不买
+        except:
+            pass
+        
+        to_buy = self.dailyLongFilter(context, data, to_buy)
+        
+        if to_buy:
+            buy_msg = '日内待买股:\n' + join_list(["[%s]" % (show_stock(x)) for x in to_buy], ' ', 10)
+            self.log.info(buy_msg)
+            self.adjust(context, data, to_buy)
+            bought_stocks = [stock for stock in context.portfolio.positions.keys() if stock in to_buy]
+            #transfer long gauge to short gauge
+            self.g.monitor_short_cm.appendStockList(self.g.monitor_long_cm.getGaugeStockList(bought_stocks))
+            self.g.monitor_long_cm.displayMonitorMatrix(to_buy)
+            self.recordTrade(bought_stocks)
+            self.send_port_info(context)
+        elif context.current_dt.hour >= 14:
+            self.adjust(context, data, [])
+            self.send_port_info(context)
+
+        self.g.intraday_long_stock = [stock for stock in self.g.intraday_long_stock if stock in context.portfolio.positions.keys()] # keep track of bought stocks
+        if context.current_dt.hour >= 14:
+            self.log.info('日内60m标准持仓:\n' + join_list(["[%s]" % (show_stock(x)) for x in self.g.intraday_long_stock], ' ', 10))
+    
+    def dailyLongFilter(self, context, data, to_buy):
+        to_buy_list = []
+        TA_Factor.global_var = self.g 
+        
+        cta = checkTAIndicator_OR({
+        'TA_Indicators':[
+                        (TaType.MACD,'60m',233),
+                        (TaType.BOLL_MACD, '60m', 233),
+                        ],
+        'isLong':True})
+        to_buy_intraday_list = cta.filter(context, data, to_buy)      
+
+        # intraday short check
+        intraday_not_to_buy = self.intradayShortFilter(context, data, to_buy_intraday_list+self.g.intraday_long_stock)
+        to_buy_intraday_list = [stock for stock in to_buy_intraday_list if stock not in intraday_not_to_buy]
+        
+        # 日内待选股票中排除日内出卖点
+        self.daily_list = [stock for stock in self.daily_list if stock not in intraday_not_to_buy] 
+        # combine with existing intraday long stocks
+        self.g.intraday_long_stock = list(set(self.g.intraday_long_stock + to_buy_intraday_list))
+
+        if context.current_dt.hour >= 14:
+            cta = checkTAIndicator_OR({
+            'TA_Indicators':[
+                            (TaType.RSI, '240m', 100),
+                            ],
+            'isLong':True})
+            to_buy_special_list = cta.filter(context, data, to_buy)
+            # combine with existing intraday long stocks
+            self.g.intraday_long_stock = list(set(self.g.intraday_long_stock + to_buy_special_list))            
+            
+            cta = checkTAIndicator_OR({
+            'TA_Indicators':[
+                            (TaType.MACD,'240m',233),
+                            (TaType.BOLL_MACD, '240m', 233),
+#                             (TaType.RSI, '240m', 100),
+                            (TaType.KDJ_CROSS, '240m', 100),
+                            ],
+            'isLong':True})
+            to_buy_list = cta.filter(context, data, to_buy)
+            
+            # ML check
+            # mlb = ML_biaoli_check()
+            # to_buy_list = mlb.gauge_stocks(to_buy_list, isLong=True)
+            
+            # 之前的日内选股的票排除掉如果被更大级别买点覆盖
+            self.g.intraday_long_stock = [stock for stock in self.g.intraday_long_stock if stock not in to_buy_list]        
+    
+        return to_buy_list + to_buy_intraday_list
+
+    def intradayShortFilter(self, context, data, to_buy):
+        cti_short_check = None
+        if context.current_dt.hour < 11:
+            cti_short_check = checkTAIndicator_OR({
+                'TA_Indicators':[
+                                (TaType.MACD,'60m',233),
+                                (TaType.BOLL_MACD,'60m',233),
+                                # (TaType.BOLL,'60m',40),
+                                (TaType.TRIX_STATUS, '60m', 100)
+                                ], 
+                'isLong':False})
+        elif context.current_dt.hour >= 14:
+            cti_short_check = checkTAIndicator_OR({
+                'TA_Indicators':[
+                                (TaType.MACD,'60m',233),
+                                (TaType.BOLL_MACD,'60m',233),
+                                # (TaType.BOLL,'60m',40),
+                                (TaType.TRIX_STATUS, '60m', 100)
+                                ], 
+                'isLong':False})  
+        else:
+            cti_short_check = checkTAIndicator_OR({
+                'TA_Indicators':[
+                                (TaType.MACD,'60m',233),
+                                (TaType.BOLL_MACD,'60m',233),
+                                # (TaType.BOLL,'60m',40),
+                                (TaType.TRIX_STATUS, '60m', 100)
+                                ], 
+                'isLong':False})  
+
+        not_to_buy = cti_short_check.filter(context, data, to_buy) if cti_short_check else []
+        return not_to_buy
+
+
+    def dailyShortFilter(self, context, data, to_buy):
+        remove_from_candidate = []
+        not_to_buy = []
+        cti_short_check = checkTAIndicator_OR({
+            'TA_Indicators':[
+                            # (TaType.MACD,'60m',233),
+                            # (TaType.BOLL_MACD,'60m',233),
+                            ], 
+            'isLong':False})
+        not_to_buy += cti_short_check.filter(context, data, to_buy)       
+    
+        if context.current_dt.hour < 11:
+            cti_short_check = checkTAIndicator_OR({
+                'TA_Indicators':[
+                                (TaType.MACD,'1d',233),
+                                (TaType.BOLL_MACD,'1d',233),
+                                (TaType.BOLL,'1d',40),
+                                (TaType.TRIX_STATUS, '1d', 100)], 
+                'isLong':False})
+            remove_from_candidate = cti_short_check.filter(context, data, to_buy) 
+            not_to_buy += remove_from_candidate
+        
+        elif context.current_dt.hour >= 14:
+            cti_short_check = checkTAIndicator_OR({
+                'TA_Indicators':[
+                                (TaType.MACD,'240m',233),
+                                (TaType.BOLL_MACD,'240m',233),
+                                (TaType.BOLL,'240m',40),
+                                (TaType.TRIX_STATUS, '240m', 100), 
+                                ], 
+                'isLong':False})
+            remove_from_candidate = cti_short_check.filter(context, data, to_buy)
+            not_to_buy += remove_from_candidate
+
+        not_to_buy += self.g.monitor_long_cm.filterUpTrendDownTrend(stock_list=to_buy, level_list=self.monitor_levels[1:], update_df=False)
+        not_to_buy += self.g.monitor_long_cm.filterUpTrendUpNode(stock_list=to_buy, level_list=self.monitor_levels[1:], update_df=False)
+        not_to_buy += self.g.monitor_long_cm.filterUpNodeDownTrend(stock_list=to_buy, level_list=self.monitor_levels[1:], update_df=False)
+        not_to_buy += self.g.monitor_long_cm.filterUpNodeUpNode(stock_list=to_buy, level_list=self.monitor_levels[1:], update_df=False)
+        
+        ## not_to_buy += self.g.monitor_long_cm.filterDownNodeUpNode(stock_list=to_buy, level_list=self.monitor_levels[1:], update_df=False)
+        not_to_buy = list(set(not_to_buy))
+        # 大级别卖点从待选股票中去掉
+#         if remove_from_candidate:
+#             self.g.monitor_long_cm.removeGaugeStockList(remove_from_candidate)
+#             self.g.monitor_buy_list = [stock for stock in self.g.monitor_buy_list if stock not in remove_from_candidate]
+        return not_to_buy
+
+    def after_trading_end(self, context):
+        self.g.sell_stocks = []
+        self.daily_list = []
+        
+    def __str__(self):
+        return '股票调仓买入规则：买在对应级别买点'
+            
+    
 class Sell_stocks_pair(Sell_stocks):
     def __init__(self,params):
         Sell_stocks.__init__(self, params)
@@ -409,6 +723,8 @@ class Relative_Index_Timing(Rule):
         self.N = params.get('N', 18)
         self.buy = params.get('buy', 0.7)
         self.sell = params.get('sell', -0.7)
+        self.period = params.get('correlation_period', 250)
+        self.strict_long = params.get('strict_long', False)
         self.default_index = self.market_list[0]
         self.rsrs_check = RSRS_Market_Timing({'market_list': self.market_list,
                                               'M':self.M,
@@ -416,6 +732,10 @@ class Relative_Index_Timing(Rule):
                                               'buy':self.buy,
                                               'sell':self.sell})
         self.isInitialized = False
+        
+    def update_params(self, context, params):
+        self.period = params.get('correlation_period', 250)
+        self.strict_long = params.get('strict_long', False)
         
     def before_trading_start(self, context):
         Rule.before_trading_start(self, context)
@@ -436,13 +756,12 @@ class Relative_Index_Timing(Rule):
         
     def build_stock_index_dict(self, context):
         # find the index for candidate stock by largest correlation
-        period = 250
         stock_symbol_list = [stock for stock in list(set(context.portfolio.positions.keys() + self.g.monitor_buy_list)) if stock not in g.money_fund]
         for stock in stock_symbol_list:
             current_max_corr = 0
-            stock_df = attribute_history(stock, period, '1d', 'close', df=False)
+            stock_df = attribute_history(stock, self.period, '1d', 'close', df=False)
             for idx in self.market_list:
-                index_df = attribute_history(idx, period, '1d', 'close', df=False)
+                index_df = attribute_history(idx, self.period, '1d', 'close', df=False)
                 corr = np.corrcoef(stock_df['close'],index_df['close'])[0,1]
                 if corr >= current_max_corr:
                     self.g.stock_index_dict[stock] = idx
@@ -463,9 +782,44 @@ class Relative_Index_Timing(Rule):
                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
                 if stock in self.g.monitor_buy_list:
                     self.g.monitor_buy_list.remove(stock)
-#             if self.g.market_timing_check[market] != 1:
-#                 if stock in self.g.monitor_buy_list:
-#                     self.g.monitor_buy_list.remove(stock)
+            if self.g.market_timing_check[market] != 1 and self.strict_long:
+                if stock in self.g.monitor_buy_list:
+                    self.g.monitor_buy_list.remove(stock)
         self.log.info("candidate stocks: {0} closed position: {1}".format(self.g.monitor_buy_list, self.g.sell_stocks))
     def __str__(self):
         return '股票精确择时'
+    
+    
+class ML_Stock_Timing(Rule):
+    def __init__(self, params):
+        self.ml_predict_file_path = params.get('ml_file_path', None)
+    
+    def handle_data(self, context, data):
+        today_date = context.current_dt.date()
+        try:
+            trading_list = json.loads(read_file(self.ml_predict_file_path).decode())
+            trading_details = trading_list[str(today_date)]
+            trade_dict = {}
+            for trades in trading_details:
+                stock, buy, sell = trades
+                trade_dict[stock] = (buy, sell)
+            stocks_to_check = [stock for stock in list(set(context.portfolio.positions.keys() + self.g.monitor_buy_list)) if stock not in g.money_fund]
+            for stock in stocks_to_check:
+                (buy, sell) = trade_dict[stock]
+                if sell==1:
+                    self.g.sell_stocks.append(stock)
+                    if stock in self.g.monitor_buy_list:
+                        self.g.monitor_buy_list.remove(stock)
+                    if stock in context.portfolio.positions.keys():
+                        self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+            # make sure ML predict use check_status
+        except:
+            self.log.warn("ML prediction file missing: {0}".format(self.ml_predict_file_path))
+            return
+            
+        
+    def after_trading_end(self, context):
+        Rule.after_trading_end(self, context)
+        
+    def __str__(self):
+        return '股票AI择时'

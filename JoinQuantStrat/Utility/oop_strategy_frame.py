@@ -499,6 +499,11 @@ class Filter_query(Rule):
 class Filter_stock_list(Rule):
     def filter(self, context, data, stock_list):
         return None
+    
+    
+class Early_Filter_stock_list(Rule):
+    def filter(self, context, stock_list):
+        return None
 
 '''===================================调仓相关============================'''
 
