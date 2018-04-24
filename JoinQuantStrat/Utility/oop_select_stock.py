@@ -66,6 +66,7 @@ class Pick_stocks2(Group_rules):
         if self.file_path:
             checking_stocks = [stock for stock in list(set(self.g.buy_stocks+context.portfolio.positions.keys())) if stock not in g.money_fund]
             write_file(self.file_path, ",".join(checking_stocks))
+            self.log.info('file written:{0}'.format(self.file_path))
         
 
     def __str__(self):
@@ -302,14 +303,18 @@ class Pick_rank_sector(Create_stock_list):
         self.useIntradayData = params.get('useIntradayData', False)
         self.useAvg = params.get('useAvg', True)
         self.avgPeriod = params.get('avgPeriod', 5)
+        self.period_frequency = params.get('period_frequecnty', 'W')
         self.new_list = []
+        
+    def update_params(self, context, params):
+        self.period_frequency = params.get('period_frequecnty', 'W')        
         
     def filter(self, context, data):
         return self.new_list
     
     def before_trading_start(self, context):
         # new_list = ['002714.XSHE', '603159.XSHG', '603703.XSHG','000001.XSHE','000002.XSHE','600309.XSHG','002230.XSHE','600392.XSHG','600291.XSHG']
-        if self.g.isFirstTradingDayOfWeek(context) or not self.g.buy_stocks or self.isDaily:
+        if self.g.isFirstNTradingDayOfPeriod(context, num_of_day=1, period=self.period_frequency) or not self.g.buy_stocks or self.isDaily:
             self.log.info("选取前 %s%% 板块" % str(self.sector_limit_pct))
             ss = SectorSelection(limit_pct=self.sector_limit_pct, 
                     isStrong=self.strong_sector, 
@@ -359,10 +364,12 @@ class Pick_Pair_Trading(Create_stock_list):
         self.isIndex = params.get('isIndex', False)
         self.get_pair = params.get('get_pair', False)
         self.return_pair = params.get('return_pair', 1)
+        self.period_frequency = params.get('period_frequecnty', 'M')
         self.new_pair = []
     
-    def filter(self, context, data):
-        pass
+    def update_params(self, context, params):
+        self.period_frequency = params.get('period_frequecnty', 'M')
+        
     
     def before_trading_start(self, context):
         initial_list = []
@@ -370,7 +377,7 @@ class Pick_Pair_Trading(Create_stock_list):
             initial_list += get_index_stocks(index) if self.isIndex else get_industry_stocks(index) 
         initial_list = list(set(initial_list))
         
-        if self.get_pair and (self.g.isFirstTradingDayOfMonth(context) or not self.new_pair):    
+        if self.get_pair and (self.g.isFirstNTradingDayOfPeriod(context, num_of_day=1, period=self.period_frequency) or not self.new_pair):    
             data_frame = history(self.pair_period, '1d', 'close', security_list=initial_list, df=True)
             pto = PairTradingOls({'return_pair': self.return_pair})
             self.new_pair = pto.get_top_pair(data_frame)
@@ -389,20 +396,27 @@ class Filter_Pair_Trading(Filter_stock_list):
         self.pair_period = params.get('pair_period', 250)
         self.pair_num_limit = params.get('pair_num_limit', 10)
         self.return_pair = params.get('return_pair', 1)
+        self.period_frequency = params.get('period_frequecnty', 'M')    
         self.new_pair = []
+        
+    def update_params(self, context, params):
+        self.period_frequency = params.get('period_frequecnty', 'M')        
         
     def filter(self, context, data, stock_list):
         self.log.info('配对筛股:\n' + join_list(["[%s]" % (show_stock(x)) for x in stock_list[-10:]], ' ', 10))
         self.log.info('总数: {0}'.format(len(stock_list)))
         if len(stock_list) < self.pair_num_limit:
             return []
-        
-        if self.g.isFirstTradingDayOfMonth(context) or not self.new_pair:    
+        pto = PairTradingOls({'return_pair': self.return_pair})
+        if self.g.isFirstNTradingDayOfPeriod(context, num_of_day=1, period=self.period_frequency) or not self.new_pair:    
             data_frame = history(self.pair_period, '1d', 'close', security_list=stock_list, df=True)
-            pto = PairTradingOls({'return_pair': self.return_pair})
             self.new_pair = pto.get_top_pair(data_frame)
             if not self.new_pair:
                 return []
+            self.g.pair_zscore = pto.get_regression_ratio(data_frame, self.new_pair)
+            self.log.info("pair stocks:{0}, pair_zscore: {1}".format(self.new_pair, self.g.pair_zscore))
+        else:
+            data_frame = history(self.pair_period, '1d', 'close', security_list=np.array(self.new_pair).flatten().tolist(), df=True)
             self.g.pair_zscore = pto.get_regression_ratio(data_frame, self.new_pair)
             self.log.info("pair stocks:{0}, pair_zscore: {1}".format(self.new_pair, self.g.pair_zscore))
         return np.array(self.new_pair).flatten().tolist()
@@ -420,13 +434,17 @@ class Filter_Rank_Sector(Early_Filter_stock_list):
         self.useIntradayData = params.get('useIntradayData', False)
         self.useAvg = params.get('useAvg', True)
         self.avgPeriod = params.get('avgPeriod', 5)
+        self.period_frequency = params.get('period_frequecnty', 'M')   
         self.new_list = []
+    
+    def update_params(self, context, params):
+        self.period_frequency = params.get('period_frequecnty', 'M')    
     
     def filter(self, context, stock_list):
         return [stock for stock in stock_list if stock in self.new_list]
 
     def before_trading_start(self, context):
-        if self.g.isFirstTradingDayOfMonth(context) or not self.new_list or self.isDaily:
+        if self.g.isFirstNTradingDayOfPeriod(context, num_of_day=1, period=self.period_frequency) or not self.new_list or self.isDaily:
             self.log.info("选取前 %s%% 板块" % str(self.sector_limit_pct))
             ss = SectorSelection(limit_pct=self.sector_limit_pct, 
                     isStrong=self.strong_sector, 
@@ -447,10 +465,12 @@ class Filter_Week_Day_Long_Pivot_Stocks(Filter_stock_list):
         Filter_stock_list.__init__(self, params)
         self.monitor_levels = params.get('monitor_levels', ['5d','1d','60m'])
         self.enable_filter = params.get('enable_filter', True)
+        self.period_frequency = params.get('period_frequecnty', 'W')
         
     def update_params(self, context, params):
         Filter_stock_list.update_params(self, context, params)
         self.enable_filter = params.get('enable_filter', True)
+        self.period_frequency = params.get('period_frequecnty', 'W')
         
     def filter(self, context, data, stock_list):
         # 新选出票 + 过去一周选出票 + 过去一周强势票
@@ -459,7 +479,7 @@ class Filter_Week_Day_Long_Pivot_Stocks(Filter_stock_list):
         # combined_list = list(set(stock_list))
         
         # update only on the first trading day of the week for 5d status
-        if self.g.isFirstTradingDayOfWeek(context):
+        if self.g.isFirstNTradingDayOfPeriod(context, num_of_day=1, period=self.period_frequency):
             self.log.info("本周第一个交易日, 更新周信息")
             if self.g.monitor_long_cm:
                 self.g.monitor_long_cm = ChanMatrix(combined_list, isAnal=False)
@@ -589,6 +609,8 @@ class Filter_common(Filter_stock_list):
                 stock_list = [stock for stock in stock_list if stock[:6] not in ban_shares]
         except Exception as e:
             self.log.error(str(e))
+            
+        self.log.info('选股过滤:\n' + join_list(["[%s]" % (show_stock(x)) for x in stock_list], ' ', 10))
         return stock_list
 
     #获取解禁股列表

@@ -173,17 +173,26 @@ class Global_variable(object):
                     false_count = 0
         return count if init else -count  # 统计结束，返回结果。init为True返回正数，为False返回负数。
     
-    def isFirstTradingDayOfWeek(self, context):
-        trading_days = get_trade_days(end_date=context.current_dt.date(), count=2)
+    def isFirstTradingDayOfWeek(self, context, num_of_day=1):
+        trading_days = get_trade_days(end_date=context.current_dt.date(), count=num_of_day+1)
         today = trading_days[-1]
-        last_trading_day = trading_days[-2]
+        last_trading_day = trading_days[-(num_of_day+1)]
         return (today.isocalendar()[1] != last_trading_day.isocalendar()[1])
         
-    def isFirstTradingDayOfMonth(self, context):
-        trading_days = get_trade_days(end_date=context.current_dt.date(), count=2)
+    def isFirstTradingDayOfMonth(self, context, num_of_day=1):
+        trading_days = get_trade_days(end_date=context.current_dt.date(), count=num_of_day+1)
         today = trading_days[-1]
-        last_trading_day = trading_days[-2]
+        last_trading_day = trading_days[-(num_of_day+1)]
         return (today.month != last_trading_day.month)
+    
+    def isFirstNTradingDayOfPeriod(self, context, num_of_day=1, period='W'):
+        if period == 'W':
+            return self.isFirstTradingDayOfWeek(context, num_of_day)
+        elif period == 'M':
+            return self.isFirstTradingDayOfMonth(context, num_of_day)
+        else:
+            print ("Invalid period return FALSE")
+            return False
     
     def getCurrentPosRatio(self, context):
         total_value = context.portfolio.total_value

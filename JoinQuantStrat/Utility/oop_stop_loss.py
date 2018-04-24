@@ -280,7 +280,7 @@ class equity_curve_protect(Rule):
                         self.is_day_curve_protect = True
                         self.is_to_return=True
         if self.is_day_curve_protect:
-            # self.g.curve_protect = True
+            self.g.curve_protect = True
             self.g.clear_position(self, context, self.g.op_pindexs)
 #             self.port_value_record = []
             self.is_day_curve_protect = False
@@ -293,7 +293,7 @@ class equity_curve_protect(Rule):
         if len(self.port_value_record) > self.day_count:
             self.port_value_record.pop(0)
         self.is_to_return=False
-        # self.g.curve_protect = False
+        self.g.curve_protect = False
 
     def __str__(self):
         return '大盘资金比例止损器:[参数: %s日前资产] [保护百分数: %s]' % (

@@ -55,12 +55,14 @@ class Period_condition(Weight_Base):
         Weight_Base.__init__(self, params)
         # 调仓日计数器，单位：日
         self.period = params.get('period', 3)
+        self.on_clear_wait_days = params.get('clear_wait', 2)
         self.day_count = 0
         self.mark_today = {}
 
     def update_params(self, context, params):
         Weight_Base.update_params(self, context, params)
         self.period = params.get('period', self.period)
+        self.on_clear_wait_days = params.get('clear_wait', 2)
         self.mark_today = {}
 
     def handle_data(self, context, data):
@@ -83,9 +85,9 @@ class Period_condition(Weight_Base):
     def on_clear_position(self, context, new_pindexs=[0]):
         self.day_count = 0
         self.mark_today = {}
-        # if self.g.curve_protect:
-        #     self.day_count = self.period-2
-        #     self.g.curve_protect = False
+        if self.g.curve_protect:
+            self.day_count = self.period-self.on_clear_wait_days
+            self.g.curve_protect = False
         pass
 
     def __str__(self):
@@ -116,6 +118,8 @@ class Sell_stocks(Rule):
                                 ],
                 'isLong':False})
             to_sell = cta.filter(context, data,to_sell)
+        else:
+            to_sell = []
         self.g.monitor_buy_list = [stock for stock in self.g.monitor_buy_list if stock not in to_sell]
         self.adjust(context, data, self.g.monitor_buy_list)
 
@@ -288,10 +292,11 @@ class Buy_stocks_var(Buy_stocks):
     def adjust_new_pos(self, context, data, buy_stocks):
         for pindex in self.g.op_pindexs:
             position_count = len([stock for stock in context.subportfolios[pindex].positions.keys() if stock not in self.money_fund and stock not in buy_stocks])
+            extra_buy_stocks = [stock for stock in buy_stocks if stock not in context.subportfolios[pindex].positions.keys()]
             trade_ratio = {}
             if self.buy_count > position_count:
                 buy_num = self.buy_count - position_count
-                trade_ratio = self.pc_var.buy_the_stocks(context, buy_stocks[:buy_num])
+                trade_ratio = self.pc_var.buy_the_stocks(context, extra_buy_stocks[:buy_num])
             else:
                 trade_ratio = self.pc_var.func_rebalance(context)
 
@@ -320,12 +325,13 @@ class Buy_stocks_var(Buy_stocks):
             # exclude money_fund
             holding_positon_exclude_money_fund = [stock for stock in context.subportfolios[pindex].positions.keys() if stock not in self.money_fund]
             position_count = len(holding_positon_exclude_money_fund)
+            extra_buy_stocks = [stock for stock in buy_stocks if stock not in context.subportfolios[pindex].positions.keys()]
             trade_ratio = {}
             if self.buy_count <= position_count+to_buy_num: # 满仓数
                 buy_num = self.buy_count - position_count
-                trade_ratio = self.pc_var.buy_the_stocks(context, holding_positon_exclude_money_fund+buy_stocks[:buy_num])
+                trade_ratio = self.pc_var.buy_the_stocks(context, holding_positon_exclude_money_fund+extra_buy_stocks[:buy_num])
             else: # 分仓数
-                trade_ratio = self.pc_var.buy_the_stocks(context, holding_positon_exclude_money_fund+buy_stocks)
+                trade_ratio = self.pc_var.buy_the_stocks(context, holding_positon_exclude_money_fund+extra_buy_stocks)
 
             current_ratio = self.g.getCurrentPosRatio(context)
             order_stocks = self.getOrderByRatio(current_ratio, trade_ratio)
@@ -669,18 +675,14 @@ class Sell_stocks_pair(Sell_stocks):
             i = 0
             while i < len(self.g.monitor_buy_list) and i < self.buy_count:
                 if self.g.pair_zscore[int(i/2)] > 1:
-                    final_buy_list.append(self.g.monitor_buy_list[i])  
+                    final_buy_list.append(self.g.monitor_buy_list[i])
                 elif self.g.pair_zscore[int(i/2)] < -1:
                     final_buy_list.append(self.g.monitor_buy_list[i+1])
-                else:
-                    if self.g.pair_zscore[int(i/2)] >= 0:
-                        final_buy_list = final_buy_list + self.g.monitor_buy_list
-                    else:
-                        final_buy_list = final_buy_list + self.g.monitor_buy_list
                 i += 2
-            self.adjust(context, data, final_buy_list)
-        else:
-            self.adjust(context, data, [])
+                
+            for stock in context.portfolio.positions.keys():
+                if stock not in final_buy_list:
+                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
 
     def __str__(self):
         return '股票调仓买入规则：配对交易卖出'
