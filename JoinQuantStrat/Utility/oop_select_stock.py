@@ -303,11 +303,11 @@ class Pick_rank_sector(Create_stock_list):
         self.useIntradayData = params.get('useIntradayData', False)
         self.useAvg = params.get('useAvg', True)
         self.avgPeriod = params.get('avgPeriod', 5)
-        self.period_frequency = params.get('period_frequecnty', 'W')
+        self.period_frequency = params.get('period_frequency', 'W')
         self.new_list = []
         
     def update_params(self, context, params):
-        self.period_frequency = params.get('period_frequecnty', 'W')        
+        self.period_frequency = params.get('period_frequency', 'W')        
         
     def filter(self, context, data):
         return self.new_list
@@ -364,11 +364,11 @@ class Pick_Pair_Trading(Create_stock_list):
         self.isIndex = params.get('isIndex', False)
         self.get_pair = params.get('get_pair', False)
         self.return_pair = params.get('return_pair', 1)
-        self.period_frequency = params.get('period_frequecnty', 'M')
+        self.period_frequency = params.get('period_frequency', 'M')
         self.new_pair = []
     
     def update_params(self, context, params):
-        self.period_frequency = params.get('period_frequecnty', 'M')
+        self.period_frequency = params.get('period_frequency', 'M')
         
     
     def before_trading_start(self, context):
@@ -396,11 +396,11 @@ class Filter_Pair_Trading(Filter_stock_list):
         self.pair_period = params.get('pair_period', 250)
         self.pair_num_limit = params.get('pair_num_limit', 10)
         self.return_pair = params.get('return_pair', 1)
-        self.period_frequency = params.get('period_frequecnty', 'M')    
+        self.period_frequency = params.get('period_frequency', 'M')    
         self.new_pair = []
         
     def update_params(self, context, params):
-        self.period_frequency = params.get('period_frequecnty', 'M')        
+        self.period_frequency = params.get('period_frequency', 'M')        
         
     def filter(self, context, data, stock_list):
         self.log.info('配对筛股:\n' + join_list(["[%s]" % (show_stock(x)) for x in stock_list[-10:]], ' ', 10))
@@ -434,11 +434,11 @@ class Filter_Rank_Sector(Early_Filter_stock_list):
         self.useIntradayData = params.get('useIntradayData', False)
         self.useAvg = params.get('useAvg', True)
         self.avgPeriod = params.get('avgPeriod', 5)
-        self.period_frequency = params.get('period_frequecnty', 'M')   
+        self.period_frequency = params.get('period_frequency', 'M')
         self.new_list = []
     
     def update_params(self, context, params):
-        self.period_frequency = params.get('period_frequecnty', 'M')    
+        self.period_frequency = params.get('period_frequency', 'M')    
     
     def filter(self, context, stock_list):
         return [stock for stock in stock_list if stock in self.new_list]
@@ -465,12 +465,12 @@ class Filter_Week_Day_Long_Pivot_Stocks(Filter_stock_list):
         Filter_stock_list.__init__(self, params)
         self.monitor_levels = params.get('monitor_levels', ['5d','1d','60m'])
         self.enable_filter = params.get('enable_filter', True)
-        self.period_frequency = params.get('period_frequecnty', 'W')
+        self.period_frequency = params.get('period_frequency', 'W')
         
     def update_params(self, context, params):
         Filter_stock_list.update_params(self, context, params)
         self.enable_filter = params.get('enable_filter', True)
-        self.period_frequency = params.get('period_frequecnty', 'W')
+        self.period_frequency = params.get('period_frequency', 'W')
         
     def filter(self, context, data, stock_list):
         # 新选出票 + 过去一周选出票 + 过去一周强势票
