@@ -317,7 +317,7 @@ class Pick_rank_sector(Create_stock_list):
     
     def before_trading_start(self, context):
         # new_list = ['002714.XSHE', '603159.XSHG', '603703.XSHG','000001.XSHE','000002.XSHE','600309.XSHG','002230.XSHE','600392.XSHG','600291.XSHG']
-        if self.g.isFirstNTradingDayOfPeriod(context, num_of_day=1, period=self.period_frequency) or not self.g.buy_stocks or self.isDaily:
+        if self.g.isFirstNTradingDayOfPeriod(context, num_of_day=1, period=self.period_frequency) or not self.new_list or self.isDaily:
             self.log.info("选取前 %s%% 板块" % str(self.sector_limit_pct))
             ss = SectorSelection(limit_pct=self.sector_limit_pct, 
                     isStrong=self.strong_sector, 
