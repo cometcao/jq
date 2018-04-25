@@ -331,7 +331,7 @@ class Pick_rank_sector(Create_stock_list):
         return self.new_list
     
     def after_trading_end(self, context):
-        self.new_list = []
+        pass
     
     def __str__(self):
         if self.strong_sector:
