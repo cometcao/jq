@@ -164,7 +164,7 @@ class Buy_stocks(Rule):
             if self.use_long_filter:
                 self.to_buy = self.ta_long_filter(context, data, self.to_buy) 
             self.adjust(context, data, self.to_buy)
-        self.send_port_info(context)
+            self.send_port_info(context)
 
     def ta_long_filter(self, context, data, to_buy):
         cta = checkTAIndicator_OR({
