@@ -678,6 +678,9 @@ class Sell_stocks_pair(Sell_stocks):
                     final_buy_list.append(self.g.monitor_buy_list[i])
                 elif self.g.pair_zscore[int(i/2)] < -1:
                     final_buy_list.append(self.g.monitor_buy_list[i+1])
+                elif self.g.pair_zscore[int(i/2)] >= 0:
+                    final_buy_list.append(self.g.monitor_buy_list[i])
+                    final_buy_list.append(self.g.monitor_buy_list[i+1])
                 i += 2
                 
             for stock in context.portfolio.positions.keys():

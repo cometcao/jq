@@ -177,32 +177,32 @@ class SectorSelection(object):
     
     def gaugeStockUpTrendStrength_MA(self, stock, isWeighted=True, index=-1):
         if index == -1:
-            stock_df = self.getlatest_df(stock, self.period, ['close','paused'], skip_paused=False, df_flag=True)
-            MA_5 = self.simple_moving_avg(stock_df.close.values, 5)
-            MA_13 = self.simple_moving_avg(stock_df.close.values, 13)
-            MA_21 = self.simple_moving_avg(stock_df.close.values, 21)
-            MA_34 = self.simple_moving_avg(stock_df.close.values, 34)
-            MA_55 = self.simple_moving_avg(stock_df.close.values, 55)
-            MA_89 = self.simple_moving_avg(stock_df.close.values, 89)
-            MA_144 = self.simple_moving_avg(stock_df.close.values, 144)
-            MA_233 = self.simple_moving_avg(stock_df.close.values, 233)
-            if stock_df.empty or stock_df.paused[index]: # paused we need to remove it from calculation
+            stock_df = self.getlatest_df(stock, self.period, ['close','paused'], skip_paused=False, df_flag=False)
+            MA_5 = self.simple_moving_avg(stock_df['close'], 5)
+            MA_13 = self.simple_moving_avg(stock_df['close'], 13)
+            MA_21 = self.simple_moving_avg(stock_df['close'], 21)
+            MA_34 = self.simple_moving_avg(stock_df['close'], 34)
+            MA_55 = self.simple_moving_avg(stock_df['close'], 55)
+            MA_89 = self.simple_moving_avg(stock_df['close'], 89)
+            MA_144 = self.simple_moving_avg(stock_df['close'], 144)
+            MA_233 = self.simple_moving_avg(stock_df['close'], 233)
+            if len(stock_df['paused'])==0 or stock_df['paused'][index]: # paused we need to remove it from calculation
                 return -1 
-            elif stock_df.close[index] < MA_5 or np.isnan(MA_5):
+            elif stock_df['close'][index] < MA_5 or np.isnan(MA_5):
                 return 0 if isWeighted else 1
-            elif stock_df.close[index] < MA_13 or np.isnan(MA_13):
+            elif stock_df['close'][index] < MA_13 or np.isnan(MA_13):
                 return 5 if isWeighted else 2
-            elif stock_df.close[index] < MA_21 or np.isnan(MA_21):
+            elif stock_df['close'][index] < MA_21 or np.isnan(MA_21):
                 return 13 if isWeighted else 3
-            elif stock_df.close[index] < MA_34 or np.isnan(MA_34):
+            elif stock_df['close'][index] < MA_34 or np.isnan(MA_34):
                 return 21 if isWeighted else 4
-            elif stock_df.close[index] < MA_55 or np.isnan(MA_55):
+            elif stock_df['close'][index] < MA_55 or np.isnan(MA_55):
                 return 34 if isWeighted else 5
-            elif stock_df.close[index] < MA_89 or np.isnan(MA_89):
+            elif stock_df['close'][index] < MA_89 or np.isnan(MA_89):
                 return 55 if isWeighted else 6
-            elif stock_df.close[index] < MA_144 or np.isnan(MA_144):
+            elif stock_df['close'][index] < MA_144 or np.isnan(MA_144):
                 return 89 if isWeighted else 7
-            elif stock_df.close[index] < MA_233 or np.isnan(MA_233):
+            elif stock_df['close'][index] < MA_233 or np.isnan(MA_233):
                 return 144 if isWeighted else 8
             else:
                 return 233 if isWeighted else 9
@@ -210,15 +210,15 @@ class SectorSelection(object):
             stock_df = MA_5 = MA_13 = MA_21 = MA_34 = MA_55 = MA_89 = MA_144 = MA_233 = None
             try:
                 if stock not in self.stock_data_buffer:
-                    stock_df = self.getlatest_df(stock, self.period, ['close','paused'], skip_paused=False, df_flag=True)
-                    MA_5 = talib.SMA(stock_df.close.values, 5)
-                    MA_13 = talib.SMA(stock_df.close.values, 13)
-                    MA_21 = talib.SMA(stock_df.close.values, 21)
-                    MA_34 = talib.SMA(stock_df.close.values, 34)
-                    MA_55 = talib.SMA(stock_df.close.values, 55)
-                    MA_89 = talib.SMA(stock_df.close.values, 89)
-                    MA_144 = talib.SMA(stock_df.close.values, 144)
-                    MA_233 = talib.SMA(stock_df.close.values, 233)
+                    stock_df = self.getlatest_df(stock, self.period, ['close','paused'], skip_paused=False, df_flag=False)
+                    MA_5 = talib.SMA(stock_df['close'], 5)
+                    MA_13 = talib.SMA(stock_df['close'], 13)
+                    MA_21 = talib.SMA(stock_df['close'], 21)
+                    MA_34 = talib.SMA(stock_df['close'], 34)
+                    MA_55 = talib.SMA(stock_df['close'], 55)
+                    MA_89 = talib.SMA(stock_df['close'], 89)
+                    MA_144 = talib.SMA(stock_df['close'], 144)
+                    MA_233 = talib.SMA(stock_df['close'], 233)
                     self.stock_data_buffer[stock]=[stock_df, MA_5, MA_13, MA_21, MA_34, MA_55, MA_89, MA_144, MA_233]
                 else:
                     stock_df = self.stock_data_buffer[stock][0]
@@ -233,23 +233,23 @@ class SectorSelection(object):
             except Exception as e:
                 print (str(e))
                 return -1
-            if stock_df.paused[index]: # paused we need to remove it from calculation
+            if len(stock_df['paused'])==0 or stock_df['paused'][index]: # paused we need to remove it from calculation
                 return -1 
-            elif stock_df.close[index] < MA_5[index] or np.isnan(MA_5[index]):
+            elif stock_df['close'][index] < MA_5[index] or np.isnan(MA_5[index]):
                 return 0 if isWeighted else 1
-            elif stock_df.close[index] < MA_13[index] or np.isnan(MA_13[index]):
+            elif stock_df['close'][index] < MA_13[index] or np.isnan(MA_13[index]):
                 return 5 if isWeighted else 2
-            elif stock_df.close[index] < MA_21[index] or np.isnan(MA_21[index]):
+            elif stock_df['close'][index] < MA_21[index] or np.isnan(MA_21[index]):
                 return 13 if isWeighted else 3
-            elif stock_df.close[index] < MA_34[index] or np.isnan(MA_34[index]):
+            elif stock_df['close'][index] < MA_34[index] or np.isnan(MA_34[index]):
                 return 21 if isWeighted else 4
-            elif stock_df.close[index] < MA_55[index] or np.isnan(MA_55[index]):
+            elif stock_df['close'][index] < MA_55[index] or np.isnan(MA_55[index]):
                 return 34 if isWeighted else 5
-            elif stock_df.close[index] < MA_89[index] or np.isnan(MA_89[index]):
+            elif stock_df['close'][index] < MA_89[index] or np.isnan(MA_89[index]):
                 return 55 if isWeighted else 6
-            elif stock_df.close[index] < MA_144[index] or np.isnan(MA_144[index]):
+            elif stock_df['close'][index] < MA_144[index] or np.isnan(MA_144[index]):
                 return 89 if isWeighted else 7
-            elif stock_df.close[index] < MA_233[index] or np.isnan(MA_233[index]):
+            elif stock_df['close'][index] < MA_233[index] or np.isnan(MA_233[index]):
                 return 144 if isWeighted else 8
             else:
                 return 233 if isWeighted else 9
@@ -261,7 +261,7 @@ class SectorSelection(object):
     def getlatest_df(self, stock, count, fields, skip_paused=True, df_flag = True):
 #         df = attribute_history(stock, count, '1d', fields, df=df_flag)
         df = get_data(stock, count, level='1d', fields=fields, skip_paused=skip_paused, df_flag=df_flag, isAnal=self.isAnal)
-        if df.empty:
+        if df_flag and df.empty:
             return df
         if self.useIntradayData:
             containPaused = 'paused' in fields
@@ -282,7 +282,7 @@ class SectorSelection(object):
                 try:
                     df = df.append(latest_stock_data, verify_integrity=True) # True
                 except:
-                    print "stock %s has invalid history data" % stock 
+                    print ("stock {0} has invalid history data".format(stock))
             else:
                 final_fields = []
                 if isinstance(fields, basestring):

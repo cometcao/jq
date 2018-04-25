@@ -16,6 +16,8 @@ from sector_selection import *
 from herd_head import *
 from ml_factor_rank import *
 from pair_trading_ols import *
+from value_factor_lib import *
+from quant_lib import *
 
 
 '''=========================选股规则相关==================================='''
@@ -234,8 +236,9 @@ class Filter_FX_data(Early_Filter_stock_list):
         self.value_factor = value_factor_lib()
     
     def filter(self, context, stock_list):
-        import datetime as dt
-        statsDate = context.current_dt.date() - dt.timedelta(1)
+#         import datetime as dt
+#         statsDate = context.current_dt.date() - dt.timedelta(1)
+        statsDate = context.previous_date
         #获取坏股票列表，将会剔除
         bad_stock_list = self.quantlib.fun_get_bad_stock_list(statsDate)
         # 低估值策略
@@ -610,7 +613,7 @@ class Filter_common(Filter_stock_list):
         except Exception as e:
             self.log.error(str(e))
             
-        self.log.info('选股过滤:\n' + join_list(["[%s]" % (show_stock(x)) for x in stock_list], ' ', 10))
+        self.log.info('选股过滤:\n' + join_list(["[%s]" % (show_stock(x)) for x in stock_list[:10]], ' ', 10))
         return stock_list
 
     #获取解禁股列表

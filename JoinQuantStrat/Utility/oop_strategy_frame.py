@@ -187,8 +187,10 @@ class Global_variable(object):
     
     def isFirstNTradingDayOfPeriod(self, context, num_of_day=1, period='W'):
         if period == 'W':
+            print ("Weekly Update Data with num {0}".format(num_of_day))
             return self.isFirstTradingDayOfWeek(context, num_of_day)
         elif period == 'M':
+            print ("Monthly Update Data with num {0}".format(num_of_day))
             return self.isFirstTradingDayOfMonth(context, num_of_day)
         else:
             print ("Invalid period return FALSE")
