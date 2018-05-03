@@ -365,6 +365,7 @@ class Pick_Pair_Trading(Create_stock_list):
         self.pair_period = params.get('pair_period', 250)
         self.init_index_list = params.get('init_index_list', ['801010', '801780', '801790'])
         self.isIndex = params.get('isIndex', False)
+        self.input_as_list = params.get('input_as_list', False)
         self.get_pair = params.get('get_pair', False)
         self.return_pair = params.get('return_pair', 1)
         self.period_frequency = params.get('period_frequency', 'M')
@@ -375,6 +376,9 @@ class Pick_Pair_Trading(Create_stock_list):
         
     
     def before_trading_start(self, context):
+        if self.input_as_list:
+            return list(set(self.init_index_list))
+        
         initial_list = []
         for index in self.init_index_list:
             initial_list += get_index_stocks(index) if self.isIndex else get_industry_stocks(index) 

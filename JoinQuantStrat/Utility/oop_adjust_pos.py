@@ -156,6 +156,10 @@ class Buy_stocks(Rule):
         self.buy_count = params.get('buy_count', self.buy_count)
 
     def handle_data(self, context, data):
+        if self.is_to_return:
+            self.log_warn('无法执行买入!! self.is_to_return 未开启')
+            return        
+
         self.to_buy = self.g.monitor_buy_list
         self.log.info("待选股票: "+join_list([show_stock(stock) for stock in self.to_buy], ' ', 10))
         if self.use_short_filter:
@@ -679,9 +683,11 @@ class Sell_stocks_pair(Sell_stocks):
                     final_buy_list.append(self.g.monitor_buy_list[i])
                 elif self.g.pair_zscore[int(i/2)] < -1:
                     final_buy_list.append(self.g.monitor_buy_list[i+1])
-                elif self.g.pair_zscore[int(i/2)] >= 0:
-                    final_buy_list.append(self.g.monitor_buy_list[i])
-                    final_buy_list.append(self.g.monitor_buy_list[i+1])
+                else: 
+#                     self.g.pair_zscore[int(i/2)] >= 0:
+#                     final_buy_list.append(self.g.monitor_buy_list[i])
+#                     final_buy_list.append(self.g.monitor_buy_list[i+1])
+                    pass
                 i += 2
                 
             for stock in context.portfolio.positions.keys():
@@ -706,10 +712,13 @@ class Buy_stocks_pair(Buy_stocks_var):
                 elif self.g.pair_zscore[int(i/2)] < -1:
                     final_buy_list.append(self.g.monitor_buy_list[i+1])
                 else:
-                    if self.g.pair_zscore[int(i/2)] >= 0:
-                        final_buy_list = final_buy_list + self.g.monitor_buy_list
-                    else:
-                        final_buy_list = final_buy_list + self.g.monitor_buy_list
+                    
+#                     if self.g.pair_zscore[int(i/2)] >= 0:
+#                         final_buy_list = final_buy_list + self.g.monitor_buy_list
+#                     else:
+#                         final_buy_list = final_buy_list + self.g.monitor_buy_list
+                    pass
+                    
                 i += 2
             self.adjust(context, data, final_buy_list)
         else:
@@ -810,6 +819,7 @@ class ML_Stock_Timing(Rule):
                 stock, buy, sell = trades
                 trade_dict[stock] = (buy, sell)
             stocks_to_check = [stock for stock in list(set(context.portfolio.positions.keys() + self.g.monitor_buy_list)) if stock not in g.money_fund]
+            stocks_to_long = []
             for stock in stocks_to_check:
                 (buy, sell) = trade_dict[stock]
                 if sell==1:
@@ -818,6 +828,11 @@ class ML_Stock_Timing(Rule):
                         self.g.monitor_buy_list.remove(stock)
                     if stock in context.portfolio.positions.keys():
                         self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+                if buy == 1:
+                    stocks_to_long.append(stock)
+            
+            self.g.monitor_buy_list = [stock for stock in self.g.monitor_buy_list if stock in stocks_to_long]
+            self.log.info("ML择时结果: "+join_list([show_stock(stock) for stock in self.g.monitor_buy_list], ' ', 10))
             # make sure ML predict use check_status
         except:
             self.log.warn("ML prediction file missing: {0}".format(self.ml_predict_file_path))

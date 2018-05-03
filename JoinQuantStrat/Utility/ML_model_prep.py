@@ -53,10 +53,6 @@ class MLDataProcess(object):
             # convert class vectors to binary class matrices
             a, b, c, d = x_train.shape
             input_shape = (b, c, d)
-
-        
-#         y_train = to_categorical(y_train, num_classes)
-#         y_test = to_categorical(y_test, num_classes)
         
         model = Sequential()
         model.add(Conv2D(32, kernel_size=(3, 1),
@@ -108,22 +104,51 @@ class MLDataProcess(object):
                              dropout = 0.2, 
                              recurrent_dropout = 0.2
                              ))
-        model.add(BatchNormalization())
-        model.add(ConvLSTM2D(64, 
+#         model.add(BatchNormalization())
+        model.add(ConvLSTM2D(32, 
+                             kernel_size=(3, 1), 
+                             padding='same',
+                             return_sequences=True,
+                             dropout = 0.2, 
+                             recurrent_dropout = 0.2
+                             ))        
+#         model.add(BatchNormalization())
+#         model.add(ConvLSTM2D(32, 
+#                              kernel_size=(3, 1), 
+#                              padding='same',
+#                              return_sequences=True,
+#                              dropout = 0.2, 
+#                              recurrent_dropout = 0.2
+#                              ))        
+#         model.add(BatchNormalization())
+#         model.add(ConvLSTM2D(32, 
+#                              kernel_size=(3, 1), 
+#                              padding='same',
+#                              return_sequences=True,
+#                              dropout = 0.2, 
+#                              recurrent_dropout = 0.2
+#                              ))        
+#         model.add(BatchNormalization())                 
+        model.add(ConvLSTM2D(32, 
                              kernel_size=(3, 1), 
                              padding='same',
                              return_sequences=False,
                              dropout = 0.2, 
                              recurrent_dropout = 0.2
                              ))        
-        model.add(BatchNormalization())
+        model.add(BatchNormalization())   
+
+#         model.add(MaxPooling2D(pool_size=(2, 1)))
+#         model.add(Dropout(0.25))
+         
         model.add(Flatten())
-        model.add(Dense(128, activation='relu'))
+        model.add(Dense(32, activation='relu'))
+#         model.add(BatchNormalization())
         model.add(Dense(num_classes, activation='softmax'))
         
         model.compile(loss=keras.losses.categorical_crossentropy,
-                      optimizer=keras.optimizers.Adadelta(),
-                      metrics=['accuracy'])        
+                      optimizer=keras.optimizers.Adam(), #Adadelta
+                      metrics=['accuracy'])
         
         print (model.summary())
         

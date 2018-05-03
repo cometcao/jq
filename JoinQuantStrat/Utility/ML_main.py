@@ -109,6 +109,7 @@ class ML_biaoli_check(object):
         self.save_new_model = params.get('save_new_model', False)
         self.model = params.get('model', None)
         self.isDebug = params.get('isDebug', False)
+        self.use_latest_pivot = params.get('use_latest_pivot', True)
         if not self.model and self.model_path is not None:
             self.prepare_model()
 
@@ -132,10 +133,10 @@ class ML_biaoli_check(object):
         _, sp = self.gauge_stock(stock, today_date, check_status=True)
         return sp
         
-    def gauge_stocks_analysis(self, stocks, today_date=None):
+    def gauge_stocks_analysis(self, stocks, today_date=None, check_status=False):
         if not stocks:
             return [] 
-        return [(stock, self.gauge_stock(stock, today_date, check_status=False)) for stock in stocks]
+        return [(stock, self.gauge_stock(stock, today_date, check_status=check_status)) for stock in stocks]
     
     def gauge_stock(self, stock, today_date=None, check_status=False):    
         (y_class, pred), origin_size = self.model_predict(stock, today_date)
@@ -151,10 +152,10 @@ class ML_biaoli_check(object):
         # 1 none of past pivots were predicted as 0
         # 2 all past pivots were confident
         try:
-            if (old_y_class[-3:-1] != 0).all():  #and old_conf.all()
+            if self.use_latest_pivot or (old_y_class[-3:-1] != 0).all():  # old_conf.all()
                 long_pred = (old_y_class[-1] == -1 and old_long_conf[-1])
                 short_pred = (old_y_class[-1] == 1 and old_short_conf[-1])
-#                         
+                       
                 if check_status:
                     long_pred = long_pred or (len(old_y_class) >= 2 and old_y_class[-2] == -1 and old_y_class[-1] == 0 and old_long_conf[-1] and old_long_conf[-2]) 
                     short_pred = short_pred or (len(old_y_class) >= 2 and old_y_class[-2] == 1 and old_y_class[-1] == 0 and old_short_conf[-1] and old_short_conf[-2])
@@ -163,7 +164,7 @@ class ML_biaoli_check(object):
                     print(old_pred)
                     print(old_y_class)
             else:
-                print("use gapped pivots for prediction")
+                print("gapped pivots for prediction")
                 new_y_class = y_class[origin_size:]
                 new_long_conf = long_conf[origin_size:]
                 new_short_conf = short_conf[origin_size:]

@@ -263,16 +263,9 @@ class SectorSelection(object):
         df = get_data(stock, count, level='1d', fields=fields, skip_paused=skip_paused, df_flag=df_flag, isAnal=self.isAnal)
         if df_flag and df.empty:
             return df
+        
         if self.useIntradayData:
-            containPaused = 'paused' in fields
-            if containPaused:
-                fields.remove('paused')
-            latest_stock_data = attribute_history(stock, 1, self.intraday_period, fields, skip_paused=skip_paused, df=df_flag)
-            if containPaused:
-                latest_stock_data.assign(paused=np.nan)
-                cd = get_current_data()
-                latest_stock_data.ix[-1,'paused'] = cd[stock].paused
-
+            latest_stock_data = attribute_history(stock, 1, '1m', fields, skip_paused=skip_paused, df=df_flag)
             if df_flag:
                 current_date = latest_stock_data.index[-1].date()
                 latest_stock_data = latest_stock_data.reset_index(drop=False)
@@ -283,13 +276,12 @@ class SectorSelection(object):
                     df = df.append(latest_stock_data, verify_integrity=True) # True
                 except:
                     print ("stock {0} has invalid history data".format(stock))
-            else:
+            else:                    
                 final_fields = []
                 if isinstance(fields, basestring):
                     final_fields.append(fields)
                 else:
                     final_fields = list(fields)
-#                 [np.append(df[field], latest_stock_data[field][-1]) for field in final_fields]
                 for field in final_fields:
                     df[field] = np.append(df[field], latest_stock_data[field][-1])
         return df

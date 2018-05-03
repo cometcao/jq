@@ -139,7 +139,7 @@ class MLKbarPrep(object):
         high_df_tb = higher_df.dropna(subset=['new_index'])
         high_dates = high_df_tb.index
         # additional check trunk
-        for i in range(-3, -1, 2):#-5
+        for i in range(-5, -1, 2):#-5
             try:
                 previous_date = str(high_dates[i].date())
             except IndexError:
