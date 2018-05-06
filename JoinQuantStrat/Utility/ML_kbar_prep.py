@@ -33,7 +33,7 @@ class MLKbarPrep(object):
     '''
 
     monitor_level = ['1d', '30m']
-    def __init__(self, count=100, isAnal=False, isNormalize=True, manual_select=False, useMinMax=True, sub_max_count=fixed_length, isDebug=False, include_now=False, sub_level_min_count = 2):
+    def __init__(self, count=100, isAnal=False, isNormalize=True, manual_select=False, useMinMax=True, sub_max_count=fixed_length, isDebug=False, include_now=False, sub_level_min_count = 0, use_standardized_sub_df=False):
         self.isDebug = isDebug
         self.isAnal = isAnal
         self.count = count
@@ -46,6 +46,7 @@ class MLKbarPrep(object):
         self.data_set = []
         self.label_set = []
         self.include_now = include_now
+        self.use_standardized_sub_df = use_standardized_sub_df
     
     def retrieve_stock_data(self, stock, end_date=None):
         for level in MLKbarPrep.monitor_level:
@@ -58,8 +59,7 @@ class MLKbarPrep(object):
                 stock_df = get_price(stock, count=local_count, end_date=latest_trading_day, frequency=level, fields = ['open','close','high','low', 'money'], skip_paused=True)          
             if stock_df.empty:
                 continue
-            if self.sub_level_min_count != 0 or level == '1d':
-                stock_df = self.prepare_df_data(stock_df)
+            stock_df = self.prepare_df_data(stock_df, level)
             self.stock_df_dict[level] = stock_df
     
     def retrieve_stock_data_rq(self, stock, end_date=None):
@@ -74,22 +74,36 @@ class MLKbarPrep(object):
                 stock_df = SecurityDataManager.get_research_data_rq(stock, start_date=previous_trading_day, end_date=today, period=level, fields = ['open','close','high','low', 'total_turnover'], skip_suspended=True)
             if stock_df.empty:
                 continue
-            if self.sub_level_min_count != 0 or level == '1d':
-                stock_df = self.prepare_df_data(stock_df)
+            stock_df = self.prepare_df_data(stock_df, level)
             self.stock_df_dict[level] = stock_df    
     
-    def prepare_df_data(self, stock_df):
+    def prepare_df_data(self, stock_df, level):
         # MACD
 #         stock_df.loc[:,'macd_raw'], _, stock_df.loc[:,'macd']  = talib.MACD(stock_df['close'].values)
         # BiaoLi
-        stock_df = self.prepare_biaoli(stock_df)
+        stock_df = self.prepare_biaoli(stock_df, level)
         return stock_df
         
     
-    def prepare_biaoli(self, stock_df):
-        kb = KBarProcessor(stock_df)
-        kb_marked = kb.getMarkedBL()
-        stock_df = stock_df.join(kb_marked[['new_index', 'tb']])
+    def prepare_biaoli(self, stock_df, level):
+#         print(level)
+#         print(stock_df)
+        if level == MLKbarPrep.monitor_level[0]:
+            kb = KBarProcessor(stock_df)
+            # for higher level, we only need the pivot dates, getMarketBL contains more than we need, no need for join
+            stock_df = kb.getMarkedBL()
+#             stock_df = stock_df.join(kb.getMarkedBL()[['new_index', 'tb']])
+
+        elif level == MLKbarPrep.monitor_level[1]:
+            if self.use_standardized_sub_df:
+                kb = KBarProcessor(stock_df)
+                if self.sub_level_min_count != 0:
+                    stock_df = kb.getMarkedBL()[['open','close','high','low', 'money', 'new_index', 'tb']]
+                else:
+                    stock_df = kb.getStandardized()[['open','close','high','low', 'money']]
+            else:
+                pass
+#         print(stock_df)
         return stock_df
     
     def prepare_training_data(self):
@@ -97,13 +111,13 @@ class MLKbarPrep(object):
             return [], []
         higher_df = self.stock_df_dict[MLKbarPrep.monitor_level[0]]
         lower_df = self.stock_df_dict[MLKbarPrep.monitor_level[1]]
-        high_df_tb = higher_df.dropna(subset=['new_index'])
+        high_df_tb = higher_df.dropna(subset=['new_index']) # only use the pivot date in high level
         high_dates = high_df_tb.index
         for i in range(0, len(high_dates)-1):
             first_date = str(high_dates[i].date())
             second_date = str(high_dates[i+1].date())
             trunk_lower_df = lower_df.loc[first_date:second_date,:]
-            self.create_ml_data_set(trunk_lower_df, high_df_tb.ix[i+1, 'tb'].value)
+            self.create_ml_data_set(trunk_lower_df, high_df_tb.ix[i+1, 'tb'].value, for_predict=False)
         return self.data_set, self.label_set
     
     def prepare_predict_data(self):    
@@ -130,7 +144,7 @@ class MLKbarPrep(object):
                 trunk_df = lower_df.loc[previous_date:, :]
 #             if self.isDebug:
 #                 print(trunk_df.tail(5))
-            self.create_ml_data_set(trunk_df, None)
+            self.create_ml_data_set(trunk_df, None, for_predict=True)
         return self.data_set
             
     def prepare_predict_data_extra(self):
@@ -147,12 +161,12 @@ class MLKbarPrep(object):
             trunk_df = lower_df.loc[previous_date:,:]
 #             if self.isDebug:
 #                 print(trunk_df.tail(5))
-            self.create_ml_data_set(trunk_df, None)
+            self.create_ml_data_set(trunk_df, None, for_predict=True)
         return self.data_set
         
-    def create_ml_data_set(self, trunk_df, label): 
+    def create_ml_data_set(self, trunk_df, label, for_predict=False): 
         # at least 3 parts in the sub level
-        if self.sub_level_min_count != 0: # we won't process sub level df
+        if not for_predict and self.sub_level_min_count != 0: # we won't process sub level df
             sub_level_count = len(trunk_df['tb']) - trunk_df['tb'].isnull().sum()
             if sub_level_count < self.sub_level_min_count:
                 return
@@ -218,7 +232,7 @@ class MLDataPrep(object):
         for stock in stocks:
             if self.isAnal:
                 print ("working on stock: {0}".format(stock))
-            mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True, sub_max_count=self.max_sequence_length, isDebug=self.isDebug, sub_level_min_count=0)
+            mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True, sub_max_count=self.max_sequence_length, isDebug=self.isDebug, sub_level_min_count=0, use_standardized_sub_df=True)
             if self.isRQ:
                 mlk.retrieve_stock_data_rq(stock, today_date)
             else:
@@ -231,7 +245,7 @@ class MLDataPrep(object):
         return (data_list, label_list)
     
     def prepare_stock_data_predict(self, stock, period_count=100, today_date=None):
-        mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True, sub_max_count=self.max_sequence_length, isDebug=self.isDebug, sub_level_min_count=0)
+        mlk = MLKbarPrep(isAnal=self.isAnal, count=period_count, isNormalize=True, sub_max_count=self.max_sequence_length, isDebug=self.isDebug, sub_level_min_count=0, use_standardized_sub_df=True)
         if self.isRQ:
             mlk.retrieve_stock_data_rq(stock, today_date)
         else:

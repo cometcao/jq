@@ -27,11 +27,12 @@ class KBarProcessor(object):
     This lib takes financial instrument data, and process it according the Chan(Zen) theory
     We need at least 100 K-bars in each input data set
     '''
-    def __init__(self, kDf, isdebug=False):
+    def __init__(self, kDf, isdebug=False, clean_standardzed=False):
         '''
         dataframe input must contain open, close, high, low columns
         '''
         self.isdebug = isdebug
+        self.clean_standardzed = clean_standardzed
         self.kDataFrame_origin = kDf
         self.kDataFrame_standardized = copy.deepcopy(kDf)
         self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_high=np.nan, new_low=np.nan, trend_type=np.nan)
@@ -110,7 +111,7 @@ class KBarProcessor(object):
 
         self.kDataFrame_standardized = self.kDataFrame_standardized[np.isfinite(self.kDataFrame_standardized['high'])]
         # lines below is for chart drawing
-        if self.isdebug:
+        if self.clean_standardzed:
             self.synchForChart()
         return self.kDataFrame_standardized
     
@@ -342,4 +343,7 @@ class KBarProcessor(object):
         self.markTopBot()
         self.defineBi()
         return self.kDataFrame_marked
+    
+    def getStandardized(self):
+        return self.standardize()
         
