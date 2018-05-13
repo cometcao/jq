@@ -138,6 +138,121 @@ class Stop_loss_by_3_black_crows(Rule):
             return True
         return False
 
+# machine learning timing check
+class ML_Stock_Timing(Rule):
+    def __init__(self, params):
+        self.ml_predict_file_path = params.get('ml_file_path', None)
+    
+    def handle_data(self, context, data):
+        today_date = context.current_dt.date()
+        try:
+            trading_list = json.loads(read_file(self.ml_predict_file_path).decode())
+            trading_details = trading_list[str(today_date)]
+            trade_dict = {}
+            for trades in trading_details:
+                stock, buy, sell = trades
+                trade_dict[stock] = (buy, sell)
+            stocks_to_check = [stock for stock in list(set(context.portfolio.positions.keys() + self.g.monitor_buy_list)) if stock not in g.money_fund]
+            stocks_to_long = []
+            for stock in stocks_to_check:
+                (buy, sell) = trade_dict[stock]
+                if sell==1:
+                    self.g.sell_stocks.append(stock)
+                    if stock in self.g.monitor_buy_list:
+                        self.g.monitor_buy_list.remove(stock)
+                    if stock in context.portfolio.positions.keys():
+                        self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+                if buy == 1:
+                    stocks_to_long.append(stock)
+            
+            self.g.monitor_buy_list = [stock for stock in self.g.monitor_buy_list if stock in stocks_to_long]
+            self.log.info("ML择时结果: "+join_list([show_stock(stock) for stock in self.g.monitor_buy_list], ' ', 10))
+            # make sure ML predict use check_status
+        except:
+            self.log.warn("ML prediction file missing: {0}".format(self.ml_predict_file_path))
+            return
+            
+        
+    def after_trading_end(self, context):
+        Rule.after_trading_end(self, context)
+        
+    def __str__(self):
+        return '股票AI择时'
+
+
+class Relative_Index_Timing(Rule):
+    def __init__(self, params):
+        self.market_list = params.get('market_list', ['000300.XSHG', '000016.XSHG', '399333.XSHE', '000905.XSHG', '399673.XSHE'])
+        self.M = params.get('M', 600)
+        self.N = params.get('N', 18)
+        self.buy = params.get('buy', 0.7)
+        self.sell = params.get('sell', -0.7)
+        self.period = params.get('correlation_period', 250)
+        self.strict_long = params.get('strict_long', False)
+        self.default_index = self.market_list[0]
+        self.rsrs_check = RSRS_Market_Timing({'market_list': self.market_list,
+                                              'M':self.M,
+                                              'N':self.N,
+                                              'buy':self.buy,
+                                              'sell':self.sell})
+        self.isInitialized = False
+        
+    def update_params(self, context, params):
+        self.period = params.get('correlation_period', 250)
+        self.strict_long = params.get('strict_long', False)
+        
+    def before_trading_start(self, context):
+        Rule.before_trading_start(self, context)
+        if not self.isInitialized:
+            self.rsrs_check.calculate_RSRS()
+            self.isInitialized = True
+        else:
+            self.rsrs_check.add_new_RSRS()
+            
+        for market in self.market_list:
+            self.g.market_timing_check[market]=self.rsrs_check.check_timing(market)
+        self.log.info("Index timing check: {0}".format(self.g.market_timing_check))
+        
+    def after_trading_end(self, context):
+        Rule.after_trading_end(self, context)
+        self.g.stock_index_dict = {}
+        self.g.market_timing_check = {}
+        
+    def build_stock_index_dict(self, context):
+        # find the index for candidate stock by largest correlation
+        stock_symbol_list = [stock for stock in list(set(context.portfolio.positions.keys() + self.g.monitor_buy_list)) if stock not in g.money_fund]
+        for stock in stock_symbol_list:
+            current_max_corr = 0
+            stock_df = attribute_history(stock, self.period, '1d', 'close', df=False)
+            for idx in self.market_list:
+                index_df = attribute_history(idx, self.period, '1d', 'close', df=False)
+                corr = np.corrcoef(stock_df['close'],index_df['close'])[0,1]
+                if corr >= current_max_corr:
+                    self.g.stock_index_dict[stock] = idx
+                    current_max_corr = corr
+            if stock not in self.g.stock_index_dict:
+                self.g.stock_index_dict[stock] = self.default_index
+                self.log.info("{0} set to default index {1}".format(stock, self.default_index))
+        self.log.info("stock index correlation matrix: {0}".format(self.g.stock_index_dict))
+        
+    def handle_data(self, context, data):
+        self.build_stock_index_dict(context)
+        stocks_to_check = [stock for stock in list(set(context.portfolio.positions.keys() + self.g.monitor_buy_list)) if stock not in g.money_fund]
+        for stock in stocks_to_check:
+            market = self.g.stock_index_dict[stock]
+            if self.g.market_timing_check[market] == -1:
+                self.g.sell_stocks.append(stock)
+                if stock in context.portfolio.positions.keys():
+                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+                if stock in self.g.monitor_buy_list:
+                    self.g.monitor_buy_list.remove(stock)
+            if self.g.market_timing_check[market] != 1 and self.strict_long:
+                if stock in self.g.monitor_buy_list:
+                    self.g.monitor_buy_list.remove(stock)
+        self.log.info("candidate stocks: {0} closed position: {1}".format(self.g.monitor_buy_list, self.g.sell_stocks))
+    def __str__(self):
+        return '股票精确择时'
+    
 
 # 个股止损止盈
 class Stop_gain_loss_stocks(Rule):

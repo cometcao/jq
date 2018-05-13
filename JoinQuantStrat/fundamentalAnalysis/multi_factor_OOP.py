@@ -1,7 +1,3 @@
-import numpy as np
-import pandas as pd
-import talib
-from prettytable import PrettyTable
 import types
 from common_include import *
 from oop_strategy_frame import *
@@ -11,11 +7,15 @@ from oop_select_stock import *
 from oop_sort_stock import *
 from oop_record_stats import *
 from oop_trading_sync import *
+# from ML_kbar_prep import *
+# from ML_model_prep import *
+# from ML_main import *
+from ml_factor_rank import *
 
 
 # 不同步的白名单，主要用于实盘易同步持仓时，不同步中的新股，需把新股代码添加到这里。https://www.joinquant.com/algorithm/index/edit?algorithmId=23c589f4594f827184d4f6f01a11b2f2
-# 可把white_list另外放到研究的一个py文件里
-def white_list():
+# 可把while_list另外放到研究的一个py文件里
+def while_list():
     return ['000001.XSHE']
 
 # ==================================策略配置==============================================
@@ -42,7 +42,7 @@ def select_strategy(context):
     adjust_condition_config = [
         [True, '_time_c_', '调仓时间', Time_condition, {
             # 'times': [[10,0],[10, 30], [11,00], [13,00], [13,30], [14,00],[14, 30]],  # 调仓时间列表，二维数组，可指定多个时间点
-            'times': [[10, 30], [11,20], [13,30], [14, 50]],  # 调仓时间列表，二维数组，可指定多个时间点
+            'times': [[14, 50]],  # 调仓时间列表，二维数组，可指定多个时间点
         }],
         [False, '_Stop_loss_by_price_', '指数最高低价比值止损器', Stop_loss_by_price, {
             'index': '000001.XSHG',  # 使用的指数,默认 '000001.XSHG'
@@ -60,6 +60,9 @@ def select_strategy(context):
             'stop_gain':0.2,
             'enable_stop_gain':False
             },],
+        [True, '', '股票AI择时', ML_Stock_Timing,{
+            'ml_file_path':'training_result/multi_factor_trading_picked_stocks.txt'
+            }],
         # [True,'_Stop_loss_by_growth_rate_','当日指数涨幅止损器',Stop_loss_by_growth_rate,{
         #     'index':'000001.XSHG',  # 使用的指数,默认 '000001.XSHG'
         #      'stop_loss_growth_rate':-0.05,
@@ -85,8 +88,11 @@ def select_strategy(context):
             'ta_type': TaType.TRIX_PURE,
             'period':'5d'
         }],
+        [True, '', 'RSRS_timing', RSRS_timing, {
+            'market_symbol': '000300.XSHG',
+        }],
         [True, '', '调仓日计数器', Period_condition, {
-            'period': 1,  # 调仓频率,日
+            'period': 3,  # 调仓频率,日
         }],
     ]
     adjust_condition_config = [
@@ -97,16 +103,29 @@ def select_strategy(context):
 
     ''' --------------------------配置 选股规则----------------- '''
     pick_config = [
-        [True, '', '缠论强弱势板块', Pick_rank_sector,{
+        [False, '', '配对交易选对股', Pick_Pair_Trading, {
+                        'pair_period':250, 
+                        'get_pair':False,
+                        # 'init_index_list':['000300.XSHG', '000016.XSHG', '399333.XSHE', '399673.XSHE', '399330.XSHE'],
+                        'init_index_list':['510050.XSHG', '510180.XSHG', '510300.XSHG', '512800.XSHG', '512000.XSHG', '510230.XSHG', '510310.XSHG', '510880.XSHG'],
+                        'input_as_list':True,
+                        'isIndex':True,
+            }], 
+        [True, '', '多因子回归公式选股', Pick_Rank_Factor,{
+                        'stock_num':34,
+                        'index_scope':'000985.XSHG'
+            }],
+        [False, '', '缠论强弱势板块', Pick_rank_sector,{
                         'strong_sector':True, 
-                        'sector_limit_pct': 13,
+                        'sector_limit_pct': 8,
                         'strength_threthold': 0, 
                         'isDaily': False, 
                         'useIntradayData':False,
-                        'useAvg':False,
-                        'avgPeriod':5}],
+                        'useAvg':True,
+                        'avgPeriod':21, 
+                        'period_frequency':'M'}],
         [False, '', '基本面数据筛选', Filter_financial_data, {'factor':'valuation.pe_ratio', 'min':0, 'max':80}],
-        [True, '', '基本面数据筛选', Filter_financial_data2, {
+        [False, '', '基本面数据筛选', Filter_financial_data2, {
             'factors': [
                         FD_Factor('valuation.ps_ratio', min=0, max=g.ps_limit),
                         FD_Factor('valuation.pe_ratio', min=0, max=g.pe_limit),
@@ -125,11 +144,7 @@ def select_strategy(context):
             'sort': SortType.asc,
             'by_sector': False,
             'limit':50}],
-        [False, '', '小佛雪选股', Filter_FX_data, {'limit':50}],
-        # 测试的多因子选股,所选因子只作为示例。
-        # 选用的财务数据参考 https://www.joinquant.com/data/dict/fundamentals
-        # 传入参数的财务因子需为字符串，原因是直接传入如 indicator.eps 会存在序列化问题。
-        # FD_Factor 第一个参数为因子，min=为最小值 max为最大值，=None则不限，默认都为None。min,max都写则为区间
+        [False, '', '小佛雪选股', Filter_FX_data, {'limit':144}],
         [False, '', '多因子选股票池', Pick_financial_data, {
             'factors': [
                 # FD_Factor('valuation.circulating_market_cap', min=0, max=1000)  # 流通市值0~1000
@@ -153,8 +168,23 @@ def select_strategy(context):
             'sort': SortType.asc,  # 从小到大排序 # SortType.desc
             'limit': 500  # 只取前200只
         }],
-        [True, '', '过滤创业板', Filter_gem, {}],
         [True, '', '过滤ST,停牌,涨跌停股票', Filter_common, {}],
+        [False, '', '缠论强弱势板块', Filter_Rank_Sector,{
+                        'strong_sector':True, 
+                        'sector_limit_pct': 8,
+                        'strength_threthold': 0, 
+                        'isDaily': True, 
+                        'useIntradayData':False,
+                        'useAvg':False,
+                        'avgPeriod':5,
+                        'period_frequency':'W'}],
+        [False, '', '过滤创业板', Filter_gem, {}],
+        [False, '', '配对交易筛选对股', Filter_Pair_Trading, {
+                        'pair_period':233,
+                        'pair_num_limit':10,
+                        'return_pair':1,
+                        'period_frequency':'M'
+            }],
         [False, '', '强势股筛选', Filter_Herd_head_stocks,{'gainThre':0.05, 'count':20, 'useIntraday':True, 'filter_out':True}],
         [False, '', '技术分析筛选-AND', checkTAIndicator_AND, { 
             'TA_Indicators':[
@@ -174,11 +204,13 @@ def select_strategy(context):
                             # (TaType.MA, '1d', 60),
                             ],
             'isLong':True}], # 确保大周期安全
-        [True, '', '日线周线级别表里买点筛选', Filter_Week_Day_Long_Pivot_Stocks, {'monitor_levels':g.monitor_levels}],
-        [True, '', '过滤ST,停牌,涨跌停股票', Filter_common, {}],
-        [True, '', '权重排序', SortRules, {
+        [False, '', '日线周线级别表里买点筛选', Filter_Week_Day_Long_Pivot_Stocks, {
+            'monitor_levels':g.monitor_levels,
+            'enable_filter':False,
+            }],
+        [False, '', '权重排序', SortRules, {
             'config': [
-                [True, 'Sort_std_data', '波动率排序', Sort_std_data, {
+                [False, 'Sort_std_data', '波动率排序', Sort_std_data, {
                     'sort': SortType.asc
                     , 'period': 60
                     , 'weight': 100}],
@@ -220,9 +252,6 @@ def select_strategy(context):
                     'sort': SortType.asc
                     , 'weight': 10
                     , 'day': 60}],
-                [False, 'cash_flow_rank', '庄股脉冲排序', Sort_cash_flow_rank, {
-                    'sort': SortType.desc
-                    , 'weight': 100}],
                 [False, '', '按换手率排序', Sort_turnover_ratio, {
                     'sort': SortType.desc
                     , 'weight': 50}],
@@ -235,7 +264,8 @@ def select_strategy(context):
     pick_new = [
         [True, '_pick_stocks_', '选股', Pick_stocks2, {
             'config': pick_config,
-            'day_only_run_one': True
+            'day_only_run_one': True, 
+            'write_to_file': 'multi_factor_trading_picked_stocks.txt'
         }]
     ]
 
@@ -245,25 +275,59 @@ def select_strategy(context):
         , '证券代码': u'证券代码', '证券数量': u'证券数量', '可卖数量': u'可卖数量', '当前价': u'当前价', '成本价': u'成本价'
                  }
     adjust_position_config = [
-        [False, '', '卖出股票', Sell_stocks, {}],
-        [False, '', '买入股票', Buy_stocks, {
+        [False, '', '股票择时', Relative_Index_Timing, {
+            'M':233,
+            'N':21, #18
+            'buy':0.7,
+            'sell':-0.7,
+            'correlation_period':233,
+            'strict_long':False,
+            'market_list':
+                            # ['000059.XSHG','000060.XSHG', 
+                            # '000063.XSHG', '000064.XSHG',
+                            # '000832.XSHG', '000922.XSHG',
+                            # '399370.XSHE', '399371.XSHE', '399372.XSHE', '399373.XSHE', '399374.XSHE', '399375.XSHE', '399376.XSHE', '399377.XSHE',]
+                            ['399404.XSHE', '399405.XSHE', '399406.XSHE', '399407.XSHE', '399408.XSHE', '399409.XSHE',]
+                            # [ '000985.XSHG',
+                            # '000986.XSHG', '000987.XSHG', '000988.XSHG', '000989.XSHG', '000990.XSHG', '000991.XSHG', '000992.XSHG', '000993.XSHG', '000994.XSHG', '000995.XSHG', 
+                            # ] # industry
+                            # [ '000842.XSHG',
+                            # '000070.XSHG','000071.XSHG','000072.XSHG','000073.XSHG','000074.XSHG','000075.XSHG','000076.XSHG','000077.XSHG','000078.XSHG', '000079.XSHG',
+                            # ] # equal weights industry
+                            # ['000016.XSHG', '399333.XSHE', '399006.XSHE'] # conventional '000300.XSHG','399984.XSHE', 
+                            # ['000001.XSHG', '399001.XSHE', '399006.XSHE',]
+            }],
+        [True, '', '卖出股票', Sell_stocks, {}],
+        [True, '', '买入股票', Buy_stocks, {
+            'use_short_filter':False,
             'buy_count': g.buy_count  # 最终买入股票数
         }],
-        [True, '', '卖出股票日内表里', Sell_stocks_chan, {'monitor_levels': g.monitor_levels}],
+        [False, '', '卖出配对股票', Sell_stocks_pair, {
+            'buy_count':2
+            }],
+        [False, '', '买入配对股票', Buy_stocks_pair, {
+            'buy_count':2,
+            'money_fund':g.money_fund,
+            'p_val': 2.58,
+            'risk_var': 0.13,
+            'adjust_pos':True,
+            'equal_pos':True
+            }],        
+        [False, '', '卖出股票日内表里', Sell_stocks_chan, {'monitor_levels': g.monitor_levels}],
         [False, '', '买入股票日内表里', Buy_stocks_chan, {
             'buy_count': g.buy_count,
             'monitor_levels': g.monitor_levels, 
             'pos_control':g.port_pos_control}],
-        [True,'','VaR方式买入股票', Buy_stocks_var, {
-            'buy_count': g.buy_count,
-            'monitor_levels': g.monitor_levels, 
-            'pos_control':g.port_pos_control,
-            'money_fund':g.money_fund,
-            'adjust_pos':True,
-            'equal_pos':True,
-            }],
+        # [False,'','VaR方式买入股票', Buy_stocks_var, {
+        #     'buy_count': g.buy_count,
+        #     'money_fund':g.money_fund,
+        #     'p_val': 2.58,
+        #     'risk_var': 0.13,
+        #     'adjust_pos':True,
+        #     'equal_pos':True,
+        #     }],
         [True, '_Show_postion_adjust_', '显示买卖的股票', Show_postion_adjust, {}],
-        [g.is_sim_trade,'trade_Xq','Xue Qiu Webtrader',XueQiu_order,{'version':3}],
+        [False,'trade_Xq','Xue Qiu Webtrader',XueQiu_order,{'version':3}],
         # 实盘易同步持仓，把虚拟盘同步到实盘
         # [g.is_sim_trade, '_Shipane_manager_', '实盘易操作', Shipane_manager, {
         #     'host':'111.111.111.111',   # 实盘易IP
@@ -273,7 +337,7 @@ def select_strategy(context):
         #     'strong_op':False,   # 强力同步模式，开启会强行同步两次。
         #     'col_names':col_names, # 指定实盘易返回的持仓字段映射
         #     'cost':context.portfolio.starting_cash, # 实盘的初始资金
-        #     'get_white_list_func':white_list, # 不同步的白名单
+        #     'get_white_list_func':while_list, # 不同步的白名单
         #     'sync_scale': 1,  # 实盘资金/模拟盘资金比例，建议1为好
         #     'log_level': ['debug', 'waring', 'error'],  # 实盘易日志输出级别
         #     'sync_with_change': True,  # 是否指定只有发生了股票操作时才进行同步 , 这里重要，避免无效同步！！！！
@@ -302,8 +366,8 @@ def select_strategy(context):
         }],
         [True, '', '手续费设置器', Set_slip_fee, {}],
         [True, '', '持仓信息打印器', Show_position, {}],
-        [True, '', '统计执行器', Stat, {'trade_stats':True}],
-        [True, '', '自动调参器', Update_Params_Auto, {
+        [True, '', '统计执行器', Stat, {'trade_stats':False}],
+        [False, '', '自动调参器', Update_Params_Auto, {
             'ps_threthold':0.618,
             'pb_threthold':0.618,
             'pe_threthold':0.809,
@@ -399,6 +463,93 @@ def after_code_changed(context):
         log.error('更新代码失败:' + str(e))
         # initialize(context)
         pass
+    
+    
+# ''' ----------------------参数自动调整----------------------------'''
+class Update_Params_Auto(Rule):
+    def __init__(self, params):
+        Rule.__init__(self, params)
+        self.ps_threthold = params.get('ps_threthold',0.8)
+        self.pb_threthold = params.get('pb_threthold',0.618)
+        self.pe_threthold = params.get('pe_threthold',0.8)
+        self.evs_threthold = params.get('evs_threthold',0.618)
+        self.eve_threthold = params.get('eve_threthold',0.618)
+        self.buy_threthold = params.get('buy_threthold', 0.9)
+        self.pos_control_value = params.get('pos_control_value', 0.5)
 
+    def before_trading_start(self, context):
+        if self.g.isFirstTradingDayOfWeek(context):
+            g.ps_limit = self.g.getFundamentalThrethold('valuation.ps_ratio', self.ps_threthold)
+            g.pb_limit = self.g.getFundamentalThrethold('valuation.pb_ratio', self.pb_threthold)
+            g.pe_limit = self.g.getFundamentalThrethold('valuation.pe_ratio', self.pe_threthold)
+            g.evs_limit = self.g.getFundamentalThrethold(evs_query_string, self.evs_threthold)
+            g.eve_limit = self.g.getFundamentalThrethold(eve_query_string, self.eve_threthold)
+            
+            self.dynamicBuyCount(context)
+            self.log.info("每周修改全局参数: ps_limit: %s pb_limit: %s pe_limit: %s buy_count: %s evs_limit: %s eve_limit: %s" % (g.ps_limit, g.pb_limit, g.pe_limit, g.buy_count, g.evs_limit, g.eve_limit))
+        
+        # self.doubleIndexControl('000016.XSHG', '399333.XSHE')
+        # self.log.info("每日修改全局参数: port_pos_control: %s" % (g.port_pos_control))
+        self.updateRelaventRules(context)
+    
+    def dynamicBuyCount(self, context):
+        import math
+        g.buy_count = int(math.ceil(math.log(context.portfolio.portfolio_value/10000)))
+        # stock_list = get_index_stocks('000300.XSHG')
+        # stock_list_df = history(1, unit='1d', field='avg', security_list=stock_list, df=True, skip_paused=False, fq='pre')
+        # stock_list_df = stock_list_df.transpose()
+        # stock_list_df = stock_list_df.sort(stock_list_df.columns.values[0], ascending=True, axis=0)
+        # threthold_price = stock_list_df.iloc[int(self.buy_threthold * 300),0] # 000300
+        # g.buy_count = int(context.portfolio.portfolio_value / (threthold_price * 1000)) # 10手
+        
+    def doubleIndexControl(self, index1, index2, target=0, period=20):
+        # 大盘周线弱势， 按照仓位比例操作
+        # ta_trix = TA_Factor_Short({'ta_type':TaType.TRIX, 'period':'1d', 'count':100})
+        # g.port_pos_control = self.pos_control_value if ta_trix.check_TRIX_list('000300.XSHG') else 1.0
+        
+        # ta_trix_long = TA_Factor_Long({'ta_type':TaType.TRIX_PURE, 'period':'1d', 'count':100, 'isLong':True})
+        # long_list = ta_trix_long.filter([index1,index2])
+        # if len(long_list) == 0:
+        #     g.port_pos_control = self.pos_control_value / 2
+        # elif len(long_list) == 1:
+        #     g.port_pos_control = self.pos_control_value
+        # else:
+        #     g.port_pos_control = 1.0
+        
+        gr_index1 = get_growth_rate(index1, period)
+        gr_index2 = get_growth_rate(index2, period)
+        target = 0.01
+        if gr_index1 < target and gr_index2 < target:
+            g.port_pos_control = self.pos_control_value / 2
+        elif gr_index1 >= target or gr_index2 >= target:
+            g.port_pos_control = self.pos_control_value
+        else:
+            g.port_pos_control = 1.0  
 
+    def updateRelaventRules(self, context):
+        # print g.main.rules
+        # update everything
+        for rule in g.main.rules:
+            if isinstance(rule, Pick_stocks2):
+                for r2 in rule.rules:
+                    if isinstance(r2, Filter_financial_data2):
+                        r2.update_params(context, {
+                            'factors': [
+                                        FD_Factor('valuation.ps_ratio', min=0, max=g.ps_limit),
+                                        FD_Factor('valuation.pe_ratio', min=0, max=g.pe_limit),
+                                        FD_Factor('valuation.pb_ratio', min=0, max=g.pb_limit),
+                                        # FD_Factor(evs_query_string, min=0, max=g.evs_limit, isComplex=True),
+                                        # FD_Factor(eve_query_string, min=0, max=g.eve_limit, isComplex=True),
+                                        ],
+                            'order_by': 'valuation.circulating_market_cap',
+                            'sort': SortType.asc,
+                            'by_sector':False,
+                            'limit':50})
+            if isinstance(rule, Adjust_position):
+                for r3 in rule.rules:
+                    if isinstance(r3, Buy_stocks_chan) or isinstance(r3, Buy_stocks_var):
+                        r3.update_params(context, {'buy_count': g.buy_count, 'pos_control': g.port_pos_control})
 
+    def __str__(self):
+        return '参数自动调整'
+    
