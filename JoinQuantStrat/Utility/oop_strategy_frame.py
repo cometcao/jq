@@ -138,6 +138,15 @@ class Global_variable(object):
                     self.close_position(sender, position, False, pindex)
         # 调用规则器的清仓事件
         self._owner.on_clear_position(context, pindexs)
+        
+        # send port details while clear portfolio
+        self.send_port_info(context)
+        
+    def send_port_info(self, context):
+        port_msg = [(context.portfolio.positions[stock].security, context.portfolio.positions[stock].total_amount * context.portfolio.positions[stock].price / context.portfolio.total_value) for stock in context.portfolio.positions]
+        self.log.info(str(port_msg))
+        if context.run_params.type == 'sim_trade':
+            send_message(port_msg, channel='weixin')
 
     # 通过对象名 获取对象
     def get_obj_by_name(self, name):
