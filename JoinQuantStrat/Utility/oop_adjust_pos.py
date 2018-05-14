@@ -168,7 +168,7 @@ class Buy_stocks(Rule):
             if self.use_long_filter:
                 self.to_buy = self.ta_long_filter(context, data, self.to_buy) 
             self.adjust(context, data, self.to_buy)
-            self.send_port_info(context)
+            self.g.send_port_info(context)
 
     def ta_long_filter(self, context, data, to_buy):
         cta = checkTAIndicator_OR({
@@ -220,11 +220,11 @@ class Buy_stocks(Rule):
         self.g.sell_stocks = []
         self.to_buy = []
 
-    def send_port_info(self, context):
-        port_msg = [(context.portfolio.positions[stock].security, context.portfolio.positions[stock].total_amount * context.portfolio.positions[stock].price / context.portfolio.total_value) for stock in context.portfolio.positions]
-        self.log.info(str(port_msg))
-        if context.run_params.type == 'sim_trade':
-            send_message(port_msg, channel='weixin')
+#     def send_port_info(self, context):
+#         port_msg = [(context.portfolio.positions[stock].security, context.portfolio.positions[stock].total_amount * context.portfolio.positions[stock].price / context.portfolio.total_value) for stock in context.portfolio.positions]
+#         self.log.info(str(port_msg))
+#         if context.run_params.type == 'sim_trade':
+#             send_message(port_msg, channel='weixin')
         
     def recordTrade(self, stock_list):
         for stock in stock_list:
@@ -521,10 +521,10 @@ class Buy_stocks_chan(Buy_stocks_var):
             self.g.monitor_short_cm.appendStockList(self.g.monitor_long_cm.getGaugeStockList(bought_stocks))
             self.g.monitor_long_cm.displayMonitorMatrix(to_buy)
             self.recordTrade(bought_stocks)
-            self.send_port_info(context)
+            self.g.send_port_info(context)
         elif context.current_dt.hour >= 14:
             self.adjust(context, data, [])
-            self.send_port_info(context)
+            self.g.send_port_info(context)
 
         self.g.intraday_long_stock = [stock for stock in self.g.intraday_long_stock if stock in context.portfolio.positions.keys()] # keep track of bought stocks
         if context.current_dt.hour >= 14:
@@ -724,7 +724,7 @@ class Buy_stocks_pair(Buy_stocks_var):
         else:
             self.adjust(context, data, [])
             
-        self.send_port_info(context)
+        self.g.send_port_info(context)
         
 
     def __str__(self):
