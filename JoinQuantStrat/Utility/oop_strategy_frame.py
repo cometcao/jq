@@ -144,7 +144,7 @@ class Global_variable(object):
         
     def send_port_info(self, context):
         port_msg = [(context.portfolio.positions[stock].security, context.portfolio.positions[stock].total_amount * context.portfolio.positions[stock].price / context.portfolio.total_value) for stock in context.portfolio.positions]
-        self.log.info(str(port_msg))
+        print(str(port_msg))
         if context.run_params.type == 'sim_trade':
             send_message(port_msg, channel='weixin')
 
