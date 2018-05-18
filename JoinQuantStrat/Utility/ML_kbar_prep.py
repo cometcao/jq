@@ -270,11 +270,16 @@ class MLDataPrep(object):
     def prepare_stock_data_cnn(self, filenames, padData=True, test_portion=0.1, random_seed=42, background_data_generation=True):
         data_list = label_list = []
         for file in filenames:
-            A, B = self.load_dataset(file)            
-            if pd.isnull(np.array(A)).any() or pd.isnull(np.array(B)).any(): 
-                print("Data contains nan")
-                print(A)
-                print(B)
+            A, B = self.load_dataset(file)
+            
+            A_check = True
+            for item in A:     
+                if not ((item>=0).all() and (item<=1).all()): # min max value range
+                    print(item)
+                    A_check=False
+                    break
+            if not A_check:
+                print("Data invalid in file {0}".format(file))
                 continue
 
             data_list = A + data_list 
