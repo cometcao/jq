@@ -47,6 +47,7 @@ class MLKbarPrep(object):
         self.label_set = []
         self.include_now = include_now
         self.use_standardized_sub_df = use_standardized_sub_df
+        self.num_of_debug_display = 4
     
     def retrieve_stock_data(self, stock, end_date=None):
         for level in MLKbarPrep.monitor_level:
@@ -56,9 +57,12 @@ class MLKbarPrep(object):
                 stock_df = attribute_history(stock, local_count, level, fields = ['open','close','high','low', 'money'], skip_paused=True, df=True)  
             else:
                 latest_trading_day = end_date if end_date is not None else get_trade_days(count=1)[-1]
-                stock_df = get_price(stock, count=local_count, end_date=latest_trading_day, frequency=level, fields = ['open','close','high','low', 'money'], skip_paused=True)          
+                stock_df = get_price(stock, count=local_count, end_date=str(latest_trading_day), frequency=level, fields = ['open','close','high','low', 'money'], skip_paused=True)          
             if stock_df.empty:
                 continue
+#             if self.isDebug:
+#                 print("{0}, {1}, {2}, {3}".format(stock, local_count, end_date, level))
+#                 print(stock_df.tail(self.num_of_debug_display))
             stock_df = self.prepare_df_data(stock_df, level)
             self.stock_df_dict[level] = stock_df
     
@@ -125,13 +129,13 @@ class MLKbarPrep(object):
         lower_df = self.stock_df_dict[MLKbarPrep.monitor_level[1]]
         high_df_tb = higher_df.dropna(subset=['new_index'])
         if self.isDebug:
-            if high_df_tb.shape[0] > 5:
-                print(high_df_tb.tail(5)[['tb', 'new_index']])
+            if high_df_tb.shape[0] > self.num_of_debug_display:
+                print(high_df_tb.tail(self.num_of_debug_display)[['tb', 'new_index']])
             else:
                 print(high_df_tb[['tb', 'new_index']])
         high_dates = high_df_tb.index
         
-        for i in range(-5, 0, 1):
+        for i in range(-self.num_of_debug_display-1, 0, 1): #-5
             try:
                 previous_date = str(high_dates[i].date())
             except IndexError:
@@ -143,7 +147,7 @@ class MLKbarPrep(object):
             else:
                 trunk_df = lower_df.loc[previous_date:, :]
 #             if self.isDebug:
-#                 print(trunk_df.tail(5))
+#                 print(trunk_df.tail(self.num_of_debug_display))
             self.create_ml_data_set(trunk_df, None, for_predict=True)
         return self.data_set
             
@@ -153,14 +157,15 @@ class MLKbarPrep(object):
         high_df_tb = higher_df.dropna(subset=['new_index'])
         high_dates = high_df_tb.index
         # additional check trunk
-        for i in range(-5, -1, 2):#-5
+        for i in range(-self.num_of_debug_display-1, -1, 2):#-5
             try:
                 previous_date = str(high_dates[i].date())
             except IndexError:
                 continue
             trunk_df = lower_df.loc[previous_date:,:]
 #             if self.isDebug:
-#                 print(trunk_df.tail(5))
+#                 print(trunk_df.head(self.num_of_debug_display))
+#                 print(trunk_df.tail(self.num_of_debug_display))
             self.create_ml_data_set(trunk_df, None, for_predict=True)
         return self.data_set
         
@@ -220,9 +225,10 @@ class MLKbarPrep(object):
 
 
 class MLDataPrep(object):
-    def __init__(self, isAnal=False, max_length_for_pad=fixed_length, rq=False, isDebug=False):
+    def __init__(self, isAnal=False, max_length_for_pad=fixed_length, rq=False, isDebug=False, detailed_bg=False):
         self.isDebug = isDebug
         self.isAnal = isAnal
+        self.detailed_bg = detailed_bg
         self.max_sequence_length = max_length_for_pad
         self.isRQ = rq
         self.unique_index = []
@@ -294,9 +300,9 @@ class MLDataPrep(object):
             print("Invalid file content")
             return
 
-        if self.isDebug:
-            print (data_list)
-            print (label_list)
+#         if self.isDebug:
+#             print (data_list)
+#             print (label_list)
 
         if background_data_generation:
             data_list, label_list = self.prepare_background_data(data_list, label_list)
@@ -310,8 +316,8 @@ class MLDataPrep(object):
         
         if self.isDebug:
             print (x_train.shape)
-            print (x_train)
-            print (y_train)
+#             print (x_train)
+#             print (y_train)
         
         return x_train, x_test, y_train, y_test
     
@@ -322,16 +328,17 @@ class MLDataPrep(object):
         new_label_data = []
         for sample in data_set:
             length = sample.shape[0]
-            for split_index in split_ratio:
-                si = int(split_index * length)
-                new_data = sample[:si,:]
-                new_background_data.append(new_data)
-                new_label_data.append(TopBotType.noTopBot.value)
-#                 if self.isDebug:
-#                     print(sample.shape)
-#                     print(new_background_data[-1].shape)
-#                     print(new_label_data[-1])
-        
+            if self.detailed_bg:
+                for i in range(2, length-1, 2): # step by 2
+                    new_data = sample[:i, :] 
+                    new_background_data.append(new_data)
+                    new_label_data.append(TopBotType.noTopBot.value)
+            else:
+                for split_index in split_ratio:
+                    si = int(split_index * length)
+                    new_data = sample[:si,:]
+                    new_background_data.append(new_data)
+                    new_label_data.append(TopBotType.noTopBot.value)
         
         data_set = data_set + new_background_data
         label_set = label_set + new_label_data

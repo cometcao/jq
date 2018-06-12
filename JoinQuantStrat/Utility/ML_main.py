@@ -57,7 +57,7 @@ class ML_biaoli_train(object):
         x_train, x_test, y_train, y_test = mld.prepare_stock_data_cnn(initial_data_path)
         
         mdp = MLDataProcess(model_name=model_name)
-        mdp.define_conv_lstm_model(x_train, x_test, y_train, y_test, num_classes=3, epochs=epochs)        
+        mdp.define_conv_lstm_model(x_train, x_test, y_train, y_test, num_classes=3, epochs=epochs, verbose=2)        
         
         # filenames = ['training_data/cnn_training_test_index_v3_list.pkl']
         # x_train, x_test, y_train, y_test = mld.prepare_stock_data_cnn(filenames)
@@ -92,6 +92,30 @@ class ML_biaoli_train(object):
         mdp = MLDataProcess(model_name=model_name)
         mdp.define_conv_lstm_model(x_train, x_test, y_train, y_test, num_classes=3, batch_size=batch_size, epochs=epochs) 
         return mdp.model
+    
+    def specified_stock_training(self, stocks, period_count=90, training_data_path=None, model_name=None, batch_size=20, epochs=3,detailed_bg=False):
+        if not stocks:
+            return None    
+        
+        filenames = [f for f in listdir(training_data_path) if isfile(join(training_data_path, f))]
+        mld = MLDataPrep(isAnal=self.isAnal, rq=self.rq, ts=self.ts, detailed_bg=detailed_bg) 
+        
+        for stock in stocks:
+            if stock in filenames:
+                print("data {0} exists".format(stock))
+                x_train, x_test, y_train, y_test = mld.prepare_stock_data_cnn(['{0}/{1}'.format(training_data_path,stock)])
+            else:
+                tmp_data, tmp_label = mld.retrieve_stocks_data(stocks, period_count=period_count, filename='{0}/{1}'.format(training_data_path, stock))
+                x_train, x_test, y_train, y_test = mld.prepare_stock_data_set(tmp_data, tmp_label)                
+            
+            mdp = MLDataProcess(model_name=None, isAnal=True)
+            mdp.load_model(model_name)
+            model_path = model_name.split('/')
+            mdp.model_name = '{0}/{1}/{2}.h5'.format(model_path[0], model_path[1], stock)
+            
+            x_train, x_test, _ = mdp.define_conv_lstm_dimension(x_train, x_test)
+            mdp.process_model(mdp.model, x_train, x_test, y_train, y_test, batch_size=batch_size, epochs=epochs, verbose=2) 
+        
 
 #################### PREDICTION ######################
 
@@ -172,8 +196,8 @@ class ML_biaoli_check(object):
                 long_pred = (new_y_class[-1] == -1 and new_long_conf[-1])
                 short_pred = (new_y_class[-1] == 1 and new_short_conf[-1])
                 if check_status:
-                    long_pred = long_pred or (len(new_y_class) >= 2 and new_y_class[-2] == -1 and new_y_class[-1] == 0 and new_long_conf[-1] and new_long_conf[-2]) 
-                    short_pred = short_pred or (len(new_y_class) >= 2 and new_y_class[-2] == 1 and new_y_class[-1] == 0 and new_short_conf[-1] and new_short_conf[-2])                  
+                    long_pred = long_pred or (len(new_y_class) >= 2 and new_y_class[-2] == -1 and new_long_conf[-2]) 
+                    short_pred = short_pred or (len(new_y_class) >= 2 and new_y_class[-2] == 1 and new_short_conf[-2])
                 if self.isDebug:
                     print(new_pred)
                     print(new_y_class)
@@ -187,7 +211,8 @@ class ML_biaoli_check(object):
         mld = MLDataPrep(isAnal=self.isAnal, rq=self.rq, isDebug=self.isDebug)
         data_set, origin_data_length = mld.prepare_stock_data_predict(stock, today_date=today_date) # 000001.XSHG
         if data_set is None: # can't predict
-            return ([0],[[0]], 0)
+            print("None dataset, return [0],[[0]], 0")
+            return (([0],[[0]]), 0)
         try:
             if self.extra_training:
                 tmp_data, tmp_label = mld.retrieve_stocks_data([stock], period_count=self.extra_training_period, filename=self.extra_training_file, today_date=today_date)
@@ -196,11 +221,10 @@ class ML_biaoli_check(object):
                 self.mdp.process_model(self.mdp.model, x_train, x_test, y_train, y_test, batch_size = 30,epochs = 3)
                 
             unique_index = np.array([-1, 0, 1])
-            
             return self.mdp.model_predict_cnn_lstm(data_set, unique_index), origin_data_length
         except Exception as e: 
             print(e)
-            return ([0],[[0]], 0)
+            return (([0],[[0]]), 0)
     
     def interpret(self, pred):
         """Our confidence level must be above the threthold"""

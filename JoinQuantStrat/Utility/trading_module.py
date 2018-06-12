@@ -15,8 +15,8 @@ try:
 except:
     pass
 
-from api import *
-from webtrader import WebTrader
+# from api import *
+# from webtrader import WebTrader
 
 import config
 import smtplib
@@ -266,6 +266,6 @@ class XueQiuAction:
                 except:
                     log.info('order failed:{0} {1}'.format(stock, value_pct))
 
-# xq = XueQiuAction('xq', 2)
-# xq.connect()
-# xq.reset()
+xq = XueQiuAction('xq', 2)
+xq.connect()
+xq.reset()

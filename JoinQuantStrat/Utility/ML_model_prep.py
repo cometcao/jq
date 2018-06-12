@@ -187,14 +187,15 @@ class MLDataProcess(object):
             self.model = load_model(hack_path)
         self.model_name = model_name
         print("loaded model: {0}".format(self.model_name))
+        print (self.model.summary())
 
     def model_predict_cnn(self, data_set, unique_id):
         if self.model:
             data_set = np.expand_dims(data_set, axis=2)
             prediction = np.array(self.model.predict(data_set))
-            print(prediction)
+#             print(prediction)
             y_class = unique_id[prediction.argmax(axis=-1)]
-            print(y_class)
+#             print(y_class)
         else:
             print("Invalid model")
     
