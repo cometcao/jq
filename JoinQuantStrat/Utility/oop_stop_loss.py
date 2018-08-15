@@ -340,7 +340,7 @@ class Stop_gain_loss_stocks(Rule):
         bstd = (maxd + avgd) / 2
 
         # 数据不足时，计算的bstd为nan
-        if not isnan(bstd):
+        if not np.isnan(bstd):
             if bstd != 0:
                 return abs(bstd)
             else:
@@ -380,11 +380,13 @@ class equity_curve_protect(Rule):
         self.market_index = params.get('market_index', None)
         self.is_day_curve_protect = False
         self.port_value_record = []
+        self.debug = params.get('debug', False)
     
     def update_params(self, context, params):
-        self.percent = params.get('percent', self.percent)
-        self.day_count = params.get('day_count', self.day_count)
-        self.use_avg = params.get('use_avg', self.use_avg)
+#         self.percent = params.get('percent', self.percent)
+#         self.day_count = params.get('day_count', self.day_count)
+#         self.use_avg = params.get('use_avg', self.use_avg)
+        self.debug = params.get('debug', False)
 
     def handle_data(self, context, data):
         if not self.is_day_curve_protect :
@@ -392,6 +394,10 @@ class equity_curve_protect(Rule):
             if len(self.port_value_record) >= self.day_count:
                 market_growth_rate = get_growth_rate(self.market_index) if self.market_index else 0
                 last_value = self.port_value_record[-self.day_count]
+                if self.debug:
+                    self.g.log("current_value:{0}".format(cur_value))
+                    self.g.log("last_value:{0}".format(last_value))
+                    self.g.log("market_growth_rate:{0}".format(market_growth_rate))
                 if self.use_avg:
                     avg_value = sum(self.port_value_record[-self.day_count:]) / self.day_count
                     if cur_value < avg_value:

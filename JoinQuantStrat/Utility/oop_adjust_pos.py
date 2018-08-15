@@ -60,13 +60,16 @@ class Period_condition(Weight_Base):
         self.mark_today = {}
 
     def update_params(self, context, params):
-        Weight_Base.update_params(self, context, params)
-        self.period = params.get('period', self.period)
-        self.on_clear_wait_days = params.get('clear_wait', 2)
-        self.mark_today = {}
+#         Weight_Base.update_params(self, context, params)
+#         self.period = params.get('period', self.period)
+#         self.on_clear_wait_days = params.get('clear_wait', 2)
+#         self.mark_today = {}
+        pass
 
     def handle_data(self, context, data):
-        self.is_to_return = self.day_count % self.period != 0 or (self.mark_today[context.current_dt.date()] if context.current_dt.date() in self.mark_today else False)
+        self.is_to_return = self.day_count < 0 or\
+                            self.day_count % self.period != 0 or\
+                            (self.mark_today[context.current_dt.date()] if context.current_dt.date() in self.mark_today else False)
         
         if context.current_dt.date() not in self.mark_today: # only increment once per day
             self.log.info("调仓日计数 [%d]" % (self.day_count))
@@ -85,8 +88,8 @@ class Period_condition(Weight_Base):
     def on_clear_position(self, context, new_pindexs=[0]):
         self.day_count = 0
         self.mark_today = {}
-        if self.g.curve_protect:
-            self.day_count = self.period-self.on_clear_wait_days
+        if self.g.curve_protect or self.on_clear_wait_days > 0:
+            self.day_count = -self.on_clear_wait_days
             self.g.curve_protect = False
         pass
 
