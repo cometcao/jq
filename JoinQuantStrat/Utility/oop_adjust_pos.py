@@ -161,6 +161,7 @@ class Buy_stocks(Rule):
     def handle_data(self, context, data):
         if self.is_to_return:
             self.log_warn('无法执行买入!! self.is_to_return 未开启')
+            self.g.send_port_info(context)
             return        
 
         self.to_buy = self.g.monitor_buy_list
@@ -249,6 +250,7 @@ class Buy_stocks_portion(Buy_stocks):
     def adjust(self,context,data,buy_stocks):
         if self.is_to_return:
             self.log_warn('无法执行买入!! self.is_to_return 未开启')
+            self.g.send_port_info(context)
             return
         for pindex in self.g.op_pindexs:
             position_count = len(context.subportfolios[pindex].positions)
@@ -265,6 +267,7 @@ class Buy_stocks_portion(Buy_stocks):
                         if self.g.open_position(self, stock, value, pindex):
                             if len(context.subportfolios[pindex].long_positions) == self.buy_count:
                                 break
+        self.g.send_port_info(context)
         pass
     def after_trading_end(self, context):
         self.g.sell_stocks = []
@@ -290,6 +293,7 @@ class Buy_stocks_var(Buy_stocks):
             self.pc_var = PositionControlVar(context, self.risk_var, self.p_value, self.money_fund, self.equal_pos)
         if self.is_to_return:
             self.log_warn('无法执行买入!! self.is_to_return 未开启')
+            self.g.send_port_info(context)
             return
         
         if self.adjust_pos:

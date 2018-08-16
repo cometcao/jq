@@ -158,17 +158,17 @@ class ML_Stock_Timing(Rule):
                 trade_dict[stock] = (buy, sell)
                 
 #             print(trade_dict)
-#             # sell holding stocks if found # no need to do it
-#             hold_stocks_to_check = [stock for stock in context.portfolio.positions.keys() if stock not in g.money_fund]
-#             for stock in hold_stocks_to_check:
-#                 if stock not in trade_dict:
-#                     continue            
-#                 (buy, sell) = trade_dict[stock]
-#                 if sell == 1:
-#                     self.g.sell_stocks.append(stock)
-#                     if stock in context.portfolio.positions.keys():
-#                         print("stock {0} closed".format(stock))
-#                         self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+            # sell holding stocks if found # no need to do it
+            hold_stocks_to_check = [stock for stock in context.portfolio.positions.keys() if stock not in g.money_fund]
+            for stock in hold_stocks_to_check:
+                if stock not in trade_dict:
+                    continue            
+                (buy, sell) = trade_dict[stock]
+                if sell == 1:
+                    self.g.sell_stocks.append(stock)
+                    if stock in context.portfolio.positions.keys():
+                        print("stock {0} closed".format(stock))
+                        self.g.close_position(self, context.portfolio.positions[stock], True, 0)
             
             # filter in long point stocks
             stocks_to_check = self.g.buy_stocks
@@ -597,6 +597,39 @@ class Mul_index_stop_loss_ta(Rule):
 
     def __str__(self):
         return '多指数技术分析止损器[指数:%s] [TA:%s]' % (str(self._indexs), self._ta)
+
+# '''-------------多指数平均止损------------'''
+class Mul_index_stop_loss_avg(Rule):
+    def __init__(self, params):
+        Rule.__init__(self, params)
+        self._indexs = params.get('indexs', ['000001.XSHG', '399001.XSHE'])
+        self._n = params.get('n', 30)
+        
+    def handle_data(self, context, data):
+        total_index_previous_price = 0.0
+        total_index_avg_price = 0.0
+        for index_a in self._indexs:
+            close_data = attribute_history(index_a, self._n , '1d', ['close'])
+            total_index_avg_price += close_data['close'].mean()
+            total_index_previous_price += close_data['close'][-1]
+
+        # 取得过n天的平均价格
+        avg_price = total_index_avg_price/len(self._indexs)
+        # 取得上一时间点价格
+        current_price = total_index_previous_price/len(self._indexs)
+        # 取得现有仓位中的所有股票
+        if current_price < avg_price:
+            self.log.warn('不符合持仓条件，清仓')
+            self.g.clear_position(self, context, self.g.op_pindexs)
+            self.is_to_return = True
+        else:
+            pass
+
+    def after_trading_end(self, context):
+        Rule.after_trading_end(self, context)        
+
+    def __str__(self):
+        return '多指数平均止损[指数:%s] [Number of days:%s]' % (str(self._indexs), self._n)
 
 # '''-------------RSRS------------'''
 class RSRS_timing(Rule):
