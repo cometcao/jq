@@ -273,7 +273,8 @@ class MLDataPrep(object):
         self.check_level = monitor_level
     
     def retrieve_stocks_data(self, stocks, period_count=60, filename=None, today_date=None):
-        data_list = label_list = []
+        data_list = []
+        label_list = []
         for stock in stocks:
             if self.isAnal:
                 print ("working on stock: {0}".format(stock))
@@ -331,7 +332,8 @@ class MLDataPrep(object):
         return y_code
     
     def prepare_stock_data_cnn(self, filenames, padData=True, test_portion=0.1, random_seed=42, background_data_generation=True):
-        data_list = label_list = []
+        data_list = []
+        label_list = []
         for file in filenames:
             A, B = self.load_dataset(file)
             
