@@ -132,7 +132,6 @@ class MLKbarPrep(object):
             kb = KBarProcessor(stock_df)
             # for higher level, we only need the pivot dates, getMarketBL contains more than we need, no need for join
             stock_df = kb.getMarkedBL()
-#             stock_df = stock_df.join(kb.getMarkedBL()[['new_index', 'tb']])
 
         elif level == self.monitor_level[1]:
             if self.use_standardized_sub_df:
@@ -140,10 +139,11 @@ class MLKbarPrep(object):
                 if self.sub_level_min_count != 0:
                     stock_df = kb.getMarkedBL()[['open','close','high','low', 'money', 'new_index', 'tb']]
                 else:
-                    stock_df = kb.getStandardized()[['open','close','high','low', 'money']]
+                    # stock_df = kb.getStandardized()[['open','close','high','low', 'money']]
+                    # logic change here use sub level pivot time for segmentation of background training data
+                    stock_df = kb.getIntegraded()
             else:
                 pass
-#         print(stock_df)
         return stock_df
     
     def prepare_training_data(self):
@@ -212,12 +212,15 @@ class MLKbarPrep(object):
             if sub_level_count < self.sub_level_min_count:
                 return
         
+        # intermediate trunk
+        tb_trunk_df = trunk_df.dropna(subset=['tb'])
+        
         if trunk_df.shape[0] > self.sub_max_count: # truncate
             trunk_df = trunk_df.iloc[-self.sub_max_count:,:]
         
         if self.manual_select:
             trunk_df = self.manual_select(trunk_df)
-        else:
+        else: # manual_wash
             trunk_df = self.manual_wash(trunk_df)  
         if self.isNormalize:
             trunk_df = self.normalize(trunk_df)
@@ -225,6 +228,11 @@ class MLKbarPrep(object):
         if label: # differentiate training and predicting
             self.data_set.append(trunk_df.values)
             self.label_set.append(label)
+            
+            for time_index in tb_trunk_df.index:
+                self.data_set.append(trunk_df.loc[:time_index, :])
+                self.label_set.append(TopBotType.noTopBot.value)
+            
         else:
             self.data_set.append(trunk_df.values)
         
@@ -238,9 +246,7 @@ class MLKbarPrep(object):
         return df
         
     def manual_wash(self, df):
-        if self.sub_level_min_count != 0:
-            df = df.drop(['new_index','tb'], 1, errors='ignore')
-        df = df.dropna()
+        df = df.drop(['new_index','tb'], 1, errors='ignore')
         return df
         
     def normalize(self, df):
@@ -322,7 +328,8 @@ class MLDataPrep(object):
 
         predict_dataset = self.pad_each_training_array(predict_dataset)
         if self.isDebug:
-            print("original size:{0}".format(origin_pred_size))
+#             print("original size:{0}".format(origin_pred_size))
+            pass
         return predict_dataset, origin_pred_size
         
     def encode_category(self, label_set):
@@ -347,8 +354,8 @@ class MLDataPrep(object):
                 print("Data invalid in file {0}".format(file))
                 continue
 
-            data_list = A + data_list 
-            label_list = B + label_list
+            data_list = data_list + A
+            label_list = label_list + B
             print("loaded data set: {0}".format(file))
 
         return self.prepare_stock_data_set(data_list, label_list, padData, test_portion, random_seed, background_data_generation)
@@ -432,7 +439,14 @@ class MLDataPrep(object):
         length = len(inputarray)
         output = np.zeros((length,)+outputshape)
         for i in range(length):
+            if inputarray[i].shape[0] <= outputshape[0]:
             output[i][:inputarray[i].shape[0],:inputarray[i].shape[1]] = inputarray[i]
+            else:
+                output[i][:outputshape[0], :outputshape[1]] = inputarray[i][-outputshape[0]:,-outputshape[1]:]
+#                 print(inputarray[i].shape)
+#                 print(output[i].shape)
+#                 print(inputarray[i])
+#                 print(output[i])
         return output
     
     def findmaxshape(self, inputarray):
@@ -450,6 +464,52 @@ class MLDataPrep(object):
             if y > max_y:
                 max_y = y
         return(max_x, max_y)
+
+    def define_conv_lstm_dimension(self, x_train):
+        x_train = np.expand_dims(x_train, axis=2)         
+        x_train = np.expand_dims(x_train, axis=1)
+        return x_train
+    
+
+    def generate_from_data(self, data, label, batch_size):
+        for i in batch(range(0, len(data)), batch_size):
+            yield data[i[0]:i[1]], label[i[0]:i[1]]    
+    
+    def generate_from_file(self, filenames, padData=True, background_data_generation=True, batch_size=50):
+        while True:
+            for file in filenames:
+                A, B = self.load_dataset(file)
+                
+                A_check = True
+                for item in A:     
+                    if not ((item>=0).all() and (item<=1).all()): # min max value range
+                        print(item)
+                        A_check=False
+                        break
+                if not A_check:
+                    print("Data invalid in file {0}".format(file))
+                    continue
+    
+                print("loaded data set: {0}".format(file))
+    
+                if not A or not B:
+                    print("Invalid file content")
+                    return
+    
+                if background_data_generation:
+                    A, B = self.prepare_background_data(A, B)
+    
+                if padData:
+                    A = self.pad_each_training_array(A)
+                
+                B = self.encode_category(B)
+                A = self.define_conv_lstm_dimension(A)
+                for i in batch(range(0, len(A)), batch_size):
+                    yield A[i[0]:i[1]], B[i[0]:i[1]] 
+    
+    def prepare_stock_data_cnn_gen(self, filenames, padData=True, background_data_generation=True, batch_size=50):
+        return self.generate_from_file(filenames, padData=padData, background_data_generation=background_data_generation, batch_size=batch_size)
+    
 #                           open      close       high        low        money  \
 # 2017-11-14 10:00:00  3446.5500  3436.1400  3450.3400  3436.1400  60749246464   
 # 2017-11-14 10:30:00  3436.7000  3433.1700  3438.7300  3431.2600  39968927744   
