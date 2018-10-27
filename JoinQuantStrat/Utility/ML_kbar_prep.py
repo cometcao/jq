@@ -24,6 +24,15 @@ from utility_ts import *
 
 fixed_length = 1200
 
+# save a dataset to file
+def save_dataset(dataset, filename):
+    dump(dataset, open(filename, 'wb'))
+    print('Saved: %s' % filename)
+
+# load a clean dataset
+def load_dataset(filename):
+    return load(open(filename, 'rb'))
+
 
 class MLKbarPrep(object):
     '''
@@ -61,22 +70,41 @@ class MLKbarPrep(object):
         self.use_standardized_sub_df = use_standardized_sub_df
         self.num_of_debug_display = 4
         self.monitor_level = monitor_level
-    
-#     def obtain_count(self, level): # this function relys on correctly set of self.monitor_level 
-#         if self.monitor_level[0] == '5d':
-#             if level == '5d':
-#                 return self.count
-#             else:
-#                 return self.count * 5 # '1d'
-#         if self.monitor_level[0] == '1d':
-#             if level == '1d':
-#                 return self.count
-#             else:
-#                 return self.count * 8 # '30m'
+
+    def workout_count_num(self, level):
+        return self.count if self.monitor_level[0] == level else self.count * 8 if level == '30m' else self.count * 10 if level == '120m' else self.count * 5
+
+    def grab_stock_raw_data(self, stock, end_date, fields=['open','close','high','low', 'money'], file_dir="."):
+        temp_stock_df_dict = {}
+        for level in self.monitor_level:
+            local_count = self.workout_count_num(level)
+            stock_df = None
+            if not self.isAnal:
+                stock_df = attribute_history(stock, local_count, level, fields = fields, skip_paused=True, df=True)  
+            else:
+                latest_trading_day = end_date if end_date is not None else get_trade_days(count=1)[-1]
+                stock_df = get_price(stock, count=local_count, end_date=str(latest_trading_day), frequency=level, fields = ['open','close','high','low', 'money'], skip_paused=True)              
+            if stock_df.empty:
+                continue
+            temp_stock_df_dict[level] = stock_df
+        return temp_stock_df_dict
+        
+    def grab_stocks_raw_data(self, stocks, end_date=None, fields=['open','close','high','low', 'money'], file_dir="."):
+        # grab the raw data and save on files
+        all_stock_df = []
+        for stock in stocks:
+            all_stock_df.append(self.grab_stock_raw_data(stock, end_date, fields, file_dir))
+        save_dataset(all_stock_df, "{0}/last_stock_{1}.pkl".format(file_dir, stocks[-1]))
+            
+    def load_stock_raw_data(self, stock_df):
+        self.stock_df_dict = stock_df
+        for level in self.monitor_level:
+            self.stock_df_dict[level] = self.prepare_df_data(self.stock_df_dict[level], level)
+        
     
     def retrieve_stock_data(self, stock, end_date=None):
         for level in self.monitor_level:
-            local_count = self.count if self.monitor_level[0] == level else self.count * 8 if level == '30m' else self.count * 5
+            local_count = self.workout_count_num(level)
             stock_df = None
             if not self.isAnal:
                 stock_df = attribute_history(stock, local_count, level, fields = ['open','close','high','low', 'money'], skip_paused=True, df=True)  
@@ -95,7 +123,7 @@ class MLKbarPrep(object):
         for level in self.monitor_level:
             stock_df = None
             if not self.isAnal:
-                local_count = self.count if self.monitor_level[0] == level else self.count * 8 if level == '30m' else self.count * 5
+                local_count = self.workout_count_num(level)
                 stock_df = SecurityDataManager.get_data_rq(stock, count=local_count, period=level, fields=['open','close','high','low', 'total_turnover'], skip_suspended=True, df=True, include_now=self.include_now)
             else:
                 today = end_date if end_date is not None else datetime.datetime.today()
@@ -212,8 +240,12 @@ class MLKbarPrep(object):
             if sub_level_count < self.sub_level_min_count:
                 return
         
-        # intermediate trunk
-        tb_trunk_df = trunk_df.dropna(subset=['tb'])
+        if not for_predict:
+            # intermediate trunk
+            tb_trunk_df = trunk_df.dropna(subset=['tb'])
+        
+        if len(tb_trunk_df.index) > 0: # precise sub level chunk
+            trunk_df = trunk_df.loc[tb_trunk_df.index[0]:tb_trunk_df.index[-1],:]
         
         if trunk_df.shape[0] > self.sub_max_count: # truncate
             trunk_df = trunk_df.iloc[-self.sub_max_count:,:]
@@ -225,16 +257,16 @@ class MLKbarPrep(object):
         if self.isNormalize:
             trunk_df = self.normalize(trunk_df)
         
-        if label: # differentiate training and predicting
+        if for_predict: # differentiate training and predicting
             self.data_set.append(trunk_df.values)
-            self.label_set.append(label)
-            
-            for time_index in tb_trunk_df.index:
-                self.data_set.append(trunk_df.loc[:time_index, :])
-                self.label_set.append(TopBotType.noTopBot.value)
-            
         else:
             self.data_set.append(trunk_df.values)
+            self.label_set.append(label)
+        
+            if len(tb_trunk_df.index) > 0:
+                for time_index in tb_trunk_df.index[1:]:
+                self.data_set.append(trunk_df.loc[:time_index, :].values)
+                self.label_set.append(TopBotType.noTopBot.value)
         
         
     def manual_select(self, df):
@@ -278,6 +310,27 @@ class MLDataPrep(object):
         self.use_standardized_sub_df = use_standardized_sub_df
         self.check_level = monitor_level
     
+    def retrieve_stocks_data_from_raw(self, raw_file_path=None, filename=None):
+        data_list = []
+        label_list = []
+        mlk = MLKbarPrep(isAnal=self.isAnal, 
+                         isNormalize=True, 
+                         sub_max_count=self.max_sequence_length, 
+                         isDebug=self.isDebug, 
+                         sub_level_min_count=0, 
+                         use_standardized_sub_df=self.use_standardized_sub_df, 
+                         monitor_level=self.check_level)
+
+        df_array = load_dataset(raw_file_path)
+        for stock_df in df_array:
+            mlk.load_stock_raw_data(stock_df)
+            dl, ll = mlk.prepare_training_data()
+            data_list = data_list + dl
+            label_list = label_list + ll
+        if filename:
+            save_dataset((data_list, label_list), filename)
+        return (data_list, label_list)            
+    
     def retrieve_stocks_data(self, stocks, period_count=60, filename=None, today_date=None):
         data_list = []
         label_list = []
@@ -302,7 +355,7 @@ class MLDataPrep(object):
             data_list = data_list + dl
             label_list = label_list + ll   
         if filename:
-            self.save_dataset((data_list, label_list), filename)
+            save_dataset((data_list, label_list), filename)
         return (data_list, label_list)
     
     def prepare_stock_data_predict(self, stock, period_count=100, today_date=None):
@@ -338,11 +391,11 @@ class MLDataPrep(object):
         self.unique_index = uniques
         return y_code
     
-    def prepare_stock_data_cnn(self, filenames, padData=True, test_portion=0.1, random_seed=42, background_data_generation=True):
+    def prepare_stock_data_cnn(self, filenames, padData=True, test_portion=0.1, random_seed=42, background_data_generation=False):
         data_list = []
         label_list = []
         for file in filenames:
-            A, B = self.load_dataset(file)
+            A, B = load_dataset(file)
             
             A_check = True
             for item in A:     
@@ -411,16 +464,6 @@ class MLDataPrep(object):
         label_set = label_set + new_label_data
         return data_set, label_set
                 
-    
-        # save a dataset to file
-    def save_dataset(self, dataset, filename):
-        dump(dataset, open(filename, 'wb'))
-        print('Saved: %s' % filename)
-        
-    # load a clean dataset
-    def load_dataset(self, filename):
-        return load(open(filename, 'rb'))
-
     def pad_each_training_array(self, data_list):
         new_shape = self.findmaxshape(data_list)
         if self.max_sequence_length != 0: # force padding to global max length
@@ -440,7 +483,7 @@ class MLDataPrep(object):
         output = np.zeros((length,)+outputshape)
         for i in range(length):
             if inputarray[i].shape[0] <= outputshape[0]:
-            output[i][:inputarray[i].shape[0],:inputarray[i].shape[1]] = inputarray[i]
+                output[i][:inputarray[i].shape[0],:inputarray[i].shape[1]] = inputarray[i]
             else:
                 output[i][:outputshape[0], :outputshape[1]] = inputarray[i][-outputshape[0]:,-outputshape[1]:]
 #                 print(inputarray[i].shape)
@@ -478,7 +521,7 @@ class MLDataPrep(object):
     def generate_from_file(self, filenames, padData=True, background_data_generation=True, batch_size=50):
         while True:
             for file in filenames:
-                A, B = self.load_dataset(file)
+                A, B = load_dataset(file)
                 
                 A_check = True
                 for item in A:     

@@ -70,13 +70,13 @@ class ML_biaoli_train(object):
                          max_length_for_pad=self.sub_level_max_length)
         mld.retrieve_stocks_data(stocks=self.index_list,period_count=2500, filename='{0}/training_index.pkl'.format(initial_path))
 
-    def initial_training(self, initial_data_path, model_name, epochs=10, use_ccnlstm=True):
+    def initial_training(self, initial_data_path, model_name, epochs=10, use_ccnlstm=True, background_data_generation=True):
         mld = MLDataPrep(isAnal=self.isAnal, 
                          rq=self.rq, ts=self.ts, 
                          use_standardized_sub_df=self.use_standardized_sub_df, 
                          isDebug=self.isDebug,monitor_level=self.check_level,
                          max_length_for_pad=self.sub_level_max_length)
-        x_train, x_test, y_train, y_test = mld.prepare_stock_data_cnn(initial_data_path)
+        x_train, x_test, y_train, y_test = mld.prepare_stock_data_cnn(initial_data_path, background_data_generation=background_data_generation)
         
         mdp = MLDataProcess(model_name=model_name)
         if use_ccnlstm:

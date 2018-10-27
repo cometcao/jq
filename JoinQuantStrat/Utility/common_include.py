@@ -113,3 +113,8 @@ def generate_portion(num):
     while num != 0:
         yield float(num) / float(total_portion)
         num -= 1
+        
+def batch(iterable, n=1):
+    l = len(iterable)
+    for ndx in range(0, l, n): # restart
+        yield [ndx,min(ndx + n, l)]
