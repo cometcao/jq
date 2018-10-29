@@ -143,9 +143,11 @@ class ML_Stock_Timing(Rule):
     def __init__(self, params):
         self.ml_predict_file_path = params.get('ml_file_path', None)
         self.only_take_long_stocks = params.get('only_take_long_stocks', False)
+        self.clear_candidate_if_AI_failed = params.get('force_no_candidate', False)
         
     def update_params(self, context, params):
-        self.only_take_long_stocks = params.get('only_take_long_stocks', False)
+        self.only_take_long_stocks = params.get('only_take_long_stocks', True)
+        self.clear_candidate_if_AI_failed = params.get('force_no_candidate', True)
     
     def handle_data(self, context, data):
         today_date = context.current_dt.date()
@@ -192,6 +194,8 @@ class ML_Stock_Timing(Rule):
             # make sure ML predict use check_status
         except:
             self.log.warn("ML prediction data missing: {0} {1}".format(self.ml_predict_file_path, str(today_date)))
+            if self.clear_candidate_if_AI_failed:
+                self.g.buy_stocks = []
             return
             
         

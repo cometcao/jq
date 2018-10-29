@@ -72,7 +72,11 @@ class MLKbarPrep(object):
         self.monitor_level = monitor_level
 
     def workout_count_num(self, level):
-        return self.count if self.monitor_level[0] == level else self.count * 8 if level == '30m' else self.count * 10 if level == '120m' else self.count * 5
+        return self.count if self.monitor_level[0] == level \
+                        else self.count * 8 if level == '30m' \
+                        else self.count * 8 if level == '150m' \
+                        else self.count * 10 if level == '120m' \
+                        else self.count * 5
 
     def grab_stock_raw_data(self, stock, end_date, fields=['open','close','high','low', 'money'], file_dir="."):
         temp_stock_df_dict = {}
@@ -239,12 +243,11 @@ class MLKbarPrep(object):
             sub_level_count = len(trunk_df['tb']) - trunk_df['tb'].isnull().sum()
             if sub_level_count < self.sub_level_min_count:
                 return
+
+        # sub level trunks
+        tb_trunk_df = trunk_df.dropna(subset=['tb'])
         
-        if not for_predict:
-            # intermediate trunk
-            tb_trunk_df = trunk_df.dropna(subset=['tb'])
-        
-        if len(tb_trunk_df.index) > 0: # precise sub level chunk
+        if len(tb_trunk_df.index) >= 2: # precise sub level chunk at least 2 subs
             trunk_df = trunk_df.loc[tb_trunk_df.index[0]:tb_trunk_df.index[-1],:]
         
         if trunk_df.shape[0] > self.sub_max_count: # truncate
@@ -263,10 +266,9 @@ class MLKbarPrep(object):
             self.data_set.append(trunk_df.values)
             self.label_set.append(label)
         
-            if len(tb_trunk_df.index) > 0:
-                for time_index in tb_trunk_df.index[1:]:
-                self.data_set.append(trunk_df.loc[:time_index, :].values)
-                self.label_set.append(TopBotType.noTopBot.value)
+            for time_index in tb_trunk_df.index[1:-2]: #  counting from cutting start
+                    self.data_set.append(trunk_df.loc[:time_index, :].values)
+                    self.label_set.append(TopBotType.noTopBot.value)
         
         
     def manual_select(self, df):
@@ -413,7 +415,7 @@ class MLDataPrep(object):
 
         return self.prepare_stock_data_set(data_list, label_list, padData, test_portion, random_seed, background_data_generation)
     
-    def prepare_stock_data_set(self, data_list, label_list, padData=True, test_portion=0.1, random_seed=42, background_data_generation=True):
+    def prepare_stock_data_set(self, data_list, label_list, padData=True, test_portion=0.1, random_seed=42, background_data_generation=False):
 
         if not data_list or not label_list:
             print("Invalid file content")
@@ -518,7 +520,7 @@ class MLDataPrep(object):
         for i in batch(range(0, len(data)), batch_size):
             yield data[i[0]:i[1]], label[i[0]:i[1]]    
     
-    def generate_from_file(self, filenames, padData=True, background_data_generation=True, batch_size=50):
+    def generate_from_file(self, filenames, padData=True, background_data_generation=False, batch_size=50):
         while True:
             for file in filenames:
                 A, B = load_dataset(file)
@@ -550,7 +552,7 @@ class MLDataPrep(object):
                 for i in batch(range(0, len(A)), batch_size):
                     yield A[i[0]:i[1]], B[i[0]:i[1]] 
     
-    def prepare_stock_data_cnn_gen(self, filenames, padData=True, background_data_generation=True, batch_size=50):
+    def prepare_stock_data_cnn_gen(self, filenames, padData=True, background_data_generation=False, batch_size=50):
         return self.generate_from_file(filenames, padData=padData, background_data_generation=background_data_generation, batch_size=batch_size)
     
 #                           open      close       high        low        money  \
