@@ -161,7 +161,6 @@ class Buy_stocks(Rule):
     def handle_data(self, context, data):
         if self.is_to_return:
             self.log_warn('无法执行买入!! self.is_to_return 未开启')
-            self.g.send_port_info(context)
             return        
 
         self.to_buy = self.g.monitor_buy_list
@@ -172,7 +171,7 @@ class Buy_stocks(Rule):
             if self.use_long_filter:
                 self.to_buy = self.ta_long_filter(context, data, self.to_buy) 
             self.adjust(context, data, self.to_buy)
-            self.g.send_port_info(context)
+#             self.g.send_port_info(context)
 
     def ta_long_filter(self, context, data, to_buy):
         cta = checkTAIndicator_OR({
@@ -223,12 +222,6 @@ class Buy_stocks(Rule):
     def after_trading_end(self, context):
         self.g.sell_stocks = []
         self.to_buy = []
-
-#     def send_port_info(self, context):
-#         port_msg = [(context.portfolio.positions[stock].security, context.portfolio.positions[stock].total_amount * context.portfolio.positions[stock].price / context.portfolio.total_value) for stock in context.portfolio.positions]
-#         self.log.info(str(port_msg))
-#         if context.run_params.type == 'sim_trade':
-#             send_message(port_msg, channel='weixin')
         
     def recordTrade(self, stock_list):
         for stock in stock_list:
@@ -250,7 +243,7 @@ class Buy_stocks_portion(Buy_stocks):
     def adjust(self,context,data,buy_stocks):
         if self.is_to_return:
             self.log_warn('无法执行买入!! self.is_to_return 未开启')
-            self.g.send_port_info(context)
+#             self.g.send_port_info(context)
             return
         for pindex in self.g.op_pindexs:
             position_count = len(context.subportfolios[pindex].positions)
@@ -267,7 +260,7 @@ class Buy_stocks_portion(Buy_stocks):
                         if self.g.open_position(self, stock, value, pindex):
                             if len(context.subportfolios[pindex].long_positions) == self.buy_count:
                                 break
-        self.g.send_port_info(context)
+#         self.g.send_port_info(context)
         pass
     def after_trading_end(self, context):
         self.g.sell_stocks = []
@@ -293,7 +286,7 @@ class Buy_stocks_var(Buy_stocks):
             self.pc_var = PositionControlVar(context, self.risk_var, self.p_value, self.money_fund, self.equal_pos)
         if self.is_to_return:
             self.log_warn('无法执行买入!! self.is_to_return 未开启')
-            self.g.send_port_info(context)
+#             self.g.send_port_info(context)
             return
         
         if self.adjust_pos:
@@ -528,10 +521,10 @@ class Buy_stocks_chan(Buy_stocks_var):
             self.g.monitor_short_cm.appendStockList(self.g.monitor_long_cm.getGaugeStockList(bought_stocks))
             self.g.monitor_long_cm.displayMonitorMatrix(to_buy)
             self.recordTrade(bought_stocks)
-            self.g.send_port_info(context)
+#             self.g.send_port_info(context)
         elif context.current_dt.hour >= 14:
             self.adjust(context, data, [])
-            self.g.send_port_info(context)
+#             self.g.send_port_info(context)
 
         self.g.intraday_long_stock = [stock for stock in self.g.intraday_long_stock if stock in context.portfolio.positions.keys()] # keep track of bought stocks
         if context.current_dt.hour >= 14:
@@ -731,7 +724,7 @@ class Buy_stocks_pair(Buy_stocks_var):
         else:
             self.adjust(context, data, [])
             
-        self.g.send_port_info(context)
+#         self.g.send_port_info(context)
         
 
     def __str__(self):

@@ -541,6 +541,7 @@ class Adjust_position(Group_rules):
         for rule in self.rules:
             if isinstance(rule, Adjust_expand):
                 rule.after_adjust_end(context, data)
+        self.g.send_port_info(context)
         if self.is_to_return:
             return
 
