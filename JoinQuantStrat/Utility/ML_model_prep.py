@@ -112,7 +112,7 @@ class MLDataProcess(object):
                              dropout = 0.2, 
                              recurrent_dropout = 0.2
                              ))
-        model.add(ConvLSTM2D(32, 
+        model.add(ConvLSTM2D(48, 
                              kernel_size=(3, 1), 
                              padding='same',
                              return_sequences=True,
@@ -120,14 +120,29 @@ class MLDataProcess(object):
                              recurrent_dropout = 0.2
                              ))        
         model.add(BatchNormalization())
-        model.add(ConvLSTM2D(32, 
+        model.add(ConvLSTM2D(64, 
                              kernel_size=(3, 1), 
                              padding='same',
                              return_sequences=True,
                              dropout = 0.2, 
                              recurrent_dropout = 0.2
                              ))
-        model.add(ConvLSTM2D(32, 
+        model.add(ConvLSTM2D(80, 
+                             kernel_size=(3, 1), 
+                             padding='same',
+                             return_sequences=True,
+                             dropout = 0.2, 
+                             recurrent_dropout = 0.2
+                             ))        
+        model.add(BatchNormalization())
+        model.add(ConvLSTM2D(96, 
+                             kernel_size=(3, 1), 
+                             padding='same',
+                             return_sequences=True,
+                             dropout = 0.2, 
+                             recurrent_dropout = 0.2
+                             ))
+        model.add(ConvLSTM2D(112, 
                              kernel_size=(3, 1), 
                              padding='same',
                              return_sequences=True,
@@ -135,14 +150,14 @@ class MLDataProcess(object):
                              recurrent_dropout = 0.2
                              ))  
         model.add(BatchNormalization())
-        model.add(ConvLSTM2D(32, 
+        model.add(ConvLSTM2D(128, 
                              kernel_size=(3, 1), 
                              padding='same',
                              return_sequences=True,
                              dropout = 0.2, 
                              recurrent_dropout = 0.2
                              ))        
-        model.add(ConvLSTM2D(32, 
+        model.add(ConvLSTM2D(144, 
                              kernel_size=(3, 1), 
                              padding='same',
                              return_sequences=False,
@@ -155,8 +170,8 @@ class MLDataProcess(object):
 #         model.add(Dropout(0.25))
          
         model.add(Flatten())
-        model.add(Dense(128, activation='relu'))
-        model.add(BatchNormalization())
+#         model.add(Dense(128, activation='relu'))
+#         model.add(BatchNormalization())
         model.add(Dense(num_classes, activation='softmax'))
         
         model.compile(loss=keras.losses.categorical_crossentropy,
@@ -180,6 +195,50 @@ class MLDataProcess(object):
         if self.model_name:
             model.save(self.model_name)
             print("saved to file {0}".format(self.model_name))
+
+    def define_conv_lstm_shape(self, data_gen):
+        x_train, x_test = next(data_gen)
+        
+        input_shape = None
+        a, b, c, d, e = x_train.shape
+        if K.image_data_format() == 'channels_first':
+            # convert class vectors to binary class matrices
+            input_shape = (b, e, c, d)
+        else:
+            # convert class vectors to binary class matrices
+            input_shape = (b, c, d, e)
+        
+        data_gen.send((x_train, x_test))
+        return input_shape
+                      
+    
+    def define_conv_lstm_model_gen(self, data_gen, validation_gen, num_classes, batch_size = 50, steps = 10000,epochs = 5, verbose=0, validation_steps=1000):
+        input_shape = self.define_conv_lstm_shape(data_gen)
+        
+        model = self.create_conv_lstm_model_arch(input_shape, num_classes)
+        
+        self.process_model_generator(model, data_gen, steps, epochs, verbose, validation_gen, validation_gen, validation_steps)
+
+        
+    def process_model_generator(self, model, generator, steps = 10000, epochs = 5, verbose = 2, validation_data=None, evaluate_generator=None, validation_steps=1000):
+        model.fit_generator(generator, 
+                            steps_per_epoch = steps, 
+                            epochs = epochs, 
+                            verbose = verbose,
+                            validation_data = validation_data,
+                            validation_steps = validation_steps)
+        score = model.evaluate_generator(evaluate_generator, verbose = verbose, steps=841)
+        print('Test loss:', score[0])
+        print('Test accuracy:', score[1])        
+        
+        self.model = model
+        if self.model_name:
+            if self.saveByte:
+                self.save_model_byte(self.model_name, self.model)
+            else:
+                model.save(self.model_name)
+            print("saved to file {0}".format(self.model_name))        
+        
     
     def load_model(self, model_name):
         if self.isAnal:

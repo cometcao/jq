@@ -83,14 +83,6 @@ class ML_biaoli_train(object):
             mdp.define_conv_lstm_model(x_train, x_test, y_train, y_test, num_classes=3, epochs=epochs, verbose=2)        
         else:
             mdp.define_conv2d_model(x_train, x_test, y_train, y_test, num_classes=3, epochs=epochs, verbose=2)
-        # filenames = ['training_data/cnn_training_test_index_v3_list.pkl']
-        # x_train, x_test, y_train, y_test = mld.prepare_stock_data_cnn(filenames)
-        
-        # mdp = MLDataProcess(model_name='training_data/cnn_model_index_test.h5')
-        # mdp.define_conv2d_model(x_train, x_test, y_train, y_test, num_classes=3, epochs=50)
-        
-        # mdp = MLDataProcess(model_name='training_data/cnn_lstm_model_index_test.h5')
-        # mdp.define_conv_lstm_model(x_train, x_test, y_train, y_test, num_classes=3, epochs=50)
 
     def continue_training(self, model_name, folder_path='./training_data'):
         mld = MLDataPrep(isAnal=self.isAnal, 
@@ -179,6 +171,35 @@ class ML_biaoli_train(object):
             mdp.process_model(mdp.model, x_train, x_test, y_train, y_test, batch_size=batch_size, epochs=epochs, verbose=2) 
         
 
+    def initial_training_gen(self, initial_data_path, model_name, epochs=10, use_ccnlstm=True):
+        mld = MLDataPrep(isAnal=self.isAnal, 
+                         rq=self.rq, ts=self.ts, 
+                         use_standardized_sub_df=self.use_standardized_sub_df, 
+                         isDebug=self.isDebug,monitor_level=self.check_level,
+                         max_length_for_pad=self.sub_level_max_length)
+        data_gen, validation_gen = mld.prepare_stock_data_cnn_gen(initial_data_path)
+        
+        mdp = MLDataProcess(model_name=model_name)
+        if use_ccnlstm:
+            mdp.define_conv_lstm_model_gen(data_gen, validation_gen, num_classes=3, epochs=epochs, verbose=2)
+            
+    def continue_training_gen(self, model_name, folder_path='./training_data'):
+        mld = MLDataPrep(isAnal=self.isAnal, 
+                         rq=self.rq, 
+                         ts=self.ts, 
+                         use_standardized_sub_df=self.use_standardized_sub_df, 
+                         isDebug=self.isDebug,
+                         monitor_level=self.check_level,
+                         max_length_for_pad=self.sub_level_max_length)
+        mdp = MLDataProcess(model_name=None)
+        mdp.load_model(model_name)
+        filenames = [f for f in listdir(folder_path) if isfile(join(folder_path, f))]
+        
+        full_names = ['{0}/{1}'.format(folder_path, file) for file in filenames]
+        data_gen, validation_gen = mld.prepare_stock_data_cnn_gen(full_names)
+        mdp.process_model_generator(mdp.model, data_gen, steps=100000, epochs=5, verbose=2, validation_data=validation_gen, evaluate_generator=validation_gen) 
+
+
 #################### PREDICTION ######################
 
 class ML_biaoli_check(object):
@@ -231,7 +252,7 @@ class ML_biaoli_check(object):
         return [(stock, self.gauge_stock(stock, today_date, check_status=check_status)) for stock in stocks]
     
     def gauge_stock(self, stock, today_date=None, check_status=False):    
-        (y_class, pred), origin_size = self.model_predict(stock, today_date)
+        (y_class, pred), origin_size, past_pivot_status = self.model_predict(stock, today_date)
         long_conf, short_conf = self.interpret(pred)    
         
         old_pred = pred[:origin_size]
@@ -251,10 +272,14 @@ class ML_biaoli_check(object):
                 if check_status:
                     long_pred = long_pred or (len(old_y_class) >= 2 and old_y_class[-2] == -1 and old_y_class[-1] == 0 and old_long_conf[-1] and old_long_conf[-2]) 
                     short_pred = short_pred or (len(old_y_class) >= 2 and old_y_class[-2] == 1 and old_y_class[-1] == 0 and old_short_conf[-1] and old_short_conf[-2])
+                else:
+                    long_pred = long_pred or (past_pivot_status == -1 and old_y_class[-1] == 0) 
+                    short_pred = short_pred or (past_pivot_status == 1 and old_y_class[-1] == 0)
                     
                 if self.isDebug:
                     print(old_pred)
                     print(old_y_class)
+                    print(past_pivot_status)
             else:
                 print("gapped pivots for prediction")
                 new_y_class = y_class[origin_size:]
@@ -282,7 +307,7 @@ class ML_biaoli_check(object):
                          use_standardized_sub_df=self.use_standardized_sub_df, 
                          monitor_level=self.check_level,
                          max_length_for_pad=self.sub_level_max_length)
-        data_set, origin_data_length = mld.prepare_stock_data_predict(stock, today_date=today_date) # 000001.XSHG
+        data_set, origin_data_length, past_pivot_status = mld.prepare_stock_data_predict(stock, today_date=today_date) # 000001.XSHG
         if data_set is None: # can't predict
             print("None dataset, return [0],[[0]], 0")
             return (([0],[[0]]), 0)
@@ -296,14 +321,14 @@ class ML_biaoli_check(object):
             unique_index = np.array([-1, 0, 1])
             
             if self.use_cnn_lstm:
-                return self.mdp.model_predict_cnn_lstm(data_set, unique_index), origin_data_length
+                return self.mdp.model_predict_cnn_lstm(data_set, unique_index), origin_data_length, past_pivot_status
             elif self.use_cnn:
-                return self.mdp.model_predict_cnn(data_set, unique_index), origin_data_length
+                return self.mdp.model_predict_cnn(data_set, unique_index), origin_data_length, past_pivot_status
             else:
-                return self.mdp.model_predict_cnn_lstm(data_set, unique_index), origin_data_length
+                return self.mdp.model_predict_cnn_lstm(data_set, unique_index), origin_data_length, past_pivot_status
         except Exception as e: 
             print(e)
-            return (([0],[[0]]), 0)
+            return (([0],[[0]]), 0, 0)
     
     def interpret(self, pred):
         """Our confidence level must be above the threthold"""

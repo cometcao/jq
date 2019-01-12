@@ -7,6 +7,7 @@ try:
     from jqdata import *
 except:
     pass
+from common_include import *
 from kBarProcessor import *
 from biaoLiStatus import TopBotType
 from keras.utils.np_utils import to_categorical
@@ -23,16 +24,6 @@ from utility_ts import *
 # pd.options.mode.chained_assignment = None 
 
 fixed_length = 1200
-
-# save a dataset to file
-def save_dataset(dataset, filename):
-    dump(dataset, open(filename, 'wb'))
-    print('Saved: %s' % filename)
-
-# load a clean dataset
-def load_dataset(filename):
-    return load(open(filename, 'rb'))
-
 
 class MLKbarPrep(object):
     '''
@@ -77,6 +68,12 @@ class MLKbarPrep(object):
                         else self.count * 8 if level == '150m' \
                         else self.count * 10 if level == '120m' \
                         else self.count * 5
+
+    def get_high_df(self):
+        return self.stock_df_dict[self.monitor_level[0]]
+    
+    def get_low_df(self):
+        return self.stock_df_dict[self.monitor_level[1]]
 
     def grab_stock_raw_data(self, stock, end_date, fields=['open','close','high','low', 'money'], file_dir="."):
         temp_stock_df_dict = {}
@@ -385,7 +382,7 @@ class MLDataPrep(object):
         if self.isDebug:
 #             print("original size:{0}".format(origin_pred_size))
             pass
-        return predict_dataset, origin_pred_size
+        return predict_dataset, origin_pred_size, mlk.get_high_df().ix[-1, 'tb'].value
         
     def encode_category(self, label_set):
         uniques, ids = np.unique(label_set, return_inverse=True)
@@ -400,11 +397,16 @@ class MLDataPrep(object):
             A, B = load_dataset(file)
             
             A_check = True
+            i = 0
             for item in A:     
                 if not ((item>=0).all() and (item<=1).all()): # min max value range
                     print(item)
+                    print(A[i])
+                    print(B[i])
+                    print(i)
                     A_check=False
                     break
+                i += 1
             if not A_check:
                 print("Data invalid in file {0}".format(file))
                 continue
