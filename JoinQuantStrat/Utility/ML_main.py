@@ -273,7 +273,7 @@ class ML_biaoli_check(object):
                 short_pred = short_pred or (len(old_y_class) >= 2 and old_y_class[-2] == 1 and old_y_class[-1] == 0 and old_short_conf[-1] and old_short_conf[-2])
                     
                 if check_status and not long_pred and not short_pred: # model not deterministic, we use past pivot point with passive logic
-                    long_pred = long_pred or past_pivot_status == -1
+                    long_pred = long_pred or (past_pivot_status == -1 and old_y_class[-1] == 0 and old_long_conf[-1])
                     short_pred = short_pred or past_pivot_status == 1
                     
                 if self.isDebug:
