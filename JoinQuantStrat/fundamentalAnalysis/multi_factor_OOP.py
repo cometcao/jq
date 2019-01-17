@@ -1,3 +1,5 @@
+# -*- encoding: utf8 -*-
+
 import types
 from common_include import *
 from oop_strategy_frame import *
@@ -6,26 +8,26 @@ from oop_stop_loss import *
 from oop_select_stock import *
 from oop_sort_stock import *
 from oop_record_stats import *
-from oop_trading_sync import *
+# from oop_trading_sync import *
 # from ML_kbar_prep import *
 # from ML_model_prep import *
 # from ML_main import *
 from ml_factor_rank import *
 
 
-# ä¸åŒæ­¥çš„ç™½åå•ï¼Œä¸»è¦ç”¨äºå®ç›˜æ˜“åŒæ­¥æŒä»“æ—¶ï¼Œä¸åŒæ­¥ä¸­çš„æ–°è‚¡ï¼Œéœ€æŠŠæ–°è‚¡ä»£ç æ·»åŠ åˆ°è¿™é‡Œã€‚https://www.joinquant.com/algorithm/index/edit?algorithmId=23c589f4594f827184d4f6f01a11b2f2
-# å¯æŠŠwhile_listå¦å¤–æ”¾åˆ°ç ”ç©¶çš„ä¸€ä¸ªpyæ–‡ä»¶é‡Œ
+# ²»Í¬²½µÄ°×Ãûµ¥£¬Ö÷ÒªÓÃÓÚÊµÅÌÒ×Í¬²½³Ö²ÖÊ±£¬²»Í¬²½ÖĞµÄĞÂ¹É£¬Ğè°ÑĞÂ¹É´úÂëÌí¼Óµ½ÕâÀï¡£https://www.joinquant.com/algorithm/index/edit?algorithmId=23c589f4594f827184d4f6f01a11b2f2
+# ¿É°Ñwhile_listÁíÍâ·Åµ½ÑĞ¾¿µÄÒ»¸öpyÎÄ¼şÀï
 def while_list():
     return ['000001.XSHE']
 
-# ==================================ç­–ç•¥é…ç½®==============================================
+# ==================================²ßÂÔÅäÖÃ==============================================
 def select_strategy(context):
-    g.strategy_memo = 'æ··åˆç­–ç•¥'
-    # **** è¿™é‡Œå®šä¹‰logè¾“å‡ºçš„ç±»ç±»å‹,é‡è¦ï¼Œä¸€å®šè¦å†™ã€‚å‡å¦‚æœ‰éœ€è¦è‡ªå®šä¹‰logï¼Œå¯æ›´æ”¹è¿™ä¸ªå˜é‡
+    g.strategy_memo = '»ìºÏ²ßÂÔ'
+    # **** ÕâÀï¶¨ÒålogÊä³öµÄÀàÀàĞÍ,ÖØÒª£¬Ò»¶¨ÒªĞ´¡£¼ÙÈçÓĞĞèÒª×Ô¶¨Òålog£¬¿É¸ü¸ÄÕâ¸ö±äÁ¿
     g.log_type = Rule_loger
-    # åˆ¤æ–­æ˜¯è¿è¡Œå›æµ‹è¿˜æ˜¯è¿è¡Œæ¨¡æ‹Ÿ
+    # ÅĞ¶ÏÊÇÔËĞĞ»Ø²â»¹ÊÇÔËĞĞÄ£Äâ
     g.is_sim_trade = context.run_params.type == 'sim_trade'
-    g.port_pos_control = 1.0 # ç»„åˆä»“ä½æ§åˆ¶å‚æ•°
+    g.port_pos_control = 1.0 # ×éºÏ²ÖÎ»¿ØÖÆ²ÎÊı
     g.monitor_levels = ['5d','1d','60m']
     g.buy_count = 3
     g.pb_limit = 5
@@ -33,249 +35,39 @@ def select_strategy(context):
     g.pe_limit = 200
     g.evs_limit = 5
     g.eve_limit = 5
-    index2 = '000016.XSHG'  # å¤§ç›˜æŒ‡æ•°
-    index8 = '399333.XSHE'  # å°ç›˜æŒ‡æ•°
+    index2 = '000001.XSHG' #'000016.XSHG'  # ´óÅÌÖ¸Êı
+    index8 = '399001.XSHE' #'399333.XSHE'  # Ğ¡ÅÌÖ¸Êı
     g.money_fund = ['511880.XSHG','511010.XSHG','511220.XSHG']
     
-    ''' ---------------------é…ç½® è°ƒä»“æ¡ä»¶åˆ¤æ–­è§„åˆ™-----------------------'''
-    # è°ƒä»“æ¡ä»¶åˆ¤æ–­
+    ''' ---------------------ÅäÖÃ µ÷²ÖÌõ¼şÅĞ¶Ï¹æÔò-----------------------'''
+    # µ÷²ÖÌõ¼şÅĞ¶Ï
     adjust_condition_config = [
-        [True, '_time_c_', 'è°ƒä»“æ—¶é—´', Time_condition, {
-            # 'times': [[10,0],[10, 30], [11,00], [13,00], [13,30], [14,00],[14, 30]],  # è°ƒä»“æ—¶é—´åˆ—è¡¨ï¼ŒäºŒç»´æ•°ç»„ï¼Œå¯æŒ‡å®šå¤šä¸ªæ—¶é—´ç‚¹
-            'times': [[14, 50]],  # è°ƒä»“æ—¶é—´åˆ—è¡¨ï¼ŒäºŒç»´æ•°ç»„ï¼Œå¯æŒ‡å®šå¤šä¸ªæ—¶é—´ç‚¹
+        [True, '_time_c_', 'µ÷²ÖÊ±¼ä', Time_condition, {
+            # 'times': [[10,0],[10, 30], [11,00], [13,00], [13,30], [14,00],[14, 30]],  # µ÷²ÖÊ±¼äÁĞ±í£¬¶şÎ¬Êı×é£¬¿ÉÖ¸¶¨¶à¸öÊ±¼äµã
+            'times': [[14, 50]],  # µ÷²ÖÊ±¼äÁĞ±í£¬¶şÎ¬Êı×é£¬¿ÉÖ¸¶¨¶à¸öÊ±¼äµã
         }],
-        [False, '_Stop_loss_by_price_', 'æŒ‡æ•°æœ€é«˜ä½ä»·æ¯”å€¼æ­¢æŸå™¨', Stop_loss_by_price, {
-            'index': '000001.XSHG',  # ä½¿ç”¨çš„æŒ‡æ•°,é»˜è®¤ '000001.XSHG'
-            'day_count': 160,  # å¯é€‰ å–day_countå¤©å†…çš„æœ€é«˜ä»·ï¼Œæœ€ä½ä»·ã€‚é»˜è®¤160
-            'multiple': 2.2  # å¯é€‰ æœ€é«˜ä»·ä¸ºæœ€ä½ä»·çš„multipleå€æ—¶ï¼Œè§¦ å‘æ¸…ä»“
+        [False, '_Stop_loss_by_price_', 'Ö¸Êı×î¸ßµÍ¼Û±ÈÖµÖ¹ËğÆ÷', Stop_loss_by_price, {
+            'index': '000001.XSHG',  # Ê¹ÓÃµÄÖ¸Êı,Ä¬ÈÏ '000001.XSHG'
+            'day_count': 160,  # ¿ÉÑ¡ È¡day_countÌìÄÚµÄ×î¸ß¼Û£¬×îµÍ¼Û¡£Ä¬ÈÏ160
+            'multiple': 2.2  # ¿ÉÑ¡ ×î¸ß¼ÛÎª×îµÍ¼ÛµÄmultiple±¶Ê±£¬´¥ ·¢Çå²Ö
         }],
-        [False,'_Stop_loss_by_3_black_crows_','æŒ‡æ•°ä¸‰ä¹Œé¸¦æ­¢æŸ', Stop_loss_by_3_black_crows,{
-            'index':'000001.XSHG',  # ä½¿ç”¨çš„æŒ‡æ•°,é»˜è®¤ '000001.XSHG'
-             'dst_drop_minute_count':60,  # å¯é€‰ï¼Œåœ¨ä¸‰ä¹Œé¸¦è§¦å‘æƒ…å†µä¸‹ï¼Œä¸€å¤©ä¹‹å†…æœ‰å¤šå°‘åˆ†é’Ÿæ¶¨å¹…<0,åˆ™è§¦å‘æ­¢æŸï¼Œé»˜è®¤60åˆ†é’Ÿ
+        [False,'_Stop_loss_by_3_black_crows_','Ö¸ÊıÈıÎÚÑ»Ö¹Ëğ', Stop_loss_by_3_black_crows,{
+            'index':'000001.XSHG',  # Ê¹ÓÃµÄÖ¸Êı,Ä¬ÈÏ '000001.XSHG'
+             'dst_drop_minute_count':60,  # ¿ÉÑ¡£¬ÔÚÈıÎÚÑ»´¥·¢Çé¿öÏÂ£¬Ò»ÌìÖ®ÄÚÓĞ¶àÉÙ·ÖÖÓÕÇ·ù<0,Ôò´¥·¢Ö¹Ëğ£¬Ä¬ÈÏ60·ÖÖÓ
             }],
-        [False,'Stop_loss_stocks','ä¸ªè‚¡æ­¢æŸ',Stop_gain_loss_stocks,{
-            'period':20,  # è°ƒä»“é¢‘ç‡ï¼Œæ—¥
+        [False,'Stop_loss_stocks','¸ö¹ÉÖ¹Ëğ',Stop_gain_loss_stocks,{
+            'period':20,  # µ÷²ÖÆµÂÊ£¬ÈÕ
             'stop_loss':0.0,
             'enable_stop_loss':True,
             'stop_gain':0.2,
             'enable_stop_gain':False
             },],
-        [True, '', 'è‚¡ç¥¨AIæ‹©æ—¶', ML_Stock_Timing,{
-            'ml_file_path':'training_result/multi_factor_trading_picked_stocks.txt'
+        [True, '', '¹ÉÆ±AIÔñÊ±', ML_Stock_Timing,{
+            'ml_file_path':'training_result/multi_factor_trading_picked_stocks.txt',
+            'only_take_long_stocks':True,
+            'force_no_candidate':True
             }],
-        # [True,'_Stop_loss_by_growth_rate_','å½“æ—¥æŒ‡æ•°æ¶¨å¹…æ­¢æŸå™¨',Stop_loss_by_growth_rate,{
-        #     'index':'000001.XSHG',  # ä½¿ç”¨çš„æŒ‡æ•°,é»˜è®¤ '000001.XSHG'
-        #      'stop_loss_growth_rate':-0.05,
-        #     }],
-        # [False,'_Stop_loss_by_28_index_','28å®æ—¶æ­¢æŸ',Stop_loss_by_28_index,{
-        #             'index2' : '000016.XSHG',       # å¤§ç›˜æŒ‡æ•°
-        #             'index8' : '399333.XSHE',       # å°ç›˜æŒ‡æ•°
-        #             'index_growth_rate': 0.01,      # åˆ¤å®šè°ƒä»“çš„äºŒå…«æŒ‡æ•°20æ—¥å¢å¹…
-        #             'dst_minute_count_28index_drop': 120 # ç¬¦åˆæ¡ä»¶è¿ç»­å¤šå°‘åˆ†é’Ÿåˆ™æ¸…ä»“
-        #         }],
-        [False, '_equity_curve_protect_', 'èµ„é‡‘æ›²çº¿æ­¢æŸ', equity_curve_protect, {
-            'day_count': 20,  # 
-            'percent': 0.01,  # å¯é€‰ å½“æ—¥æ€»èµ„äº§å°äºé€‰å®šæ—¥å‰èµ„äº§çš„å›ºå®šç™¾åˆ†æ•°ï¼Œè§¦ å‘æ¸…ä»“
-            'use_avg': False,
-            'market_index':'000300.XSHG'
-        }],
-        [False, '', 'å¤šæŒ‡æ•°20æ—¥æ¶¨å¹…æ­¢æŸå™¨', Mul_index_stop_loss, {
-            'indexs': [index2, index8],
-            'min_rate': 0.005
-        }],
-        [False, '', 'å¤šæŒ‡æ•°æŠ€æœ¯åˆ†ææ­¢æŸå™¨', Mul_index_stop_loss_ta, {
-            'indexs': [index2, index8],
-            'ta_type': TaType.TRIX_PURE,
-            'period':'5d'
-        }],
-        [True, '', 'RSRS_timing', RSRS_timing, {
-            'market_symbol': '000300.XSHG',
-        }],
-        [True, '', 'è°ƒä»“æ—¥è®¡æ•°å™¨', Period_condition, {
-            'period': 3,  # è°ƒä»“é¢‘ç‡,æ—¥
-        }],
-    ]
-    adjust_condition_config = [
-        [True, '_adjust_condition_', 'è°ƒä»“æ‰§è¡Œæ¡ä»¶çš„åˆ¤æ–­è§„åˆ™ç»„åˆ', Group_rules, {
-            'config': adjust_condition_config
-        }]
-    ]
-
-    ''' --------------------------é…ç½® é€‰è‚¡è§„åˆ™----------------- '''
-    pick_config = [
-        [False, '', 'é…å¯¹äº¤æ˜“é€‰å¯¹è‚¡', Pick_Pair_Trading, {
-                        'pair_period':250, 
-                        'get_pair':False,
-                        # 'init_index_list':['000300.XSHG', '000016.XSHG', '399333.XSHE', '399673.XSHE', '399330.XSHE'],
-                        'init_index_list':['510050.XSHG', '510180.XSHG', '510300.XSHG', '512800.XSHG', '512000.XSHG', '510230.XSHG', '510310.XSHG', '510880.XSHG'],
-                        'input_as_list':True,
-                        'isIndex':True,
-            }], 
-        [True, '', 'å¤šå› å­å›å½’å…¬å¼é€‰è‚¡', Pick_Rank_Factor,{
-                        'stock_num':34,
-                        'index_scope':'000985.XSHG'
-            }],
-        [False, '', 'ç¼ è®ºå¼ºå¼±åŠ¿æ¿å—', Pick_rank_sector,{
-                        'strong_sector':True, 
-                        'sector_limit_pct': 8,
-                        'strength_threthold': 0, 
-                        'isDaily': False, 
-                        'useIntradayData':False,
-                        'useAvg':True,
-                        'avgPeriod':21, 
-                        'period_frequency':'M'}],
-        [False, '', 'åŸºæœ¬é¢æ•°æ®ç­›é€‰', Filter_financial_data, {'factor':'valuation.pe_ratio', 'min':0, 'max':80}],
-        [False, '', 'åŸºæœ¬é¢æ•°æ®ç­›é€‰', Filter_financial_data2, {
-            'factors': [
-                        FD_Factor('valuation.ps_ratio', min=0, max=g.ps_limit),
-                        FD_Factor('valuation.pe_ratio', min=0, max=g.pe_limit),
-                        # FD_Factor('valuation.pcf_ratio', min=0, max=100),
-                        FD_Factor('valuation.pb_ratio', min=0, max=g.pb_limit),
-                        # FD_Factor(eve_query_string
-                        #         , min=0
-                        #         , max=5
-                        #         , isComplex=True),
-                        # FD_Factor(evs_query_string
-                        #         , min=0
-                        #         , max=5
-                        #         , isComplex=True),
-                        ],
-            'order_by': 'valuation.market_cap',
-            'sort': SortType.asc,
-            'by_sector': False,
-            'limit':50}],
-        [False, '', 'å°ä½›é›ªé€‰è‚¡', Filter_FX_data, {'limit':144}],
-        [False, '', 'å¤šå› å­é€‰è‚¡ç¥¨æ± ', Pick_financial_data, {
-            'factors': [
-                # FD_Factor('valuation.circulating_market_cap', min=0, max=1000)  # æµé€šå¸‚å€¼0~1000
-                FD_Factor('valuation.market_cap', min=0, max=20000)  # å¸‚å€¼0~20000äº¿
-                , FD_Factor('valuation.pe_ratio', min=0, max=80)  # 0 < pe < 200 
-                , FD_Factor('valuation.pb_ratio', min=0, max=5)  # 0 < pb < 2
-                , FD_Factor('valuation.ps_ratio', min=0, max=2.5)  # 0 < ps < 2
-                # , FD_Factor('indicator.eps', min=0)  # eps > 0
-                # , FD_Factor('indicator.operating_profit', min=0) # operating_profit > 0
-                # , FD_Factor('valuation.pe_ratio/indicator.inc_revenue_year_on_year', min=0, max=1)
-                # , FD_Factor('valuation.pe_ratio/indicator.inc_net_profit_to_shareholders_year_on_year', min=0, max=1)
-                # , FD_Factor('balance.total_current_assets / balance.total_current_liability', min=0, max=2) # 0 < current_ratio < 2
-                # , FD_Factor('(balance.total_current_assets - balance.inventories) / balance.total_current_liability', min= 0, max=1) # 0 < quick_ratio < 1
-                # , FD_Factor('indicator.roe',min=0,max=50) # roe
-                # , FD_Factor('indicator.inc_net_profit_annual',min=0,max=10000)
-                # , FD_Factor('valuation.capitalization',min=0,max=8000)
-                # , FD_Factor('indicator.gross_profit_margin',min=0,max=10000)
-                # , FD_Factor('indicator.net_profit_margin',min=0,max=10000)
-            ],
-            'order_by': 'valuation.pb_ratio',  # æŒ‰æµé€šå¸‚å€¼æ’åº
-            'sort': SortType.asc,  # ä»å°åˆ°å¤§æ’åº # SortType.desc
-            'limit': 500  # åªå–å‰200åª
-        }],
-        [True, '', 'è¿‡æ»¤ST,åœç‰Œ,æ¶¨è·Œåœè‚¡ç¥¨', Filter_common, {}],
-        [False, '', 'ç¼ è®ºå¼ºå¼±åŠ¿æ¿å—', Filter_Rank_Sector,{
-                        'strong_sector':True, 
-                        'sector_limit_pct': 8,
-                        'strength_threthold': 0, 
-                        'isDaily': True, 
-                        'useIntradayData':False,
-                        'useAvg':False,
-                        'avgPeriod':5,
-                        'period_frequency':'W'}],
-        [False, '', 'è¿‡æ»¤åˆ›ä¸šæ¿', Filter_gem, {}],
-        [False, '', 'é…å¯¹äº¤æ˜“ç­›é€‰å¯¹è‚¡', Filter_Pair_Trading, {
-                        'pair_period':233,
-                        'pair_num_limit':10,
-                        'return_pair':1,
-                        'period_frequency':'M'
-            }],
-        [False, '', 'å¼ºåŠ¿è‚¡ç­›é€‰', Filter_Herd_head_stocks,{'gainThre':0.05, 'count':20, 'useIntraday':True, 'filter_out':True}],
-        [False, '', 'æŠ€æœ¯åˆ†æç­›é€‰-AND', checkTAIndicator_AND, { 
-            'TA_Indicators':[
-                            # (TaType.BOLL,'5d',233),
-                            (TaType.TRIX_STATUS, '5d', 100),
-                            # (TaType.MACD_ZERO, '5d', 100),
-                            (TaType.MA, '1d', 20),
-                            # (TaType.MA, '1d', 60),
-                            ],
-            'isLong':True}], # ç¡®ä¿å¤§å‘¨æœŸå®‰å…¨
-        [False, '', 'æŠ€æœ¯åˆ†æç­›é€‰-OR', checkTAIndicator_OR, { 
-            'TA_Indicators':[
-                            # (TaType.BOLL,'5d',233),
-                            (TaType.TRIX_STATUS, '5d', 100),
-                            # (TaType.MACD_STATUS, '5d', 100),
-                            # (TaType.MA, '1d', 20),
-                            # (TaType.MA, '1d', 60),
-                            ],
-            'isLong':True}], # ç¡®ä¿å¤§å‘¨æœŸå®‰å…¨
-        [False, '', 'æ—¥çº¿å‘¨çº¿çº§åˆ«è¡¨é‡Œä¹°ç‚¹ç­›é€‰', Filter_Week_Day_Long_Pivot_Stocks, {
-            'monitor_levels':g.monitor_levels,
-            'enable_filter':False,
-            }],
-        [False, '', 'æƒé‡æ’åº', SortRules, {
-            'config': [
-                [False, 'Sort_std_data', 'æ³¢åŠ¨ç‡æ’åº', Sort_std_data, {
-                    'sort': SortType.asc
-                    , 'period': 60
-                    , 'weight': 100}],
-                [False, 'cash_flow_rank', 'åº„è‚¡è„‰å†²æ’åº', Sort_cash_flow_rank, {
-                    'sort': SortType.desc
-                    , 'weight': 100}],
-                [False, '', 'å¸‚å€¼æ’åº', Sort_financial_data, {
-                    'factor': 'valuation.market_cap',
-                    'sort': SortType.asc
-                    , 'weight': 100}],
-                [False, '', 'EVSæ’åº', Sort_financial_data, {
-                    'factor': evs_query_string,
-                    'sort': SortType.asc
-                    , 'weight': 100}],
-                [False, '', 'æµé€šå¸‚å€¼æ’åº', Sort_financial_data, {
-                    'factor': 'valuation.circulating_market_cap',
-                    'sort': SortType.asc
-                    , 'weight': 100}],
-                [False, '', 'P/Sæ’åº', Sort_financial_data, {
-                    'factor': 'valuation.ps_ratio',
-                    'sort': SortType.asc
-                    , 'weight': 100}],
-                [False, '', 'GPæ’åº', Sort_financial_data, {
-                    'factor': 'income.total_profit/balance.total_assets',
-                    'sort': SortType.desc
-                    , 'weight': 100}],
-                [False, '', 'æŒ‰å½“å‰ä»·æ’åº', Sort_price, {
-                    'sort': SortType.asc
-                    , 'weight': 20}],
-                [False, '5growth', '5æ—¥æ¶¨å¹…æ’åº', Sort_growth_rate, {
-                    'sort': SortType.asc
-                    , 'weight': 100
-                    , 'day': 5}],
-                [False, '20growth', '20æ—¥æ¶¨å¹…æ’åº', Sort_growth_rate, {
-                    'sort': SortType.asc
-                    , 'weight': 100
-                    , 'day': 20}],
-                [False, '60growth', '60æ—¥æ¶¨å¹…æ’åº', Sort_growth_rate, {
-                    'sort': SortType.asc
-                    , 'weight': 10
-                    , 'day': 60}],
-                [False, '', 'æŒ‰æ¢æ‰‹ç‡æ’åº', Sort_turnover_ratio, {
-                    'sort': SortType.desc
-                    , 'weight': 50}],
-            ]}
-        ],
-        [True, '', 'è·å–æœ€ç»ˆé€‰è‚¡æ•°', Filter_buy_count, {
-            'buy_count': 20  # æœ€ç»ˆå…¥é€‰è‚¡ç¥¨æ•°
-        }],
-    ]
-    pick_new = [
-        [True, '_pick_stocks_', 'é€‰è‚¡', Pick_stocks2, {
-            'config': pick_config,
-            'day_only_run_one': True, 
-            'write_to_file': 'multi_factor_trading_picked_stocks.txt'
-        }]
-    ]
-
-    ''' --------------------------é…ç½® 4 è°ƒä»“è§„åˆ™------------------ '''
-    # # é€šè¾¾ä¿¡æŒä»“å­—æ®µä¸åŒåæ ¡æ­£
-    col_names = {'å¯ç”¨': u'å¯ç”¨', 'å¸‚å€¼': u'å‚è€ƒå¸‚å€¼', 'è¯åˆ¸åç§°': u'è¯åˆ¸åç§°', 'èµ„äº§': u'èµ„äº§'
-        , 'è¯åˆ¸ä»£ç ': u'è¯åˆ¸ä»£ç ', 'è¯åˆ¸æ•°é‡': u'è¯åˆ¸æ•°é‡', 'å¯å–æ•°é‡': u'å¯å–æ•°é‡', 'å½“å‰ä»·': u'å½“å‰ä»·', 'æˆæœ¬ä»·': u'æˆæœ¬ä»·'
-                 }
-    adjust_position_config = [
-        [False, '', 'è‚¡ç¥¨æ‹©æ—¶', Relative_Index_Timing, {
+        [False, '', '¹ÉÆ±ÔñÊ±', Relative_Index_Timing, {
             'M':233,
             'N':21, #18
             'buy':0.7,
@@ -297,15 +89,242 @@ def select_strategy(context):
                             # ['000016.XSHG', '399333.XSHE', '399006.XSHE'] # conventional '000300.XSHG','399984.XSHE', 
                             # ['000001.XSHG', '399001.XSHE', '399006.XSHE',]
             }],
-        [True, '', 'å–å‡ºè‚¡ç¥¨', Sell_stocks, {}],
-        [True, '', 'ä¹°å…¥è‚¡ç¥¨', Buy_stocks, {
-            'use_short_filter':False,
-            'buy_count': g.buy_count  # æœ€ç»ˆä¹°å…¥è‚¡ç¥¨æ•°
+        # [True,'_Stop_loss_by_growth_rate_','µ±ÈÕÖ¸ÊıÕÇ·ùÖ¹ËğÆ÷',Stop_loss_by_growth_rate,{
+        #     'index':'000001.XSHG',  # Ê¹ÓÃµÄÖ¸Êı,Ä¬ÈÏ '000001.XSHG'
+        #      'stop_loss_growth_rate':-0.05,
+        #     }],
+        # [False,'_Stop_loss_by_28_index_','28ÊµÊ±Ö¹Ëğ',Stop_loss_by_28_index,{
+        #             'index2' : '000016.XSHG',       # ´óÅÌÖ¸Êı
+        #             'index8' : '399333.XSHE',       # Ğ¡ÅÌÖ¸Êı
+        #             'index_growth_rate': 0.01,      # ÅĞ¶¨µ÷²ÖµÄ¶ş°ËÖ¸Êı20ÈÕÔö·ù
+        #             'dst_minute_count_28index_drop': 120 # ·ûºÏÌõ¼şÁ¬Ğø¶àÉÙ·ÖÖÓÔòÇå²Ö
+        #         }],
+        [False, '_equity_curve_protect_', '×Ê½ğÇúÏßÖ¹Ëğ', equity_curve_protect, {
+            'day_count': 20,  # 
+            'percent': 0.01,  # ¿ÉÑ¡ µ±ÈÕ×Ü×Ê²úĞ¡ÓÚÑ¡¶¨ÈÕÇ°×Ê²úµÄ¹Ì¶¨°Ù·ÖÊı£¬´¥ ·¢Çå²Ö
+            'use_avg': False,
+            'market_index':'000300.XSHG'
         }],
-        [False, '', 'å–å‡ºé…å¯¹è‚¡ç¥¨', Sell_stocks_pair, {
+        [False, '', '¶àÖ¸Êı20ÈÕÕÇ·ùÖ¹ËğÆ÷', Mul_index_stop_loss, {
+            'indexs': [index2, index8],
+            'min_rate': 0.005
+        }],
+        [False, '', '¶àÖ¸Êı¼¼Êõ·ÖÎöÖ¹ËğÆ÷', Mul_index_stop_loss_ta, {
+            'indexs': [index2, index8],
+            'ta_type': TaType.TRIX_PURE,
+            'period':'5d'
+        }],
+        [False, '', '¶àÖ¸ÊıÆ½¾ùÖ¹Ëğ', Mul_index_stop_loss_avg, {
+            'indexs': [index2, index8],
+            'n': 20
+        }],
+        [True, '', 'RSRS_timing', RSRS_timing, {
+            'market_symbol': '000300.XSHG',
+        }],
+        [True, '', 'µ÷²ÖÈÕ¼ÆÊıÆ÷', Period_condition, {
+            'period': 3,  # µ÷²ÖÆµÂÊ,ÈÕ
+            'clear_wait':0
+        }],
+    ]
+    adjust_condition_config = [
+        [True, '_adjust_condition_', 'µ÷²ÖÖ´ĞĞÌõ¼şµÄÅĞ¶Ï¹æÔò×éºÏ', Group_rules, {
+            'config': adjust_condition_config
+        }]
+    ]
+
+    ''' --------------------------ÅäÖÃ Ñ¡¹É¹æÔò----------------- '''
+    pick_config = [
+        [False, '', 'Åä¶Ô½»Ò×Ñ¡¶Ô¹É', Pick_Pair_Trading, {
+                        'pair_period':250, 
+                        'get_pair':False,
+                        # 'init_index_list':['000300.XSHG', '000016.XSHG', '399333.XSHE', '399673.XSHE', '399330.XSHE'],
+                        'init_index_list':['510050.XSHG', '510180.XSHG', '510300.XSHG', '512800.XSHG', '512000.XSHG', '510230.XSHG', '510310.XSHG', '510880.XSHG'],
+                        'input_as_list':True,
+                        'isIndex':True,
+            }], 
+        [True, '', '¶àÒò×Ó»Ø¹é¹«Ê½Ñ¡¹É', Pick_Rank_Factor,{
+                        'stock_num':34,
+                        'index_scope':'000985.XSHG'
+            }],
+        [False, '', '²øÂÛÇ¿ÈõÊÆ°å¿é', Pick_rank_sector,{
+                        'strong_sector':True, 
+                        'sector_limit_pct': 8,
+                        'strength_threthold': 0, 
+                        'isDaily': False, 
+                        'useIntradayData':False,
+                        'useAvg':True,
+                        'avgPeriod':21, 
+                        'period_frequency':'M'}],
+        [False, '', '¶àÒò×ÓÑ¡¹ÉÆ±³Ø', Pick_financial_data, {
+            'factors': [
+                # FD_Factor('valuation.circulating_market_cap', min=0, max=1000)  # Á÷Í¨ÊĞÖµ0~1000
+                FD_Factor('valuation.market_cap', min=0, max=20000)  # ÊĞÖµ0~20000ÒÚ
+                , FD_Factor('valuation.pe_ratio', min=0, max=200)  # 0 < pe < 200 
+                # , FD_Factor('valuation.pb_ratio', min=0, max=5)  # 0 < pb < 2
+                # , FD_Factor('valuation.ps_ratio', min=0, max=2.5)  # 0 < ps < 2
+                # , FD_Factor('indicator.eps', min=0)  # eps > 0
+                # , FD_Factor('indicator.operating_profit', min=0) # operating_profit > 0
+                # , FD_Factor('valuation.pe_ratio/indicator.inc_revenue_year_on_year', min=0, max=1)
+                # , FD_Factor('valuation.pe_ratio/indicator.inc_net_profit_to_shareholders_year_on_year', min=0, max=1)
+                # , FD_Factor('balance.total_current_assets / balance.total_current_liability', min=0, max=2) # 0 < current_ratio < 2
+                # , FD_Factor('(balance.total_current_assets - balance.inventories) / balance.total_current_liability', min= 0, max=1) # 0 < quick_ratio < 1
+                # , FD_Factor('indicator.roe',min=0,max=50) # roe
+                # , FD_Factor('indicator.inc_net_profit_annual',min=0,max=10000)
+                # , FD_Factor('valuation.capitalization',min=0,max=8000)
+                # , FD_Factor('indicator.gross_profit_margin',min=0,max=10000)
+                # , FD_Factor('indicator.net_profit_margin',min=0,max=10000)
+            ],
+            'order_by': 'valuation.pb_ratio',  # °´Á÷Í¨ÊĞÖµÅÅĞò
+            'sort': SortType.asc,  # ´ÓĞ¡µ½´óÅÅĞò # SortType.desc
+            'limit': 500  # Ö»È¡Ç°200Ö»
+        }],
+        
+        ################################### FILTER ##########################################
+        [False, '', '»ù±¾ÃæÊı¾İÉ¸Ñ¡', Filter_financial_data, {'factor':'valuation.pe_ratio', 'min':0, 'max':80}],
+        [False, '', '»ù±¾ÃæÊı¾İÉ¸Ñ¡', Filter_financial_data2, {
+            'factors': [
+                        # FD_Factor('valuation.ps_ratio', min=0, max=g.ps_limit),
+                        FD_Factor('valuation.pe_ratio', min=0, max=300), #g.pe_limit
+                        # FD_Factor('valuation.pcf_ratio', min=0, max=100),
+                        # FD_Factor('valuation.pb_ratio', min=0, max=g.pb_limit),
+                        # FD_Factor(eve_query_string
+                        #         , min=0
+                        #         , max=5
+                        #         , isComplex=True),
+                        # FD_Factor(evs_query_string
+                        #         , min=0
+                        #         , max=5
+                        #         , isComplex=True),
+                        ],
+            'order_by': 'valuation.market_cap',
+            'sort': SortType.asc,
+            'by_sector': False,
+            'limit':50}],
+        [False, '', 'Ğ¡·ğÑ©Ñ¡¹É', Filter_FX_data, {'limit':144}],
+        [True, '', '¹ıÂËST,Í£ÅÆ,ÕÇµøÍ£¹ÉÆ±', Filter_common, {}],
+        [False, '', '²øÂÛÇ¿ÈõÊÆ°å¿é', Filter_Rank_Sector,{
+                        'strong_sector':True, 
+                        'sector_limit_pct': 8,
+                        'strength_threthold': 0, 
+                        'isDaily': True, 
+                        'useIntradayData':False,
+                        'useAvg':False,
+                        'avgPeriod':5,
+                        'period_frequency':'W'}],
+        [False, '', '¹ıÂË´´Òµ°å', Filter_gem, {}],
+        [False, '', 'Åä¶Ô½»Ò×É¸Ñ¡¶Ô¹É', Filter_Pair_Trading, {
+                        'pair_period':233,
+                        'pair_num_limit':10,
+                        'return_pair':1,
+                        'period_frequency':'M'
+            }],
+        [False, '', 'Ç¿ÊÆ¹ÉÉ¸Ñ¡', Filter_Herd_head_stocks,{'gainThre':0.05, 'count':20, 'useIntraday':True, 'filter_out':True}],
+        [False, '', '¼¼Êõ·ÖÎöÉ¸Ñ¡-AND', checkTAIndicator_AND, { 
+            'TA_Indicators':[
+                            # (TaType.BOLL,'5d',233),
+                            (TaType.TRIX_STATUS, '5d', 100),
+                            # (TaType.MACD_ZERO, '5d', 100),
+                            (TaType.MA, '1d', 20),
+                            # (TaType.MA, '1d', 60),
+                            ],
+            'isLong':True}], # È·±£´óÖÜÆÚ°²È«
+        [False, '', '¼¼Êõ·ÖÎöÉ¸Ñ¡-OR', checkTAIndicator_OR, { 
+            'TA_Indicators':[
+                            # (TaType.BOLL,'5d',233),
+                            (TaType.TRIX_STATUS, '5d', 100),
+                            # (TaType.MACD_STATUS, '5d', 100),
+                            # (TaType.MA, '1d', 20),
+                            # (TaType.MA, '1d', 60),
+                            ],
+            'isLong':True}], # È·±£´óÖÜÆÚ°²È«
+        [False, '', 'ÈÕÏßÖÜÏß¼¶±ğ±íÀïÂòµãÉ¸Ñ¡', Filter_Week_Day_Long_Pivot_Stocks, {
+            'monitor_levels':g.monitor_levels,
+            'enable_filter':False,
+            }],
+        [False, '', 'È¨ÖØÅÅĞò', SortRules, {
+            'config': [
+                [True, '', 'peg_re', Sort_financial_data, {
+                    'factor': 'valuation.pe_ratio/indicator.inc_revenue_year_on_year',
+                    'sort': SortType.asc
+                    , 'weight': 100}], 
+                [True, '', 'peg_pro', Sort_financial_data, {
+                    'factor': 'valuation.pe_ratio/indicator.inc_net_profit_to_shareholders_year_on_year',
+                    'sort': SortType.asc
+                    , 'weight': 100}],  
+                [False, 'Sort_std_data', '²¨¶¯ÂÊÅÅĞò', Sort_std_data, {
+                    'sort': SortType.asc
+                    , 'period': 60
+                    , 'weight': 100}],
+                [False, 'cash_flow_rank', '×¯¹ÉÂö³åÅÅĞò', Sort_cash_flow_rank, {
+                    'sort': SortType.desc
+                    , 'weight': 100}],
+                [False, '', 'ÊĞÖµÅÅĞò', Sort_financial_data, {
+                    'factor': 'valuation.market_cap',
+                    'sort': SortType.asc
+                    , 'weight': 100}],
+                [False, '', 'EVSÅÅĞò', Sort_financial_data, {
+                    'factor': evs_query_string,
+                    'sort': SortType.asc
+                    , 'weight': 100}],
+                [False, '', 'Á÷Í¨ÊĞÖµÅÅĞò', Sort_financial_data, {
+                    'factor': 'valuation.circulating_market_cap',
+                    'sort': SortType.asc
+                    , 'weight': 100}],
+                [False, '', 'P/SÅÅĞò', Sort_financial_data, {
+                    'factor': 'valuation.ps_ratio',
+                    'sort': SortType.asc
+                    , 'weight': 100}],
+                [False, '', 'GPÅÅĞò', Sort_financial_data, {
+                    'factor': 'income.total_profit/balance.total_assets',
+                    'sort': SortType.desc
+                    , 'weight': 100}],
+                [False, '', '°´µ±Ç°¼ÛÅÅĞò', Sort_price, {
+                    'sort': SortType.asc
+                    , 'weight': 20}],
+                [False, '5growth', '5ÈÕÕÇ·ùÅÅĞò', Sort_growth_rate, {
+                    'sort': SortType.asc
+                    , 'weight': 100
+                    , 'day': 5}],
+                [False, '20growth', '20ÈÕÕÇ·ùÅÅĞò', Sort_growth_rate, {
+                    'sort': SortType.asc
+                    , 'weight': 100
+                    , 'day': 20}],
+                [False, '60growth', '60ÈÕÕÇ·ùÅÅĞò', Sort_growth_rate, {
+                    'sort': SortType.asc
+                    , 'weight': 10
+                    , 'day': 60}],
+                [False, '', '°´»»ÊÖÂÊÅÅĞò', Sort_turnover_ratio, {
+                    'sort': SortType.desc
+                    , 'weight': 50}],
+            ]}
+        ],
+        [True, '', '»ñÈ¡×îÖÕÑ¡¹ÉÊı', Filter_buy_count, {
+            'buy_count': 20  # ×îÖÕÈëÑ¡¹ÉÆ±Êı
+        }],
+    ]
+    pick_new = [
+        [True, '_pick_stocks_', 'Ñ¡¹É', Pick_stocks2, {
+            'config': pick_config,
+            'day_only_run_one': True, 
+            'write_to_file': 'multi_factor_trading_picked_stocks.txt'
+        }]
+    ]
+
+    ''' --------------------------ÅäÖÃ 4 µ÷²Ö¹æÔò------------------ '''
+    # # Í¨´ïĞÅ³Ö²Ö×Ö¶Î²»Í¬ÃûĞ£Õı
+    col_names = {'¿ÉÓÃ': u'¿ÉÓÃ', 'ÊĞÖµ': u'²Î¿¼ÊĞÖµ', 'Ö¤È¯Ãû³Æ': u'Ö¤È¯Ãû³Æ', '×Ê²ú': u'×Ê²ú'
+        , 'Ö¤È¯´úÂë': u'Ö¤È¯´úÂë', 'Ö¤È¯ÊıÁ¿': u'Ö¤È¯ÊıÁ¿', '¿ÉÂôÊıÁ¿': u'¿ÉÂôÊıÁ¿', 'µ±Ç°¼Û': u'µ±Ç°¼Û', '³É±¾¼Û': u'³É±¾¼Û'
+                 }
+    adjust_position_config = [
+        [True, '', 'Âô³ö¹ÉÆ±', Sell_stocks, {}],
+        [True, '', 'ÂòÈë¹ÉÆ±', Buy_stocks, {
+            'use_short_filter':False,
+            'buy_count': g.buy_count  # ×îÖÕÂòÈë¹ÉÆ±Êı
+        }],
+        [False, '', 'Âô³öÅä¶Ô¹ÉÆ±', Sell_stocks_pair, {
             'buy_count':2
             }],
-        [False, '', 'ä¹°å…¥é…å¯¹è‚¡ç¥¨', Buy_stocks_pair, {
+        [False, '', 'ÂòÈëÅä¶Ô¹ÉÆ±', Buy_stocks_pair, {
             'buy_count':2,
             'money_fund':g.money_fund,
             'p_val': 2.58,
@@ -313,61 +332,61 @@ def select_strategy(context):
             'adjust_pos':True,
             'equal_pos':True
             }],        
-        [False, '', 'å–å‡ºè‚¡ç¥¨æ—¥å†…è¡¨é‡Œ', Sell_stocks_chan, {'monitor_levels': g.monitor_levels}],
-        [False, '', 'ä¹°å…¥è‚¡ç¥¨æ—¥å†…è¡¨é‡Œ', Buy_stocks_chan, {
+        [False, '', 'Âô³ö¹ÉÆ±ÈÕÄÚ±íÀï', Sell_stocks_chan, {'monitor_levels': g.monitor_levels}],
+        [False, '', 'ÂòÈë¹ÉÆ±ÈÕÄÚ±íÀï', Buy_stocks_chan, {
             'buy_count': g.buy_count,
             'monitor_levels': g.monitor_levels, 
             'pos_control':g.port_pos_control}],
-        # [False,'','VaRæ–¹å¼ä¹°å…¥è‚¡ç¥¨', Buy_stocks_var, {
-        #     'buy_count': g.buy_count,
-        #     'money_fund':g.money_fund,
-        #     'p_val': 2.58,
-        #     'risk_var': 0.13,
-        #     'adjust_pos':True,
-        #     'equal_pos':True,
-        #     }],
-        [True, '_Show_postion_adjust_', 'æ˜¾ç¤ºä¹°å–çš„è‚¡ç¥¨', Show_postion_adjust, {}],
-        [False,'trade_Xq','Xue Qiu Webtrader',XueQiu_order,{'version':3}],
-        # å®ç›˜æ˜“åŒæ­¥æŒä»“ï¼ŒæŠŠè™šæ‹Ÿç›˜åŒæ­¥åˆ°å®ç›˜
-        # [g.is_sim_trade, '_Shipane_manager_', 'å®ç›˜æ˜“æ“ä½œ', Shipane_manager, {
-        #     'host':'111.111.111.111',   # å®ç›˜æ˜“IP
-        #     'port':8888,    # å®ç›˜æ˜“ç«¯å£
-        #     'key':'',   # å®ç›˜æ˜“Key
-        #     'client':'title:guangfa', # å®ç›˜æ˜“client
-        #     'strong_op':False,   # å¼ºåŠ›åŒæ­¥æ¨¡å¼ï¼Œå¼€å¯ä¼šå¼ºè¡ŒåŒæ­¥ä¸¤æ¬¡ã€‚
-        #     'col_names':col_names, # æŒ‡å®šå®ç›˜æ˜“è¿”å›çš„æŒä»“å­—æ®µæ˜ å°„
-        #     'cost':context.portfolio.starting_cash, # å®ç›˜çš„åˆå§‹èµ„é‡‘
-        #     'get_white_list_func':while_list, # ä¸åŒæ­¥çš„ç™½åå•
-        #     'sync_scale': 1,  # å®ç›˜èµ„é‡‘/æ¨¡æ‹Ÿç›˜èµ„é‡‘æ¯”ä¾‹ï¼Œå»ºè®®1ä¸ºå¥½
-        #     'log_level': ['debug', 'waring', 'error'],  # å®ç›˜æ˜“æ—¥å¿—è¾“å‡ºçº§åˆ«
-        #     'sync_with_change': True,  # æ˜¯å¦æŒ‡å®šåªæœ‰å‘ç”Ÿäº†è‚¡ç¥¨æ“ä½œæ—¶æ‰è¿›è¡ŒåŒæ­¥ , è¿™é‡Œé‡è¦ï¼Œé¿å…æ— æ•ˆåŒæ­¥ï¼ï¼ï¼ï¼
+        [False,'','VaR·½Ê½ÂòÈë¹ÉÆ±', Buy_stocks_var, {
+            'buy_count': g.buy_count,
+            'money_fund':g.money_fund,
+            'p_val': 2.58,
+            'risk_var': 0.13,
+            'adjust_pos':True,
+            'equal_pos':True,
+            }],
+        [True, '_Show_postion_adjust_', 'ÏÔÊ¾ÂòÂôµÄ¹ÉÆ±', Show_postion_adjust, {}],
+        # [False,'trade_Xq','Xue Qiu Webtrader',XueQiu_order,{'version':3}],
+        # ÊµÅÌÒ×Í¬²½³Ö²Ö£¬°ÑĞéÄâÅÌÍ¬²½µ½ÊµÅÌ
+        # [g.is_sim_trade, '_Shipane_manager_', 'ÊµÅÌÒ×²Ù×÷', Shipane_manager, {
+        #     'host':'111.111.111.111',   # ÊµÅÌÒ×IP
+        #     'port':8888,    # ÊµÅÌÒ×¶Ë¿Ú
+        #     'key':'',   # ÊµÅÌÒ×Key
+        #     'client':'title:guangfa', # ÊµÅÌÒ×client
+        #     'strong_op':False,   # Ç¿Á¦Í¬²½Ä£Ê½£¬¿ªÆô»áÇ¿ĞĞÍ¬²½Á½´Î¡£
+        #     'col_names':col_names, # Ö¸¶¨ÊµÅÌÒ×·µ»ØµÄ³Ö²Ö×Ö¶ÎÓ³Éä
+        #     'cost':context.portfolio.starting_cash, # ÊµÅÌµÄ³õÊ¼×Ê½ğ
+        #     'get_white_list_func':while_list, # ²»Í¬²½µÄ°×Ãûµ¥
+        #     'sync_scale': 1,  # ÊµÅÌ×Ê½ğ/Ä£ÄâÅÌ×Ê½ğ±ÈÀı£¬½¨Òé1ÎªºÃ
+        #     'log_level': ['debug', 'waring', 'error'],  # ÊµÅÌÒ×ÈÕÖ¾Êä³ö¼¶±ğ
+        #     'sync_with_change': True,  # ÊÇ·ñÖ¸¶¨Ö»ÓĞ·¢ÉúÁË¹ÉÆ±²Ù×÷Ê±²Å½øĞĞÍ¬²½ , ÕâÀïÖØÒª£¬±ÜÃâÎŞĞ§Í¬²½£¡£¡£¡£¡
         # }],
-        # # æ¨¡æ‹Ÿç›˜è°ƒä»“é‚®ä»¶é€šçŸ¥ï¼Œæš‚æ—¶åªè¯•è¿‡QQé‚®ç®±ï¼Œå…¶å®ƒé‚®ç®±ä¸çŸ¥é“æ˜¯å¦æ”¯æŒ
-        # [g.is_sim_trade, '_new_Email_notice_', 'è°ƒä»“é‚®ä»¶é€šçŸ¥æ‰§è¡Œå™¨', Email_notice, {
+        # # Ä£ÄâÅÌµ÷²ÖÓÊ¼şÍ¨Öª£¬ÔİÊ±Ö»ÊÔ¹ıQQÓÊÏä£¬ÆäËüÓÊÏä²»ÖªµÀÊÇ·ñÖ§³Ö
+        # [g.is_sim_trade, '_new_Email_notice_', 'µ÷²ÖÓÊ¼şÍ¨ÖªÖ´ĞĞÆ÷', Email_notice, {
         #     'user': '123456@qq.com',    # QQmail
-        #     'password': '123459486',    # QQmailå¯†ç 
-        #     'tos': ["æ¥æ”¶è€…1<123456@qq.com>"], # æ¥æ”¶äººEmailåœ°å€ï¼Œå¯å¤šä¸ª
-        #     'sender': 'èšå®½æ¨¡æ‹Ÿç›˜',  # å‘é€äººåç§°
-        #     'strategy_name': g.strategy_memo, # ç­–ç•¥åç§°
-        #     'send_with_change': False,   # æŒä»“æœ‰å˜åŒ–æ—¶æ‰å‘é€
+        #     'password': '123459486',    # QQmailÃÜÂë
+        #     'tos': ["½ÓÊÕÕß1<123456@qq.com>"], # ½ÓÊÕÈËEmailµØÖ·£¬¿É¶à¸ö
+        #     'sender': '¾Û¿íÄ£ÄâÅÌ',  # ·¢ËÍÈËÃû³Æ
+        #     'strategy_name': g.strategy_memo, # ²ßÂÔÃû³Æ
+        #     'send_with_change': False,   # ³Ö²ÖÓĞ±ä»¯Ê±²Å·¢ËÍ
         # }],
     ]
     adjust_position_config = [
-        [True, '_Adjust_position_', 'è°ƒä»“æ‰§è¡Œè§„åˆ™ç»„åˆ', Adjust_position, {
+        [True, '_Adjust_position_', 'µ÷²ÖÖ´ĞĞ¹æÔò×éºÏ', Adjust_position, {
             'config': adjust_position_config
         }]
     ]
 
-    ''' --------------------------é…ç½® è¾…åŠ©è§„åˆ™------------------ '''
-    # ä¼˜å…ˆè¾…åŠ©è§„åˆ™ï¼Œæ¯åˆ†é’Ÿä¼˜å…ˆæ‰§è¡Œhandle_data
+    ''' --------------------------ÅäÖÃ ¸¨Öú¹æÔò------------------ '''
+    # ÓÅÏÈ¸¨Öú¹æÔò£¬Ã¿·ÖÖÓÓÅÏÈÖ´ĞĞhandle_data
     common_config_list = [
-        [True, '', 'è®¾ç½®ç³»ç»Ÿå‚æ•°', Set_sys_params, {
-            'benchmark': '000300.XSHG'  # æŒ‡å®šåŸºå‡†ä¸ºæ¬¡æ–°è‚¡æŒ‡
+        [True, '', 'ÉèÖÃÏµÍ³²ÎÊı', Set_sys_params, {
+            'benchmark': '000300.XSHG'  # Ö¸¶¨»ù×¼Îª´ÎĞÂ¹ÉÖ¸
         }],
-        [True, '', 'æ‰‹ç»­è´¹è®¾ç½®å™¨', Set_slip_fee, {}],
-        [True, '', 'æŒä»“ä¿¡æ¯æ‰“å°å™¨', Show_position, {}],
-        [True, '', 'ç»Ÿè®¡æ‰§è¡Œå™¨', Stat, {'trade_stats':False}],
-        [False, '', 'è‡ªåŠ¨è°ƒå‚å™¨', Update_Params_Auto, {
+        [True, '', 'ÊÖĞø·ÑÉèÖÃÆ÷', Set_slip_fee, {}],
+        [True, '', '³Ö²ÖĞÅÏ¢´òÓ¡Æ÷', Show_position, {}],
+        [True, '', 'Í³¼ÆÖ´ĞĞÆ÷', Stat, {'trade_stats':False}],
+        [False, '', '×Ô¶¯µ÷²ÎÆ÷', Update_Params_Auto, {
             'ps_threthold':0.618,
             'pb_threthold':0.618,
             'pe_threthold':0.809,
@@ -376,64 +395,64 @@ def select_strategy(context):
             'eve_threthold':0.618,
             'pos_control_value': 1.0
         }],
-        # [g.is_sim_trade, '_Purchase_new_stocks_', 'å®ç›˜æ˜“ç”³è´­æ–°è‚¡', Purchase_new_stocks, {
+        # [g.is_sim_trade, '_Purchase_new_stocks_', 'ÊµÅÌÒ×Éê¹ºĞÂ¹É', Purchase_new_stocks, {
         #     'times': [[11, 24]],
-        #     'host':'111.111.111.111',   # å®ç›˜æ˜“IP
-        #     'port':8888,    # å®ç›˜æ˜“ç«¯å£
-        #     'key':'',   # å®ç›˜æ˜“Key
-        #     'clients': ['title:zhaoshang', 'title:guolian'] # å®ç›˜æ˜“clientåˆ—è¡¨,å³ä¸€ä¸ªè§„åˆ™æ”¯æŒåŒä¸€ä¸ªå®ç›˜æ˜“ä¸‹çš„å¤šä¸ªå¸å·åŒæ—¶æ‰“æ–°
+        #     'host':'111.111.111.111',   # ÊµÅÌÒ×IP
+        #     'port':8888,    # ÊµÅÌÒ×¶Ë¿Ú
+        #     'key':'',   # ÊµÅÌÒ×Key
+        #     'clients': ['title:zhaoshang', 'title:guolian'] # ÊµÅÌÒ×clientÁĞ±í,¼´Ò»¸ö¹æÔòÖ§³ÖÍ¬Ò»¸öÊµÅÌÒ×ÏÂµÄ¶à¸öÕÊºÅÍ¬Ê±´òĞÂ
         # }],
     ]
     common_config = [
-        [True, '_other_pre_', 'é¢„å…ˆå¤„ç†çš„è¾…åŠ©è§„åˆ™', Group_rules, {
+        [True, '_other_pre_', 'Ô¤ÏÈ´¦ÀíµÄ¸¨Öú¹æÔò', Group_rules, {
             'config': common_config_list
         }]
     ]
-    # ç»„åˆæˆä¸€ä¸ªæ€»çš„ç­–ç•¥
+    # ×éºÏ³ÉÒ»¸ö×ÜµÄ²ßÂÔ
     g.main_config = (common_config
                      + adjust_condition_config
                      + pick_new
                      + adjust_position_config)
 
 
-# ===================================èšå®½è°ƒç”¨==============================================
+# ===================================¾Û¿íµ÷ÓÃ==============================================
 def initialize(context):
-    # ç­–ç•¥é…ç½®
+    # ²ßÂÔÅäÖÃ
     select_strategy(context)
-    # åˆ›å»ºç­–ç•¥ç»„åˆ
+    # ´´½¨²ßÂÔ×éºÏ
     g.main = Strategy_Group({'config': g.main_config
                                 , 'g_class': Global_variable
                                 , 'memo': g.strategy_memo
                                 , 'name': '_main_'})
     g.main.initialize(context)
 
-    # æ‰“å°è§„åˆ™å‚æ•°
+    # ´òÓ¡¹æÔò²ÎÊı
     g.main.log.info(g.main.show_strategy())
 
 
-# æŒ‰åˆ†é’Ÿå›æµ‹
+# °´·ÖÖÓ»Ø²â
 def handle_data(context, data):
-    # ä¿å­˜contextåˆ°å…¨å±€å˜é‡é‡ï¼Œä¸»è¦æ˜¯ä¸ºäº†æ–¹ä¾¿è§„åˆ™å™¨åœ¨ä¸€äº›æ²¡æœ‰contextçš„å‚æ•°çš„å‡½æ•°é‡Œä½¿ç”¨ã€‚
+    # ±£´æcontextµ½È«¾Ö±äÁ¿Á¿£¬Ö÷ÒªÊÇÎªÁË·½±ã¹æÔòÆ÷ÔÚÒ»Ğ©Ã»ÓĞcontextµÄ²ÎÊıµÄº¯ÊıÀïÊ¹ÓÃ¡£
     g.main.g.context = context
-    # æ‰§è¡Œç­–ç•¥
+    # Ö´ĞĞ²ßÂÔ
     g.main.handle_data(context, data)
 
 
-# å¼€ç›˜
+# ¿ªÅÌ
 def before_trading_start(context):
     log.info("==========================================================================")
     g.main.g.context = context
     g.main.before_trading_start(context)
 
 
-# æ”¶ç›˜
+# ÊÕÅÌ
 def after_trading_end(context):
     g.main.g.context = context
     g.main.after_trading_end(context)
     g.main.g.context = None
 
 
-# è¿›ç¨‹å¯åŠ¨(ä¸€å¤©ä¸€æ¬¡)
+# ½ø³ÌÆô¶¯(Ò»ÌìÒ»´Î)
 def process_initialize(context):
     try:
         g.main.g.context = context
@@ -442,30 +461,30 @@ def process_initialize(context):
         pass
 
 
-# è¿™é‡Œç¤ºä¾‹è¿›è¡Œæ¨¡æ‹Ÿæ›´æ”¹å›æµ‹æ—¶ï¼Œå¦‚ä½•è°ƒæ•´ç­–ç•¥,åŸºæœ¬é€šç”¨ä»£ç ã€‚
+# ÕâÀïÊ¾Àı½øĞĞÄ£Äâ¸ü¸Ä»Ø²âÊ±£¬ÈçºÎµ÷Õû²ßÂÔ,»ù±¾Í¨ÓÃ´úÂë¡£
 def after_code_changed(context):
     try:
         g.main
         pass
     except:
-        print 'æ›´æ–°ä»£ç ->åŸå…ˆä¸æ˜¯OOç­–ç•¥ï¼Œé‡æ–°è°ƒç”¨initialize(context)ã€‚'
+        print ('¸üĞÂ´úÂë->Ô­ÏÈ²»ÊÇOO²ßÂÔ£¬ÖØĞÂµ÷ÓÃinitialize(context)¡£')
         initialize(context)
         return
 
     try:
-        print '=> æ›´æ–°ä»£ç '
+        print ('=> ¸üĞÂ´úÂë')
         select_strategy(context)
         g.main.g.context = context
         g.main.update_params(context, {'config': g.main_config})
         g.main.after_code_changed(context)
         g.main.log.info(g.main.show_strategy())
     except Exception as e:
-        log.error('æ›´æ–°ä»£ç å¤±è´¥:' + str(e))
+        log.error('¸üĞÂ´úÂëÊ§°Ü:' + str(e))
         # initialize(context)
         pass
     
     
-# ''' ----------------------å‚æ•°è‡ªåŠ¨è°ƒæ•´----------------------------'''
+# ''' ----------------------²ÎÊı×Ô¶¯µ÷Õû----------------------------'''
 class Update_Params_Auto(Rule):
     def __init__(self, params):
         Rule.__init__(self, params)
@@ -486,10 +505,10 @@ class Update_Params_Auto(Rule):
             g.eve_limit = self.g.getFundamentalThrethold(eve_query_string, self.eve_threthold)
             
             self.dynamicBuyCount(context)
-            self.log.info("æ¯å‘¨ä¿®æ”¹å…¨å±€å‚æ•°: ps_limit: %s pb_limit: %s pe_limit: %s buy_count: %s evs_limit: %s eve_limit: %s" % (g.ps_limit, g.pb_limit, g.pe_limit, g.buy_count, g.evs_limit, g.eve_limit))
+            self.log.info("Ã¿ÖÜĞŞ¸ÄÈ«¾Ö²ÎÊı: ps_limit: %s pb_limit: %s pe_limit: %s buy_count: %s evs_limit: %s eve_limit: %s" % (g.ps_limit, g.pb_limit, g.pe_limit, g.buy_count, g.evs_limit, g.eve_limit))
         
         # self.doubleIndexControl('000016.XSHG', '399333.XSHE')
-        # self.log.info("æ¯æ—¥ä¿®æ”¹å…¨å±€å‚æ•°: port_pos_control: %s" % (g.port_pos_control))
+        # self.log.info("Ã¿ÈÕĞŞ¸ÄÈ«¾Ö²ÎÊı: port_pos_control: %s" % (g.port_pos_control))
         self.updateRelaventRules(context)
     
     def dynamicBuyCount(self, context):
@@ -500,10 +519,10 @@ class Update_Params_Auto(Rule):
         # stock_list_df = stock_list_df.transpose()
         # stock_list_df = stock_list_df.sort(stock_list_df.columns.values[0], ascending=True, axis=0)
         # threthold_price = stock_list_df.iloc[int(self.buy_threthold * 300),0] # 000300
-        # g.buy_count = int(context.portfolio.portfolio_value / (threthold_price * 1000)) # 10æ‰‹
+        # g.buy_count = int(context.portfolio.portfolio_value / (threthold_price * 1000)) # 10ÊÖ
         
     def doubleIndexControl(self, index1, index2, target=0, period=20):
-        # å¤§ç›˜å‘¨çº¿å¼±åŠ¿ï¼Œ æŒ‰ç…§ä»“ä½æ¯”ä¾‹æ“ä½œ
+        # ´óÅÌÖÜÏßÈõÊÆ£¬ °´ÕÕ²ÖÎ»±ÈÀı²Ù×÷
         # ta_trix = TA_Factor_Short({'ta_type':TaType.TRIX, 'period':'1d', 'count':100})
         # g.port_pos_control = self.pos_control_value if ta_trix.check_TRIX_list('000300.XSHG') else 1.0
         
@@ -551,5 +570,5 @@ class Update_Params_Auto(Rule):
                         r3.update_params(context, {'buy_count': g.buy_count, 'pos_control': g.port_pos_control})
 
     def __str__(self):
-        return 'å‚æ•°è‡ªåŠ¨è°ƒæ•´'
+        return '²ÎÊı×Ô¶¯µ÷Õû'
     
