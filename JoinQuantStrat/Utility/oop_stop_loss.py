@@ -14,7 +14,7 @@ from oop_strategy_frame import *
 from common_include import *
 import statsmodels.api as sm
 from pandas import Series, DataFrame
-from pandas.stats.api import ols
+# from pandas.stats.api import ols # not needed
 
 class Stop_loss_by_price(Rule):
     def __init__(self, params):
