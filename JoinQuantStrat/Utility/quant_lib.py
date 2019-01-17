@@ -709,7 +709,7 @@ class quantlib():
                 len(context.subportfolios[sf_id].long_positions)
                 ,p_value*100/(cash+p_value))
         
-        print '子仓详情:\n' + sub_str + str(table)
+        print ('子仓详情:\n' + sub_str + str(table))
     def show_stock(self,stock):
         return "%s %s"%(stock[:6],get_security_info(stock).display_name)
     # 清空卖出所有持仓
