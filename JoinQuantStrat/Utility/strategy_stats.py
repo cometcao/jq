@@ -103,8 +103,8 @@ class StrategyStats(object):
                 try:
                     BL_status = [item.value if item is not None else (np.nan,np.nan) for item in BL_status]
                 except Exception as e:
-                    print str(e)
-                    print condition
+                    print (str(e))
+                    print (condition)
                     BL_status = [(np.nan,np.nan),(np.nan,np.nan),(np.nan,np.nan)]
 #                 if BL_status is None or len(BL_status) != 3 \
 #                     or BL_status == [(np.nan,np.nan),(np.nan,np.nan),(np.nan,np.nan)]: # hack
@@ -125,19 +125,19 @@ class StrategyStats(object):
             self.getPnL(record, context)
     
     def displayRecords(self):    
-        print self.open_pos
+        print (self.open_pos)
         self.getStats()
-        print self.closed_pos[self.closed_pos['TA_signal_long']==TaType.RSI.value]
-        print self.closed_pos[self.closed_pos['TA_signal_long']==TaType.KDJ_CROSS.value]
+        print (self.closed_pos[self.closed_pos['TA_signal_long']==TaType.RSI.value])
+        print (self.closed_pos[self.closed_pos['TA_signal_long']==TaType.KDJ_CROSS.value])
     
     def getStats(self):
         self.closed_pos['pnl_sign'] = np.sign(self.closed_pos.pnl)
         # success rate on each long/short condition
-#         print self.closed_pos[self.closed_pos['pnl_sign']>=0].groupby(self.closed_pos.biaoli_status_long.apply(tuple)).agg({'pnl_sign':sum})
-        print self.closed_pos[['5d_status_long','1d_status_long','60m_status_long','pnl_sign']].groupby(('5d_status_long','1d_status_long','60m_status_long')).pnl_sign.value_counts()
-        print self.closed_pos[['5d_status_short','1d_status_short','60m_status_short','pnl_sign']].groupby(('5d_status_short','1d_status_short','60m_status_short')).pnl_sign.value_counts()
-        print self.closed_pos[['TA_signal_long', 'TA_period_long', 'pnl_sign']].groupby(('TA_signal_long', 'TA_period_long')).pnl_sign.value_counts()
-        print self.closed_pos[['TA_signal_short', 'TA_period_short','pnl_sign']].groupby(('TA_signal_short', 'TA_period_short')).pnl_sign.value_counts() #
+#         print (self.closed_pos[self.closed_pos['pnl_sign']>=0].groupby(self.closed_pos.biaoli_status_long.apply(tuple)).agg({'pnl_sign':sum}))
+        print (self.closed_pos[['5d_status_long','1d_status_long','60m_status_long','pnl_sign']].groupby(('5d_status_long','1d_status_long','60m_status_long')).pnl_sign.value_counts())
+        print (self.closed_pos[['5d_status_short','1d_status_short','60m_status_short','pnl_sign']].groupby(('5d_status_short','1d_status_short','60m_status_short')).pnl_sign.value_counts())
+        print (self.closed_pos[['TA_signal_long', 'TA_period_long', 'pnl_sign']].groupby(('TA_signal_long', 'TA_period_long')).pnl_sign.value_counts())
+        print (self.closed_pos[['TA_signal_short', 'TA_period_short','pnl_sign']].groupby(('TA_signal_short', 'TA_period_short')).pnl_sign.value_counts()) #
         self.closed_pos.drop('pnl_sign', axis=1, inplace=True)
         
         
