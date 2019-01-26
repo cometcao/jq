@@ -60,8 +60,7 @@ class Period_condition(Weight_Base):
         self.mark_today = {}
 
     def update_params(self, context, params):
-#         Weight_Base.update_params(self, context, params)
-#         self.period = params.get('period', self.period)
+        Weight_Base.update_params(self, context, params)
 #         self.on_clear_wait_days = params.get('clear_wait', 2)
 #         self.mark_today = {}
         pass
@@ -94,8 +93,7 @@ class Period_condition(Weight_Base):
         pass
 
     def __str__(self):
-        return '调仓日计数器:[调仓频率: %d日] [调仓日计数 %d]' % (
-            self.period, self.day_count)
+        return '调仓日计数器:[调仓频率: %d日] [调仓日计数 %d] [清仓等待: %d日]' % (self.period, self.day_count, self.on_clear_wait_days)
 
 
 '''===================================调仓相关============================'''
