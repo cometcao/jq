@@ -299,7 +299,8 @@ class ML_biaoli_check(object):
                     print(old_y_class)
             
             if check_status and not long_pred and not short_pred: # model not deterministic, we use past pivot point with passive logic
-                print("check status use past pivot: {0}".format(past_pivot_status))
+                if self.isDebug:
+                    print("check status use past pivot: {0}".format(past_pivot_status))
                 long_pred = long_pred or past_pivot_status == -1 
 #                                          (old_y_class[-1] == 0 and old_long_conf[-1]) and
 #                                          (len(new_y_class) >= 1 and new_y_class[-1] == 0 and new_long_conf[-1]))
@@ -312,7 +313,7 @@ class ML_biaoli_check(object):
     
         
     def model_predict(self, stock, today_date=None):
-        if self.isAnal:
+        if self.isDebug:
             print("ML working on {0} at date {1}".format(stock, str(today_date) if today_date else ""))
         mld = MLDataPrep(isAnal=self.isAnal, 
                          rq=self.rq, ts=self.ts, 
