@@ -14,7 +14,10 @@ from oop_strategy_frame import *
 from common_include import *
 import statsmodels.api as sm
 from pandas import Series, DataFrame
-# from pandas.stats.api import ols # not needed
+from ML_main import *
+import os
+import tensorflow as tf
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
 
 class Stop_loss_by_price(Rule):
     def __init__(self, params):
@@ -149,17 +152,71 @@ class ML_Stock_Timing(Rule):
         self.only_take_long_stocks = params.get('only_take_long_stocks', True)
         self.clear_candidate_if_AI_failed = params.get('force_no_candidate', True)
     
+    def ml_prediction(self, stock_list, context):
+        mbc_weekly = ML_biaoli_check({'rq':False, 
+                               'ts':False,
+                               'model_path':'training_model/cnn_lstm_model_base_weekly2.h5', 
+                               'isAnal':False,
+                               'extra_training':False,
+                               'extra_training_period':90,
+                               'save_new_model':False,
+                               'long_threthold':0.9, 
+                               'short_threthold':0.9, 
+                               'isDebug':False,
+                               'use_latest_pivot':True, 
+                               'use_standardized_sub_df':True,
+                               'use_cnn_lstm':True,
+                               'use_cnn':False,
+                               'check_level':['5d','1d'],
+                               'sub_level_max_length':240
+                              })
+        
+        mbc_day = ML_biaoli_check({'rq':False, 
+                               'ts':False,
+                               'model_path':'training_model/cnn_lstm_model_base2.h5', 
+                               'isAnal':False,
+                               'extra_training':False, 
+                               'extra_training_period':250, # 1250
+                               'save_new_model':False,
+                               'long_threthold':0.9, 
+                               'short_threthold':0.9, 
+                               'isDebug':False, 
+                               'use_latest_pivot':True, 
+                               'use_standardized_sub_df':True,
+                               'use_cnn_lstm':True,
+                               'use_cnn':False,
+                               'check_level':['1d','30m'],
+                               'sub_level_max_length':400})
+    
+        stock_list.sort()
+        weekly_gauge_results = mbc_weekly.gauge_stocks_analysis(stock_list, check_status=True, today_date=context.current_dt.date())
+        daily_gauge_results = mbc_day.gauge_stocks_analysis(stock_list, check_status=False, today_date=context.current_dt.date())
+        
+        combined_results = zip(weekly_gauge_results, daily_gauge_results)
+#         print("combined_result: {0}".format(combined_results))
+        
+        result = {}
+        result[str(context.current_dt.date())]=[(stock, 1 if (long_week and long_day) else 0, 1 if (short_week or short_day) else 0) 
+                                for (stock, (long_week, short_week)), (stock, (long_day, short_day)) in combined_results]
+
+        return result
+        
+    
     def handle_data(self, context, data):
         today_date = context.current_dt.date()
         try:
-            trading_list = json.loads(read_file(self.ml_predict_file_path).decode())
+            if self.ml_predict_file_path: # model prediction happened outside
+                trading_list = json.loads(read_file(self.ml_predict_file_path).decode())
+            else:
+                checking_list = list(set(self.g.buy_stocks+list(context.portfolio.positions.keys())))
+                trading_list = self.ml_prediction(checking_list, context)
+                
             trading_details = trading_list[str(today_date)]
             trade_dict = {}
             for trades in trading_details:
                 stock, buy, sell = trades
                 trade_dict[stock] = (buy, sell)
                 
-#             print("ML data for {0}, with: {1}".format(str(today_date), trade_dict))
             # sell holding stocks if found # no need to do it
             hold_stocks_to_check = [stock for stock in context.portfolio.positions.keys() if stock not in g.money_fund]
             for stock in hold_stocks_to_check:
@@ -192,7 +249,8 @@ class ML_Stock_Timing(Rule):
                 self.g.buy_stocks = [stock for stock in self.g.buy_stocks if stock not in stocks_to_remove]
             self.log.info("ML择时结果: "+join_list([show_stock(stock) for stock in self.g.buy_stocks], ' ', 10))
             # make sure ML predict use check_status
-        except:
+        except Exception as e:
+            print(str(e))
             self.log.warn("ML prediction data missing: {0} {1}".format(self.ml_predict_file_path, str(today_date)))
             if self.clear_candidate_if_AI_failed:
                 self.g.buy_stocks = []

@@ -241,14 +241,17 @@ class MLDataProcess(object):
         
     
     def load_model(self, model_name):
-        if self.isAnal:
-            self.model = load_model(model_name)
-        else:
-            copy(model_name)
-            self.model = load_model(hack_path)
+#         if self.isAnal:
+#             self.model = load_model(model_name)
+#         else:
+#             copy(model_name)
+#             self.model = load_model(hack_path)
+
+        self.model = load_model(model_name)
         self.model_name = model_name
         print("loaded model: {0}".format(self.model_name))
-        print (self.model.summary())
+        if self.isAnal:
+            print (self.model.summary())
 
     def model_predict_cnn(self, data_set, unique_id):
         if self.model:

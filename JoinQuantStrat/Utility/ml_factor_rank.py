@@ -71,6 +71,8 @@ class ML_Factor_Rank(object):
         svr = SVR(kernel='rbf', gamma=0.1) 
         model = svr.fit(X, Y)
         factor = Y - pd.DataFrame(svr.predict(X), index = Y.index, columns = ['log_mcap'])
-        factor = factor.sort_index(by = 'log_mcap')
+#         factor = factor.sort_index(by = 'log_mcap')
+        factor = factor.sort_values(by = 'log_mcap')
         stockset = list(factor.index[:self.stock_num])
+        
         return stockset

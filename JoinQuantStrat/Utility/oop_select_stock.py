@@ -18,6 +18,7 @@ from ml_factor_rank import *
 from pair_trading_ols import *
 from value_factor_lib import *
 from quant_lib import *
+from functools import reduce
 
 
 '''=========================选股规则相关==================================='''
@@ -66,7 +67,7 @@ class Pick_stocks2(Group_rules):
                 self.g.buy_stocks = rule.filter(context, self.g.buy_stocks)
                 
         if self.file_path:
-            checking_stocks = [stock for stock in list(set(self.g.buy_stocks+context.portfolio.positions.keys())) if stock not in g.money_fund]
+            checking_stocks = [stock for stock in list(set(self.g.buy_stocks+list(context.portfolio.positions.keys()))) if stock not in g.money_fund]
             write_file(self.file_path, ",".join(checking_stocks))
             self.log.info('file written:{0}'.format(self.file_path))
         
@@ -498,7 +499,7 @@ class Filter_Week_Day_Long_Pivot_Stocks(Filter_stock_list):
             self.g.monitor_long_cm = ChanMatrix(combined_list, isAnal=False)
             self.g.monitor_long_cm.gaugeStockList([self.monitor_levels[0]])
         if not self.g.monitor_short_cm: # only update if we have stocks in position
-            self.g.monitor_short_cm = ChanMatrix(context.portfolio.positions.keys(), isAnal=False)
+            self.g.monitor_short_cm = ChanMatrix(list(context.portfolio.positions.keys()), isAnal=False)
             self.g.monitor_short_cm.gaugeStockList([self.monitor_levels[0]])
     
         # update daily status
