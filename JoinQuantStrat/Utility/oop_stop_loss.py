@@ -190,7 +190,7 @@ class ML_Stock_Timing(Rule):
     
         stock_list.sort()
         weekly_gauge_results = mbc_weekly.gauge_stocks_analysis(stock_list, check_status=True, today_date=context.current_dt.date())
-        daily_gauge_results = mbc_day.gauge_stocks_analysis(stock_list, check_status=False, today_date=context.current_dt.date())
+        daily_gauge_results = mbc_day.gauge_stocks_analysis(stock_list, check_status=True, today_date=context.current_dt.date())
         
         combined_results = zip(weekly_gauge_results, daily_gauge_results)
 #         print("combined_result: {0}".format(combined_results))
