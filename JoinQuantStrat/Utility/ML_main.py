@@ -301,9 +301,9 @@ class ML_biaoli_check(object):
             if check_status and not long_pred and not short_pred: # model not deterministic, we use past pivot point with passive logic
                 if self.isDebug:
                     print("check status use past pivot: {0}".format(past_pivot_status))
-                long_pred = long_pred or past_pivot_status == -1 
-#                                          (old_y_class[-1] == 0 and old_long_conf[-1]) and
-#                                          (len(new_y_class) >= 1 and new_y_class[-1] == 0 and new_long_conf[-1]))
+                long_pred = long_pred or (past_pivot_status == -1 and
+                                        ((old_y_class[-1] == 0 and old_long_conf[-1]) or
+                                        (len(new_y_class) >= 1 and new_y_class[-1] == 0 and new_long_conf[-1])))
                                         
                 short_pred = short_pred or past_pivot_status == 1
         except Exception as e:
@@ -321,7 +321,7 @@ class ML_biaoli_check(object):
                          use_standardized_sub_df=self.use_standardized_sub_df, 
                          monitor_level=self.check_level,
                          max_length_for_pad=self.sub_level_max_length)
-        data_set, origin_data_length, past_pivot_status = mld.prepare_stock_data_predict(stock, today_date=today_date) # 000001.XSHG
+        data_set, origin_data_length, past_pivot_status = mld.prepare_stock_data_predict(stock, today_date=today_date, period_count=self.sub_level_max_length) # 000001.XSHG
         if data_set is None: # can't predict
             print("None dataset, return [0],[[0]], 0")
             return (([0],[[0]]), 0)
