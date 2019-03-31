@@ -66,10 +66,13 @@ class Pick_stocks2(Group_rules):
             if isinstance(rule, Early_Filter_stock_list):
                 self.g.buy_stocks = rule.filter(context, self.g.buy_stocks)
                 
-        if self.file_path:
-            checking_stocks = [stock for stock in list(set(self.g.buy_stocks+list(context.portfolio.positions.keys()))) if stock not in g.money_fund]
+        checking_stocks = [stock for stock in list(set(self.g.buy_stocks+list(context.portfolio.positions.keys()))) if stock not in g.money_fund]
+        if self.file_path:    
             write_file(self.file_path, ",".join(checking_stocks))
             self.log.info('file written:{0}'.format(self.file_path))
+        else:
+            write_file("daily_stocks/{0}.txt".format(str(context.current_dt.date())), ",".join(checking_stocks))    
+        
         
 
     def __str__(self):
@@ -630,7 +633,7 @@ class Filter_common(Filter_stock_list):
         return df_jj.code.values
 
     def update_params(self, context, params):
-        self.filters = params.get('filters', ['st', 'high_limit', 'low_limit', 'pause','ban'])
+        self.filters = params.get('filters', ['st', 'high_limit', 'low_limit', 'pause']) # ,'ban'
 
     def __str__(self):
         return '一般性股票过滤器:%s' % (str(self.filters))
