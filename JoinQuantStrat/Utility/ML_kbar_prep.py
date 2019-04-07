@@ -84,7 +84,7 @@ class MLKbarPrep(object):
                 stock_df = attribute_history(stock, local_count, level, fields = fields, skip_paused=True, df=True)  
             else:
                 latest_trading_day = end_date if end_date is not None else get_trade_days(count=1)[-1]
-                stock_df = get_price(stock, count=local_count, end_date=str(latest_trading_day), frequency=level, fields = ['open','close','high','low', 'money'], skip_paused=True)              
+                stock_df = get_price(stock, count=local_count, end_date=str(latest_trading_day), frequency=level, fields = fields, skip_paused=True)              
             if stock_df.empty:
                 continue
             temp_stock_df_dict[level] = stock_df

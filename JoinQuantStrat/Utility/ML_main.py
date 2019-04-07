@@ -303,7 +303,7 @@ class ML_biaoli_check(object):
                     print("check status use past pivot: {0}".format(past_pivot_status))
                 long_pred = long_pred or (past_pivot_status == -1 and
                                         ((old_y_class[-1] == 0 and old_long_conf[-1]) or
-                                        (len(new_y_class) >= 1 and new_y_class[-1] == 0 and new_long_conf[-1])))
+                                        (not self.use_latest_pivot and len(new_y_class) >= 1 and new_y_class[-1] == 0 and new_long_conf[-1])))
                                         
                 short_pred = short_pred or past_pivot_status == 1
         except Exception as e:
