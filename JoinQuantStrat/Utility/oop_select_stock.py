@@ -47,7 +47,7 @@ class Pick_stocks2(Group_rules):
             if isinstance(rule, Filter_stock_list):
                 stock_list = rule.filter(context, data, stock_list)
     
-        self.g.monitor_buy_list = stock_list
+        self.g.monitor_buy_list = stock_list + g.etf_index # add the ETF index into list
 
         self.log.info('今日选股:\n' + join_list(["[%s]" % (show_stock(x)) for x in stock_list], ' ', 10))
         self.has_run = True
@@ -56,7 +56,9 @@ class Pick_stocks2(Group_rules):
         self.has_run = False
         for rule in self.rules:
             if isinstance(rule, Create_stock_list):
-                self.g.buy_stocks = rule.before_trading_start(context)
+                self.g.buy_stocks = self.g.buy_stocks + rule.before_trading_start(context)
+        
+        self.g.buy_stocks = list(set(self.g.buy_stocks))
         
         for rule in self.rules:
             if isinstance(rule, Early_Filter_stock_list):
@@ -65,19 +67,16 @@ class Pick_stocks2(Group_rules):
         for rule in self.rules:
             if isinstance(rule, Early_Filter_stock_list):
                 self.g.buy_stocks = rule.filter(context, self.g.buy_stocks)
-                
-        checking_stocks = [stock for stock in list(set(self.g.buy_stocks+list(context.portfolio.positions.keys()))) if stock not in g.money_fund]
-        if self.file_path:    
+    
+        checking_stocks = [stock for stock in list(set(self.g.buy_stocks+list(context.portfolio.positions.keys()))) if stock not in g.money_fund] + g.etf_index # add the ETF index into list
+        if self.file_path:
             write_file(self.file_path, ",".join(checking_stocks))
             self.log.info('file written:{0}'.format(self.file_path))
         else:
             write_file("daily_stocks/{0}.txt".format(str(context.current_dt.date())), ",".join(checking_stocks))    
         
-        
-
     def __str__(self):
         return self.memo
-
 
 # 根据多字段财务数据一次选股，返回一个Query
 class Pick_financial_data(Filter_query):
@@ -362,6 +361,76 @@ class Pick_Rank_Factor(Create_stock_list):
     def __str__(self):
         return "多因子回归公式选股"
     
+class Pick_ETF(Create_stock_list):
+    def __init__(self, params):
+        self.etf_index = params.get('etf_index', g.etf_index)
+        pass
+    
+    def before_trading_start(self, context):
+        return self.etf_index
+
+    def __str__(self):
+        return "ETF选股"
+    
+class Pick_fundamental_factor_rank(Create_stock_list):
+    def __init__(self, params):
+        self.stock_num = params.get('stock_num', 20)
+        pass
+
+    def before_trading_start(self, context):    
+        q = query(
+            valuation.code
+        )
+        for fd_param in self._params.get('factors', []):
+            if not isinstance(fd_param, FD_Factor):
+                continue
+            if fd_param.min is None and fd_param.max is None:
+                continue
+            factor = eval(fd_param.factor)
+            q = q.add_column(factor)            
+            if fd_param.min is not None:
+                q = q.filter(
+                    factor > fd_param.min
+                )
+            if fd_param.max is not None:
+                q = q.filter(
+                    factor < fd_param.max
+                )
+
+        order_by = eval(self._params.get('order_by', None))
+        sort_type = self._params.get('sort', SortType.asc)
+        if order_by is not None:
+            if sort_type == SortType.asc:
+                q = q.order_by(order_by.asc())
+            else:
+                q = q.order_by(order_by.desc())
+
+        df = get_fundamentals(q)
+        df = df.set_index('code')
+        #获取综合得分
+        df['point'] = df.rank().T.apply(sum)        
+        #按得分进行排序，取指定数量的股票
+        df = df.sort('point')[:self.stock_num]
+        return list(df.index.values)
+    
+    def before_trading_start_backup(self, context):
+            #获取股票池
+        df = get_fundamentals(query(valuation.code,valuation.pb_ratio,indicator.roe))
+        #进行pb,roe大于0筛选
+        df = df[(df['roe']>0) & (df['pb_ratio']>0)].sort('pb_ratio')
+        #以股票名词作为index
+#         df.index = df['code'].values
+        df = df.set_index('code')
+        #取roe倒数
+        df['1/roe'] = 1/df['roe']
+        #获取综合得分
+        df['point'] = df[['pb_ratio','1/roe']].rank().T.apply(sum)
+        #按得分进行排序，取指定数量的股票
+        df = df.sort('point')[:self.stock_num]
+        return df.index
+        
+    def __str__(self):
+        return "多因子综合评分选股"
 
 class Pick_Pair_Trading(Create_stock_list):
     def __init__(self, params):

@@ -121,10 +121,11 @@ class Sell_stocks(Rule):
             to_sell = cta.filter(context, data,to_sell)
         else:
             to_sell = []
-        self.g.monitor_buy_list = [stock for stock in self.g.monitor_buy_list if stock not in to_sell]
+        self.g.monitor_buy_list = [stock for stock in self.g.monitor_buy_list if stock not in to_sell]        
         self.adjust(context, data, self.g.monitor_buy_list)
 
     def adjust(self, context, data, buy_stocks):
+        buy_stocks = [g.etf_list[stock] if stock in g.etf_list else stock for stock in buy_stocks ]
         # 卖出不在待买股票列表中的股票
         # 对于因停牌等原因没有卖出的股票则继续持有
         for pindex in self.g.op_pindexs:
@@ -277,6 +278,7 @@ class Buy_stocks_var(Buy_stocks):
         self.pc_var = None
 
     def adjust(self, context, data, buy_stocks):
+        buy_stocks = [g.etf_list[stock]  if stock in g.etf_list else stock for stock in buy_stocks]
         if not self.pc_var:
             # 设置 VaR 仓位控制参数。风险敞口: 0.05,
             # 正态分布概率表，标准差倍数以及置信率: 0.96, 95%; 2.06, 96%; 2.18, 97%; 2.34, 98%; 2.58, 99%; 5, 99.9999%
