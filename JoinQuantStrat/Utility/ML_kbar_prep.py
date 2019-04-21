@@ -33,8 +33,6 @@ class MLKbarPrep(object):
     biaoli status, high/low prices, volume/turnover ratio/money, MACD, sequence index
     '''
 
-#     monitor_level = ['1d', '30m']
-#     monitor_level = ['5d', '1d']
     def __init__(self, count=100, 
                  isAnal=False, 
                  isNormalize=True, 
@@ -64,10 +62,10 @@ class MLKbarPrep(object):
 
     def workout_count_num(self, level):
         return self.count if self.monitor_level[0] == level \
-                        else self.count * 8 if level == '30m' \
-                        else self.count * 8 if level == '150m' \
-                        else self.count * 10 if level == '120m' \
-                        else self.count * 5
+                        else self.count * 8 if self.monitor_level[0] == '1d' and level == '30m' \
+                        else self.count * 8 if self.monitor_level[0] == '5d' and level == '150m' \
+                        else self.count * 24 if self.monitor_level[0] == '5d' and level == '30m' \
+                        else self.count * 8
 
     def get_high_df(self):
         return self.stock_df_dict[self.monitor_level[0]]
@@ -413,7 +411,6 @@ class MLDataPrep(object):
 
             data_list = data_list + A
             label_list = label_list + B
-            print("loaded data set: {0}".format(file))
 
         return self.prepare_stock_data_set(data_list, label_list, padData, test_portion, random_seed, background_data_generation)
     
@@ -522,6 +519,11 @@ class MLDataPrep(object):
         for i in batch(range(0, len(data)), batch_size):
             yield data[i[0]:i[1]], label[i[0]:i[1]]    
     
+    def keepDimension(self, targetArray, indexList):
+        tempArray = np.array(targetArray)
+        tempArray = tempArray[:,:,indexList]
+        return tempArray.tolist()
+    
     def generate_from_file(self, filenames, padData=True, background_data_generation=False, batch_size=50):
         while True:
             for file in filenames:
@@ -537,7 +539,7 @@ class MLDataPrep(object):
                     print("Data invalid in file {0}".format(file))
                     continue
     
-                print("loaded data set: {0}".format(file))
+#                 print("loaded data set: {0}".format(file))
     
                 if not A or not B:
                     print("Invalid file content")
