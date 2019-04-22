@@ -29,9 +29,11 @@ class Pick_stocks2(Group_rules):
         Group_rules.__init__(self, params)
         self.has_run = False
         self.file_path = params.get('write_to_file', None)
+        self.add_etf = params.get('add_etf', True)
 
     def update_params(self, context, params):
         self.file_path = params.get('write_to_file', None)
+        self.add_etf = params.get('add_etf', True)
 
     def handle_data(self, context, data):
         try:
@@ -47,7 +49,7 @@ class Pick_stocks2(Group_rules):
             if isinstance(rule, Filter_stock_list):
                 stock_list = rule.filter(context, data, stock_list)
     
-        self.g.monitor_buy_list = stock_list + g.etf_index # add the ETF index into list
+        self.g.monitor_buy_list = stock_list + g.etf_index if self.add_etf else stock_list # add the ETF index into list
 
         self.log.info('今日选股:\n' + join_list(["[%s]" % (show_stock(x)) for x in stock_list], ' ', 10))
         self.has_run = True
@@ -68,12 +70,15 @@ class Pick_stocks2(Group_rules):
             if isinstance(rule, Early_Filter_stock_list):
                 self.g.buy_stocks = rule.filter(context, self.g.buy_stocks)
     
-        checking_stocks = [stock for stock in list(set(self.g.buy_stocks+list(context.portfolio.positions.keys()))) if stock not in g.money_fund] + g.etf_index # add the ETF index into list
+        checking_stocks = [stock for stock in list(set(self.g.buy_stocks+list(context.portfolio.positions.keys()))) if stock not in g.money_fund]
+        if self.add_etf:
+            checking_stocks = checking_stocks + g.etf_index
         if self.file_path:
-            write_file(self.file_path, ",".join(checking_stocks))
-            self.log.info('file written:{0}'.format(self.file_path))
-        else:
-            write_file("daily_stocks/{0}.txt".format(str(context.current_dt.date())), ",".join(checking_stocks))    
+            if self.file_path == "daily":
+                write_file("daily_stocks/{0}.txt".format(str(context.current_dt.date())), ",".join(checking_stocks))    
+            else:
+                write_file(self.file_path, ",".join(checking_stocks))
+                self.log.info('file written:{0}'.format(self.file_path))
         
     def __str__(self):
         return self.memo
