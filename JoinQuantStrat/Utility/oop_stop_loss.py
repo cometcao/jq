@@ -16,8 +16,8 @@ import statsmodels.api as sm
 from pandas import Series, DataFrame
 from ML_main import *
 import os
-import tensorflow as tf
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
+# import tensorflow as tf
+# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
 
 class Stop_loss_by_price(Rule):
     def __init__(self, params):

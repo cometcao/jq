@@ -201,6 +201,7 @@ class Buy_stocks(Rule):
         return to_buy
         
     def adjust(self, context, data, buy_stocks):
+        buy_stocks = [g.etf_list[stock] if stock in g.etf_list else stock for stock in buy_stocks ]
         # 买入股票
         # 始终保持持仓数目为g.buy_stock_count
         # 根据股票数量分仓
