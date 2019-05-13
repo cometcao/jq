@@ -5,10 +5,13 @@ from keras import backend as K
 from keras.utils.np_utils import to_categorical
 from keras.models import load_model
 from keras.models import Sequential
-from keras.layers import Dense, Dropout, Flatten, TimeDistributed,LSTM
+from keras.layers import Dense, Dropout, Flatten, TimeDistributed,LSTM, GRU
 from keras.layers.normalization import BatchNormalization
-from keras.layers import Conv2D, MaxPooling2D, ConvLSTM2D
+from keras.layers import Conv2D, MaxPooling2D, ConvLSTM2D, Conv1D, MaxPooling1D, Reshape, GlobalAveragePooling1D
 from keras import optimizers
+from keras.callbacks import EarlyStopping
+from keras.callbacks import ModelCheckpoint
+from utility.common_include import pad_each_training_array
 
 #     import os
 #     print(os.path.abspath('.'))
@@ -31,10 +34,11 @@ def copy(path):
 
 
 class MLDataProcess(object):
-    def __init__(self, model_name=None, isAnal=False):
+    def __init__(self, model_name=None, isAnal=False, isDebug=False):
         self.model_name = model_name
         self.model = None
         self.isAnal = isAnal
+        self.isDebug = isDebug 
     
     def define_conv2d_dimension(self, x_train, x_test):
         x_train = np.expand_dims(x_train, axis=2) 
@@ -175,7 +179,7 @@ class MLDataProcess(object):
         model.add(Dense(num_classes, activation='softmax'))
         
         model.compile(loss=keras.losses.categorical_crossentropy,
-                      optimizer=keras.optimizers.Adam(), #Adadelta
+                      optimizer=keras.optimizers.Adadelta(), #Adadelta, Nadam, SGD, Adam
                       metrics=['accuracy'])
         
         print (model.summary())
@@ -205,29 +209,105 @@ class MLDataProcess(object):
             # convert class vectors to binary class matrices
             input_shape = (b, e, c, d)
         else:
-            # convert class vectors to binary class matrices
+            # channel last
             input_shape = (b, c, d, e)
         
         data_gen.send((x_train, x_test))
-        return input_shape
+        aa, bb, cc, dd = input_shape
+        return aa, bb, cc, dd        
                       
-    
-    def define_conv_lstm_model_gen(self, data_gen, validation_gen, num_classes, batch_size = 50, steps = 10000,epochs = 5, verbose=0, validation_steps=1000):
+    def define_conv_lstm_model_gen(self, data_gen, validation_gen, num_classes, batch_size = 50, steps = 10000,epochs = 5, verbose=0, validation_steps=1000, patience=10):
         input_shape = self.define_conv_lstm_shape(data_gen)
         
         model = self.create_conv_lstm_model_arch(input_shape, num_classes)
         
-        self.process_model_generator(model, data_gen, steps, epochs, verbose, validation_gen, validation_gen, validation_steps)
+        self.process_model_generator(model, data_gen, steps, epochs, verbose, validation_gen, validation_gen, validation_steps, patience)
 
+
+    def create_rnn_cnn_model_arch(self, input_shape, num_classes):
+        model = Sequential()     
+        model.add(Conv1D(3,
+                         kernel_size=3,
+                         input_shape=input_shape,
+                         padding='valid',
+                         activation='relu',
+                         strides=3))
+        if self.isDebug:
+            print("layer input/output shape:{0}, {1}".format(model.input_shape, model.output_shape))
+            
         
-    def process_model_generator(self, model, generator, steps = 10000, epochs = 5, verbose = 2, validation_data=None, evaluate_generator=None, validation_steps=1000):
+        model.add(Conv1D(4,
+                         kernel_size=2,
+                         padding='valid',
+                         activation='relu'))
+        model.add(GRU(model.output_shape[1], return_sequences=True))   
+        
+        model.add(Conv1D(4,
+                         kernel_size=3,
+                         padding='valid',
+                         activation='relu',
+                         strides=3))
+        model.add(GRU(model.output_shape[1], return_sequences=True))
+        
+        model.add(Conv1D(3,
+                         kernel_size=3,
+                         padding='valid',
+                         activation='relu',
+                         strides=5))
+        model.add(GRU(model.output_shape[1], return_sequences=False))
+
+        model.add(Dropout(0.3))
+        model.add(Dense (model.output_shape[1], activation='relu'))
+
+        if self.isDebug:
+            print("layer input/output shape:{0}".format(model.output_shape))
+
+        model.add(Dense(num_classes, activation='softmax'))
+         
+        model.compile(loss=keras.losses.categorical_crossentropy,
+                      optimizer=keras.optimizers.Adadelta(), #Adadelta, Nadam, SGD, Adam
+                      metrics=['accuracy'])
+                
+        print (model.summary())
+        return model     
+
+    def define_rnn_cnn_shape(self, data_gen):
+        x_train, x_test = next(data_gen)
+        
+        input_shape = None
+        a, b, c = x_train.shape
+        if K.image_data_format() == 'channels_first':
+            # convert class vectors to binary class matrices
+            input_shape = (c, b)
+        else:
+            # channel last
+            input_shape = (b, c)
+        
+        data_gen.send((x_train, x_test))
+        aa, bb = input_shape
+        return aa, bb
+
+
+    def define_rnn_cnn_model_gen(self, data_gen, validation_gen, num_classes, batch_size = 50, steps = 10000,epochs = 5, verbose=0, validation_steps=1000, patience=10):
+        input_shape = self.define_rnn_cnn_shape(data_gen)
+        
+        model = self.create_rnn_cnn_model_arch(input_shape, num_classes)
+        
+        self.process_model_generator(model, data_gen, steps, epochs, verbose, validation_gen, validation_gen, validation_steps, patience)
+
+    def process_model_generator(self, model, generator, steps = 10000, epochs = 5, verbose = 2, validation_data=None, evaluate_generator=None, validation_steps=1000, patience=10):
+        es = EarlyStopping(monitor='val_loss', mode='min', verbose=verbose, patience=patience)
+        mc_loss = ModelCheckpoint('best_model_loss.h5', monitor='val_loss', mode='min', verbose=verbose, save_best_only=True)
+        mc_acc = ModelCheckpoint('best_model_acc.h5', monitor='val_acc', mode='max', verbose=verbose, save_best_only=True)
+        
         model.fit_generator(generator, 
                             steps_per_epoch = steps, 
                             epochs = epochs, 
                             verbose = verbose,
                             validation_data = validation_data,
-                            validation_steps = validation_steps)
-        score = model.evaluate_generator(evaluate_generator, verbose = verbose, steps=841)
+                            validation_steps = validation_steps, 
+                            callbacks=[es, mc_loss, mc_acc])
+        score = model.evaluate_generator(evaluate_generator, steps=validation_steps)
         print('Test loss:', score[0])
         print('Test accuracy:', score[1])        
         
@@ -266,7 +346,16 @@ class MLDataProcess(object):
     def model_predict_cnn_lstm(self, data_set, unique_id):
         if self.model:
             data_set = np.expand_dims(data_set, axis=2)
-            data_set = np.expand_dims(data_set, axis=1)
+            data_set = np.expand_dims(data_set, axis=2)
+            prediction = np.array(self.model.predict(data_set))
+            y_class = unique_id[prediction.argmax(axis=-1)]
+            return (y_class, prediction)
+        else:
+            print("Invalid model")
+            return None
+        
+    def model_predict_rcnn(self, data_set, unique_id):
+        if self.model:
             prediction = np.array(self.model.predict(data_set))
             y_class = unique_id[prediction.argmax(axis=-1)]
             return (y_class, prediction)

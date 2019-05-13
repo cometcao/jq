@@ -15,6 +15,7 @@ from pickle import dump
 from pickle import load
 import numpy as np
 import io
+from keras.utils.np_utils import to_categorical
 
 evs_query_string = '(valuation.market_cap*100000000+balance.total_liability+balance.minority_interests+balance.capital_reserve_fund-balance.cash_equivalents)/(income.total_operating_revenue)'
 eve_query_string = '(valuation.market_cap*100000000+balance.total_liability+balance.minority_interests+balance.capital_reserve_fund-balance.cash_equivalents)/(indicator.eps*valuation.capitalization*10000)'
@@ -157,3 +158,64 @@ def save_dataset_np(dataset, filename):
 def load_dataset_np(filename):
     print('Loaded: %s' % filename)
     return np.load(filename)
+
+def pad_each_training_array(data_list, max_sequence_length):
+    new_shape = findmaxshape(data_list)
+    if max_sequence_length != 0: # force padding to global max length
+        new_shape = (max_sequence_length, new_shape[1]) 
+    new_data_list = fillwithzeros(data_list, new_shape)
+    return new_data_list
+
+def fillwithzeros(inputarray, outputshape):
+    """
+    Fills input array with dtype 'object' so that all arrays have the same shape as 'outputshape'
+    inputarray: input numpy array
+    outputshape: max dimensions in inputarray (obtained with the function 'findmaxshape')
+
+    output: inputarray filled with zeros
+    """
+    length = len(inputarray)
+    output = np.zeros((length,)+outputshape)
+    for i in range(length):
+        if inputarray[i].shape[0] <= outputshape[0]:
+            output[i][:inputarray[i].shape[0],:inputarray[i].shape[1]] = inputarray[i]
+        else:
+            output[i][:outputshape[0], :outputshape[1]] = inputarray[i][-outputshape[0]:,-outputshape[1]:]
+#                 print(inputarray[i].shape)
+#                 print(output[i].shape)
+#                 print(inputarray[i])
+#                 print(output[i])
+    return output
+
+def findmaxshape(inputarray):
+    """
+    Finds maximum x and y in an inputarray with dtype 'object' and 3 dimensions
+    inputarray: input numpy array
+
+    output: detected maximum shape
+    """
+    max_x, max_y = 0, 0
+    for array in inputarray:
+        x, y = array.shape
+        if x > max_x:
+            max_x = x
+        if y > max_y:
+            max_y = y
+    return(max_x, max_y)
+
+def sort_training_dataset_by_sublength(dataset, label):
+    """
+    Input: training/testing dataset label
+    output: training/testing dataset label sorted by sub sequence length in dataset
+    """
+    narrayData = sorted(dataset, key=len, reverse=False)
+    length_index = np.argsort([len(seq) for seq in dataset])
+
+    narrayLabel = np.array(label)[length_index]
+        
+    return narrayData, narrayLabel
+    
+def encode_category(label_set): # this is assuming we have full label in the sample
+    uniques, ids = np.unique(label_set, return_inverse=True)
+    y_code = to_categorical(ids, len(uniques))
+    return y_code
