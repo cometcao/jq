@@ -37,7 +37,7 @@ class MLKbarPrep(object):
                  isAnal=False, 
                  isNormalize=True, 
                  manual_select=False, 
-                 useMinMax=True, 
+                 norm_range=[-1, 1], 
                  sub_max_count=fixed_length, 
                  isDebug=False, 
                  include_now=False, 
@@ -48,7 +48,7 @@ class MLKbarPrep(object):
         self.isAnal = isAnal
         self.count = count
         self.isNormalize = isNormalize
-        self.useMinMax = useMinMax
+        self.norm_range = norm_range
         self.manual_select = manual_select
         self.stock_df_dict = {}
         self.sub_level_min_count = sub_level_min_count
@@ -63,8 +63,10 @@ class MLKbarPrep(object):
     def workout_count_num(self, level, count):
         return count if self.monitor_level[0] == level \
                         else count * 8 if self.monitor_level[0] == '1d' and level == '30m' \
+                        else count * 16 if self.monitor_level[0] == '1d' and level == '15m' \
                         else count * 8 if self.monitor_level[0] == '5d' and level == '150m' \
                         else count * 40 if self.monitor_level[0] == '5d' and level == '30m' \
+                        else count * 20 if self.monitor_level[0] == '5d' and level == '60m' \
                         else count * 8
 
     def get_high_df(self):
@@ -182,11 +184,15 @@ class MLKbarPrep(object):
         high_dates = high_df_tb.index
         for i in range(0, len(high_dates)-1):
             first_date = str(high_dates[i].date())
-            if self.monitor_level[0] == '5d': # find the full range of date for the week
-                first_date = JqDataRetriever.get_trading_date(count=5, end_date=first_date)[0]
             second_date = str(high_dates[i+1].date())
+#             print("high date: {0}:{1}".format(first_date, second_date))
+            if self.monitor_level[0] == '5d': # find the full range of date for the week
+                first_date = JqDataRetriever.get_trading_date(count=4, end_date=first_date)[0]
+                second_date = JqDataRetriever.get_trading_date(start_date=second_date)[4] # 5 days after the peak Week bar
+#                 print("high cutting date: {0}:{1}".format(first_date, second_date))
             trunk_lower_df = lower_df.loc[first_date:second_date,:]
             self.create_ml_data_set(trunk_lower_df, high_df_tb.ix[i+1, 'tb'].value, for_predict=False)
+        
         return self.data_set, self.label_set
     
     def prepare_predict_data(self):    
@@ -204,7 +210,7 @@ class MLKbarPrep(object):
             try:
                 previous_date = str(high_dates[i].date())
                 if self.monitor_level[0] == '5d': # find the full range of date for the week
-                    previous_date = JqDataRetriever.get_trading_date(count=5, end_date=previous_date)[0]
+                    previous_date = JqDataRetriever.get_trading_date(count=4, end_date=previous_date)[0]
             except IndexError:
                 continue
             trunk_df = None
@@ -228,7 +234,7 @@ class MLKbarPrep(object):
             try:
                 previous_date = str(high_dates[i].date())
                 if self.monitor_level[0] == '5d': # find the full range of date for the week
-                    previous_date = JqDataRetriever.get_trading_date(count=5, end_date=previous_date)[0]
+                    previous_date = JqDataRetriever.get_trading_date(count=4, end_date=previous_date)[0]
             except IndexError:
                 continue
             trunk_df = lower_df.loc[previous_date:,:]
@@ -247,15 +253,16 @@ class MLKbarPrep(object):
 
         # sub level trunks
         tb_trunk_df = trunk_df.dropna(subset=['tb'])
-        
-#         if len(tb_trunk_df.index) >= 2: # precise sub level chunk at least 2 subs
+                
         pivot_sub_counting_range = self.workout_count_num(self.monitor_level[1], 1)        
 
-        
         if len(trunk_df) > pivot_sub_counting_range * 2:
 
             start_high_idx = trunk_df.ix[:pivot_sub_counting_range,'high'].idxmax()
-            start_low_idx = trunk_df.ix[:pivot_sub_counting_range,'low'].idxmin()        
+            start_low_idx = trunk_df.ix[:pivot_sub_counting_range,'low'].idxmin()
+            
+            sub_start_index_high = trunk_df.index[trunk_df.index.get_loc(start_high_idx) + pivot_sub_counting_range]
+            sub_start_index_low = trunk_df.index[trunk_df.index.get_loc(start_low_idx) + pivot_sub_counting_range]
             
             if for_predict:
                 trunk_df = trunk_df.loc[start_high_idx:tb_trunk_df.index[-1],:] if label == 1 else trunk_df.loc[start_low_idx:tb_trunk_df.index[-1],:]
@@ -265,17 +272,18 @@ class MLKbarPrep(object):
                         trunk_df.loc[tb_trunk_df.index[0]:tb_trunk_df.index[-1],:]
         else:
             return
-        
-        if self.sub_max_count > 0 and trunk_df.shape[0] > self.sub_max_count: # truncate
-            print("data truncated due to max length sequence exceeded")
-            trunk_df = trunk_df.iloc[-self.sub_max_count:,:]
-        
+
+#         if self.sub_max_count > 0 and trunk_df.shape[0] > self.sub_max_count: # truncate
+#             print("data truncated due to max length sequence exceeded")
+#             trunk_df = trunk_df.iloc[-self.sub_max_count:,:]
+       
         if self.manual_select:
             trunk_df = self.manual_select(trunk_df)
         else: # manual_wash
             trunk_df = self.manual_wash(trunk_df)  
-        if self.isNormalize:
-            trunk_df = self.normalize(trunk_df)
+            
+#         if self.isNormalize:
+#             trunk_df = normalize(trunk_df, norm_range=[-1,1])
         
         if trunk_df.isnull().values.any():
             print("NaN value found, ignore this data")
@@ -287,25 +295,52 @@ class MLKbarPrep(object):
             self.data_set.append(trunk_df.values)
         else:
             if not trunk_df.empty:            
-                end_low_idx = trunk_df.ix[-pivot_sub_counting_range:,'low'].idxmin()
-                end_high_idx = trunk_df.ix[-pivot_sub_counting_range:,'high'].idxmax()    
-                for time_index in tb_trunk_df.index: #  counting from cutting start
+                end_low_idx = trunk_df.ix[-pivot_sub_counting_range*2:,'low'].idxmin()
+                end_high_idx = trunk_df.ix[-pivot_sub_counting_range*2:,'high'].idxmax()   
+                
+#                 print("full sequence: {0},{1}".format(trunk_df.iloc[0,:], trunk_df.iloc[-1,:]))                
+                sub_end_pos_low = trunk_df.index.get_loc(end_low_idx) + pivot_sub_counting_range
+                sub_end_pos_high = trunk_df.index.get_loc(end_high_idx) + pivot_sub_counting_range                
+                sub_end_index_low = trunk_df.index[sub_end_pos_low if sub_end_pos_low < len(trunk_df.index) else -1]
+                sub_end_index_high = trunk_df.index[sub_end_pos_high if sub_end_pos_high < len(trunk_df.index) else -1]             
+                
+                for time_index in trunk_df.index: #  tb_trunk_df.index
+                    if label == TopBotType.bot.value and (time_index < sub_start_index_high or time_index > sub_end_index_low):
+                        continue
+                    elif label == TopBotType.top.value and (time_index < sub_start_index_low or time_index > sub_end_index_high):
+                        continue
+                    
                     sub_trunk_df = trunk_df.loc[:time_index, :]
+                                
+                    if self.isNormalize:
+                        sub_trunk_df = normalize(sub_trunk_df, norm_range=[-1,1])
+
+                    if sub_trunk_df.isnull().values.any():
+                        print("NaN value found, ignore this data")
+#                         print(trunk_df)
+                        print(sub_trunk_df)
+                        continue
+                        
                     if not sub_trunk_df.empty:
                         self.data_set.append(sub_trunk_df.values)
-                        if label == -1:
-                            if time_index < end_low_idx or tb_trunk_df.loc[time_index, 'tb'].value != label:
-                                self.label_set.append(TopBotType.noTopBot.value)
+                        if label == TopBotType.bot.value:
+                            if time_index < start_high_idx: #  and tb_trunk_df.loc[time_index, 'tb'].value == TopBotType.top.value
+                                self.label_set.append(TopBotType.top.value)
+                            elif time_index >= end_low_idx:  #  and tb_trunk_df.loc[time_index, 'tb'].value == TopBotType.bot.value
+                                self.label_set.append(TopBotType.bot.value)
                             else:
-                                self.label_set.append(label)
-                        elif label == 1:
-                            if time_index < end_high_idx or tb_trunk_df.loc[time_index, 'tb'].value != label:
-                                self.label_set.append(TopBotType.noTopBot.value)
+                                self.label_set.append(TopBotType.top.value) # change to binary classification
+#                                 self.label_set.append(TopBotType.noTopBot.value)
+                        elif label == TopBotType.top.value:
+                            if time_index >= end_high_idx: #  and tb_trunk_df.loc[time_index, 'tb'].value == TopBotType.top.value
+                                self.label_set.append(TopBotType.top.value)
+                            elif time_index < start_low_idx: #  and tb_trunk_df.loc[time_index, 'tb'].value == TopBotType.bot.value
+                                self.label_set.append(TopBotType.bot.value)
                             else:
-                                self.label_set.append(label)
+                                self.label_set.append(TopBotType.bot.value) # change to binary classification
+#                                 self.label_set.append(TopBotType.noTopBot.value)
                         else:
                             pass
-        
         
     def manual_select(self, df):
         df = df.dropna() # only concern BI
@@ -319,26 +354,26 @@ class MLKbarPrep(object):
         df = df.drop(['new_index','tb'], 1, errors='ignore')
         return df
         
-    def normalize(self, df):
-        for column in df: 
+    def normalize_old(self, df):
+        working_df = df.copy(deep=True)
+        for column in working_df: 
             if column == 'new_index' or column == 'tb':
                 continue
-            if self.useMinMax:
+            if self.norm_range:
                 # min-max -1 1 / 0 1
-                col_min = df[column].min()
-                col_max = df[column].max()
-                col_mean = df[column].mean()
-                df[column]=(df[column]-col_mean)/(col_max-col_min)
+                col_min = working_df[column].min()
+                col_max = working_df[column].max()
+                col_mean = working_df[column].mean()
+                working_df[column]=(working_df[column]-col_mean)/(col_max-col_min)
             else:
-                # mean std
-                col_mean = df[column].mean()
-                col_std = df[column].std()
-                df[column] = (df[column] - col_mean) / col_std
-        return df
-
-
+                # use zscore mean std
+                col_mean = working_df[column].mean()
+                col_std = working_df[column].std()
+                working_df[column] = (working_df[column] - col_mean) / col_std
+        return working_df
+        
 class MLDataPrep(object):
-    def __init__(self, isAnal=False, max_length_for_pad=fixed_length, rq=False, ts=True, useMinMax=False, isDebug=False,detailed_bg=False, use_standardized_sub_df=True, monitor_level=['1d','30m']):
+    def __init__(self, isAnal=False, max_length_for_pad=fixed_length, rq=False, ts=True, norm_range=[-1,1], isDebug=False,detailed_bg=False, use_standardized_sub_df=True, monitor_level=['1d','30m']):
         self.isDebug = isDebug
         self.isAnal = isAnal
         self.detailed_bg = detailed_bg
@@ -347,7 +382,7 @@ class MLDataPrep(object):
         self.isTS = ts
         self.use_standardized_sub_df = use_standardized_sub_df
         self.check_level = monitor_level
-        self.useMinMax = useMinMax
+        self.norm_range = norm_range
     
     def retrieve_stocks_data_from_raw(self, raw_file_path=None, filename=None):
         data_list = []
@@ -355,7 +390,7 @@ class MLDataPrep(object):
         mlk = MLKbarPrep(isAnal=self.isAnal, 
                          isNormalize=True, 
                          sub_max_count=self.max_sequence_length, 
-                         useMinMax=self.useMinMax,
+                         norm_range=self.norm_range,
                          isDebug=self.isDebug, 
                          sub_level_min_count=0, 
                          use_standardized_sub_df=self.use_standardized_sub_df, 
@@ -365,6 +400,7 @@ class MLDataPrep(object):
         for stock_df in df_array:
             mlk.load_stock_raw_data(stock_df)
             dl, ll = mlk.prepare_training_data()
+            
             data_list = data_list + dl
             label_list = label_list + ll
         if filename:
@@ -381,7 +417,7 @@ class MLDataPrep(object):
                              count=period_count, 
                              isNormalize=True, 
                              sub_max_count=self.max_sequence_length, 
-                             useMinMax=self.useMinMax,
+                             norm_range=self.norm_range,
                              isDebug=self.isDebug, 
                              sub_level_min_count=0, 
                              use_standardized_sub_df=self.use_standardized_sub_df, 
@@ -404,7 +440,7 @@ class MLDataPrep(object):
                          count=period_count, 
                          isNormalize=True, 
                          sub_max_count=self.max_sequence_length, 
-                         useMinMax=self.useMinMax,
+                         norm_range=self.norm_range,
                          isDebug=self.isDebug, 
                          sub_level_min_count=0, 
                          use_standardized_sub_df=self.use_standardized_sub_df,
@@ -438,7 +474,7 @@ class MLDataPrep(object):
             A_check = True
             i = 0
             for item in A:     
-                if (self.useMinMax and not ((item>=-1).all() and (item<=1).all())) or np.isnan(item).any(): # min max value range
+                if (not ((item>=self.norm_range[0]).all() and (item<=self.norm_range[1]).all())) or np.isnan(item).any(): # min max value range
                     print(item)
                     print(A[i])
                     print(B[i])
@@ -454,9 +490,8 @@ class MLDataPrep(object):
             label_list = label_list + B
 
         return self.prepare_stock_data_set(data_list, label_list, padData, test_portion, random_seed, background_data_generation)
-    
+        
     def prepare_stock_data_set(self, data_list, label_list, padData=True, test_portion=0.1, random_seed=42, background_data_generation=False):
-
         if not data_list or not label_list:
             print("Invalid file content")
             return
@@ -528,7 +563,7 @@ class MLDataPrep(object):
                 
                 A_check = True
                 for item in A:     
-                    if (self.useMinMax and not ((item>=-1).all() and (item<=1).all())) or \
+                    if (not ((item>=self.norm_range[0]).all() and (item<=self.norm_range[1]).all())) or \
                     np.isnan(item).any() or \
                     item.size == 0: # min max value range or zscore
                         print(item)
@@ -545,28 +580,29 @@ class MLDataPrep(object):
                 if background_data_generation:
                     A, B = self.prepare_background_data(A, B)
     
-                if padData:
-                    A = sequence.pad_sequences(A, maxlen=None if self.max_sequence_length == 0 else self.max_sequence_length, padding='pre', truncating='pre')
-                
-                if model_type == 'convlstm':
-                    A = self.define_conv_lstm_dimension(A)
+#                 if padData:
+#                     A = sequence.pad_sequences(A, maxlen=None if self.max_sequence_length == 0 else self.max_sequence_length, padding='pre', truncating='pre')
+#   
+#                 if model_type == 'convlstm':
+#                     A = self.define_conv_lstm_dimension(A)
             
 #                 B = encode_category(B)
                 
                 for i in batch(range(0, len(A)), batch_size):
                     subA = A[i[0]:i[1]]               
 
-#                     if padData:
-# ###                         subA = pad_each_training_array(subA, self.max_sequence_length)## not used
-#                         subA = sequence.pad_sequences(subA, maxlen=None if self.max_sequence_length == 0 else self.max_sequence_length, padding='pre', truncating='pre')
-#                     else:
-#                         subA = np.array(subA)
-#    
-#                     if model_type == 'convlstm':
-#                         subA = self.define_conv_lstm_dimension(subA)
-#                     elif model_type == 'rnncnn':
-#                         pass                       
-                    
+                    if padData:
+###                         subA = pad_each_training_array(subA, self.max_sequence_length)## not used
+                        subA = sequence.pad_sequences(subA, maxlen=None if self.max_sequence_length == 0 else self.max_sequence_length, padding='pre', truncating='pre')
+                    else:
+                        subA = np.array(subA)
+    
+                    if model_type == 'convlstm':
+                        subA = self.define_conv_lstm_dimension(subA)
+                    elif model_type == 'rnncnn':
+                        pass                     
+                    elif model_type == 'cnn':  
+                        pass
                     yield subA, B[i[0]:i[1]] 
     
     def prepare_stock_data_gen(self, filenames, padData=True, background_data_generation=False, batch_size=50, model_type='convlstm'):

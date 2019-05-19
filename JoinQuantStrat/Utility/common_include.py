@@ -219,3 +219,10 @@ def encode_category(label_set): # this is assuming we have full label in the sam
     uniques, ids = np.unique(label_set, return_inverse=True)
     y_code = to_categorical(ids, len(uniques))
     return y_code
+
+def normalize(df, norm_range=[0, 1], fields = ['open', 'close', 'high', 'low', 'money']):
+    scaler = MinMaxScaler(feature_range=norm_range)
+    working_df = df.copy(deep=True)
+    working_df[fields] = scaler.fit_transform(working_df[fields]) 
+    
+    return working_df
