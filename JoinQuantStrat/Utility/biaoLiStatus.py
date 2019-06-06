@@ -27,7 +27,9 @@ class InclusionType(Enum):
     
 class TopBotType(Enum):
     noTopBot = 0
+    bot2top = 0.5
     top = 1
+    top2bot = -0.5
     bot = -1
 
 class KBarStatus(Enum):
