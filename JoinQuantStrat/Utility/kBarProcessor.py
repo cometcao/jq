@@ -338,8 +338,8 @@ class KBarProcessor(object):
                 elif currentFenXing.tb == TopBotType.bot and nextFenXing.tb == TopBotType.top and currentFenXing['low'] < nextFenXing['low']:
                     pass
                 elif currentFenXing.tb == TopBotType.bot and nextFenXing.tb == TopBotType.top and currentFenXing['low'] >= nextFenXing['low']:
-                        working_df.ix[current_index,'tb'] = TopBotType.noTopBot
-                        current_index = next_index
+                    working_df.ix[current_index,'tb'] = TopBotType.noTopBot
+                    current_index = next_index
                     next_index = next_index + 1
             else:
                 if currentFenXing.tb == TopBotType.top and nextFenXing.tb == TopBotType.bot and previousFenXing['low'] < nextFenXing['low']:
