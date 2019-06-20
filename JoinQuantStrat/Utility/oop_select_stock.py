@@ -49,8 +49,8 @@ class Pick_stocks2(Group_rules):
             if isinstance(rule, Filter_stock_list):
                 stock_list = rule.filter(context, data, stock_list)
     
-        self.g.monitor_buy_list = stock_list + g.etf_index if self.add_etf else stock_list # add the ETF index into list
-
+        # add the ETF index into list this is already done in oop_stop_loss, dirty hack
+        self.g.monitor_buy_list = stock_list 
         self.log.info('今日选股:\n' + join_list(["[%s]" % (show_stock(x)) for x in stock_list], ' ', 10))
         self.has_run = True
 

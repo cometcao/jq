@@ -147,6 +147,7 @@ class ML_Stock_Timing(Rule):
         self.ml_predict_file_path = params.get('ml_file_path', None)
         self.only_take_long_stocks = params.get('only_take_long_stocks', False)
         self.clear_candidate_if_AI_failed = params.get('force_no_candidate', False)
+        self.add_etf = params.get('add_etf', True)
         
     def update_params(self, context, params):
         self.only_take_long_stocks = params.get('only_take_long_stocks', True)
@@ -232,7 +233,8 @@ class ML_Stock_Timing(Rule):
             # filter in long point stocks
             stocks_to_remove = []
             stocks_to_long = []
-            for stock in self.g.buy_stocks:
+            check_list = self.g.buy_stocks + g.etf_index if self.add_etf else self.g.buy_stocks
+            for stock in check_list:
 #                 print("checking stock {0}".format(stock))
                 if stock not in trade_dict:
                     continue
