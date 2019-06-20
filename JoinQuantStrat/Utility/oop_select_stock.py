@@ -415,7 +415,7 @@ class Pick_fundamental_factor_rank(Create_stock_list):
         #获取综合得分
         df['point'] = df.rank().T.apply(sum)        
         #按得分进行排序，取指定数量的股票
-        df = df.sort('point')[:self.stock_num]
+        df = df.sort_values('point')[:self.stock_num]
         return list(df.index.values)
     
     def before_trading_start_backup(self, context):
@@ -431,7 +431,7 @@ class Pick_fundamental_factor_rank(Create_stock_list):
         #获取综合得分
         df['point'] = df[['pb_ratio','1/roe']].rank().T.apply(sum)
         #按得分进行排序，取指定数量的股票
-        df = df.sort('point')[:self.stock_num]
+        df = df.sort_values('point')[:self.stock_num]
         return df.index
         
     def __str__(self):
