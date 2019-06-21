@@ -4,6 +4,9 @@ Created on 4 Dec 2017
 
 @author: MetalInvest
 '''
+from _ast import Or
+from pip._vendor.distlib.util import OR
+from _operator import or_
 try:
     from kuanke.user_space_api import *
 except:
@@ -148,11 +151,17 @@ class ML_Stock_Timing(Rule):
         self.only_take_long_stocks = params.get('only_take_long_stocks', False)
         self.clear_candidate_if_AI_failed = params.get('force_no_candidate', False)
         self.add_etf = params.get('add_etf', True)
+        self.ml_categories = params.get('ml_categories', 4)
+        self.use_day_only = params.get('use_day_only', False)
+        self.allow_half_pos = params.get('allow_half_pos', False)
         
     def update_params(self, context, params):
         self.only_take_long_stocks = params.get('only_take_long_stocks', True)
         self.clear_candidate_if_AI_failed = params.get('force_no_candidate', True)
         self.add_etf = params.get('add_etf', True)
+        self.ml_categories = params.get('ml_categories', 4)
+        self.use_day_only = params.get('use_day_only', False)
+        self.allow_half_pos = params.get('allow_half_pos', False)
     
     def ml_prediction(self, stock_list, context):
         mbc_weekly = ML_biaoli_check({'rq':False, 
@@ -203,7 +212,115 @@ class ML_Stock_Timing(Rule):
 
         return result
         
-    
+    def use_ml_data(self, context, trading_details):
+        trade_dict = {}
+        for trades in trading_details:
+            stock, buy, sell = trades
+            trade_dict[stock] = (buy, sell)
+            
+        # sell holding stocks if found # no need to do it
+        hold_stocks_to_check = [stock for stock in context.portfolio.positions.keys() if stock not in g.money_fund]
+        for stock in hold_stocks_to_check:
+            if stock not in trade_dict:
+                continue            
+            (buy, sell) = trade_dict[stock]
+            if sell == 1:
+                self.g.sell_stocks.append(stock)
+                if stock in context.portfolio.positions.keys():
+                    print("stock {0} closed".format(stock))
+                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+        
+        # filter in long point stocks
+        stocks_to_remove = []
+        stocks_to_long = []
+        check_list = self.g.buy_stocks + g.etf_index if self.add_etf else self.g.buy_stocks
+        for stock in check_list:
+#                 print("checking stock {0}".format(stock))
+            if stock not in trade_dict:
+                continue
+            (buy, sell) = trade_dict[stock]
+            if sell == 1:
+                self.g.sell_stocks.append(stock)
+                stocks_to_remove.append(stock)
+            if buy == 1:
+                stocks_to_long.append(stock)
+#             print("stocks to remove: {0}".format(stocks_to_remove))
+        if self.only_take_long_stocks:
+            self.g.buy_stocks = stocks_to_long
+        else:
+            self.g.buy_stocks = [stock for stock in self.g.buy_stocks if stock not in stocks_to_remove]
+        
+    def use_ml_data_4(self, context, trading_details):    
+        trade_dict = {}
+        for trades in trading_details:
+            stock, week_status, day_status = trades
+            trade_dict[stock] = (week_status, day_status)
+           
+        # sell holding stocks if found # no need to do it
+        hold_stocks_to_check = [stock for stock in context.portfolio.positions.keys() if stock not in g.money_fund]
+        for stock in hold_stocks_to_check:
+            if stock not in trade_dict:
+                continue            
+            (ws, ds) = trade_dict[stock]
+            if (self.use_day_only and (ds == 1 or ds == -0.5)) or \
+            ##################################
+                (ws == 1 and ds == 1) or \
+                (ws == 1 and ds == -0.5) or \
+                (ws == -0.5 and ds == 1) or \
+                (ws == -0.5 and ds == -0.5) or \
+            ##################################
+                (ws == 1 and ds == -1) or \
+                (ws == 1 and ds == 0.5) or \
+                (ws == -0.5 and ds == -1) or \
+                (ws == -0.5 and ds == 0.5) or \
+                (ws == -1 and ds == 1) or \
+                (ws == -1 and ds == -0.5) or \
+                (ws == 0.5 and ds == 1) or \
+                (ws == 0.5 and ds == -0.5):
+                self.g.sell_stocks.append(stock)
+                if stock in context.portfolio.positions.keys():
+                    print("stock {0} closed".format(stock))
+                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+            
+        # filter in long point stocks
+        stocks_to_remove = []
+        stocks_to_long = []
+        check_list = self.g.buy_stocks + g.etf_index if self.add_etf else self.g.buy_stocks
+        for stock in check_list:
+#                 print("checking stock {0}".format(stock))
+            if stock not in trade_dict:
+                continue
+            (ws, ds) = trade_dict[stock]
+            if (self.use_day_only and (ds == 1 or ds == -0.5)) or \
+            ##################################
+                (ws == 1 and ds == 1) or \
+                (ws == 1 and ds == -0.5) or \
+                (ws == -0.5 and ds == 1) or \
+                (ws == -0.5 and ds == -0.5) or \
+            ##################################
+                (ws == 1 and ds == -1) or \
+                (ws == 1 and ds == 0.5) or \
+                (ws == -0.5 and ds == -1) or \
+                (ws == -0.5 and ds == 0.5) or \
+                (ws == -1 and ds == 1) or \
+                (ws == -1 and ds == -0.5) or \
+                (ws == 0.5 and ds == 1) or \
+                (ws == 0.5 and ds == -0.5):
+                self.g.sell_stocks.append(stock)
+                stocks_to_remove.append(stock)
+                
+            if (self.use_day_only and (ds == -1 or ds == 0.5)) or \
+                (ws == -1 and ds == -1) or \
+                (ws == -1 and ds == 0.5) or \
+                (ws == 0.5 and ds == -1) or \
+                (ws == 0.5 and ds == 0.5):
+                stocks_to_long.append(stock)
+#             print("stocks to remove: {0}".format(stocks_to_remove))
+        if self.only_take_long_stocks:
+            self.g.buy_stocks = stocks_to_long
+        else:
+            self.g.buy_stocks = [stock for stock in self.g.buy_stocks if stock not in stocks_to_remove]
+
     def handle_data(self, context, data):
         today_date = context.current_dt.date()
         try:
@@ -214,42 +331,12 @@ class ML_Stock_Timing(Rule):
                 trading_list = self.ml_prediction(checking_list, context)
                 
             trading_details = trading_list[str(today_date)]
-            trade_dict = {}
-            for trades in trading_details:
-                stock, buy, sell = trades
-                trade_dict[stock] = (buy, sell)
-                
-            # sell holding stocks if found # no need to do it
-            hold_stocks_to_check = [stock for stock in context.portfolio.positions.keys() if stock not in g.money_fund]
-            for stock in hold_stocks_to_check:
-                if stock not in trade_dict:
-                    continue            
-                (buy, sell) = trade_dict[stock]
-                if sell == 1:
-                    self.g.sell_stocks.append(stock)
-                    if stock in context.portfolio.positions.keys():
-                        print("stock {0} closed".format(stock))
-                        self.g.close_position(self, context.portfolio.positions[stock], True, 0)
-            
-            # filter in long point stocks
-            stocks_to_remove = []
-            stocks_to_long = []
-            check_list = self.g.buy_stocks + g.etf_index if self.add_etf else self.g.buy_stocks
-            for stock in check_list:
-#                 print("checking stock {0}".format(stock))
-                if stock not in trade_dict:
-                    continue
-                (buy, sell) = trade_dict[stock]
-                if sell == 1:
-                    self.g.sell_stocks.append(stock)
-                    stocks_to_remove.append(stock)
-                if buy == 1:
-                    stocks_to_long.append(stock)
-#             print("stocks to remove: {0}".format(stocks_to_remove))
-            if self.only_take_long_stocks:
-                self.g.buy_stocks = stocks_to_long
-            else:
-                self.g.buy_stocks = [stock for stock in self.g.buy_stocks if stock not in stocks_to_remove]
+
+            if self.ml_categories == 3:
+                self.use_ml_data(context, trading_details)
+            elif self.ml_categories == 4:
+                self.use_ml_data_4(context, trading_details)
+
             self.log.info("ML择时结果: "+join_list([show_stock(stock) for stock in self.g.buy_stocks], ' ', 10))
             # make sure ML predict use check_status
         except Exception as e:
