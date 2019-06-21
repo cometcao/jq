@@ -152,6 +152,7 @@ class ML_Stock_Timing(Rule):
     def update_params(self, context, params):
         self.only_take_long_stocks = params.get('only_take_long_stocks', True)
         self.clear_candidate_if_AI_failed = params.get('force_no_candidate', True)
+        self.add_etf = params.get('add_etf', True)
     
     def ml_prediction(self, stock_list, context):
         mbc_weekly = ML_biaoli_check({'rq':False, 
