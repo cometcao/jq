@@ -262,13 +262,15 @@ class ML_Stock_Timing(Rule):
             if stock not in trade_dict:
                 continue            
             (ws, ds) = trade_dict[stock]
-            if (self.use_day_only and (ds == 1 or ds == -0.5)) or \
-            ##################################
-                (ws == 1 and ds == 1) or \
+            if (self.use_day_only and (ds == 1 or ds == -0.5)): 
+                self.g.sell_stocks.append(stock)
+                if stock in context.portfolio.positions.keys():
+                    print("stock {0} closed".format(stock))
+                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+            elif (ws == 1 and ds == 1) or \
                 (ws == 1 and ds == -0.5) or \
                 (ws == -0.5 and ds == 1) or \
                 (ws == -0.5 and ds == -0.5) or \
-            ##################################
                 (ws == 1 and ds == -1) or \
                 (ws == 1 and ds == 0.5) or \
                 (ws == -0.5 and ds == -1) or \
@@ -291,13 +293,15 @@ class ML_Stock_Timing(Rule):
             if stock not in trade_dict:
                 continue
             (ws, ds) = trade_dict[stock]
-            if (self.use_day_only and (ds == 1 or ds == -0.5)) or \
-            ##################################
-                (ws == 1 and ds == 1) or \
+            if (self.use_day_only and (ds == 1 or ds == -0.5)):
+                self.g.sell_stocks.append(stock)
+                if stock in context.portfolio.positions.keys():
+                    print("stock {0} closed".format(stock))
+                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+            elif (ws == 1 and ds == 1) or \
                 (ws == 1 and ds == -0.5) or \
                 (ws == -0.5 and ds == 1) or \
                 (ws == -0.5 and ds == -0.5) or \
-            ##################################
                 (ws == 1 and ds == -1) or \
                 (ws == 1 and ds == 0.5) or \
                 (ws == -0.5 and ds == -1) or \
@@ -309,8 +313,9 @@ class ML_Stock_Timing(Rule):
                 self.g.sell_stocks.append(stock)
                 stocks_to_remove.append(stock)
                 
-            if (self.use_day_only and (ds == -1 or ds == 0.5)) or \
-                (ws == -1 and ds == -1) or \
+            if (self.use_day_only and (ds == -1 or ds == 0.5)):
+                stocks_to_long.append(stock)
+            elif (ws == -1 and ds == -1) or \
                 (ws == -1 and ds == 0.5) or \
                 (ws == 0.5 and ds == -1) or \
                 (ws == 0.5 and ds == 0.5):
