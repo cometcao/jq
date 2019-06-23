@@ -232,6 +232,8 @@ class ML_biaoli_check(object):
         self.use_cnn_lstm = params.get('use_cnn_lstm', True)
         self.use_cnn = params.get('use_cnn', False)
         self.check_level = params.get('check_level', ['1d','30m'])
+        self.norm_range = params.get('norm_range', [-1,1])
+        self.monitor_fields = params.get('monitor_fields', ['chan_price', 'new_index', 'macd_acc', 'money_acc'])
         self.sub_level_max_length = params.get('sub_level_max_length', 1200)
         if not self.model and self.model_path is not None:
             self.prepare_model()
@@ -256,13 +258,28 @@ class ML_biaoli_check(object):
         _, sp = self.gauge_stock(stock, today_date, check_status=True)
         return sp
         
+    def gauge_stocks_analysis_status(self, stocks, today_date=None):
+        if not stocks:
+            return [] 
+        return [(stock, self.gauge_stock_status(stock, today_date)) for stock in stocks]
+    
+    def gauge_stock_status(self, stock, today_date=None):
+        # only return the predicted confident status 
+        (y_class, pred), origin_size, past_pivot_status = self.model_predict(stock, today_date, categories=4)
+        confidence, _ = self.interpret(pred)# only use long confidence level check
+        if self.isDebug:
+            print(pred)
+            print(y_class)
+        return y_class[-1] if confidence[-1] else TopBotType.noTopBot.value
+
+      
     def gauge_stocks_analysis(self, stocks, today_date=None, check_status=False):
         if not stocks:
             return [] 
         return [(stock, self.gauge_stock(stock, today_date, check_status=check_status)) for stock in stocks]
     
     def gauge_stock(self, stock, today_date=None, check_status=False):    
-        (y_class, pred), origin_size, past_pivot_status = self.model_predict(stock, today_date)
+        (y_class, pred), origin_size, past_pivot_status = self.model_predict(stock, today_date, categories=3)
         long_conf, short_conf = self.interpret(pred)    
         
         old_pred = pred[:origin_size]
@@ -311,17 +328,19 @@ class ML_biaoli_check(object):
             long_pred = short_pred = False
         return (long_pred, short_pred)
     
-        
-    def model_predict(self, stock, today_date=None):
+    def model_predict(self, stock, today_date=None, categories=4):
         if self.isDebug:
             print("ML working on {0} at date {1}".format(stock, str(today_date) if today_date else ""))
         mld = MLDataPrep(isAnal=self.isAnal, 
                          rq=self.rq, ts=self.ts, 
                          isDebug=self.isDebug, 
+                         norm_range = self.norm_range,
                          use_standardized_sub_df=self.use_standardized_sub_df, 
                          monitor_level=self.check_level,
-                         max_length_for_pad=self.sub_level_max_length)
-        data_set, origin_data_length, past_pivot_status = mld.prepare_stock_data_predict(stock, today_date=today_date, period_count=100, predict_extra=self.use_cnn_lstm) # 500 sample period
+                         max_length_for_pad=self.sub_level_max_length, 
+                         monitor_fields=self.monitor_fields)
+                         
+        data_set, origin_data_length, past_pivot_status = mld.prepare_stock_data_predict(stock, today_date=today_date, period_count=50 if self.check_level[0]=='5d' else 90, predict_extra=self.use_cnn_lstm) # 500 sample period
         if data_set is None: # can't predict
             print("None dataset, return [0],[[0]], 0")
             return (([0],[[0]]), 0)
@@ -332,7 +351,7 @@ class ML_biaoli_check(object):
                 x_train, x_test, _ = self.mdp.define_conv_lstm_dimension(x_train, x_test)
                 self.mdp.process_model(self.mdp.model, x_train, x_test, y_train, y_test, batch_size = 30,epochs =3)
             
-            unique_index = np.array([-1, 0, 1])
+            unique_index = np.array([-1, -0.5, 0.5, 1]) if categories == 4 else np.array([-1, 0, 1]) if categories == 3 else np.array([-1, 1]) 
             
             if self.use_cnn_lstm:
                 return self.mdp.model_predict_cnn_lstm(data_set, unique_index), origin_data_length, past_pivot_status

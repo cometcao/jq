@@ -92,7 +92,7 @@ def show_stock(stock):
     :param stock: 股票代码，例如: '603822.XSHG'
     :return: str，例如：'603822 嘉澳环保'
     '''
-    return "%s %s" % (stock[:6], get_security_info(stock).display_name)
+    return "%s:%s" % (stock[:6], get_security_info(stock).display_name)
 
 
 def join_list(pl, connector=' ', step=5):

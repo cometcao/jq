@@ -7,7 +7,7 @@ from keras.models import load_model
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Flatten, TimeDistributed,LSTM, GRU, Bidirectional
 from keras.layers.normalization import BatchNormalization
-from keras.layers import Conv2D, MaxPooling2D, ConvLSTM2D, Conv1D, MaxPooling1D, Reshape, GlobalAveragePooling1D
+from keras.layers import Conv2D, MaxPooling2D, ConvLSTM2D, Conv1D, MaxPooling1D, Reshape, GlobalAveragePooling2D, GlobalMaxPooling2D
 from keras import optimizers
 from keras.callbacks import EarlyStopping
 from keras.callbacks import ModelCheckpoint
@@ -232,20 +232,19 @@ class MLDataProcess(object):
                                      recurrent_dropout = hp.drop_out_rate), merge_mode='concat'))
 
         if hp.network_topology == 'deep':
-            model.add(Bidirectional(LSTM(model.output_shape[2], return_sequences=True, 
-                             activation = hp.activation_func,
-                             dropout = hp.drop_out_rate, 
-                             recurrent_dropout = hp.drop_out_rate), merge_mode='concat'))
-#         model.add(TimeDistributed(Dense (num_classes, activation=hp.activation_func)))
+#             model.add(Bidirectional(LSTM(model.output_shape[2], return_sequences=True, 
+#                              activation = hp.activation_func,
+#                              dropout = hp.drop_out_rate, 
+#                              recurrent_dropout = hp.drop_out_rate), merge_mode='concat'))
+            model.add(TimeDistributed(Dense (num_classes, activation=hp.activation_func)))
+            model.add(AttentionWithContext())
         if self.isDebug:
             print("layer input/output shape:{0}, {1}".format(model.input_shape, model.output_shape))
 #         model.add(GlobalMaxPool1D())
-        model.add(AttentionWithContext())
         model.add(Flatten())
 
-        model.add(Dense(num_classes, activation='softmax')) #softmax, sigmoid
-         
-        model.compile(loss=keras.losses.categorical_crossentropy, #categorical_crossentropy
+        model.add(Dense(num_classes, activation='softmax' if num_classes>2 else 'sigmoid')) #softmax, sigmoid
+        model.compile(loss=keras.losses.categorical_crossentropy if num_classes>2 else keras.losses.binary_crossentropy,
                       optimizer=hp.get_optimizer(), #Adadelta, Nadam, SGD, Adam,SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
                       metrics=['accuracy'])
                 
@@ -293,9 +292,10 @@ class MLDataProcess(object):
         return self.process_model_generator(model, data_gen, steps, epochs, verbose, validation_gen, validation_gen, validation_steps, patience)
 
     def process_model_generator(self, model, generator, steps = 10000, epochs = 5, verbose = 2, validation_data=None, evaluate_generator=None, validation_steps=1000, patience=10):
-        es = EarlyStopping(monitor='val_loss', mode='min', verbose=verbose, patience=patience)
-#         mc_loss = ModelCheckpoint('best_model_loss.h5', monitor='val_loss', mode='min', verbose=verbose, save_best_only=True)
-#         mc_acc = ModelCheckpoint('best_model_acc.h5', monitor='val_acc', mode='max', verbose=verbose, save_best_only=True)
+        es_loss = EarlyStopping(monitor='val_loss', mode='min', verbose=verbose, patience=patience)
+#         es_acc = EarlyStopping(monitor='val_acc', mode='max', verbose=verbose, patience=patience, baseline=0.5)
+        mc_loss = ModelCheckpoint('training_model/bl.{epoch:003d}-{val_acc:.4f}-{val_loss:.4f}-{acc:.4f}-{loss:.4f}.h5', monitor='val_loss', mode='min', verbose=verbose, save_best_only=True)
+        mc_acc = ModelCheckpoint('training_model/ba.{epoch:003d}-{val_acc:.4f}-{val_loss:.4f}-{acc:.4f}-{loss:.4f}.h5', monitor='val_acc', mode='max', verbose=verbose, save_best_only=True)
 #         cvs_logger = CSVLogger('log/training.log', append=True)
 #         acclosshistory = LossAccHistory()
         
@@ -305,7 +305,7 @@ class MLDataProcess(object):
                             verbose = verbose,
                             validation_data = validation_data,
                             validation_steps = validation_steps, 
-                            callbacks=[es]) # , mc_loss, mc_acc
+                            callbacks=[es_loss, mc_loss, mc_acc]) # , mc_loss, mc_acc cvs_logger,  mc_loss, mc_acc
 #         score = model.evaluate_generator(evaluate_generator, steps=validation_steps)
 #         print('Test loss:', score[0])
 #         print('Test accuracy:', score[1])          
@@ -322,7 +322,7 @@ class MLDataProcess(object):
         
     
     def load_model(self, model_name):
-        self.model = load_model(model_name)
+        self.model = load_model(model_name, custom_objects={'AttentionWithContext': AttentionWithContext})
         self.model_name = model_name
         
         if self.isDebug:
@@ -388,7 +388,7 @@ class HyperParam():
     
     def get_optimizer(self):
         if self.optimization_method == "SGD":
-            return keras.optimizers.SGD(lr = self.learning_rate, momentum=self.momentum)
+            return keras.optimizers.SGD(lr = self.learning_rate, momentum=self.momentum, nesterov=False)
         elif self.optimization_method == "RMSprop":
             return keras.optimizers.RMSprop(lr = self.learning_rate)
         elif self.optimization_method == "Adagrad":

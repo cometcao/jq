@@ -19,6 +19,7 @@ import statsmodels.api as sm
 from pandas import Series, DataFrame
 from ML_main import *
 import os
+import math
 # import tensorflow as tf
 # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
 
@@ -233,7 +234,7 @@ class ML_Stock_Timing(Rule):
         # filter in long point stocks
         stocks_to_remove = []
         stocks_to_long = []
-        check_list = self.g.buy_stocks + g.etf_index if self.add_etf else self.g.buy_stocks
+        check_list = self.g.buy_stocks + g.etf if self.add_etf else self.g.buy_stocks
         for stock in check_list:
 #                 print("checking stock {0}".format(stock))
             if stock not in trade_dict:
@@ -256,71 +257,57 @@ class ML_Stock_Timing(Rule):
             stock, week_status, day_status = trades
             trade_dict[stock] = (week_status, day_status)
            
-        # sell holding stocks if found # no need to do it
+        # Dearling with Holding stocks
         hold_stocks_to_check = [stock for stock in context.portfolio.positions.keys() if stock not in g.money_fund]
         for stock in hold_stocks_to_check:
             if stock not in trade_dict:
-                continue            
+                continue
             (ws, ds) = trade_dict[stock]
-            if (self.use_day_only and (ds == 1 or ds == -0.5)): 
+            if (self.use_day_only and (math.isclose(ds, 1.0) or math.isclose(ds, -0.5))): 
                 self.g.sell_stocks.append(stock)
                 if stock in context.portfolio.positions.keys():
                     print("stock {0} closed".format(stock))
                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
-            elif (ws == 1 and ds == 1) or \
-                (ws == 1 and ds == -0.5) or \
-                (ws == -0.5 and ds == 1) or \
-                (ws == -0.5 and ds == -0.5) or \
-                (ws == 1 and ds == -1) or \
-                (ws == 1 and ds == 0.5) or \
-                (ws == -0.5 and ds == -1) or \
-                (ws == -0.5 and ds == 0.5) or \
-                (ws == -1 and ds == 1) or \
-                (ws == -1 and ds == -0.5) or \
-                (ws == 0.5 and ds == 1) or \
-                (ws == 0.5 and ds == -0.5):
+            elif (math.isclose(ds,0.0) or math.isclose(ds, 1.0) or math.isclose(ds,-0.5)):
                 self.g.sell_stocks.append(stock)
                 if stock in context.portfolio.positions.keys():
                     print("stock {0} closed".format(stock))
-                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)                
+            elif ((math.isclose(ws, 0.0) or math.isclose(ws,1.0) or math.isclose(ws,-0.5)) and \
+                  (math.isclose(ds,-1) or math.isclose(ds,0.5))):
+                self.g.position_proportion[stock] = 0.5
+            else:
+                self.g.position_proportion[stock] = 1.0
+
             
-        # filter in long point stocks
+        # Dealing with potential long candidate
         stocks_to_remove = []
         stocks_to_long = []
-        check_list = self.g.buy_stocks + g.etf_index if self.add_etf else self.g.buy_stocks
+        check_list = [stock for stock in (self.g.buy_stocks + g.etf if self.add_etf else self.g.buy_stocks) if stock not in hold_stocks_to_check]
         for stock in check_list:
-#                 print("checking stock {0}".format(stock))
             if stock not in trade_dict:
                 continue
             (ws, ds) = trade_dict[stock]
-            if (self.use_day_only and (ds == 1 or ds == -0.5)):
+            if (self.use_day_only and (math.isclose(ds, 1.0) or math.isclose(ds,-0.5))):
                 self.g.sell_stocks.append(stock)
-                if stock in context.portfolio.positions.keys():
-                    print("stock {0} closed".format(stock))
-                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
-            elif (ws == 1 and ds == 1) or \
-                (ws == 1 and ds == -0.5) or \
-                (ws == -0.5 and ds == 1) or \
-                (ws == -0.5 and ds == -0.5) or \
-                (ws == 1 and ds == -1) or \
-                (ws == 1 and ds == 0.5) or \
-                (ws == -0.5 and ds == -1) or \
-                (ws == -0.5 and ds == 0.5) or \
-                (ws == -1 and ds == 1) or \
-                (ws == -1 and ds == -0.5) or \
-                (ws == 0.5 and ds == 1) or \
-                (ws == 0.5 and ds == -0.5):
+                stocks_to_remove.append(stock)
+            elif math.isclose(ds,0.0) or math.isclose(ds,1.0) or math.isclose(ds,-0.5):
                 self.g.sell_stocks.append(stock)
                 stocks_to_remove.append(stock)
                 
-            if (self.use_day_only and (ds == -1 or ds == 0.5)):
+            if (self.use_day_only and (math.isclose(ds,-1) or math.isclose(ds,0.5))):
                 stocks_to_long.append(stock)
-            elif (ws == -1 and ds == -1) or \
-                (ws == -1 and ds == 0.5) or \
-                (ws == 0.5 and ds == -1) or \
-                (ws == 0.5 and ds == 0.5):
+            elif ((math.isclose(ws, 0.0) or math.isclose(ws,1.0) or math.isclose(ws,-0.5)) and \
+                  (math.isclose(ds,-1) or math.isclose(ds,0.5))):
                 stocks_to_long.append(stock)
+                self.g.position_proportion[stock] = 0.5  
+            elif (math.isclose(ws,-1) or math.isclose(ws, 0.5)) and \
+                (math.isclose(ds,-1) or math.isclose(ds, 0.5)):
+                stocks_to_long.append(stock)
+                self.g.position_proportion[stock] = 1.0  
+#             print("stocks to long: {0}".format(stocks_to_long))
 #             print("stocks to remove: {0}".format(stocks_to_remove))
+        # combine the existing holdings and preserve the order
         if self.only_take_long_stocks:
             self.g.buy_stocks = stocks_to_long
         else:
@@ -353,6 +340,7 @@ class ML_Stock_Timing(Rule):
             
         
     def after_trading_end(self, context):
+        self.g.position_proportion = {}
         Rule.after_trading_end(self, context)
         
     def __str__(self):

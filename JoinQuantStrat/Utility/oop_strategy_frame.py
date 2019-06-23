@@ -64,6 +64,7 @@ class Global_variable(object):
     pair_zscore = []
     market_timing_check = {}
     stock_index_dict = {}
+    position_proportion = {} # 仓位控制比例
 
     def __init__(self, owner):
         self._owner = owner
@@ -88,6 +89,27 @@ class Global_variable(object):
             self._owner.on_buy_stock(security, order, pindex,self.context)
             return True
         return False
+
+
+    def adjust_position(self, context, security, value, pindex=0):
+        cur_price = get_close_price(security, 1, '1m')
+        if math.isnan(cur_price):
+            return False
+        # 通过当前价，四乘五入的计算要买的股票数。
+        amount = int(round(value / cur_price / 100) * 100)
+        new_value = amount * cur_price
+
+        if abs(1 - context.subportfolios[pindex].long_positions[security].value/new_value) <= 0.05:
+            return True # don't need to make adjustments
+
+        order = order_target_value(security, new_value, pindex=pindex)
+        if order != None and order.filled > 0:
+            # 订单成功，则调用规则的买股事件 。（注：这里只适合市价，挂价单不适合这样处理）
+            self._owner.on_buy_stock(security, order, pindex,self.context)
+            return True
+        return False        
+
+
 
     # 按指定股数下单
     def order(self, sender, security, amount, pindex=0):

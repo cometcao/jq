@@ -125,7 +125,6 @@ class Sell_stocks(Rule):
         self.adjust(context, data, self.g.monitor_buy_list)
 
     def adjust(self, context, data, buy_stocks):
-        buy_stocks = [g.etf_list[stock] if stock in g.etf_list else stock for stock in buy_stocks ]
         # 卖出不在待买股票列表中的股票
         # 对于因停牌等原因没有卖出的股票则继续持有
         for pindex in self.g.op_pindexs:
@@ -152,6 +151,7 @@ class Buy_stocks(Rule):
         self.use_long_filter = params.get('use_long_filter', False)
         self.use_short_filter = params.get('use_short_filter', False)
         self.to_buy = []
+        self.use_adjust_portion = params.get('use_adjust_portion', False)
 
     def update_params(self, context, params):
         Rule.update_params(self, context, params)
@@ -169,8 +169,10 @@ class Buy_stocks(Rule):
         if context.current_dt.hour >= 14:
             if self.use_long_filter:
                 self.to_buy = self.ta_long_filter(context, data, self.to_buy) 
-            self.adjust(context, data, self.to_buy)
-#             self.g.send_port_info(context)
+            if self.use_adjust_portion:
+                self.adjust_portion(context, data, self.to_buy)
+            else:
+                self.adjust(context, data, self.to_buy)
 
     def ta_long_filter(self, context, data, to_buy):
         cta = checkTAIndicator_OR({
@@ -201,7 +203,6 @@ class Buy_stocks(Rule):
         return to_buy
         
     def adjust(self, context, data, buy_stocks):
-        buy_stocks = [g.etf_list[stock] if stock in g.etf_list else stock for stock in buy_stocks ]
         # 买入股票
         # 始终保持持仓数目为g.buy_stock_count
         # 根据股票数量分仓
@@ -217,8 +218,31 @@ class Buy_stocks(Rule):
                         if self.g.open_position(self, stock, value, pindex):
                             if len(context.subportfolios[pindex].long_positions) == self.buy_count:
                                 break
+        pass        
+        
+    def adjust_portion(self, context, data, buy_stocks):
+        # 买入股票
+        # 始终保持持仓数目为g.buy_stock_count
+        # 根据股票数量分仓
+        # 此处只根据可用金额平均分配购买，不能保证每个仓位平均分配
+        for pindex in self.g.op_pindexs:
+            value = context.subportfolios[pindex].total_value / self.buy_count
+            for stock in context.subportfolios[pindex].long_positions.keys():
+                sub_holding_value = value * (self.g.position_proportion[stock] if stock in self.g.position_proportion else 1.0)
+                self.g.adjust_position(context, stock, sub_holding_value, pindex)            
+            
+            position_count = len(context.subportfolios[pindex].long_positions)
+            if self.buy_count > position_count:
+                for stock in buy_stocks:
+                    if stock in self.g.sell_stocks:
+                        continue
+                    if stock not in context.subportfolios[pindex].long_positions.keys():
+                        sub_value = value * (self.g.position_proportion[stock] if stock in self.g.position_proportion else 1.0)
+                        if self.g.open_position(self, stock, sub_value, pindex):
+                            if len(context.subportfolios[pindex].long_positions) == self.buy_count:
+                                break
         pass
-
+                    
     def after_trading_end(self, context):
         self.g.sell_stocks = []
         self.to_buy = []
@@ -279,7 +303,7 @@ class Buy_stocks_var(Buy_stocks):
         self.pc_var = None
 
     def adjust(self, context, data, buy_stocks):
-        buy_stocks = [g.etf_list[stock]  if stock in g.etf_list else stock for stock in buy_stocks]
+#         buy_stocks = [g.etf_list[stock]  if stock in g.etf_list else stock for stock in buy_stocks]
         if not self.pc_var:
             # 设置 VaR 仓位控制参数。风险敞口: 0.05,
             # 正态分布概率表，标准差倍数以及置信率: 0.96, 95%; 2.06, 96%; 2.18, 97%; 2.34, 98%; 2.58, 99%; 5, 99.9999%
@@ -313,13 +337,13 @@ class Buy_stocks_var(Buy_stocks):
                     if (stock not in trade_ratio or trade_ratio[stock] == 0.0):
                         self.g.close_position(self, position, True, pindex)
                     else:
-                        self.g.open_position(self, stock, context.subportfolios[pindex].total_value*trade_ratio[stock],pindex)
+                        self.g.adjust_position(context, stock, context.subportfolios[pindex].total_value*trade_ratio[stock],pindex)
                         
             for stock in trade_ratio:
                 if stock in self.g.sell_stocks and stock not in self.money_fund:
                     continue
                 if context.subportfolios[pindex].long_positions[stock].total_amount == 0:
-                    if self.g.open_position(self, stock, context.subportfolios[pindex].total_value*trade_ratio[stock],pindex):
+                    if self.g.adjust_position(context, stock, context.subportfolios[pindex].total_value*trade_ratio[stock],pindex):
                         if len(context.subportfolios[pindex].long_positions) == self.buy_count+1:
                             break        
         
@@ -344,7 +368,7 @@ class Buy_stocks_var(Buy_stocks):
             for stock in order_stocks:
                 if stock in self.g.sell_stocks:
                     continue
-                if self.g.open_position(self, stock, context.subportfolios[pindex].total_value*trade_ratio[stock],pindex):
+                if self.g.adjust_position(context, stock, context.subportfolios[pindex].total_value*trade_ratio[stock],pindex):
                     pass
     
     def getOrderByRatio(self, current_ratio, target_ratio):

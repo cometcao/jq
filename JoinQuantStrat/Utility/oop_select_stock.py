@@ -56,10 +56,11 @@ class Pick_stocks2(Group_rules):
 
     def before_trading_start(self, context):
         self.has_run = False
+        self.g.buy_stocks = [] # clear the buy list this variable stores the initial list of candidates for the day
         for rule in self.rules:
             if isinstance(rule, Create_stock_list):
                 self.g.buy_stocks = self.g.buy_stocks + rule.before_trading_start(context)
-        
+
         self.g.buy_stocks = list(set(self.g.buy_stocks))
         
         for rule in self.rules:
@@ -72,7 +73,7 @@ class Pick_stocks2(Group_rules):
     
         checking_stocks = [stock for stock in list(set(self.g.buy_stocks+list(context.portfolio.positions.keys()))) if stock not in g.money_fund]
         if self.add_etf:
-            checking_stocks = checking_stocks + g.etf_index
+            checking_stocks = checking_stocks + g.etf
         if self.file_path:
             if self.file_path == "daily":
                 write_file("daily_stocks/{0}.txt".format(str(context.current_dt.date())), ",".join(checking_stocks))    
