@@ -289,7 +289,7 @@ class KBarProcessor(object):
             current_index=next_index
             next_index = current_index+1
             
-                # if nextIndex is the last one
+            # if nextIndex is the last one
             if next_index == working_df.shape[0]-1 \
             and ((working_df.ix[current_index,'tb']==TopBotType.top and self.kDataFrame_origin.ix[-1,'high'] > working_df.ix[current_index, 'high']) \
             or (working_df.ix[current_index,'tb']==TopBotType.bot and self.kDataFrame_origin.ix[-1, 'low'] < working_df.ix[current_index, 'low']) ):

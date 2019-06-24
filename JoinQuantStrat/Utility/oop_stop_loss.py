@@ -154,7 +154,7 @@ class ML_Stock_Timing(Rule):
         self.add_etf = params.get('add_etf', True)
         self.ml_categories = params.get('ml_categories', 4)
         self.use_day_only = params.get('use_day_only', False)
-        self.allow_half_pos = params.get('allow_half_pos', False)
+        self.use_strict_mode = params.get('use_strict_mode', False)
         
     def update_params(self, context, params):
         self.only_take_long_stocks = params.get('only_take_long_stocks', True)
@@ -162,7 +162,7 @@ class ML_Stock_Timing(Rule):
         self.add_etf = params.get('add_etf', True)
         self.ml_categories = params.get('ml_categories', 4)
         self.use_day_only = params.get('use_day_only', False)
-        self.allow_half_pos = params.get('allow_half_pos', False)
+        self.use_strict_mode = params.get('use_strict_mode', False)
     
     def ml_prediction(self, stock_list, context):
         mbc_weekly = ML_biaoli_check({'rq':False, 
@@ -236,7 +236,6 @@ class ML_Stock_Timing(Rule):
         stocks_to_long = []
         check_list = self.g.buy_stocks + g.etf if self.add_etf else self.g.buy_stocks
         for stock in check_list:
-#                 print("checking stock {0}".format(stock))
             if stock not in trade_dict:
                 continue
             (buy, sell) = trade_dict[stock]
@@ -257,33 +256,50 @@ class ML_Stock_Timing(Rule):
             stock, week_status, day_status = trades
             trade_dict[stock] = (week_status, day_status)
            
+#         print(trade_dict)   
+
+        # Dealing with potential long candidate
+        stocks_to_remove = []
+        stocks_to_long = []
+
         # Dearling with Holding stocks
         hold_stocks_to_check = [stock for stock in context.portfolio.positions.keys() if stock not in g.money_fund]
+#         print(hold_stocks_to_check)
         for stock in hold_stocks_to_check:
             if stock not in trade_dict:
                 continue
             (ws, ds) = trade_dict[stock]
             if (self.use_day_only and (math.isclose(ds, 1.0) or math.isclose(ds, -0.5))): 
                 self.g.sell_stocks.append(stock)
+                stocks_to_remove.append(stock)
                 if stock in context.portfolio.positions.keys():
                     print("stock {0} closed".format(stock))
                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
             elif (math.isclose(ds,0.0) or math.isclose(ds, 1.0) or math.isclose(ds,-0.5)):
                 self.g.sell_stocks.append(stock)
+                stocks_to_remove.append(stock)
                 if stock in context.portfolio.positions.keys():
                     print("stock {0} closed".format(stock))
                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)                
             elif ((math.isclose(ws, 0.0) or math.isclose(ws,1.0) or math.isclose(ws,-0.5)) and \
                   (math.isclose(ds,-1) or math.isclose(ds,0.5))):
-                self.g.position_proportion[stock] = 0.5
+                if self.use_strict_mode:
+                    self.g.sell_stocks.append(stock)
+                    stocks_to_remove.append(stock)
+                    if stock in context.portfolio.positions.keys():
+                        print("stock {0} closed".format(stock))
+                        self.g.close_position(self, context.portfolio.positions[stock], True, 0)   
+                        
+                    pass # do nothing for holding behaviour                   
+                else:
+                    self.g.position_proportion[stock] = 0.5
+                    stocks_to_long.append(stock)
             else:
                 self.g.position_proportion[stock] = 1.0
+                stocks_to_long.append(stock)
 
-            
-        # Dealing with potential long candidate
-        stocks_to_remove = []
-        stocks_to_long = []
         check_list = [stock for stock in (self.g.buy_stocks + g.etf if self.add_etf else self.g.buy_stocks) if stock not in hold_stocks_to_check]
+#         print(check_list)
         for stock in check_list:
             if stock not in trade_dict:
                 continue
@@ -297,10 +313,15 @@ class ML_Stock_Timing(Rule):
                 
             if (self.use_day_only and (math.isclose(ds,-1) or math.isclose(ds,0.5))):
                 stocks_to_long.append(stock)
-            elif ((math.isclose(ws, 0.0) or math.isclose(ws,1.0) or math.isclose(ws,-0.5)) and \
+            elif((math.isclose(ws, 0.0) or math.isclose(ws,1.0) or math.isclose(ws,-0.5)) and \
                   (math.isclose(ds,-1) or math.isclose(ds,0.5))):
-                stocks_to_long.append(stock)
-                self.g.position_proportion[stock] = 0.5  
+                if self.use_strict_mode:
+                    self.g.sell_stocks.append(stock)
+                    stocks_to_remove.append(stock)   
+                    pass # do nothing for other case           
+                else:
+                    stocks_to_long.append(stock)
+                    self.g.position_proportion[stock] = 0.5  
             elif (math.isclose(ws,-1) or math.isclose(ws, 0.5)) and \
                 (math.isclose(ds,-1) or math.isclose(ds, 0.5)):
                 stocks_to_long.append(stock)
