@@ -153,7 +153,8 @@ class MLKbarPrep(object):
     def prepare_df_data(self, stock_df, level):
         if level == self.monitor_level[1]: # only add the fields in sub level
             # SMA
-            stock_df.loc[:,'sma'] = talib.SMA(stock_df['close'].values, 233) # use 233
+            sma_period = 233 if level == '30m' else 89 # 5m
+            stock_df.loc[:,'sma'] = talib.SMA(stock_df['close'].values, sma_period) # use 233
             # MACD 
             _, _, stock_df.loc[:,'macd']  = talib.MACD(stock_df['close'].values)            
         stock_df = stock_df.dropna() # make sure we don't get any nan data
@@ -202,7 +203,10 @@ class MLKbarPrep(object):
                 first_date = get_trade_days(count=2, end_date=first_date)[0]
                 second_date = get_trade_days(start_date=second_date)[2] 
             trunk_lower_df = lower_df.loc[first_date:second_date,:]
-            self.create_ml_data_set(trunk_lower_df, high_df_tb.ix[i+1, 'tb'].value)
+            if self.use_standardized_sub_df:
+                self.create_ml_data_set(trunk_lower_df, high_df_tb.ix[i+1, 'tb'].value)
+            else:
+                self.create_ml_data_set_dynamic(trunk_lower_df, high_df_tb.ix[i+1, 'tb'].value)
         return self.data_set, self.label_set
     
     def prepare_predict_data(self):    
@@ -283,6 +287,8 @@ class MLKbarPrep(object):
 #         # sub level trunks pivots are used to training / prediction
 #         tb_trunk_df = trunk_df.dropna(subset=['tb'])
         tb_trunk_df = self.manual_wash(trunk_df)
+        if tb_trunk_df is None:
+            return False
 
         if tb_trunk_df.isnull().values.any():
             print("NaN value found, ignore this data")
@@ -290,11 +296,13 @@ class MLKbarPrep(object):
             return
     
         if self.isNormalize:
-            tb_trunk_df = normalize(tb_trunk_df, norm_range=self.norm_range, fields=self.monitor_fields)
+            tb_trunk_df = normalize(tb_trunk_df.copy(deep=True), norm_range=self.norm_range, fields=self.monitor_fields)
         self.data_set.append(tb_trunk_df.values) #trunk_df
         return True
         
-    def findFirstPivotIndexByMA(self, df, start_index, topbot):
+    def findFirstPivotIndexByMA(self, df, start_index, topbot, last_index=None):
+        if start_index > df.index[-1]:
+            return last_index
         start_pos = df.index.get_loc(start_index)
         while start_pos < df.shape[0]:
             item = df.iloc[start_pos]
@@ -310,6 +318,98 @@ class MLKbarPrep(object):
         if self.isDebug:
             print("WE REACH THE END!!!!")
         return df.index[-1]
+    
+    def create_ml_data_set_dynamic(self, trunk_df, label):
+        # at least 3 parts in the sub level
+        if self.sub_level_min_count != 0: # we won't process sub level df
+            sub_level_count = len(trunk_df['tb']) - trunk_df['tb'].isnull().sum()
+            if sub_level_count < self.sub_level_min_count:
+                return
+                
+        pivot_sub_counting_range = self.workout_count_num(self.monitor_level[1], 1)        
+
+        if len(trunk_df) > pivot_sub_counting_range * 2:
+
+            start_high_idx = trunk_df.ix[:pivot_sub_counting_range,'high'].idxmax()
+            start_low_idx = trunk_df.ix[:pivot_sub_counting_range,'low'].idxmin()
+            
+            trunk_df = trunk_df.loc[start_high_idx:,:] if label == TopBotType.bot.value else \
+                    trunk_df.loc[start_low_idx:,:] if label == TopBotType.top.value else None
+                    
+            end_low_idx = trunk_df.ix[-pivot_sub_counting_range*2:,'low'].idxmin()
+            end_high_idx = trunk_df.ix[-pivot_sub_counting_range*2:,'high'].idxmax()
+            
+            
+        else:
+            print("Sub-level data length too short!")
+            return
+
+
+        for time_index in trunk_df.index[10:]: #  at least 10 bars to make 3 pivots
+            sub_trunk_df = trunk_df.loc[:time_index, :].copy(deep=True)
+            kb = KBarProcessor(sub_trunk_df)
+            sub_trunk_df = kb.getIntegraded()   
+            
+            sub_tb_count = len(sub_trunk_df['tb']) - sub_trunk_df['tb'].isnull().sum()
+            if sub_tb_count < 3:
+                continue
+            
+            # first top pivot index with high below sma / first bot pivot index with low above sma
+            sub_start_index = self.findFirstPivotIndexByMA(sub_trunk_df, 
+                                                           start_high_idx if label == TopBotType.bot.value else start_low_idx, 
+                                                           TopBotType.top if label == TopBotType.bot.value else TopBotType.bot,
+                                                           trunk_df.index[-1])
+        
+            if time_index < sub_start_index:
+                continue
+            
+            sub_end_index = self.findFirstPivotIndexByMA(sub_trunk_df,
+                                                         end_low_idx if label == TopBotType.bot.value else end_high_idx,
+                                                         TopBotType.bot if label == TopBotType.bot.value else TopBotType.top,
+                                                         trunk_df.index[-1])
+            
+            if time_index >= sub_end_index:
+                break
+
+            sub_tb_trunk_df = self.manual_wash(sub_trunk_df)
+            
+            if sub_tb_trunk_df.isnull().values.any():
+                print("NaN value found, ignore this data")
+                print(sub_tb_trunk_df)
+                return
+
+            if self.isNormalize:
+                sub_tb_trunk_df = normalize(sub_tb_trunk_df, norm_range=self.norm_range, fields=self.monitor_fields)
+            
+            if len(self.data_set) > 0 and len(sub_tb_trunk_df) == len(self.data_set[-1]) and np.isclose(sub_tb_trunk_df.values, self.data_set[-1]).all():
+                continue
+                
+            if not sub_tb_trunk_df.empty:
+                self.data_set.append(sub_tb_trunk_df.values)
+                if label == TopBotType.bot.value:
+                    if time_index < start_high_idx:
+                        self.label_set.append(TopBotType.top.value)
+                        if self.isDebug:
+                            print("SOMETHING IS WRONG")
+                    elif time_index >= end_low_idx:  
+                        self.label_set.append(TopBotType.bot.value)
+                    else:
+                        self.label_set.append(TopBotType.top2bot.value) # change to 4 categories
+#                             self.label_set.append(TopBotType.top.value) # change to binary classification
+#                             self.label_set.append(TopBotType.noTopBot.value) # 3 categories
+                elif label == TopBotType.top.value:
+                    if time_index >= end_high_idx: 
+                        self.label_set.append(TopBotType.top.value)
+                    elif time_index < start_low_idx:
+                        self.label_set.append(TopBotType.bot.value)
+                        if self.isDebug:
+                            print("SOMETHING IS WRONG")
+                    else:
+                        self.label_set.append(TopBotType.bot2top.value) # change to 4 categories
+#                             self.label_set.append(TopBotType.bot.value) # change to binary classification
+#                             self.label_set.append(TopBotType.noTopBot.value)
+                else:
+                    pass
     
     def create_ml_data_set(self, trunk_df, label): 
         # at least 3 parts in the sub level
@@ -340,13 +440,14 @@ class MLKbarPrep(object):
             print("Sub-level data length too short!")
             return
         
-#         # sub level trunks pivots are used to training / prediction
-#         tb_trunk_df = trunk_df.dropna(subset=['tb']) # done in manual_wash
+#         if self.manual_select:
+#             trunk_df = self.manual_select(trunk_df)
+#         else: # manual_wash
         
-        if self.manual_select:
-            trunk_df = self.manual_select(trunk_df)
-        else: # manual_wash
             tb_trunk_df = self.manual_wash(trunk_df)
+        
+        if tb_trunk_df is None:
+            return
         
         if tb_trunk_df.isnull().values.any():
             print("NaN value found, ignore this data")
@@ -382,7 +483,7 @@ class MLKbarPrep(object):
                 sub_trunk_df = tb_trunk_df.loc[:time_index, :]
                             
                 if self.isNormalize:
-                    sub_trunk_df = normalize(sub_trunk_df, norm_range=self.norm_range, fields=self.monitor_fields)
+                    sub_trunk_df = normalize(sub_trunk_df.copy(deep=True), norm_range=self.norm_range, fields=self.monitor_fields)
 
                 if sub_trunk_df.isnull().values.any():
                     print("NaN value found, ignore this data")
@@ -449,6 +550,11 @@ class MLKbarPrep(object):
         
         # sub level trunks pivots are used to training / prediction
         df = df.dropna(subset=['tb'])
+        
+        if df.empty:
+            if self.isDebug:
+                print("We have empty dataframe return None")
+            return None
         
         # use the new_index column as distance measure starting from the beginning of the sequence
         df['new_index'] = df['new_index'] - df.iat[0,df.columns.get_loc('new_index')]
