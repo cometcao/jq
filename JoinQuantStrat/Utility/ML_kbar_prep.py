@@ -193,7 +193,7 @@ class MLKbarPrep(object):
         for i in range(0, len(high_dates)-1):
             first_date = str(high_dates[i].date())
             second_date = str(high_dates[i+1].date())
-#             print("high date: {0}:{1}".format(first_date, second_date))
+            print("high date: {0}:{1}".format(first_date, second_date))
             # high level date is [) while using pd.loc func
             # low level timestamp is [] while using pd.loc func
             if self.monitor_level[0] == '5d': # find the full range of date for the week
