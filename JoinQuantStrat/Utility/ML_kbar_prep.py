@@ -300,7 +300,7 @@ class MLKbarPrep(object):
         self.data_set.append(tb_trunk_df.values) #trunk_df
         return True
         
-    def findFirstPivotIndexByMA(self, df, start_index, topbot, last_index=None):
+    def findFirstPivotIndexByMA(self, df, start_index, topbot, last_index=None): # only use last_index in dynamic mode
         if start_index > df.index[-1]:
             return last_index
         start_pos = df.index.get_loc(start_index)
@@ -317,7 +317,7 @@ class MLKbarPrep(object):
             start_pos += 1
         if self.isDebug:
             print("WE REACH THE END!!!!")
-        return df.index[-1]
+        return df.index[-1] if last_index is None else last_index
     
     def create_ml_data_set_dynamic(self, trunk_df, label):
         # at least 3 parts in the sub level
