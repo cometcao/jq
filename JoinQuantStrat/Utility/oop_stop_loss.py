@@ -154,6 +154,7 @@ class ML_Stock_Timing(Rule):
         self.add_etf = params.get('add_etf', True)
         self.ml_categories = params.get('ml_categories', 4)
         self.use_day_only = params.get('use_day_only', False)
+        self.use_week_only = params.get('use_week_only', False)
         self.use_strict_mode = params.get('use_strict_mode', False)
         
     def update_params(self, context, params):
@@ -162,6 +163,7 @@ class ML_Stock_Timing(Rule):
         self.add_etf = params.get('add_etf', True)
         self.ml_categories = params.get('ml_categories', 4)
         self.use_day_only = params.get('use_day_only', False)
+        self.use_week_only = params.get('use_week_only', False)
         self.use_strict_mode = params.get('use_strict_mode', False)
     
     def ml_prediction(self, stock_list, context):
@@ -249,14 +251,96 @@ class ML_Stock_Timing(Rule):
             self.g.buy_stocks = stocks_to_long
         else:
             self.g.buy_stocks = [stock for stock in self.g.buy_stocks if stock not in stocks_to_remove]
-        
+    
+    def use_ml_data_4_day(self, context, trading_details):
+        trade_dict = {}
+        for trades in trading_details:
+            stock, week_status, day_status = trades
+            trade_dict[stock] = (week_status, day_status)
+
+        # Dealing with potential long candidate
+        stocks_to_remove = []
+        stocks_to_long = []
+
+        # Dearling with Holding stocks
+        hold_stocks_to_check = [stock for stock in context.portfolio.positions.keys() if stock not in g.money_fund]
+        for stock in hold_stocks_to_check:
+            if stock not in trade_dict:
+                continue
+            (ws, ds) = trade_dict[stock]
+            if math.isclose(ds,0.0) or math.isclose(ds, 1.0) or math.isclose(ds, -0.5): 
+                self.g.sell_stocks.append(stock)
+                stocks_to_remove.append(stock)
+                if stock in context.portfolio.positions.keys():
+                    print("stock {0} closed".format(stock))
+                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+            else:
+                stocks_to_long.append(stock)
+
+        check_list = [stock for stock in (self.g.buy_stocks + g.etf if self.add_etf else self.g.buy_stocks) if stock not in hold_stocks_to_check]
+        for stock in check_list:
+            if stock not in trade_dict:
+                continue
+            (ws, ds) = trade_dict[stock]
+            if math.isclose(ds,0.0) or math.isclose(ds,1.0) or math.isclose(ds,-0.5):
+                self.g.sell_stocks.append(stock)
+                stocks_to_remove.append(stock)
+                
+            if math.isclose(ds,-1) or math.isclose(ds,0.5):
+                stocks_to_long.append(stock) 
+        # combine the existing holdings and preserve the order
+        if self.only_take_long_stocks:
+            self.g.buy_stocks = stocks_to_long
+        else:
+            self.g.buy_stocks = [stock for stock in self.g.buy_stocks if stock not in stocks_to_remove]
+            
+    def use_ml_data_4_week(self, context, trading_details):
+        trade_dict = {}
+        for trades in trading_details:
+            stock, week_status, day_status = trades
+            trade_dict[stock] = (week_status, day_status)
+
+        # Dealing with potential long candidate
+        stocks_to_remove = []
+        stocks_to_long = []
+
+        # Dearling with Holding stocks
+        hold_stocks_to_check = [stock for stock in context.portfolio.positions.keys() if stock not in g.money_fund]
+        for stock in hold_stocks_to_check:
+            if stock not in trade_dict:
+                continue
+            (ws, ds) = trade_dict[stock]
+            if math.isclose(ws,0.0) or math.isclose(ws, 1.0) or math.isclose(ws): 
+                self.g.sell_stocks.append(stock)
+                stocks_to_remove.append(stock)
+                if stock in context.portfolio.positions.keys():
+                    print("stock {0} closed".format(stock))
+                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+            else:
+                stocks_to_long.append(stock)
+
+        check_list = [stock for stock in (self.g.buy_stocks + g.etf if self.add_etf else self.g.buy_stocks) if stock not in hold_stocks_to_check]
+        for stock in check_list:
+            if stock not in trade_dict:
+                continue
+            (ws, ds) = trade_dict[stock]
+            if math.isclose(ws,0.0) or math.isclose(ws,1.0) or math.isclose(ws,-0.5):
+                self.g.sell_stocks.append(stock)
+                stocks_to_remove.append(stock)
+                
+            if math.isclose(ws,-1) or math.isclose(ws,0.5):
+                stocks_to_long.append(stock) 
+        # combine the existing holdings and preserve the order
+        if self.only_take_long_stocks:
+            self.g.buy_stocks = stocks_to_long
+        else:
+            self.g.buy_stocks = [stock for stock in self.g.buy_stocks if stock not in stocks_to_remove]
+    
     def use_ml_data_4(self, context, trading_details):    
         trade_dict = {}
         for trades in trading_details:
             stock, week_status, day_status = trades
             trade_dict[stock] = (week_status, day_status)
-           
-#         print(trade_dict)   
 
         # Dealing with potential long candidate
         stocks_to_remove = []
@@ -269,13 +353,7 @@ class ML_Stock_Timing(Rule):
             if stock not in trade_dict:
                 continue
             (ws, ds) = trade_dict[stock]
-            if (self.use_day_only and (math.isclose(ds, 1.0) or math.isclose(ds, -0.5))): 
-                self.g.sell_stocks.append(stock)
-                stocks_to_remove.append(stock)
-                if stock in context.portfolio.positions.keys():
-                    print("stock {0} closed".format(stock))
-                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
-            elif (math.isclose(ds,0.0) or math.isclose(ds, 1.0) or math.isclose(ds,-0.5)):
+            if (math.isclose(ds,0.0) or math.isclose(ds, 1.0) or math.isclose(ds,-0.5)):
                 self.g.sell_stocks.append(stock)
                 stocks_to_remove.append(stock)
                 if stock in context.portfolio.positions.keys():
@@ -289,7 +367,6 @@ class ML_Stock_Timing(Rule):
                     if stock in context.portfolio.positions.keys():
                         print("stock {0} closed".format(stock))
                         self.g.close_position(self, context.portfolio.positions[stock], True, 0)   
-                        
                     pass # do nothing for holding behaviour                   
                 else:
                     self.g.position_proportion[stock] = 0.5
@@ -304,15 +381,10 @@ class ML_Stock_Timing(Rule):
             if stock not in trade_dict:
                 continue
             (ws, ds) = trade_dict[stock]
-            if (self.use_day_only and (math.isclose(ds, 1.0) or math.isclose(ds,-0.5))):
-                self.g.sell_stocks.append(stock)
-                stocks_to_remove.append(stock)
-            elif math.isclose(ds,0.0) or math.isclose(ds,1.0) or math.isclose(ds,-0.5):
+            if math.isclose(ds,0.0) or math.isclose(ds,1.0) or math.isclose(ds,-0.5):
                 self.g.sell_stocks.append(stock)
                 stocks_to_remove.append(stock)
                 
-            if (self.use_day_only and (math.isclose(ds,-1) or math.isclose(ds,0.5))):
-                stocks_to_long.append(stock)
             elif((math.isclose(ws, 0.0) or math.isclose(ws,1.0) or math.isclose(ws,-0.5)) and \
                   (math.isclose(ds,-1) or math.isclose(ds,0.5))):
                 if self.use_strict_mode:
@@ -348,7 +420,12 @@ class ML_Stock_Timing(Rule):
             if self.ml_categories == 3:
                 self.use_ml_data(context, trading_details)
             elif self.ml_categories == 4:
-                self.use_ml_data_4(context, trading_details)
+                if self.use_day_only:
+                    self.use_ml_data_4_day(context, trading_details)
+                elif self.use_week_only:
+                    self.use_ml_data_4_week(context, trading_details)
+                else:
+                    self.use_ml_data_4(context, trading_details)
 
             self.log.info("ML择时结果: "+join_list([show_stock(stock) for stock in self.g.buy_stocks], ' ', 10))
             # make sure ML predict use check_status

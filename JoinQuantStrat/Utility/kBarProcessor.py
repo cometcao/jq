@@ -141,8 +141,17 @@ class KBarProcessor(object):
         else:
             return TopBotType.noTopBot
         
-    def markTopBot(self):
+    def markTopBot(self, initial_state=TopBotType.noTopBot):
         self.kDataFrame_standardized = self.kDataFrame_standardized.assign(tb=TopBotType.noTopBot)
+        if initial_state != TopBotType.noTopBot:
+            felem = self.kDataFrame_standardized.iloc[0]
+            selem = self.kDataFrame_standardized.iloc[1]
+            if (initial_state == TopBotType.top and felem.high > selem.high) or \
+                (initial_state == TopBotType.bot and felem.low < selem.low):
+                self.kDataFrame_standardized.ix[0, 'tb'] = initial_state
+            else:
+                print("Incorrect initial state given!!!")
+                
         # This function assume we have done the standardization process (no inclusion)
         for idx in range(self.kDataFrame_standardized.shape[0]-2): #xrange
             currentElem = self.kDataFrame_standardized.iloc[idx]

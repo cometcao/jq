@@ -348,7 +348,7 @@ class MLKbarPrep(object):
         for time_index in trunk_df.index[10:]: #  at least 10 bars to make 3 pivots
             sub_trunk_df = trunk_df.loc[:time_index, :].copy(deep=True)
             kb = KBarProcessor(sub_trunk_df)
-            sub_trunk_df = kb.getIntegraded()   
+            sub_trunk_df = kb.getIntegraded(TopBotType.top if label == TopBotType.bot.value else TopBotType.bot)   
             
             sub_tb_count = len(sub_trunk_df['tb']) - sub_trunk_df['tb'].isnull().sum()
             if sub_tb_count < 3:
