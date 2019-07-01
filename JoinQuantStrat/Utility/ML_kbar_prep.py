@@ -330,8 +330,8 @@ class MLKbarPrep(object):
 
         if len(trunk_df) > pivot_sub_counting_range * 2:
 
-            start_high_idx = trunk_df.ix[:pivot_sub_counting_range,'high'].idxmax()
-            start_low_idx = trunk_df.ix[:pivot_sub_counting_range,'low'].idxmin()
+            start_high_idx = trunk_df.ix[:pivot_sub_counting_range*2,'high'].idxmax()
+            start_low_idx = trunk_df.ix[:pivot_sub_counting_range*2,'low'].idxmin()
             
             trunk_df = trunk_df.loc[start_high_idx:,:] if label == TopBotType.bot.value else \
                     trunk_df.loc[start_low_idx:,:] if label == TopBotType.top.value else None
