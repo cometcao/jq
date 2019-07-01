@@ -66,19 +66,39 @@ class KBarProcessor(object):
             isBull = True
         return isBull
         
-    def standardize(self):
+    def standardize(self, initial_state=TopBotType.noTopBot):
         # 1. We need to make sure we start with first two K-bars without inclusive relationship
         # drop the first if there is inclusion, and check again
-        while self.kDataFrame_standardized.shape[0] > 2:
-            first_Elem = self.kDataFrame_standardized.iloc[0]
-            second_Elem = self.kDataFrame_standardized.iloc[1]
-            if self.checkInclusive(first_Elem, second_Elem) != InclusionType.noInclusion:
-                self.kDataFrame_standardized.drop(self.kDataFrame_standardized.index[0], inplace=True)
-                pass
-            else:
-                self.kDataFrame_standardized.ix[0,'new_high'] = first_Elem.high
-                self.kDataFrame_standardized.ix[0,'new_low'] = first_Elem.low
-                break
+        if initial_state == TopBotType.noTopBot:
+            while self.kDataFrame_standardized.shape[0] > 2:
+                first_Elem = self.kDataFrame_standardized.iloc[0]
+                second_Elem = self.kDataFrame_standardized.iloc[1]
+                if self.checkInclusive(first_Elem, second_Elem) != InclusionType.noInclusion:
+                    self.kDataFrame_standardized.drop(self.kDataFrame_standardized.index[0], inplace=True)
+                    pass
+                else:
+                    self.kDataFrame_standardized.ix[0,'new_high'] = first_Elem.high
+                    self.kDataFrame_standardized.ix[0,'new_low'] = first_Elem.low
+                    break
+        else:
+            # given the initial state, make the first two bars non-inclusive, 
+            # the first bar is confirmed as pivot, anything followed with inclusive relation 
+            # will be merged into the first bar
+            while self.kDataFrame_standardized.shape[0] > 2:
+                first_Elem = self.kDataFrame_standardized.iloc[0]
+                second_Elem = self.kDataFrame_standardized.iloc[1]
+                if self.checkInclusive(first_Elem, second_Elem) != InclusionType.noInclusion:
+                    if initial_state == TopBotType.bot:
+                        self.kDataFrame_standardized.ix[0,'new_high'] = second_Elem.high
+                        self.kDataFrame_standardized.ix[0,'new_low'] = first_Elem.low
+                    elif initial_state == TopBotType.top:
+                        self.kDataFrame_standardized.ix[0,'new_high'] = first_Elem.high
+                        self.kDataFrame_standardized.ix[0,'new_low'] = second_Elem.low               
+                    self.kDataFrame_standardized.drop(self.kDataFrame_standardized.index[1], inplace=True)                        
+                else:
+                    self.kDataFrame_standardized.ix[0,'new_high'] = first_Elem.high
+                    self.kDataFrame_standardized.ix[0,'new_low'] = first_Elem.low
+                    break                    
 
         # 2. loop through the whole data set and process inclusive relationship
         pastElemIdx = 0
@@ -486,7 +506,7 @@ class KBarProcessor(object):
         return self.standardize()
     
     def getIntegraded(self, initial_state=TopBotType.noTopBot):
-        self.standardize()
+        self.standardize(initial_state)
         self.markTopBot(initial_state)
         self.defineBi()
         return self.kDataFrame_origin.join(self.kDataFrame_marked[['new_index', 'tb']])
