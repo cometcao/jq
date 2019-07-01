@@ -146,8 +146,8 @@ class KBarProcessor(object):
         if initial_state != TopBotType.noTopBot:
             felem = self.kDataFrame_standardized.iloc[0]
             selem = self.kDataFrame_standardized.iloc[1]
-            if (initial_state == TopBotType.top and felem.high > selem.high) or \
-                (initial_state == TopBotType.bot and felem.low < selem.low):
+            if (initial_state == TopBotType.top and felem.high >= selem.high) or \
+                (initial_state == TopBotType.bot and felem.low <= selem.low):
                 self.kDataFrame_standardized.ix[0, 'tb'] = initial_state
             else:
                 print("Incorrect initial state given!!!")
