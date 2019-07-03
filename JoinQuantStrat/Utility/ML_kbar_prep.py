@@ -274,8 +274,8 @@ class MLKbarPrep(object):
     def create_ml_data_set_predict(self, trunk_df, previous_high_label):  
         pivot_sub_counting_range = self.workout_count_num(self.monitor_level[1], 1)        
 
-        start_high_idx = trunk_df.ix[:pivot_sub_counting_range,'high'].idxmax()
-        start_low_idx = trunk_df.ix[:pivot_sub_counting_range,'low'].idxmin()            
+        start_high_idx = trunk_df.ix[:pivot_sub_counting_range*2,'high'].idxmax()
+        start_low_idx = trunk_df.ix[:pivot_sub_counting_range*2,'low'].idxmin()            
               
         trunk_df = trunk_df.loc[start_high_idx:,:] if previous_high_label == TopBotType.top.value else trunk_df.loc[start_low_idx:,:]  
 
@@ -284,9 +284,11 @@ class MLKbarPrep(object):
                 print("Sub-level data length too short for prediction!")
             return False
         
-#         # sub level trunks pivots are used to training / prediction
-#         tb_trunk_df = trunk_df.dropna(subset=['tb'])
-        tb_trunk_df = self.manual_wash(trunk_df)
+        if not self.use_standardized_sub_df: # the case of dynamic data gen
+            kb = KBarProcessor(trunk_df)
+            sub_trunk_df = kb.getIntegraded(TopBotType.bot if previous_high_label == TopBotType.bot.value else TopBotType.top)   
+            
+        tb_trunk_df = self.manual_wash(sub_trunk_df)
         if tb_trunk_df is None:
             return False
 
