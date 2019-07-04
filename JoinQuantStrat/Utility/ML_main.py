@@ -350,8 +350,8 @@ class ML_biaoli_check(object):
                          
         data_set, origin_data_length, past_pivot_status = mld.prepare_stock_data_predict(stock, today_date=today_date, period_count=50 if self.check_level[0]=='5d' else 90, predict_extra=self.use_cnn_lstm) # 500 sample period
         if data_set is None: # can't predict
-            print("None dataset, return [0],[[0]], 0")
-            return (([0],[[0]]), 0)
+            print("None dataset, return default value")
+            return (([0],[[0]]), 0, 0)
         try:
             if self.extra_training:
                 tmp_data, tmp_label = mld.retrieve_stocks_data([stock], period_count=self.extra_training_period, filename=self.extra_training_file, today_date=today_date)

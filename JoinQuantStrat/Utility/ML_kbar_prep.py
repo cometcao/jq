@@ -210,8 +210,12 @@ class MLKbarPrep(object):
         return self.data_set, self.label_set
     
     def prepare_predict_data(self):    
+        if len(self.stock_df_dict) == 0:
+            return self.data_set   
         higher_df = self.stock_df_dict[self.monitor_level[0]]
         lower_df = self.stock_df_dict[self.monitor_level[1]]
+        if higher_df.empty or lower_df.empty:
+            return self.data_set
         high_df_tb = higher_df.dropna(subset=['new_index'])
         high_dates = high_df_tb.index
         if self.isDebug and self.num_of_debug_display != 0:
