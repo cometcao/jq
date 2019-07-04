@@ -214,7 +214,8 @@ class MLKbarPrep(object):
             return self.data_set   
         higher_df = self.stock_df_dict[self.monitor_level[0]]
         lower_df = self.stock_df_dict[self.monitor_level[1]]
-        if higher_df.empty or lower_df.empty:
+        pivot_sub_counting_range = self.workout_count_num(self.monitor_level[1], 1)
+        if higher_df.empty or lower_df.empty or len(lower_df) < pivot_sub_counting_range:
             return self.data_set
         high_df_tb = higher_df.dropna(subset=['new_index'])
         high_dates = high_df_tb.index
