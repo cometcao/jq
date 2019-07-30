@@ -235,12 +235,13 @@ class ML_biaoli_check(object):
         self.norm_range = params.get('norm_range', [-1,1])
         self.monitor_fields = params.get('monitor_fields', ['chan_price', 'new_index', 'macd_acc', 'money_acc'])
         self.sub_level_max_length = params.get('sub_level_max_length', 1200)
+        self.high_level_max_length = params.get('high_level_max_length', 5)
         if not self.model and self.model_path is not None:
             self.prepare_model()
 
     
     def prepare_model(self):
-        self.mdp = MLDataProcess(model_name=self.model_path, isAnal=self.isAnal)
+        self.mdp = MLDataProcess(model_name=self.model_path, isAnal=self.isAnal, isDebug=self.isDebug)
         self.mdp.load_model(model_name=self.model_path)#
         if not self.save_new_model:
             self.mdp.model_name = None # we don't want to save the modified model
@@ -249,7 +250,7 @@ class ML_biaoli_check(object):
         if not stocks:
             return [] 
         return [stock for stock in stocks if (self.gauge_long(stock, today_date) if isLong else self.gauge_short(stock, today_date))]
-        
+    
     def gauge_long(self, stock, today_date=None):
         lp, _ = self.gauge_stock(stock, today_date, check_status=True)
         return lp
@@ -279,6 +280,28 @@ class ML_biaoli_check(object):
             print(pred)
             print(y_class)
         return y_class[-1] if confidence[-1] else TopBotType.noTopBot.value
+
+    def gauge_stocks_analysis_seq(self, stocks, today_date=None):
+        if not stocks:
+            return [] 
+        return [(stock, self.gauge_stock_seq(stock, today_date)) for stock in stocks]
+    
+    def gauge_stock_seq(self, stock, today_date=None):
+        # only return the predicted confident status 
+        try:
+            (y_class, pred) = self.model_predict_seq(stock, today_date, categories=4)
+        except Exception as e:
+            if str(e) == "inputs are all NaN":
+                print(str(e))
+                return TopBotType.noTopBot.value
+            else:
+                tb = sys.exc_info()[2]
+                raise Exception('Unable to handle exception').with_traceback(tb)
+        confidence, _ = self.interpret(pred)# only use long confidence level check
+        if self.isDebug:
+            print(pred)
+            print(y_class)
+        return y_class[-1] if confidence[-1] else TopBotType.noTopBot.value        
 
       
     def gauge_stocks_analysis(self, stocks, today_date=None, check_status=False):
@@ -349,7 +372,7 @@ class ML_biaoli_check(object):
                          monitor_fields=self.monitor_fields)
                          
         data_set, origin_data_length, past_pivot_status = mld.prepare_stock_data_predict(stock, today_date=today_date, period_count=50 if self.check_level[0]=='5d' else 90, predict_extra=self.use_cnn_lstm) # 500 sample period
-        if data_set is None: # can't predict
+        if data_set is None or len(data_set) == 0: # can't predict
             print("None dataset, return default value")
             return (([0],[[0]]), 0, 0)
         try:
@@ -371,6 +394,30 @@ class ML_biaoli_check(object):
             print(e)
             return (([0],[[0]]), 0, 0)
     
+    def model_predict_seq(self, stock, today_date=None, categories=4):
+        if self.isDebug:
+            print("ML working on {0} at date {1}".format(stock, str(today_date) if today_date else ""))
+        mld = MLDataPrepSeq(isAnal=self.isAnal, 
+                        isDebug=self.isDebug, 
+                        max_length_for_pad_high = self.high_level_max_length,
+                        max_length_for_pad=self.sub_level_max_length, 
+                        norm_range=self.norm_range,
+                        use_standardized_sub_df=self.use_standardized_sub_df, 
+                        monitor_level=self.check_level,
+                        monitor_fields=self.monitor_fields)
+        
+        data_set = mld.prepare_stock_data_predict(stock, today_date=today_date, period_count=200 if self.check_level[0]=='5d' else 200) # 500 sample period
+        if data_set is None or len(data_set) == 0: # can't predict
+            print("None dataset, return default value")
+            return ([0],[[0]])
+        try:
+            unique_index = np.array([-1, -0.5, 0.5, 1]) if categories == 4 else np.array([-1, 0, 1]) if categories == 3 else np.array([-1, 1]) 
+            
+            return self.mdp.model_predict_rcnn(data_set, unique_index)
+        except Exception as e: 
+            print(e)
+            return ([0],[[0]]) 
+        
     def interpret(self, pred):
         """Our confidence level must be above the threthold"""
         max_val = np.max(pred, axis=1)
