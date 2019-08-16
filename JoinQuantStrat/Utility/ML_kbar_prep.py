@@ -950,7 +950,7 @@ class MLKbarPrepSeq(MLKbarPrep):
             high_window_size = 200
             low_window_size = self.workout_count_num(self.monitor_level[1], high_window_size)
             
-            trading_dates_from_first = JqDataRetriever.get_trading_date(start_date=higher_df.index[0].date())
+            trading_dates_from_first = get_trade_days(start_date=higher_df.index[0].date())
             
             for i in range(low_window_size, len(lower_df)):
                 print("progress {0} @ {1}".format(i, len(lower_df)))
