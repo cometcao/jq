@@ -1,5 +1,4 @@
 # -*- encoding: utf8 -*-
-from jqdatasdk.api import get_trade_days
 try:
     from rqdatac import *
 except:
