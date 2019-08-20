@@ -121,9 +121,9 @@ def generate_portion(num):
         yield float(num) / float(total_portion)
         num -= 1
         
-def batch(iterable, n=1):
+def batch(iterable, n=1, start=0):
     l = len(iterable)
-    for ndx in range(0, l, n): # restart
+    for ndx in range(start, l, n): # restart
         yield [ndx,min(ndx + n, l)]    
             
 def save_dataset(dataset, filename, isDebug=True):
