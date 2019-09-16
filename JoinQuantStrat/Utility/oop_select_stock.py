@@ -61,7 +61,7 @@ class Pick_stocks2(Group_rules):
             if isinstance(rule, Create_stock_list):
                 self.g.buy_stocks = self.g.buy_stocks + rule.before_trading_start(context)
 
-        self.g.buy_stocks = list(set(self.g.buy_stocks))
+#         self.g.buy_stocks = list(set(self.g.buy_stocks))
         
         for rule in self.rules:
             if isinstance(rule, Early_Filter_stock_list):
@@ -361,7 +361,8 @@ class Pick_Rank_Factor(Create_stock_list):
     def before_trading_start(self, context):
         mfr = ML_Factor_Rank({'stock_num':self.stock_num, 
                               'index_scope':self.index_scope})
-        new_list = mfr.gaugeStocks()
+#         new_list = mfr.gaugeStocks()
+        new_list = mfr.gaugeStocks_new(context)
         return new_list
 
     def __str__(self):
