@@ -888,7 +888,7 @@ class RSRS_timing(Rule):
         # 设置RSRS指标中N, M的值
         self.N = params.get('N', 18)
         self.M = params.get('M', 600)
-        
+                
         self.beta_list = []
         self.R2 = []
         
@@ -898,11 +898,13 @@ class RSRS_timing(Rule):
 
     def handle_data(self, context, data):
         if not self.init:
-            self.calculate_RSRS()
+            self.calculate_RSRS(context)
             self.init=True
         else:
             self.add_new_RSRS()
-            
+        
+        self.log.info("handle data updated RSRS info")
+        
         self.check_timing(context)
 
 
@@ -912,15 +914,21 @@ class RSRS_timing(Rule):
         sigma = np.std(section)
         zscore = (section-mu)/sigma
         
+        zscore_rightdev = zscore[-1] * self.beta_list[-1] * self.R2[-1]
+        
+#         self.log.info("zscore_rightdev:{0}".format(zscore_rightdev))
+#         self.log.info("zscore_rightdev:{0}".format(self.beta_list[-10:]))
+#         self.log.info("zscore_rightdev:{0}".format(self.R2[-10:]))
+        
         # 获得前10日交易量
         trade_vol10 = attribute_history(self.market_symbol, 10, '1d', 'volume')
         
-        if zscore[-1] > self.buy \
-            and np.corrcoef(np.array([trade_vol10['volume'].values, (np.array(self.R2[-10:]) * np.array(zscore[-10:]))]))[0,1] > 0:
+        if zscore_rightdev > self.buy: 
+#             np.corrcoef(np.array([trade_vol10['volume'].values, (np.array(self.R2[-10:]) * np.array(zscore[-10:]))]))[0,1] > 0:
             self.log.info("RSRS右偏标准分大于买入阈值, 且修正标准分与前10日交易量相关系数为正")
             
         # 如果上一时间点的右偏RSRS标准分小于卖出阈值, （且修正标准分与前10日交易量相关系数为正）则空仓卖出
-        elif zscore[-1] < self.sell:
+        elif zscore_rightdev < self.sell:
             self.log.info("RSRS右偏标准分小于卖出阈值, 且修正标准分与前10日交易量相关系数为正")
             self.g.clear_position(self, context, self.g.op_pindexs)
             self.is_to_return = True 
@@ -933,8 +941,13 @@ class RSRS_timing(Rule):
     def after_trading_end(self, context):
         Rule.after_trading_end(self, context)
 
-    def calculate_RSRS(self):
-        prices = attribute_history(self.market_symbol, self.M+self.N, '1d', ['high', 'low'])
+    def calculate_RSRS(self, context):
+        ## on-demand method
+#         prices = attribute_history(self.market_symbol, self.M+self.N, '1d', ['high', 'low'])
+        prices = get_price(self.market_symbol, '2005-01-05', context.previous_date, '1d', ['high', 'low'])
+        prices[np.isnan(prices)] = 0
+        prices[np.isinf(prices)] = 0
+
         highs = prices.high
         lows = prices.low
         for i in range(len(highs))[self.N:]:

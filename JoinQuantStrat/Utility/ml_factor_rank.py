@@ -215,7 +215,12 @@ class ML_Factor_Rank(object):
     
     def gaugeStocks_new(self, context):
         # 设置初始股票池
-        sample = get_index_stocks(self.index_scope, date = None)
+        sample = []
+        if isinstance(self.index_scope, list):
+            for idx in self.index_scope:
+                sample = sample +  get_index_stocks(idx, date = None)
+        else:
+            sample = get_index_stocks(self.index_scope, date = None)
         # 设置可交易股票池
         self.__feasible_stocks = self.set_feasible_stocks(sample,context)
         # 因子获取Query
@@ -314,6 +319,8 @@ class ML_Factor_Rank(object):
         
         #对新的因子，即残差进行排序（按照从小到大）
         factor = factor.sort_values(by = 'log_mcap')        
+        
+#         print(factor)
         
         stockset = list(factor.index[:self.stock_num])
         return stockset

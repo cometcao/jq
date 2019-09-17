@@ -361,8 +361,8 @@ class Pick_Rank_Factor(Create_stock_list):
     def before_trading_start(self, context):
         mfr = ML_Factor_Rank({'stock_num':self.stock_num, 
                               'index_scope':self.index_scope})
-#         new_list = mfr.gaugeStocks()
-        new_list = mfr.gaugeStocks_new(context)
+        new_list = mfr.gaugeStocks()
+#         new_list = mfr.gaugeStocks_new(context)
         return new_list
 
     def __str__(self):
