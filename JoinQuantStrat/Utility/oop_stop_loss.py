@@ -551,13 +551,15 @@ class Stop_gain_loss_stocks(Rule):
                     % (stock,cur_price,self.last_high[stock],loss_threthold))
                 position = context.portfolio.positions[stock]
                 self.g.close_position(self, position, True, 0)
+                self.g.sell_stocks.append(stock)
                 
             profit_threshold = self.__get_stop_profit_threshold(stock,self.period) if self.stop_gain == 0.0 else self.stop_gain
             if self.enable_stop_gain and cur_price > position.avg_cost * (1 + profit_threshold):
                 self.log.info("==> 个股止盈, stock: %s, cur_price: %f, avg_cost: %f, threshold: %f"
                     % (stock,cur_price,self.last_high[stock],profit_threshold))
                 position = context.portfolio.positions[stock]
-                self.g.close_position(self, position, True, 0)      
+                self.g.close_position(self, position, True, 0) 
+                self.g.sell_stocks.append(stock)     
     
     # 获取个股前n天的m日增幅值序列
     # 增加缓存避免当日多次获取数据

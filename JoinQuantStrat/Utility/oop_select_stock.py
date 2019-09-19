@@ -353,16 +353,19 @@ class Pick_Rank_Factor(Create_stock_list):
     def __init__(self, params):
         self.stock_num = params.get('stock_num', 20)
         self.index_scope = params.get('index_scope', '000985.XSHG')
+        self.use_enhanced = params.get('use_enhanced', False)
         pass
     
-    def filter(self, context, data):    
-        pass
+    def update_params(self, context, params):
+        self.use_enhanced = params.get('use_enhanced', False)      
     
     def before_trading_start(self, context):
         mfr = ML_Factor_Rank({'stock_num':self.stock_num, 
                               'index_scope':self.index_scope})
-        new_list = mfr.gaugeStocks()
-#         new_list = mfr.gaugeStocks_new(context)
+        if self.use_enhanced:
+            new_list = mfr.gaugeStocks_new(context)
+        else:
+            new_list = mfr.gaugeStocks()
         return new_list
 
     def __str__(self):
