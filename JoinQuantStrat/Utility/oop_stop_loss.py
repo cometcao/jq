@@ -618,6 +618,54 @@ class Stop_gain_loss_stocks(Rule):
     def __str__(self):
         return '个股止损止盈器:[当前缓存价格数: %d ] 默认阈值止损%s [enabled:%s] 止盈%s [enabled:%s]' % (len(self.last_high), self.stop_loss, self.enable_stop_loss, self.stop_gain, self.enable_stop_gain)
 
+class ATR_stoploss(Rule):
+    def __init__(self, params):
+        Rule.__init__(self, params)
+        self.stop = params.get('stop', 2)
+        self.NATRstop = params.get('NATRstop', 6)
+        self.ATR_period = params.get('ATR_period', 14)
+        self.MaxLoss = params.get('MaxLoss', 0.1)
+        self.HighPrice = {}
+
+    def update_params(self,context,params):
+        self.stop = params.get('stop', 2)
+        self.NATRstop = params.get('NATRstop', 6)
+        self.ATR_period = params.get('ATR_period', 14)
+        self.MaxLoss = params.get('MaxLoss', 0.1)
+        self.HighPrice = {}
+
+    def handle_data(self,context,data): 
+        for stock in context.portfolio.positions.keys():
+            if context.portfolio.positions[stock].closeable_amount > 0:
+                stock_price = context.portfolio.positions[stock].price
+                if stock in self.HighPrice:
+                    self.HighPrice[stock] = max(self.HighPrice[stock], stock_price)
+                    if stock_price  < context.portfolio.positions[stock].avg_cost-self.stop*self.ATR(context,stock):
+                        log.info('股票硬止损:\t' +  stock)
+                        self.g.close_position(self, context.portfolio.positions[stock], True, 0) 
+                        self.g.sell_stocks.append(stock)
+                    elif stock_price  < self.HighPrice[stock]  - self.NATRstop*self.ATR(context,stock):
+                        log.info('股票追踪止损:\t' +  stock)
+                        self.g.close_position(self, context.portfolio.positions[stock], True, 0) 
+                        self.g.sell_stocks.append(stock)
+                else:
+                    self.HighPrice[stock] = stock_price
+
+    def ATR(self, context,stock):
+        PriceArray= get_price(stock, '2005-01-05', context.previous_date, '1d', ['close','high','low'])
+        close=PriceArray['close'].apply(lambda x: 0.00 if np.isnan(x) else x)#把NaN替换为0
+        high=PriceArray['high'].apply(lambda x: 0.00 if np.isnan(x) else x)#把NaN替换为0
+        low=PriceArray['low'].apply(lambda x: 0.00 if np.isnan(x) else x)#把NaN替换为0
+        close = np.array(close)
+        high = np.array(high)
+        low = np.array(low)
+        ATR = talib.ATR(high,low,close, g.ATR_period)[-1]
+        return ATR
+
+    def __str__(self):
+        return 'ATR追踪止损:[参数: ATR硬止损倍数%s] [ATR追踪止损倍数: %s] [ATR计算周期: %s] [MaxLoss: %s] [各品种最高价字典: %s]' % (
+            self.stop, self.NATRstop, self.ATR_period, self.MaxLoss, self.HighPrice)
+
 # 资金曲线保护  
 class equity_curve_protect(Rule):
     def __init__(self, params):
