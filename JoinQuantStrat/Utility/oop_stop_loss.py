@@ -4,9 +4,6 @@ Created on 4 Dec 2017
 
 @author: MetalInvest
 '''
-from _ast import Or
-from pip._vendor.distlib.util import OR
-from _operator import or_
 try:
     from kuanke.user_space_api import *
 except:
