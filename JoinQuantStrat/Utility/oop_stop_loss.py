@@ -644,10 +644,12 @@ class ATR_stoploss(Rule):
                         log.info('股票硬止损:\t' +  stock)
                         self.g.close_position(self, context.portfolio.positions[stock], True, 0) 
                         self.g.sell_stocks.append(stock)
+                        del self.HighPrice[stock]
                     elif stock_price  < self.HighPrice[stock]  - self.NATRstop*self.ATR(context,stock):
                         log.info('股票追踪止损:\t' +  stock)
                         self.g.close_position(self, context.portfolio.positions[stock], True, 0) 
                         self.g.sell_stocks.append(stock)
+                        del self.HighPrice[stock]
                 else:
                     self.HighPrice[stock] = stock_price
 
