@@ -659,7 +659,7 @@ class ATR_stoploss(Rule):
         close = np.array(close)
         high = np.array(high)
         low = np.array(low)
-        ATR = talib.ATR(high,low,close, g.ATR_period)[-1]
+        ATR = talib.ATR(high,low,close, self.ATR_period)[-1]
         return ATR
 
     def __str__(self):
