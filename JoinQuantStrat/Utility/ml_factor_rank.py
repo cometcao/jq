@@ -20,6 +20,7 @@ from sklearn.ensemble import RandomForestRegressor
 from jqfactor import standardlize
 from jqfactor import winsorize_med
 from jqdata import *
+from jqlib.technical_analysis import *
 from sklearn.model_selection import KFold
 
 class ML_Factor_Rank(object):
@@ -161,8 +162,37 @@ class ML_Factor_Rank(object):
                         'G_p',
                         #行业哑变量
                         'HY001', 'HY002', 'HY003', 'HY004', 'HY005', 'HY006', 'HY007', 'HY008', 'HY009', 'HY010', 'HY011']
+        
+        self.__factorList_fix = [#估值
+                        'EP',
+                        'BP',
+                        'DP',
+                        'RD',
+                        'CFP',
+                        #资本结构
+#                         'log_NC', 
+#                         'LEV', 
+#                         'CMV',
+#                         'FACR',
+                        #盈利
+                        'NI_p', 
+                        'GPM',
+                        'ROE',
+                        'ROA',
+                        'OPTP',
+                        #成长
+                        'PEG',
+                        'g', 
+                        'G_p',
+                        # 质量
+#                         'TR',
+                        # 流动性
+                        
+                        # 技术
+                        #行业哑变量
+                        'HY001', 'HY002', 'HY003', 'HY004', 'HY005', 'HY006', 'HY007', 'HY008', 'HY009', 'HY010', 'HY011']
     
-    def gaugeStocks(self):
+    def gaugeStocks(self, context):
         sample = get_index_stocks(self.index_scope, date = None)
         if not sample:
             print("empty stock list")
@@ -182,6 +212,18 @@ class ML_Factor_Rank(object):
         df['NI_n'] = np.log(np.abs(df['NI_n'][df['NI_n']<0]))
         df['log_RD'] = np.log(df['log_RD'])
         df.index = df.code.values
+        
+#         CYEL,CYES = CYE(df.code.tolist(),check_date=context.previous_date)
+#         df['CYEL'] = pd.Series(CYEL)
+#         df['CYES'] = pd.Series(CYES)
+        #log.info(df['CYEL'])
+        #log.info(df['CYES'])
+        
+        # DIF, DEA, _ = MACD(df.code.tolist(),check_date=pre_day)
+        # df['DIF'] = pd.Series(DIF)
+        # df['DEA'] = pd.Series(DEA)
+        # df['MACD'] = pd.Series(MACD)        
+        
         del df['code']
         df = df.fillna(0)
         df[df>10000] = 10000
@@ -199,7 +241,7 @@ class ML_Factor_Rank(object):
         X = df[['log_NC', 'LEV', 'NI_p', 'NI_n', 'g', 'log_RD','801010', '801020', '801030', '801040', '801050', 
                 '801080', '801110', '801120', '801130', '801140', '801150', '801160', '801170', '801180', '801200', 
                 '801210', '801230', '801710', '801720', '801730', '801740', '801750', '801760', '801770', '801780', 
-                '801790', '801880', '801890']]
+                '801790', '801880', '801890']] #'CYEL','CYES',
         Y = df[['log_mcap']]
         X = X.fillna(0)
         Y = Y.fillna(0)
@@ -230,28 +272,32 @@ class ML_Factor_Rank(object):
         yesterday = context.previous_date
 
         df_train = self.get_df_train(factor_query,yesterday,self.__trainlength,self.__intervals)
-        df_train = self.initialize_df(df_train)
+        df_train = self.initialize_df_fix(df_train)
 
         # T日截面数据（测试集）
         df = get_fundamentals(factor_query, date = None)
-        df = self.initialize_df(df)
+        df = self.initialize_df_fix(df)
         
         # 离散值处理
         for fac in self.__winsorizeList:
-            df_train[fac] = winsorize_med(df_train[fac], scale=5, inclusive=True, inf2nan=True, axis=0)    
-            df[fac] = winsorize_med(df[fac], scale=5, inclusive=True, inf2nan=True, axis=0)    
+            if fac in df_train.columns:
+                df_train[fac] = winsorize_med(df_train[fac], scale=5, inclusive=True, inf2nan=True, axis=0)    
+            if fac in df.columns:
+                df[fac] = winsorize_med(df[fac], scale=5, inclusive=True, inf2nan=True, axis=0)    
         
         # 标准化处理        
         for fac in self.__standardizeList:
-            df_train[fac] = standardlize(df_train[fac], inf2nan=True, axis=0)
-            df[fac] = standardlize(df[fac], inf2nan=True, axis=0)
+            if fac in df_train.columns:
+                df_train[fac] = standardlize(df_train[fac], inf2nan=True, axis=0)
+            if fac in df.columns:
+                df[fac] = standardlize(df[fac], inf2nan=True, axis=0)
 
         # 中性化处理（行业中性化）
         df_train = self.neutralize(df_train,self.__industry_set)
         df = self.neutralize(df,self.__industry_set)
 
         #训练集（包括验证集）
-        X_trainval = df_train[self.__factorList]
+        X_trainval = df_train[self.__factorList_fix]
         X_trainval = X_trainval.fillna(0)
         
         #定义机器学习训练集输出
@@ -259,7 +305,7 @@ class ML_Factor_Rank(object):
         y_trainval = y_trainval.fillna(0)
  
         #测试集
-        X = df[self.__factorList]
+        X = df[self.__factorList_fix]
         X = X.fillna(0)
         
         #定义机器学习测试集输出
@@ -463,6 +509,63 @@ class ML_Factor_Rank(object):
         df = df.fillna(0)
         
         return df
+
+    # 特征值提取
+    def initialize_df_fix(self, df):
+        #定义列名
+        df.columns = ['code', 
+                    'mcap', 
+                    'CMV',
+                    'log_NC', 
+                    'LEV', 
+                    'NI_p', 
+                    'g', 
+                    'development_expenditure',
+                    'pe',
+                    'BP',
+                    'G_p',
+                    'dividend_payable',
+                    'ROE',
+                    'ROA',
+                    'OPTP',
+                    'GPM',
+                    'FACR',
+                    'pcf_ratio',
+                    'PS'
+                    ]
+        
+        #标签：对数市值
+        df['log_mcap'] = np.log(df['mcap'])
+        
+        #因子：
+        df['EP'] = df['pe'].apply(lambda x: 1/x)
+        
+        df['BP'] = df['BP'].apply(lambda x: 1/x)
+        df['DP'] = df['dividend_payable']/(df['mcap']*100000000)
+        #因子：
+        df['RD'] = df['development_expenditure']/(df['mcap']*100000000)
+        # 因子：现金收益率
+        df['CFP'] = df['pcf_ratio'].apply(lambda x: 1/x)
+    
+        df['PEG'] = df['pe'] / (df['G_p']*100)
+        
+        df['SP'] = df['PS'].apply(lambda x: 1/x)
+        
+#         del df['mcap']
+#         del df['pe']
+#         del df['dividend_payable']
+#         del df['pcf_ratio']
+#         del df['development_expenditure']
+#         del df['PS']
+#         del df['CMV']
+#         del df['log_NC']
+#         del df['LEV']
+#         del df['FACR']
+        
+        df = df.fillna(0)
+        
+        return df
+
 
     # 中性化
     def neutralize(self, df,industry_set):

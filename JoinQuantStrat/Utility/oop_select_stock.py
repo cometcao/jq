@@ -15,6 +15,7 @@ from chanMatrix import *
 from sector_selection import *
 from herd_head import *
 from ml_factor_rank import *
+from dynamic_factor_based_stock_ranking import *
 from pair_trading_ols import *
 from value_factor_lib import *
 from quant_lib import *
@@ -365,11 +366,43 @@ class Pick_Rank_Factor(Create_stock_list):
         if self.use_enhanced:
             new_list = mfr.gaugeStocks_new(context)
         else:
-            new_list = mfr.gaugeStocks()
+            new_list = mfr.gaugeStocks(context)
         return new_list
 
     def __str__(self):
         return "多因子回归公式选股"
+    
+
+class Pick_Dynamic_Rank_Factor(Create_stock_list):
+    def __init__(self, params):
+        self.stock_num = params.get('stock_num', 5)
+        self.index_scope = params.get('index_scope', 'hs300')
+        self.period = params.get('period', 'month_3')
+        self.model = params.get('model', 'long_only')
+        self.category = params.get('category', ['quality', 'basics', 'emotion', 'growth', 'risk', 'pershare', 'barra', 'technical', 'momentum'])
+        self.factor_gauge = params.get('factor_gauge', 'ir')
+        self.factor_num = params.get('factor_num', 10)
+        self.factor_date_count = params.get('factor_date_count', 1)
+        self.factor_method = params.get('factor_method', 'factor_intersection') # ranking_score
+        pass  
+    
+    def before_trading_start(self, context):
+        dfbsr = Dynamic_factor_based_stock_ranking({'stock_num':self.stock_num, 
+                                                    'index_scope':self.index_scope,
+                                                    'period':self.period,
+                                                    'model':self.model,
+                                                    'category':self.category,
+                                                    'factor_num':self.factor_num,
+                                                    'factor_gauge':self.factor_gauge,
+                                                    'factor_date_count':self.factor_date_count,
+                                                    'factor_method':self.factor_method})
+        new_list = dfbsr.gaugeStocks(context)
+        return new_list
+
+    def __str__(self):
+        return "动态多因子有效选股"
+    
+    
     
 class Pick_ETF(Create_stock_list):
     def __init__(self, params):
