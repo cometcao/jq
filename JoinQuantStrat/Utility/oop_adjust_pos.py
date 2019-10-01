@@ -166,13 +166,13 @@ class Buy_stocks(Rule):
         self.log.info("待选股票: "+join_list([show_stock(stock) for stock in self.to_buy], ' ', 10))
         if self.use_short_filter:
             self.to_buy = self.ta_short_filter(context, data, self.to_buy)
-        if context.current_dt.hour >= 14:
-            if self.use_long_filter:
-                self.to_buy = self.ta_long_filter(context, data, self.to_buy) 
-            if self.use_adjust_portion:
-                self.adjust_portion(context, data, self.to_buy)
-            else:
-                self.adjust(context, data, self.to_buy)
+#         if context.current_dt.hour >= 14:
+        if self.use_long_filter:
+            self.to_buy = self.ta_long_filter(context, data, self.to_buy) 
+        if self.use_adjust_portion:
+            self.adjust_portion(context, data, self.to_buy)
+        else:
+            self.adjust(context, data, self.to_buy)
 
     def ta_long_filter(self, context, data, to_buy):
         cta = checkTAIndicator_OR({
