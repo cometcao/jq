@@ -48,6 +48,8 @@ class Dynamic_factor_based_stock_ranking(object):
         factor_rank.sort_values(by=self.factor_gauge, inplace=True, ascending=False)
         factor_code_list = factor_rank['code'].head(self.factor_num).tolist()
         
+        print(factor_code_list)
+        
         index_code = self.get_idx_code(self.index_scope)
         
         stock_list = get_index_stocks(index_code)
