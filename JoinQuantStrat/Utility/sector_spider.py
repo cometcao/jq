@@ -14,7 +14,11 @@ import re
 import numpy as np
 import pandas as pd
 import datetime
-import requests
+try:
+    import requests
+except ImportError as ie:
+    print(str(ie))
+    
 from bs4 import BeautifulSoup
 from IPython.display import display, HTML
 
@@ -71,13 +75,13 @@ class sectorSpider(object):
         return mydict, counter
     
     def grabInfo_v2(self):
-        sector_num = len(sectorSpider.sector_type_column)
-        r  = requests.get(r'https://www.joinquant.com/data/dict/plateData')
-        data = r.content.decode("utf-8")
-        soup = BeautifulSoup(data, "lxml")
-        counter = 0
-        mydict = {}
         try:
+            sector_num = len(sectorSpider.sector_type_column)
+            r  = requests.get(r'https://www.joinquant.com/data/dict/plateData')
+            data = r.content.decode("utf-8")
+            soup = BeautifulSoup(data, "lxml")
+            counter = 0
+            mydict = {}
             for i in range(sector_num):
                 table = soup.find_all('table')[i]
                 result = []

@@ -32,6 +32,7 @@ class Dynamic_factor_based_stock_ranking(object):
         self.factor_num = params.get('factor_num', 10)
         self.factor_date_count = params.get('factor_date_count', 1)
         self.factor_method = params.get('factor_method', 'factor_intersection') # ranking_score
+        self.ic_mean_threthold = params.get('ic_mean_threthold', 0.02)
         
     def get_idx_code(self, scope):
         if scope == 'hs300':
@@ -44,8 +45,12 @@ class Dynamic_factor_based_stock_ranking(object):
             return '000300.XSHG'
     
     def gaugeStocks(self, context):
-        factor_rank = get_factor_kanban_values(universe=self.index_scope, bt_cycle=self.period, model = self.model, category=self.category)     
+        factor_rank = get_factor_kanban_values(universe=self.index_scope, bt_cycle=self.period, model = self.model, category=self.category)  
+        
+        factor_rank = factor_rank[factor_rank['ic_mean'] >= self.ic_mean_threthold]
+        
         factor_rank.sort_values(by=self.factor_gauge, inplace=True, ascending=False)
+        
         factor_code_list = factor_rank['code'].head(self.factor_num).tolist()
         
         print(factor_code_list)

@@ -303,7 +303,7 @@ class Filter_financial_data(Early_Filter_stock_list):
             s += ' [ %s > %s ]' % (factor, max)
         else:
             s += '参数错误'
-        return s
+        return s    
 
 ################## 缠论强势板块 #################
 class Pick_rank_sector(Create_stock_list):
@@ -384,8 +384,12 @@ class Pick_Dynamic_Rank_Factor(Create_stock_list):
         self.factor_num = params.get('factor_num', 10)
         self.factor_date_count = params.get('factor_date_count', 1)
         self.factor_method = params.get('factor_method', 'factor_intersection') # ranking_score
+        self.ic_mean_threthold = params.get('ic_mean_threthold', 0.02)
         pass  
-    
+
+    def update_params(self, context, params):
+        self.ic_mean_threthold = params.get('ic_mean_threthold', 0.02)
+
     def before_trading_start(self, context):
         dfbsr = Dynamic_factor_based_stock_ranking({'stock_num':self.stock_num, 
                                                     'index_scope':self.index_scope,
@@ -395,7 +399,8 @@ class Pick_Dynamic_Rank_Factor(Create_stock_list):
                                                     'factor_num':self.factor_num,
                                                     'factor_gauge':self.factor_gauge,
                                                     'factor_date_count':self.factor_date_count,
-                                                    'factor_method':self.factor_method})
+                                                    'factor_method':self.factor_method,
+                                                    'ic_mean_threthold':self.ic_mean_threthold})
         new_list = dfbsr.gaugeStocks(context)
         return new_list
 
@@ -512,6 +517,27 @@ class Pick_Pair_Trading(Create_stock_list):
 
     def __str__(self):
         return "配对交易选对股"
+    
+
+class Pick_stock_list_from_file(Filter_stock_list):
+    '''
+    This class simple pick list of stocks from a file 
+    and feed them to the next stage. 
+    It's only used when the platform can't facilitate the initial
+    stock selection process
+    '''
+    def __init__(self, params):
+        Filter_stock_list.__init__(self, params)
+        self.filename = params.get('filename', None)        
+
+    def filter(self, context, data, stock_list):
+        file_stock_list = read_file(self.filename)
+        self.log.info("stocks {0} read from file {1}".format(file_stock_list, self.filename))
+        return file_stock_list
+        
+    def __str__(self):
+        return "从文件中读取已经写好的股票列表"
+        
     
 class Filter_Pair_Trading(Filter_stock_list):
     def __init__(self, params):
