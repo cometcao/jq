@@ -33,6 +33,7 @@ class Dynamic_factor_based_stock_ranking(object):
         self.factor_date_count = params.get('factor_date_count', 1)
         self.factor_method = params.get('factor_method', 'factor_intersection') # ranking_score
         self.ic_mean_threthold = params.get('ic_mean_threthold', 0.02)
+        self.is_debug = params.get('is_debug', False)
         
     def get_idx_code(self, scope):
         if scope == 'hs300':
@@ -47,26 +48,35 @@ class Dynamic_factor_based_stock_ranking(object):
     def gaugeStocks(self, context):
         factor_rank = get_factor_kanban_values(universe=self.index_scope, bt_cycle=self.period, model = self.model, category=self.category)  
         
-        factor_rank = factor_rank[factor_rank['ic_mean'] >= self.ic_mean_threthold]
+        factor_rank = factor_rank[abs(factor_rank['ic_mean']) >= self.ic_mean_threthold]
         
-        factor_rank.sort_values(by=self.factor_gauge, inplace=True, ascending=False)
+        factor_rank.sort_values(by=self.factor_gauge, inplace=True, ascending=True) # from small to big
         
-        factor_code_list = factor_rank['code'].head(self.factor_num).tolist()
+        factor_code_list_positive = factor_rank['code'].tail(int(self.factor_num/2)).tolist()
         
-        print(factor_code_list)
+        print("positive factor list: {0}".format(factor_code_list_positive))
+                
+        factor_code_list_negative = factor_rank['code'].head(int(self.factor_num/2)).tolist()
         
+        print("negative factor list: {0}".format(factor_code_list_negative))
+        
+        factor_code_list = factor_code_list_positive + factor_code_list_negative
         index_code = self.get_idx_code(self.index_scope)
-        
         stock_list = get_index_stocks(index_code)
         
         stock_factor_data = get_factor_values(securities=stock_list, factors=factor_code_list, count=self.factor_date_count, end_date=context.previous_date)
         
         if self.factor_method == 'factor_intersection':
             ranked_stock_list = {}
-            for code in factor_code_list:
+            for code in factor_code_list_positive:
                 factor_stock_ranking = stock_factor_data[code].T
                 factor_stock_ranking.sort_values(by=factor_stock_ranking.columns[0], inplace=True, ascending=False)
                 ranked_stock_list[code] = factor_stock_ranking.index[:self.stock_num].tolist()
+                
+            for code in factor_code_list_negative:
+                factor_stock_ranking = stock_factor_data[code].T
+                factor_stock_ranking.sort_values(by=factor_stock_ranking.columns[0], inplace=True, ascending=True)
+                ranked_stock_list[code] = factor_stock_ranking.index[:self.stock_num].tolist()                
             
             selected_stocks = []
             for code in ranked_stock_list:
@@ -84,7 +94,13 @@ class Dynamic_factor_based_stock_ranking(object):
             # sum all factors
             ranked_stock_score["sum_rank_score"] = ranked_stock_score.sum(axis=1)
             
-            return ranked_stock_score.sort_values(by="sum_rank_score", inplace=False, ascending=False).index[:self.stock_num].tolist()
+            if self.is_debug:
+                print(ranked_stock_score)
+            
+            botnum = int(self.stock_num / 2)
+            topnum = self.stock_num - botnum
+            ranked_list = ranked_stock_score.sort_values(by="sum_rank_score", inplace=False, ascending=False).index.tolist()
+            return ranked_list[:topnum] + ranked_list[-botnum:]
         else:
             print("We shouldn't be HERE")
         
