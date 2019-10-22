@@ -77,6 +77,9 @@ class Dynamic_factor_based_stock_ranking(object):
                 factor_stock_ranking = stock_factor_data[code].T
                 factor_stock_ranking.sort_values(by=factor_stock_ranking.columns[0], inplace=True, ascending=True)
                 ranked_stock_list[code] = factor_stock_ranking.index[:self.stock_num].tolist()                
+
+            if self.is_debug:
+                print(ranked_stock_list)
             
             selected_stocks = []
             for code in ranked_stock_list:
@@ -91,16 +94,18 @@ class Dynamic_factor_based_stock_ranking(object):
                 factor_stock_tmp.rename({factor_stock_tmp.columns[0]:code},axis=1, inplace=True)
                 ranked_stock_score = factor_stock_tmp if ranked_stock_score is None else ranked_stock_score.join(factor_stock_tmp)
             
-            # sum all factors
+            # remove extreme value and standardize by column
+            ranked_stock_score = winsorize(ranked_stock_score, scale = 5, axis = 0)
+            ranked_stock_score = standardlize(ranked_stock_score, axis = 0)
+            
+            # sum all factors by rows
             ranked_stock_score["sum_rank_score"] = ranked_stock_score.sum(axis=1)
             
             if self.is_debug:
                 print(ranked_stock_score)
-            
-            botnum = int(self.stock_num / 2)
-            topnum = self.stock_num - botnum
-            ranked_list = ranked_stock_score.sort_values(by="sum_rank_score", inplace=False, ascending=False).index.tolist()
-            return ranked_list[:topnum] + ranked_list[-botnum:]
+                print(ranked_stock_score["sum_rank_score"].abs().sort_values(inplace=False, ascending=False))
+
+            return ranked_stock_score["sum_rank_score"].abs().sort_values(inplace=False, ascending=False).index.tolist()[:self.stock_num]
         else:
             print("We shouldn't be HERE")
         
