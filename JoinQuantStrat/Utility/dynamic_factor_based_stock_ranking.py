@@ -45,20 +45,35 @@ class Dynamic_factor_based_stock_ranking(object):
         else:
             return '000300.XSHG'
     
-    def gaugeStocks(self, context):
+    def get_ranked_factors(self):
         factor_rank = get_factor_kanban_values(universe=self.index_scope, bt_cycle=self.period, model = self.model, category=self.category)  
         
         factor_rank = factor_rank[abs(factor_rank['ic_mean']) >= self.ic_mean_threthold]
         
-        factor_rank.sort_values(by=self.factor_gauge, inplace=True, ascending=True) # from small to big
+        factor_rank.sort_values(by=self.factor_gauge, inplace=True, ascending=True) # from small to big with both + and -
         
-        factor_code_list_positive = factor_rank['code'].tail(int(self.factor_num/2)).tolist()
+        factor_code_list_positive = factor_rank['code'].tail(int(self.factor_num)).tolist()
         
         print("positive factor list: {0}".format(factor_code_list_positive))
                 
-        factor_code_list_negative = factor_rank['code'].head(int(self.factor_num/2)).tolist()
+        factor_code_list_negative = factor_rank['code'].head(int(self.factor_num)).tolist()
         
         print("negative factor list: {0}".format(factor_code_list_negative))
+        
+        full_factor_list = factor_rank.reindex(factor_rank[self.factor_gauge].abs().sort_values(ascending=False).index)['code'].head(self.factor_num).tolist() # sort by abs ascending
+        
+        if self.is_debug:
+            print(factor_rank[['code', 'ic_mean', 'ir']].tail(5))
+            print(factor_rank.reindex(factor_rank[self.factor_gauge].abs().sort_values(ascending=False).index)[['code', 'ic_mean', 'ir']].head(5))
+        
+        print("full factor list: {0}".format(full_factor_list))
+        
+        return [factor for factor in full_factor_list if factor in factor_code_list_positive], [factor for factor in full_factor_list if factor in factor_code_list_negative]
+
+        
+    
+    def gaugeStocks(self, context):
+        factor_code_list_positive, factor_code_list_negative = self.get_ranked_factors()
         
         factor_code_list = factor_code_list_positive + factor_code_list_negative
         index_code = self.get_idx_code(self.index_scope)

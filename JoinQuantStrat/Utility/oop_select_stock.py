@@ -361,11 +361,18 @@ class Pick_Rank_Factor(Create_stock_list):
         self.use_enhanced = params.get('use_enhanced', False)      
     
     def before_trading_start(self, context):
-        mfr = ML_Factor_Rank({'stock_num':self.stock_num, 
-                              'index_scope':self.index_scope})
         if self.use_enhanced:
-            new_list = mfr.gaugeStocks_new(context)
+            mdfr = ML_Dynamic_Factor_Rank({'stock_num':self.stock_num, 
+                                  'index_scope':self.index_scope,
+                                  'is_debug':True, 
+                                  'regress_profit':True, 
+                                  'use_dynamic_factors': True})
+            new_list = mdfr.gaugeStocks_byfactors(context)
+
         else:
+            mfr = ML_Factor_Rank({'stock_num':self.stock_num, 
+                                  'index_scope':self.index_scope})
+#             new_list = mfr.gaugeStocks_new(context)
             new_list = mfr.gaugeStocks(context)
         return new_list
 
