@@ -767,7 +767,7 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         df_train = self.prepare_df_train(df_train)
         
         # today's data
-        df = self.get_df_train(self.feasible_stocks, context.current_dt, 2 if self.regress_profit else 1) # only take yesterday 
+        df = self.get_df_predict(self.feasible_stocks, context.current_dt, 2 if self.regress_profit else 1) # only take yesterday 
         df = self.prepare_df_train(df)
 
 
@@ -787,6 +787,9 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         y = df[self.y_column]
         y.index = df['stock_code']
         y = y.fillna(0)
+ 
+        print(X_trainval, y_trainval)
+        print(X, y)
  
         kfold = KFold(n_splits=4)        
         
@@ -856,6 +859,22 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         stockset = list(factor.index[:self.stock_num])
         return stockset       
 
+    def get_df_predict(self, stocks, end_date,trainlength=2):
+        factor_val_by_factor = {}
+        for fac in self.factor_list:
+            factor_val_by_factor[fac] = get_factor_values(securities = stocks, factors = fac, end_date = end_date, count = trainlength)[fac]
+        
+        factor_val_by_date = self.transform_df(factor_val_by_factor)
+        # concat dataset 
+        data_df = pd.DataFrame()
+        for stock in factor_val_by_date:
+            if self.regress_profit:
+                factor_val_by_date[stock] = self.prepare_data_delta(factor_val_by_date[stock])
+            factor_val_by_date[stock]['stock_code'] = stock
+            data_df = pd.concat([data_df, factor_val_by_date[stock]], ignore_index=True)
+        data_df = data_df[['stock_code'] + self.factor_list]
+        return data_df           
+                
 
     def get_df_train(self, stocks, end_date,trainlength=89):
         # retrieve data stock by stock due to limitation
@@ -866,11 +885,11 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         
         factor_val_by_date = self.transform_df(factor_val_by_factor)
         
+        # for remove duplicated factor values
         all_factors = get_all_factors()
         
         selected_fac = all_factors[all_factors['factor'].isin(self.pure_train_list)]
         selected_cat = selected_fac[selected_fac['category'].isin(['basic', 'quality', 'growth', 'pershare'])]
-#         print(selected_cat)
         for_drop_duplicates = selected_cat['factor'].tolist()
         
         # concat dataset 
@@ -881,7 +900,7 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
 #             print("check remove duplicated: {0}".format(factor_val_by_date[stock]))
 
             if self.regress_profit:
-                factor_val_by_date[stock] = self.prepare_data_train(factor_val_by_date[stock])
+                factor_val_by_date[stock] = self.prepare_data_delta(factor_val_by_date[stock])
             factor_val_by_date[stock]['stock_code'] = stock
             data_df = pd.concat([data_df, factor_val_by_date[stock]], ignore_index=True)
         
@@ -889,7 +908,7 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         data_df = data_df[['stock_code'] + self.factor_list]
         return data_df
         
-    def prepare_data_train(self, df_train):
+    def prepare_data_delta(self, df_train):
         # work out the percentage change in terms of past data
         for fac in df_train.columns.tolist():
             if fac in self.factor_list:
@@ -924,8 +943,6 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         
         # add the columns back with log
         df_train[self.y_column] = excluded_columns if self.regress_profit else np.log(excluded_columns) 
-
-
         
         return df_train
 
