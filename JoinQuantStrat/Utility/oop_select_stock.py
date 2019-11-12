@@ -364,6 +364,7 @@ class Pick_Rank_Factor(Create_stock_list):
         if self.use_enhanced:
             mdfr = ML_Dynamic_Factor_Rank({'stock_num':self.stock_num, 
                                   'index_scope':self.index_scope,
+                                  'period':'year_1',
                                   'is_debug':True, 
                                   'regress_profit':True, 
                                   'use_dynamic_factors': True})

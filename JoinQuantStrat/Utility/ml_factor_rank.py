@@ -729,7 +729,7 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         
         self.train_list = self.pure_train_list + self.industry_set
             
-        self.y_column = ['market_cap']
+        self.y_column = ['return'] if self.regress_profit else ['market_cap']
         
         if self.use_dynamic_factors:
             dfbsr = Dynamic_factor_based_stock_ranking({'stock_num':self.stock_num, 
@@ -770,6 +770,8 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         df = self.get_df_predict(self.feasible_stocks, context.current_dt, 2 if self.regress_profit else 1) # only take yesterday 
         df = self.prepare_df_train(df)
 
+#         print(df_train)
+#         print(df)
 
         #训练集（包括验证集）
         X_trainval = df_train[self.train_list]
@@ -788,8 +790,8 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         y.index = df['stock_code']
         y = y.fillna(0)
  
-        print(X_trainval, y_trainval)
-        print(X, y)
+#         print(X_trainval, y_trainval)
+#         print(X, y)
  
         kfold = KFold(n_splits=4)        
         
@@ -841,9 +843,9 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         
         if self.regress_profit:
 
-            factor = pd.DataFrame(y_pred, index = y.index, columns = ['market_cap'])
+            factor = pd.DataFrame(y_pred, index = y.index, columns = ['return'])
             
-            factor = factor.sort_values(by = 'market_cap', ascending=False)  
+            factor = factor.sort_values(by = 'return', ascending=False)
         else:
             # 新的因子：实际值与预测值之差    
             factor = y - pd.DataFrame(y_pred, index = y.index, columns = ['market_cap'])
@@ -862,6 +864,8 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
     def get_df_predict(self, stocks, end_date,trainlength=2):
         factor_val_by_factor = {}
         for fac in self.factor_list:
+            if fac in self.y_column and self.regress_profit:
+                continue
             factor_val_by_factor[fac] = get_factor_values(securities = stocks, factors = fac, end_date = end_date, count = trainlength)[fac]
         
         factor_val_by_date = self.transform_df(factor_val_by_factor)
@@ -869,18 +873,22 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         data_df = pd.DataFrame()
         for stock in factor_val_by_date:
             if self.regress_profit:
+                stock_price = get_price(security=stock, end_date=end_date, count=trainlength, frequency='daily', skip_paused=True, panel=False, fields='close')
+                factor_val_by_date[stock]['return'] = stock_price['close']
                 factor_val_by_date[stock] = self.prepare_data_delta(factor_val_by_date[stock])
             factor_val_by_date[stock]['stock_code'] = stock
             data_df = pd.concat([data_df, factor_val_by_date[stock]], ignore_index=True)
         data_df = data_df[['stock_code'] + self.factor_list]
         return data_df           
-                
+
 
     def get_df_train(self, stocks, end_date,trainlength=89):
         # retrieve data stock by stock due to limitation
 #         factor_val_by_factor = get_factor_values(securities = stocks, factors = self.factor_list, end_date = end_date, count = trainlength)
         factor_val_by_factor = {}
         for fac in self.factor_list:
+            if fac in self.y_column and self.regress_profit:
+                continue
             factor_val_by_factor[fac] = get_factor_values(securities = stocks, factors = fac, end_date = end_date, count = trainlength)[fac]
         
         factor_val_by_date = self.transform_df(factor_val_by_factor)
@@ -895,6 +903,10 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         # concat dataset 
         data_df = pd.DataFrame()
         for stock in factor_val_by_date:
+
+            if self.regress_profit:
+                stock_price = get_price(security=stock, end_date=end_date, count=trainlength, frequency='daily', skip_paused=True, panel=False, fields='close')
+                factor_val_by_date[stock]['return'] = stock_price['close']
 
             factor_val_by_date[stock] = factor_val_by_date[stock].drop_duplicates(subset=for_drop_duplicates,keep='last') # remove duplicated rows
 #             print("check remove duplicated: {0}".format(factor_val_by_date[stock]))
