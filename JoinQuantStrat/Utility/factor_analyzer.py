@@ -27,24 +27,39 @@ class Factor_Analyzer(object):
         self.category = params.get('category', ['quality', 'basics', 'emotion', 'growth', 'risk', 'pershare', 'barra', 'technical', 'momentum'])
         self.factor_date_count = params.get('factor_date_count', 750) # three years
         self.is_debug = params.get('is_debug', False)   
+        self.save_data = params.get('save_data', './temp/ic_ir.data')
+        self.save_result = params.get('save_result', './temp/ic_ir.result')
         
     def get_shift_days(self, period_str):
         return 60 if period_str == 'month_3' else 250 if period_str == 'year_1' else 60    
         
+    def get_factor_data(self, index_stocks, end_date, factor_list, cvs_file=None):    
+        if cvs_file is None:
+            stock_data = get_price(security=index_stocks, end_date=end_date, count=self.factor_date_count, frequency='daily', skip_paused=False, panel=False, fields='close')
+            
+            stock_data = self.cal_return(stock_data)
+            
+            stock_data = self.fill_factor_data(stock_data, index_stocks, factor_list, end_date, self.factor_date_count)
+            return stock_data
+        else:
+            return pd.read_cvs(cvs_file)
+    
+    def cal_fac_data(self, stock_data, trade_days, factor_list):
+        ic_ir_data = self.cal_ic(stock_data, trade_days, factor_list)
+        
+        ic_ir_data = self.cal_ir(ic_ir_data, factor_list)
+        
+        if self.save_result:
+            ic_ir_data.to_cvs(self.save_result, encoding='utf-8')        
+    
     def analyze_factors(self, factor_list, end_date):
         trade_days = get_trade_days(end_date=end_date, count=self.factor_date_count)
         
         index_stocks = get_index_stocks(self.index_range, date=end_date)
         
-        stock_data = get_price(security=index_stocks, end_date=end_date, count=self.factor_date_count, frequency='daily', skip_paused=False, panel=False, fields='close')
+        stock_data = self.get_factor_data(index_stocks, end_date, factor_list)
         
-        stock_data = self.cal_return(stock_data)
-        
-        stock_data = self.fill_factor_data(stock_data, index_stocks, factor_list, end_date, self.factor_date_count)
-        
-        ic_ir_data = self.cal_ic(stock_data, trade_days, factor_list)
-        
-        ic_ir_data = self.cal_ir(ic_ir_data, factor_list)
+        self.cal_fac_data(stock_data, trade_days, factor_list)
         
     def cal_ic(self, stock_data, trade_days, factor_list):
         ic_result_df = pd.DataFrame(index=trade_days)
@@ -98,6 +113,9 @@ class Factor_Analyzer(object):
             fac_data.rename({'index':'time'}, axis=1, inplace=True)
             stock_data = pd.merge(stock_data, fac_data, on=['time', 'code'], how='left')
         # save the data
+        
+        if self.save_data:
+            stock_data.to_csv(self.save_data, encoding='utf-8')
         return stock_data
         
         
