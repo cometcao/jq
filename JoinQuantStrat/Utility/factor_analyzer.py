@@ -47,7 +47,7 @@ class Factor_Analyzer(object):
         ic_ir_data = self.cal_ir(ic_ir_data, factor_list)
         
     def cal_ic(self, stock_data, trade_days, factor_list):
-        ic_result_df = pd.DataFrame(columns=['ic_value'], index=trade_days)
+        ic_result_df = pd.DataFrame(index=trade_days)
         day_index = -1
         num_td = len(trade_days)
         while day_index > -num_td:
@@ -60,10 +60,9 @@ class Factor_Analyzer(object):
                         continue
                     ref_day = trade_days[day_index - shift_days]
                     fac_data = stock_data[stock_data['time'] == str(ref_day)]
-                    rank_ic = np.corrcoef(return_data[pe+'_return'].sort_values(by=pe+'_return', ascending=False).reset_index().index.tolist(),
-                                fac_data[fac].sort_values(by=fac, ascending=False).reset_index().index.tolist())
+                    rank_ic = np.corrcoef(return_data.sort_values(by=pe+'_return', ascending=False).index.tolist(),
+                                fac_data.sort_values(by=fac, ascending=False).index.tolist())
                     ic_result_df.loc[end_day, fac+'_'+pe+'_ic'] = rank_ic[0][1]
-                    print(ic_result_df)
             day_index = day_index - 1
         return ic_result_df
     
@@ -106,7 +105,7 @@ class Factor_Analyzer(object):
         for pe in self.period:
             shift_days = self.get_shift_days(pe)
             stock_data[pe+'_return'] = stock_data.groupby(['code'])['close'].pct_change(periods=shift_days)
-            stock_data = stock_data.dropna()
+#             stock_data = stock_data.dropna()
             
 #             stock_data[pe+'_return'] = stock_data.groupby(['code']).shift(shift_days)['close']
 #             stock_data[pe+'_return'] = (stock_data['close'] - stock_data[pe+'_return']) / stock_data[pe+'_return']
