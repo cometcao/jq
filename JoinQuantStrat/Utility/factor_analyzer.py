@@ -50,7 +50,7 @@ class Factor_Analyzer(object):
         ic_ir_data = self.cal_ir(ic_ir_data, factor_list)
         
         if self.save_result:
-            ic_ir_data.to_cvs(self.save_result, encoding='utf-8')        
+            ic_ir_data.to_csv(self.save_result, encoding='utf-8')        
     
     def analyze_factors(self, factor_list, end_date):
         trade_days = get_trade_days(end_date=end_date, count=self.factor_date_count)
@@ -85,7 +85,8 @@ class Factor_Analyzer(object):
         for pe in self.period:
             shift_days = self.get_shift_days(pe)
             for fac in factor_list:
-                ic_ir_data[fac+'_'+pe+'_ir'] = ic_ir_data[fac+'_'+pe+'_ic'].rolling(window=shift_days).mean() / ic_ir_data[fac+'_'+pe+'_ic'].rolling(window=shift_days).std()
+                ic_ir_data[fac+'_'+pe+'_ic_mean'] = ic_ir_data[fac+'_'+pe+'_ic'].rolling(window=shift_days).mean()
+                ic_ir_data[fac+'_'+pe+'_ir'] = ic_ir_data[fac+'_'+pe+'_ic_mean'] / ic_ir_data[fac+'_'+pe+'_ic'].rolling(window=shift_days).std()
         return ic_ir_data
 
     def get_factor_value_rolling(self, securities, factor, end_date, count):
