@@ -15,6 +15,8 @@ import math
 from jqfactor import *
 from jqdata import *
 from jqlib.technical_analysis import *
+import os 
+
 
 class Factor_Analyzer(object):
     '''
@@ -42,7 +44,8 @@ class Factor_Analyzer(object):
             stock_data = self.fill_factor_data(stock_data, index_stocks, factor_list, end_date, self.factor_date_count)
             return stock_data
         else:
-            return pd.read_csv(csv_file)
+            print('file {0} exists, load the data'.format(csv_file))
+            return pd.read_csv(csv_file, index_col='INDEX')
     
     def cal_fac_data(self, stock_data, trade_days, factor_list):
         ic_ir_data = self.cal_ic(stock_data, trade_days, factor_list)
@@ -50,15 +53,18 @@ class Factor_Analyzer(object):
         ic_ir_data = self.cal_ir(ic_ir_data, factor_list)
         
         if self.save_result:
-            ic_ir_data.to_csv(self.save_result, encoding='utf-8')        
+            ic_ir_data.index.name = 'INDEX'
+            ic_ir_data.to_csv(self.save_result, encoding='utf-8', index=True)        
     
     def analyze_factors(self, factor_list, end_date):
         trade_days = get_trade_days(end_date=end_date, count=self.factor_date_count)
         
         index_stocks = get_index_stocks(self.index_range, date=end_date)
         
-        stock_data = self.get_factor_data(index_stocks, end_date, factor_list)
-        
+        exists = self.save_data if os.path.isfile(self.save_data) else None
+        stock_data = self.get_factor_data(index_stocks, end_date, factor_list, csv_file=exists)
+        if self.is_debug:
+            print(stock_data)
         self.cal_fac_data(stock_data, trade_days, factor_list)
         
     def cal_ic(self, stock_data, trade_days, factor_list):
@@ -116,7 +122,8 @@ class Factor_Analyzer(object):
         # save the data
         
         if self.save_data:
-            stock_data.to_csv(self.save_data, encoding='utf-8')
+            stock_data.index.name = 'INDEX'
+            stock_data.to_csv(self.save_data, encoding='utf-8', index=True)
         return stock_data
         
         
