@@ -33,8 +33,8 @@ class Factor_Analyzer(object):
     def get_shift_days(self, period_str):
         return 60 if period_str == 'month_3' else 250 if period_str == 'year_1' else 60    
         
-    def get_factor_data(self, index_stocks, end_date, factor_list, cvs_file=None):    
-        if cvs_file is None:
+    def get_factor_data(self, index_stocks, end_date, factor_list, csv_file=None):    
+        if csv_file is None:
             stock_data = get_price(security=index_stocks, end_date=end_date, count=self.factor_date_count, frequency='daily', skip_paused=False, panel=False, fields='close')
             
             stock_data = self.cal_return(stock_data)
@@ -42,7 +42,7 @@ class Factor_Analyzer(object):
             stock_data = self.fill_factor_data(stock_data, index_stocks, factor_list, end_date, self.factor_date_count)
             return stock_data
         else:
-            return pd.read_cvs(cvs_file)
+            return pd.read_csv(csv_file)
     
     def cal_fac_data(self, stock_data, trade_days, factor_list):
         ic_ir_data = self.cal_ic(stock_data, trade_days, factor_list)
