@@ -66,7 +66,7 @@ class Dynamic_factor_based_stock_ranking(object):
         factor_rank.sort_values(by=self.factor_gauge, inplace=True, ascending=True) # from small to big with both + and -
         
         factor_code_list_positive = factor_rank['code'].tail(num_fac).tolist()
-                
+
         factor_code_list_negative = factor_rank['code'].head(num_fac).tolist()
         
 #         if self.is_debug:
