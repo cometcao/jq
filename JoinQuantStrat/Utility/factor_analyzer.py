@@ -35,7 +35,7 @@ class Factor_Analyzer(object):
     def get_shift_days(self, period_str):
         return 60 if period_str == 'month_3' else 250 if period_str == 'year_1' else 60    
         
-    def get_factor_data(self, index_stocks, end_date, factor_list, csv_file=None):    
+    def get_factor_data(self, index_stocks, end_date, factor_list, csv_file=None): 
         if csv_file is None:
             stock_data = get_price(security=index_stocks, end_date=end_date, count=self.factor_date_count, frequency='daily', skip_paused=False, panel=False, fields='close')
             
@@ -83,7 +83,9 @@ class Factor_Analyzer(object):
                     fac_data = stock_data[stock_data['time'] == str(ref_day)]
                     rank_ic = np.corrcoef(return_data.sort_values(by=pe+'_return', ascending=False).index.tolist(),
                                 fac_data.sort_values(by=fac, ascending=False).index.tolist())
-                    ic_result_df.loc[end_day, fac+'_'+pe+'_ic'] = rank_ic[0][1]
+                    ic_result_df.loc[end_day, 'ic'] = rank_ic[0][1]
+                    ic_result_df.loc[end_day, fac] = fac
+                    ic_result_df.loc[end_day, pe] = pe
             day_index = day_index - 1
         return ic_result_df
     
@@ -91,8 +93,8 @@ class Factor_Analyzer(object):
         for pe in self.period:
             shift_days = self.get_shift_days(pe)
             for fac in factor_list:
-                ic_ir_data[fac+'_'+pe+'_ic_mean'] = ic_ir_data[fac+'_'+pe+'_ic'].rolling(window=shift_days).mean()
-                ic_ir_data[fac+'_'+pe+'_ir'] = ic_ir_data[fac+'_'+pe+'_ic_mean'] / ic_ir_data[fac+'_'+pe+'_ic'].rolling(window=shift_days).std()
+                ic_ir_data['ic_mean'] = ic_ir_data.groupby([fac, pe])['ic'].rolling(window=shift_days).mean()
+                ic_ir_dataic_ir_data['ir'] = ic_ir_data['ic_mean'] / ic_ir_data.grouby([fac, pe])['ic'].rolling(window=shift_days).std()
         return ic_ir_data
 
     def get_factor_value_rolling(self, securities, factor, end_date, count):
