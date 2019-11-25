@@ -93,8 +93,9 @@ class Factor_Analyzer(object):
         for pe in self.period:
             shift_days = self.get_shift_days(pe)
             for fac in factor_list:
-                ic_ir_data['ic_mean'] = ic_ir_data.groupby([fac, pe])['ic'].rolling(window=shift_days).mean()
-                ic_ir_dataic_ir_data['ir'] = ic_ir_data['ic_mean'] / ic_ir_data.grouby([fac, pe])['ic'].rolling(window=shift_days).std()
+#                 ic_ir_data['ic_mean'] = ic_ir_data.groupby([fac, pe])['ic'].rolling(window=shift_days).mean()
+                ic_ir_data['ic_mean'] = ic_ir_data.groupby([fac, pe])['ic'].apply(lambda x:x.rolling(window=shift_days).mean())
+                ic_ir_data['ir'] = ic_ir_data['ic_mean'] / ic_ir_data.grouby([fac, pe])['ic'].apply(lambda x:x.rolling(window=shift_days).std())
         return ic_ir_data
 
     def get_factor_value_rolling(self, securities, factor, end_date, count):
