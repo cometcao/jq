@@ -63,8 +63,8 @@ class Factor_Analyzer(object):
         
         exists = self.save_data if os.path.isfile(self.save_data) else None
         stock_data = self.get_factor_data(index_stocks, end_date, factor_list, csv_file=exists)
-        if self.is_debug:
-            print(stock_data)
+#         if self.is_debug:
+#             print(stock_data)
         self.cal_fac_data(stock_data, trade_days, factor_list)
         
     def cal_ic(self, stock_data, trade_days, factor_list):
@@ -94,8 +94,11 @@ class Factor_Analyzer(object):
             shift_days = self.get_shift_days(pe)
             for fac in factor_list:
 #                 ic_ir_data['ic_mean'] = ic_ir_data.groupby([fac, pe])['ic'].rolling(window=shift_days).mean()
+                if self.is_debug:
+                    print(ic_ir_data)
+                    print(ic_ir_data.groupby([fac, pe])['ic'].apply(lambda x:x.rolling(window=shift_days).mean()))
                 ic_ir_data['ic_mean'] = ic_ir_data.groupby([fac, pe])['ic'].apply(lambda x:x.rolling(window=shift_days).mean())
-                ic_ir_data['ir'] = ic_ir_data['ic_mean'] / ic_ir_data.grouby([fac, pe])['ic'].apply(lambda x:x.rolling(window=shift_days).std())
+                ic_ir_data['ir'] = ic_ir_data['ic_mean'] / ic_ir_data.groupby([fac, pe])['ic'].apply(lambda x:x.rolling(window=shift_days).std())
         return ic_ir_data
 
     def get_factor_value_rolling(self, securities, factor, end_date, count):
