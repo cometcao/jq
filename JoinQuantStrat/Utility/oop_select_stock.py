@@ -394,11 +394,13 @@ class Pick_Dynamic_Rank_Factor(Create_stock_list):
         self.factor_method = params.get('factor_method', 'factor_intersection') # ranking_score
         self.ic_mean_threthold = params.get('ic_mean_threthold', 0.02)
         self.is_debug = params.get('is_debug', False)
+        self.factor_analyzer_result_path = params.get('factor_analyzer_result_path', None)
         pass  
 
     def update_params(self, context, params):
         self.ic_mean_threthold = params.get('ic_mean_threthold', 0.02)
         self.is_debug = params.get('is_debug', False)
+        self.factor_analyzer_result_path = params.get('factor_analyzer_result_path', None)
 
     def before_trading_start(self, context):
         dfbsr = Dynamic_factor_based_stock_ranking({'stock_num':self.stock_num, 
@@ -412,7 +414,7 @@ class Pick_Dynamic_Rank_Factor(Create_stock_list):
                                                     'factor_method':self.factor_method,
                                                     'ic_mean_threthold':self.ic_mean_threthold,
                                                     'is_debug':self.is_debug})
-        new_list = dfbsr.gaugeStocks(context)
+        new_list = dfbsr.gaugeStocks(context, self.factor_analyzer_result_path)
         return new_list
 
     def __str__(self):
