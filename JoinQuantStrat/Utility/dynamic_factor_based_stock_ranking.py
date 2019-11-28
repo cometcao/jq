@@ -27,7 +27,7 @@ class Dynamic_factor_based_stock_ranking(object):
         self.index_scope = params.get('index_scope', 'hs300')
         self.period = params.get('period', 'month_3')
         self.model = params.get('model', 'long_only')
-        self.category = params.get('category', ['quality', 'basics', 'emotion', 'growth', 'risk', 'pershare', 'barra', 'technical', 'momentum'])
+        self.category = params.get('category', ['basics'])
         self.factor_gauge = params.get('factor_gauge', 'ir')
         self.factor_num = params.get('factor_num', 10)
         self.factor_date_count = params.get('factor_date_count', 1)
@@ -44,19 +44,6 @@ class Dynamic_factor_based_stock_ranking(object):
             return '000906.XSHG'
         else:
             return '000300.XSHG'
-    
-    def get_ranked_factors_by_category(self):
-        factor_rank = get_factor_kanban_values(universe=self.index_scope, bt_cycle=self.period, model = self.model, category=self.category)  
-        
-        cat_list = factor_rank['category'].unique().tolist()
-        num_fac = int(np.ceil(self.factor_num / len(cat_list)))
-        full_list = []
-        for cat in cat_list:
-            sub_factor_rank = factor_rank[factor_rank['category']==cat]
-            _, _, sub_list = self.get_pos_neg_factors(sub_factor_rank, num_fac)
-#             print("category {0}: {1}".format(cat, sub_list))
-            full_list = full_list + sub_list
-        return full_list
     
     def get_pos_neg_factors(self, factor_rank, num_fac):
         factor_rank = factor_rank.drop_duplicates(subset=['code'],keep='first') # This is in case of bugs in get_factor_kanban_values 
@@ -88,44 +75,48 @@ class Dynamic_factor_based_stock_ranking(object):
         
         return pos_list, neg_list, full_factor_list
 
-
-    
-    def get_ranked_factors(self):
+    def get_ranked_factors_by_category(self):
         factor_rank = get_factor_kanban_values(universe=self.index_scope, bt_cycle=self.period, model = self.model, category=self.category)  
         
-        return self.get_pos_neg_factors(factor_rank, self.factor_num)
-        
-#         factor_rank = factor_rank.drop_duplicates(subset=['code'],keep='first') # This is in case of bugs in get_factor_kanban_values 
-#         
-#         factor_rank = factor_rank[abs(factor_rank['ic_mean']) >= self.ic_mean_threthold]
-#         
-#         factor_rank.sort_values(by=self.factor_gauge, inplace=True, ascending=True) # from small to big with both + and -
-#         
-#         factor_code_list_positive = factor_rank['code'].tail(int(self.factor_num)).tolist()
-#                 
-#         factor_code_list_negative = factor_rank['code'].head(int(self.factor_num)).tolist()
-#         
-#         if self.is_debug:
-#             print("positive factor candidates: {0}".format(factor_code_list_positive))
-#             print("negative factor candidates: {0}".format(factor_code_list_negative))
-#         
-#         full_factor_list = factor_rank.reindex(factor_rank[self.factor_gauge].abs().sort_values(ascending=False).index)['code'].head(self.factor_num).tolist() # sort by abs ascending
-#         
-#         if self.is_debug:
-#             print(factor_rank.tail(5))
-#             print(factor_rank.reindex(factor_rank[self.factor_gauge].abs().sort_values(ascending=False).index).head(5))
-#             
-#         pos_list, neg_list = [factor for factor in factor_code_list_positive if factor in full_factor_list], [factor for factor in factor_code_list_negative if factor in full_factor_list ]
-#         
-#         print("positive factor list: {0}".format(pos_list))
-#         print("negative factor list: {0}".format(neg_list))        
-#         print("full factor list: {0}".format(full_factor_list))
-#         
-#         return pos_list, neg_list
-
+        cat_list = factor_rank['category'].unique().tolist()
+        num_fac = int(np.ceil(self.factor_num / len(cat_list)))
+        full_list = []
+        for cat in cat_list:
+            sub_factor_rank = factor_rank[factor_rank['category']==cat]
+            _, _, sub_list = self.get_pos_neg_factors(sub_factor_rank, num_fac)
+#             print("category {0}: {1}".format(cat, sub_list))
+            full_list = full_list + sub_list
+        return full_list
     
-    def gaugeStocks(self, context):
-        factor_code_list_positive, factor_code_list_negative, factor_code_list = self.get_ranked_factors()
+    def get_ranked_factors(self, factor_result_file_path=None):
+        if factor_result_file is None:
+            factor_rank = get_factor_kanban_values(universe=self.index_scope, bt_cycle=self.period, model = self.model, category=self.category)  
+        else:
+            factor_rank = get_factor_values_from_file(factor_result_file_path)
+        
+        return self.get_pos_neg_factors(factor_rank, self.factor_num)
+
+    def get_factor_values_from_file(self, result_file_path):
+        all_files = []
+        for r, d, f in os.walk(result_file_path):
+            for file in f:
+                if '.result' in file:
+                    all_files.append(os.path.join(r, file))
+        
+        result_data = pd.DataFrame()
+        for fi in all_files:
+            sub_data_df = pd.read_csv(fi, index_col='INDEX')
+            if result_data.empty:
+                result_data = sub_data_df
+            else:
+                result_data = pd.merge(result_data, sub_data_df, left_index=True, right_index=True, how='left')
+            
+        return result_data
+                
+        
+    
+    def gaugeStocks(self, context, factor_result_file_path=None):
+        factor_code_list_positive, factor_code_list_negative, factor_code_list = self.get_ranked_factors(factor_result_file_path)
         
 #         factor_code_list = factor_code_list_positive + factor_code_list_negative
         index_code = self.get_idx_code(self.index_scope)

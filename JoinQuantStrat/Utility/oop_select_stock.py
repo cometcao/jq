@@ -387,7 +387,7 @@ class Pick_Dynamic_Rank_Factor(Create_stock_list):
         self.index_scope = params.get('index_scope', 'hs300')
         self.period = params.get('period', 'month_3')
         self.model = params.get('model', 'long_only')
-        self.category = params.get('category', ['quality', 'basics', 'emotion', 'growth', 'risk', 'pershare', 'barra', 'technical', 'momentum'])
+        self.category = params.get('category', ['basics', 'emotion', 'growth', 'momentum', 'pershare', 'quality', 'risk', 'style', 'technical'])
         self.factor_gauge = params.get('factor_gauge', 'ir')
         self.factor_num = params.get('factor_num', 10)
         self.factor_date_count = params.get('factor_date_count', 1)

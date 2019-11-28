@@ -26,7 +26,7 @@ class Factor_Analyzer(object):
         self.period = params.get('period', ['month_3', 'year_1'])
         self.index_range = params.get('index_range', '000985.XSHG')
         self.model = params.get('model', 'long_only')
-        self.category = params.get('category', ['quality', 'basics', 'emotion', 'growth', 'risk', 'pershare', 'barra', 'technical', 'momentum'])
+        self.category = params.get('category', ['basics', 'emotion', 'growth', 'momentum', 'pershare', 'quality', 'risk', 'style', 'technical'])
         self.factor_date_count = params.get('factor_date_count', 750) # three years
         self.is_debug = params.get('is_debug', False)   
         self.save_data = params.get('save_data', './temp/ic_ir.data')
