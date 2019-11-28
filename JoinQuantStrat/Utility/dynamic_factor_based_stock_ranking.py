@@ -89,7 +89,7 @@ class Dynamic_factor_based_stock_ranking(object):
         return full_list
     
     def get_ranked_factors(self, factor_result_file_path=None):
-        if factor_result_file is None:
+        if factor_result_file_path is None:
             factor_rank = get_factor_kanban_values(universe=self.index_scope, bt_cycle=self.period, model = self.model, category=self.category)  
         else:
             factor_rank = get_factor_values_from_file(factor_result_file_path)
