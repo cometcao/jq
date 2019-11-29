@@ -81,11 +81,11 @@ class Factor_Analyzer(object):
                         continue
                     ref_day = trade_days[day_index - shift_days]
                     fac_data = stock_data[stock_data['time'] == str(ref_day)]
-                    rank_ic = np.corrcoef(return_data.sort_values(by=pe+'_return', ascending=False).index.tolist(),
+                    rank_ic = np.corrcoef(return_data.sort_values(by=pe.join('_return'), ascending=False).index.tolist(),
                                 fac_data.sort_values(by=fac, ascending=False).index.tolist())
                     ic_result_df.loc[end_day, 'ic'] = rank_ic[0][1]
-                    ic_result_df.loc[end_day, fac] = fac
-                    ic_result_df.loc[end_day, pe] = pe
+                    ic_result_df.loc[end_day, 'factor'] = fac
+                    ic_result_df.loc[end_day, 'bt_cycle'] = pe
             day_index = day_index - 1
         return ic_result_df
     
@@ -138,10 +138,46 @@ class Factor_Analyzer(object):
             shift_days = self.get_shift_days(pe)
             stock_data[pe+'_return'] = stock_data.groupby(['code'])['close'].pct_change(periods=shift_days)
 #             stock_data = stock_data.dropna()
-            
 #             stock_data[pe+'_return'] = stock_data.groupby(['code']).shift(shift_days)['close']
 #             stock_data[pe+'_return'] = (stock_data['close'] - stock_data[pe+'_return']) / stock_data[pe+'_return']
         
         return stock_data
     
+def combine_result_file(result_file_path):
+    all_files = []
+    for r, d, f in os.walk(result_file_path):
+        for file in f:
+            if file.endswith(".result"):
+                all_files.append(file)
+    
+    result_data = pd.DataFrame()
+    for fi in all_files:
+        cat = fi.split('_')[0]
+        sub_data_df = pd.read_csv(os.path.join(result_file_path, fi), index_col='INDEX')
+        sub_data_df['category'] = cat
+        print(sub_data_df)
+        if result_data.empty:
+            result_data = sub_data_df
+        else:
+            result_data = pd.merge(result_data, sub_data_df, left_index=True, right_index=True, how='left')
+        
+    return result_data
+    
+'''
+from factor_analyzer import *
+
+factor_rank = get_all_factors()
+all_cat = factor_rank['category'].unique().tolist()
+#['basics', 'emotion', 'growth', 'risk', 'pershare', 'style', 'technical', 'momentum', 'quality']
+for cat in all_cat:
+    print("working on {0}".format(cat))
+    fa = Factor_Analyzer({'period':['month_3'],
+                          'index_range':'000300.XSHG', 
+                          'factor_date_count': 750,
+                          'save_data':'./temp/{0}_ic_ir.data'.format(cat),
+                          'save_result':'./temp/{0}_ic_ir.result'.format(cat),
+                          'is_debug':True})
+    factors = factor_rank[factor_rank['category'] == cat]['factor'].tolist()
+    fa.analyze_factors(factors, '2019-11-21')
+'''
     

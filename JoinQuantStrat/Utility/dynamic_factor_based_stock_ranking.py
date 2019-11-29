@@ -35,6 +35,11 @@ class Dynamic_factor_based_stock_ranking(object):
         self.ic_mean_threthold = params.get('ic_mean_threthold', 0.02)
         self.is_debug = params.get('is_debug', False)
         
+        if self.category is None:
+            print("category not supplied, get it from data source")
+            self.category = get_all_factors()['category'].unique().tolist()
+        
+        
     def get_idx_code(self, scope):
         if scope == 'hs300':
             return '000300.XSHG'
@@ -78,10 +83,9 @@ class Dynamic_factor_based_stock_ranking(object):
     def get_ranked_factors_by_category(self):
         factor_rank = get_factor_kanban_values(universe=self.index_scope, bt_cycle=self.period, model = self.model, category=self.category)  
         
-        cat_list = factor_rank['category'].unique().tolist()
         num_fac = int(np.ceil(self.factor_num / len(cat_list)))
         full_list = []
-        for cat in cat_list:
+        for cat in self.category:
             sub_factor_rank = factor_rank[factor_rank['category']==cat]
             _, _, sub_list = self.get_pos_neg_factors(sub_factor_rank, num_fac)
 #             print("category {0}: {1}".format(cat, sub_list))
@@ -92,28 +96,12 @@ class Dynamic_factor_based_stock_ranking(object):
         if factor_result_file_path is None:
             factor_rank = get_factor_kanban_values(universe=self.index_scope, bt_cycle=self.period, model = self.model, category=self.category)  
         else:
-            factor_rank = get_factor_values_from_file(factor_result_file_path)
+            factor_rank = self.get_factor_values_from_file(factor_result_file_path)
         
         return self.get_pos_neg_factors(factor_rank, self.factor_num)
 
     def get_factor_values_from_file(self, result_file_path):
-        all_files = []
-        for r, d, f in os.walk(result_file_path):
-            for file in f:
-                if '.result' in file:
-                    all_files.append(os.path.join(r, file))
-        
-        result_data = pd.DataFrame()
-        for fi in all_files:
-            sub_data_df = pd.read_csv(fi, index_col='INDEX')
-            if result_data.empty:
-                result_data = sub_data_df
-            else:
-                result_data = pd.merge(result_data, sub_data_df, left_index=True, right_index=True, how='left')
-            
-        return result_data
-                
-        
+        return read_file(result_file_path)
     
     def gaugeStocks(self, context, factor_result_file_path=None):
         factor_code_list_positive, factor_code_list_negative, factor_code_list = self.get_ranked_factors(factor_result_file_path)
