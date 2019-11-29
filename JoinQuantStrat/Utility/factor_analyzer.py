@@ -159,10 +159,10 @@ def combine_result_file(result_file_path):
         if result_data.empty:
             result_data = sub_data_df
         else:
-            result_data = pd.merge(result_data, sub_data_df, left_index=True, right_index=True, how='left')
-        
+            result_data = pd.merge(result_data, sub_data_df, on=['INDEX', 'category', 'ic', 'factor', 'bt_cycle', 'ic_mean', 'ir'], how='outer')        
+    print(result_data)
     return result_data
-    
+
 '''
 from factor_analyzer import *
 
