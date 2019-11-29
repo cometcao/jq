@@ -81,7 +81,7 @@ class Factor_Analyzer(object):
                         continue
                     ref_day = trade_days[day_index - shift_days]
                     fac_data = stock_data[stock_data['time'] == str(ref_day)]
-                    rank_ic = np.corrcoef(return_data.sort_values(by=pe.join('_return'), ascending=False).index.tolist(),
+                    rank_ic = np.corrcoef(return_data.sort_values(by=pe+'_return', ascending=False).index.tolist(),
                                 fac_data.sort_values(by=fac, ascending=False).index.tolist())
                     ic_result_df.loc[end_day, 'ic'] = rank_ic[0][1]
                     ic_result_df.loc[end_day, 'factor'] = fac
@@ -96,9 +96,9 @@ class Factor_Analyzer(object):
 #                 ic_ir_data['ic_mean'] = ic_ir_data.groupby([fac, pe])['ic'].rolling(window=shift_days).mean()
                 if self.is_debug:
                     print(ic_ir_data)
-                    print(ic_ir_data.groupby([fac, pe])['ic'].apply(lambda x:x.rolling(window=shift_days).mean()))
-                ic_ir_data['ic_mean'] = ic_ir_data.groupby([fac, pe])['ic'].apply(lambda x:x.rolling(window=shift_days).mean())
-                ic_ir_data['ir'] = ic_ir_data['ic_mean'] / ic_ir_data.groupby([fac, pe])['ic'].apply(lambda x:x.rolling(window=shift_days).std())
+                    print(ic_ir_data.groupby(['factor', 'bt_cycle'])['ic'].apply(lambda x:x.rolling(window=shift_days).mean()))
+                ic_ir_data['ic_mean'] = ic_ir_data.groupby(['factor', 'bt_cycle'])['ic'].apply(lambda x:x.rolling(window=shift_days).mean())
+                ic_ir_data['ir'] = ic_ir_data['ic_mean'] / ic_ir_data.groupby(['factor', 'bt_cycle'])['ic'].apply(lambda x:x.rolling(window=shift_days).std())
         return ic_ir_data
 
     def get_factor_value_rolling(self, securities, factor, end_date, count):
