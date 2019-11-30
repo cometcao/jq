@@ -68,7 +68,7 @@ class Factor_Analyzer(object):
         self.cal_fac_data(stock_data, trade_days, factor_list)
         
     def cal_ic(self, stock_data, trade_days, factor_list):
-        ic_result_df = pd.DataFrame(index=trade_days)
+        ic_result = []
         day_index = -1
         num_td = len(trade_days)
         while day_index > -num_td:
@@ -83,10 +83,9 @@ class Factor_Analyzer(object):
                     fac_data = stock_data[stock_data['time'] == str(ref_day)]
                     rank_ic = np.corrcoef(return_data.sort_values(by=pe+'_return', ascending=False).index.tolist(),
                                 fac_data.sort_values(by=fac, ascending=False).index.tolist())
-                    ic_result_df.loc[end_day, 'ic'] = rank_ic[0][1]
-                    ic_result_df.loc[end_day, 'factor'] = fac
-                    ic_result_df.loc[end_day, 'bt_cycle'] = pe
+                    ic_result =  append({'date':end_day, 'ic':rank_ic[0][1], 'factor':fac, 'bt_cycle':pe})
             day_index = day_index - 1
+        ic_result_df = pd.DataFrame(ic_result, columns=['date', 'ic', 'factor', 'bt_cycle'])
         return ic_result_df
     
     def cal_ir(self, ic_ir_data, factor_list):
@@ -125,6 +124,9 @@ class Factor_Analyzer(object):
                             value_name=fac)
             fac_data.rename({'index':'time'}, axis=1, inplace=True)
             stock_data = pd.merge(stock_data, fac_data, on=['time', 'code'], how='left')
+        
+#         if self.is_debug:
+#             print("stock_data:{0}".format(stock_data))
         # save the data
         
         if self.save_data:
@@ -155,12 +157,17 @@ def combine_result_file(result_file_path):
         cat = fi.split('_')[0]
         sub_data_df = pd.read_csv(os.path.join(result_file_path, fi), index_col='INDEX')
         sub_data_df['category'] = cat
-        print(sub_data_df)
         if result_data.empty:
             result_data = sub_data_df
         else:
             result_data = pd.merge(result_data, sub_data_df, on=['INDEX', 'category', 'ic', 'factor', 'bt_cycle', 'ic_mean', 'ir'], how='outer')        
-    print(result_data)
+    print("result_data".format(result_data))
+    print(result_data.loc['2019-11-20', :])
+    result_data.index.name = 'DATE'
+    result_data.reset_index(inplace=True)
+    print(result_data['factor'].unique())
+    print(result_data['category'].unique())
+    
     return result_data
 
 '''
