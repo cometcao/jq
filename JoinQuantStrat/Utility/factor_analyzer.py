@@ -83,7 +83,7 @@ class Factor_Analyzer(object):
                     fac_data = stock_data[stock_data['time'] == str(ref_day)]
                     rank_ic = np.corrcoef(return_data.sort_values(by=pe+'_return', ascending=False).index.tolist(),
                                 fac_data.sort_values(by=fac, ascending=False).index.tolist())
-                    ic_result =  append({'date':end_day, 'ic':rank_ic[0][1], 'factor':fac, 'bt_cycle':pe})
+                    ic_result.append({'date':end_day, 'ic':rank_ic[0][1], 'factor':fac, 'bt_cycle':pe})
             day_index = day_index - 1
         ic_result_df = pd.DataFrame(ic_result, columns=['date', 'ic', 'factor', 'bt_cycle'])
         return ic_result_df
