@@ -95,7 +95,7 @@ class Factor_Analyzer(object):
 #                 ic_ir_data['ic_mean'] = ic_ir_data.groupby([fac, pe])['ic'].rolling(window=shift_days).mean()
                 if self.is_debug:
                     print(ic_ir_data)
-                    print(ic_ir_data.groupby(['factor', 'bt_cycle'])['ic'].apply(lambda x:x.rolling(window=shift_days).mean()))
+#                     print(ic_ir_data.groupby(['factor', 'bt_cycle'])['ic'].apply(lambda x:x.rolling(window=shift_days).mean()))
                 ic_ir_data['ic_mean'] = ic_ir_data.groupby(['factor', 'bt_cycle'])['ic'].apply(lambda x:x.rolling(window=shift_days).mean())
                 ic_ir_data['ir'] = ic_ir_data['ic_mean'] / ic_ir_data.groupby(['factor', 'bt_cycle'])['ic'].apply(lambda x:x.rolling(window=shift_days).std())
         return ic_ir_data
@@ -145,7 +145,7 @@ class Factor_Analyzer(object):
         
         return stock_data
     
-def combine_result_file(result_file_path):
+def combine_result_file(result_file_path, final_result_file):
     all_files = []
     for r, d, f in os.walk(result_file_path):
         for file in f:
@@ -157,16 +157,18 @@ def combine_result_file(result_file_path):
         cat = fi.split('_')[0]
         sub_data_df = pd.read_csv(os.path.join(result_file_path, fi), index_col='INDEX')
         sub_data_df['category'] = cat
+        print(sub_data_df)
         if result_data.empty:
             result_data = sub_data_df
         else:
-            result_data = pd.merge(result_data, sub_data_df, on=['INDEX', 'category', 'ic', 'factor', 'bt_cycle', 'ic_mean', 'ir'], how='outer')        
+            result_data = pd.merge(result_data, sub_data_df, on=['date', 'category', 'ic', 'factor', 'bt_cycle', 'ic_mean', 'ir'], how='outer')        
+
     print("result_data".format(result_data))
-    print(result_data.loc['2019-11-20', :])
-    result_data.index.name = 'DATE'
-    result_data.reset_index(inplace=True)
+    print(result_data['date'].unique())
     print(result_data['factor'].unique())
     print(result_data['category'].unique())
+    
+    result_data.to_csv(final_result_file, encoding='utf-8', index=True)   
     
     return result_data
 
