@@ -8,6 +8,7 @@ try:
     from kuanke.user_space_api import *         
 except ImportError as ie:
     print(str(ie))
+from common_include import copy_4_prd
 from jqdata import *
 import numpy as np
 import pandas as pd
@@ -92,19 +93,27 @@ class Dynamic_factor_based_stock_ranking(object):
             full_list = full_list + sub_list
         return full_list
     
-    def get_ranked_factors(self, factor_result_file_path=None):
+    def get_ranked_factors(self, factor_result_file_path=None, working_date=None):
         if factor_result_file_path is None:
             factor_rank = get_factor_kanban_values(universe=self.index_scope, bt_cycle=self.period, model = self.model, category=self.category)  
         else:
             factor_rank = self.get_factor_values_from_file(factor_result_file_path)
+            factor_rank.rename(columns = {'factor':'code'}, inplace=True)
+            factor_rank = factor_rank[factor_rank['date'] == str(working_date)] if working_date is not None else factor_rank
+            if self.is_debug:
+                print("factor_rank:{0}".format(factor_rank.head(20)))
         
         return self.get_pos_neg_factors(factor_rank, self.factor_num)
 
     def get_factor_values_from_file(self, result_file_path):
-        return read_file(result_file_path)
+        copy_4_prd(result_file_path)
+        if self.is_debug:
+            import os
+            print(os.listdir('.'))
+        return pd.read_csv(result_file_path, index_col='INDEX')
     
     def gaugeStocks(self, context, factor_result_file_path=None):
-        factor_code_list_positive, factor_code_list_negative, factor_code_list = self.get_ranked_factors(factor_result_file_path)
+        factor_code_list_positive, factor_code_list_negative, factor_code_list = self.get_ranked_factors(factor_result_file_path, context.current_dt.date())
         
 #         factor_code_list = factor_code_list_positive + factor_code_list_negative
         index_code = self.get_idx_code(self.index_scope)
@@ -125,7 +134,7 @@ class Dynamic_factor_based_stock_ranking(object):
                 ranked_stock_list[code] = factor_stock_ranking.index[:self.stock_num].tolist()                
 
             if self.is_debug:
-                print(ranked_stock_list)
+                print("ranked_stock_list: {0}".format(ranked_stock_list.head(20)))
             
             selected_stocks = []
             for code in ranked_stock_list:
@@ -148,8 +157,8 @@ class Dynamic_factor_based_stock_ranking(object):
             ranked_stock_score["sum_rank_score"] = ranked_stock_score.sum(axis=1)
             
             if self.is_debug:
-                print(ranked_stock_score)
-                print(ranked_stock_score["sum_rank_score"].abs().sort_values(inplace=False, ascending=False))
+                print(ranked_stock_score.head(20))
+#                 print(ranked_stock_score["sum_rank_score"].abs().sort_values(inplace=False, ascending=False))
 
             return ranked_stock_score["sum_rank_score"].abs().sort_values(inplace=False, ascending=False).index.tolist()[:self.stock_num]
         else:
