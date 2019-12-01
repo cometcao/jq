@@ -168,7 +168,9 @@ def combine_result_file(result_file_path, final_result_file):
     print(result_data['factor'].unique())
     print(result_data['category'].unique())
     
-    result_data.to_csv(final_result_file, encoding='utf-8', index=True)   
+    if final_result_file is not None:
+        result_data.index.name = 'INDEX'
+        result_data.to_csv(final_result_file, encoding='utf-8', index=True)   
     
     return result_data
 

@@ -227,3 +227,8 @@ def normalize(df, norm_range=[0, 1], fields = ['open', 'close', 'high', 'low', '
     scaler = MinMaxScaler(feature_range=norm_range) if norm_range is not None else StandardScaler()
     df[fields] = scaler.fit_transform(df[fields]) 
     return df
+
+def copy_4_prd(path):
+    c = read_file(path)
+    with open(path, 'wb') as f:
+        f.write(c)
