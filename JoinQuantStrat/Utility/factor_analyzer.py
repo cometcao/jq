@@ -69,22 +69,22 @@ class Factor_Analyzer(object):
         
     def cal_ic(self, stock_data, trade_days, factor_list):
         ic_result = []
-        day_index = -1
+        day_index = 60 # we start with month_3 which is 60
         num_td = len(trade_days)
-        while day_index > -num_td:
+        while day_index < num_td:
             end_day = trade_days[day_index]
             return_data = stock_data[stock_data['time'] == str(end_day)]
             for fac in factor_list:
                 for pe in self.period:
                     shift_days = self.get_shift_days(pe)
-                    if day_index - shift_days < -num_td:
+                    if day_index - shift_days < 0:
                         continue
                     ref_day = trade_days[day_index - shift_days]
                     fac_data = stock_data[stock_data['time'] == str(ref_day)]
                     rank_ic = np.corrcoef(return_data.sort_values(by=pe+'_return', ascending=False).index.tolist(),
                                 fac_data.sort_values(by=fac, ascending=False).index.tolist())
                     ic_result.append({'date':end_day, 'ic':rank_ic[0][1], 'factor':fac, 'bt_cycle':pe})
-            day_index = day_index - 1
+            day_index = day_index + 1
         ic_result_df = pd.DataFrame(ic_result, columns=['date', 'ic', 'factor', 'bt_cycle'])
         return ic_result_df
     
