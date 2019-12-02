@@ -355,19 +355,27 @@ class Pick_Rank_Factor(Create_stock_list):
         self.stock_num = params.get('stock_num', 20)
         self.index_scope = params.get('index_scope', '000985.XSHG')
         self.use_enhanced = params.get('use_enhanced', False)
+        self.factor_category = params.get('factor_category', ['basics'])
+        self.is_debug = params.get('is_debug', False)
+        self.regress_profit = params.get('regress_profit', False)
         pass
     
     def update_params(self, context, params):
         self.use_enhanced = params.get('use_enhanced', False)      
+        self.factor_category = params.get('factor_category', ['basics'])
+        self.is_debug = params.get('is_debug', False)
+        self.regress_profit = params.get('regress_profit', False)
     
     def before_trading_start(self, context):
         if self.use_enhanced:
             mdfr = ML_Dynamic_Factor_Rank({'stock_num':self.stock_num, 
                                   'index_scope':self.index_scope,
-                                  'period':'year_1',
-                                  'is_debug':True, 
-                                  'regress_profit':True, 
-                                  'use_dynamic_factors': True})
+                                  'period':'month_3',
+                                  'is_debug':self.is_debug, 
+                                  'use_dynamic_factors': True, 
+                                  'context': context, 
+                                  'regress_profit': self.regress_profit,
+                                  'factor_category':self.factor_category})
             new_list = mdfr.gaugeStocks_byfactors(context)
 
         else:

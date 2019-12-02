@@ -171,6 +171,7 @@ def combine_result_file(result_file_path, final_result_file):
     if final_result_file is not None:
         result_data.index.name = 'INDEX'
         result_data.to_csv(final_result_file, encoding='utf-8', index=True)   
+        print("file written: {0}".format(final_result_file))
     
     return result_data
 

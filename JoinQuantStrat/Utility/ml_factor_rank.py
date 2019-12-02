@@ -610,6 +610,10 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         self.index_scope = params.get('index_scope', '000985.XSHG')
         self.regress_profit = params.get('regress_profit', True)
         self.use_dynamic_factors = params.get('use_dynamic_factors', False)
+        self.context = params.get('context', None)
+        self.period = params.get('period', 'month_3')
+        self.factor_result_file = params.get('factor_result_file', None)
+        self.factor_category = params.get('factor_category', ['basics'])
 
         # 网格搜索是否开启
         self.gridserach = False
@@ -735,8 +739,9 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
             dfbsr = Dynamic_factor_based_stock_ranking({'stock_num':self.stock_num, 
                                                     'index_scope':self.get_index_pinyin(self.index_scope),
                                                     'factor_num':10,
-                                                    'is_debug':self.is_debug})
-            self.pure_train_list = dfbsr.get_ranked_factors_by_category()
+                                                    'is_debug':self.is_debug, 
+                                                    'category':self.factor_category})
+            self.pure_train_list = dfbsr.get_ranked_factors_by_category(self.factor_result_file, self.context.previous_date)
             self.factor_list = self.y_column + self.pure_train_list
             self.train_list = self.pure_train_list + self.industry_set
             
@@ -852,10 +857,10 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
             #对新的因子，即残差进行排序（按照从小到大）
             factor = factor.sort_values(by = 'market_cap')
         
-        if self.is_debug:
-            print("y value: {0}".format(y))
-            print("y_pred value: {0}".format(y_pred))
-            print("factor value: {0}".format(factor))
+#         if self.is_debug:
+#             print("y value: {0}".format(y))
+#             print("y_pred value: {0}".format(y_pred))
+#             print("factor value: {0}".format(factor))
         
         
         stockset = list(factor.index[:self.stock_num])

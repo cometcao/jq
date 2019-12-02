@@ -81,16 +81,23 @@ class Dynamic_factor_based_stock_ranking(object):
         
         return pos_list, neg_list, full_factor_list
 
-    def get_ranked_factors_by_category(self):
-        factor_rank = get_factor_kanban_values(universe=self.index_scope, bt_cycle=self.period, model = self.model, category=self.category)  
+    def get_ranked_factors_by_category(self, factor_result_file_path=None, working_date=None):
+        if factor_result_file_path is None:
+            factor_rank = get_factor_kanban_values(universe=self.index_scope, bt_cycle=self.period, model = self.model, category=self.category)  
+        else:
+            factor_rank = self.get_factor_values_from_file(factor_result_file_path)
+            factor_rank.rename(columns = {'factor':'code'}, inplace=True)
+            factor_rank = factor_rank[factor_rank['date'] == str(working_date)] if working_date is not None else factor_rank            
         
-        num_fac = int(np.ceil(self.factor_num / len(cat_list)))
+        num_fac = int(np.ceil(self.factor_num / len(self.category)))
         full_list = []
         for cat in self.category:
             sub_factor_rank = factor_rank[factor_rank['category']==cat]
             _, _, sub_list = self.get_pos_neg_factors(sub_factor_rank, num_fac)
 #             print("category {0}: {1}".format(cat, sub_list))
             full_list = full_list + sub_list
+        if self.is_debug:
+            print("full factor list: {0}".format(full_list))
         return full_list
     
     def get_ranked_factors(self, factor_result_file_path=None, working_date=None):
@@ -101,7 +108,7 @@ class Dynamic_factor_based_stock_ranking(object):
             factor_rank.rename(columns = {'factor':'code'}, inplace=True)
             factor_rank = factor_rank[factor_rank['date'] == str(working_date)] if working_date is not None else factor_rank
             if self.is_debug:
-                print("factor_rank:{0}".format(factor_rank.head(20)))
+                print("factor_rank:{0}".format(factor_rank.tail(20)))
         
         return self.get_pos_neg_factors(factor_rank, self.factor_num)
 
@@ -113,7 +120,7 @@ class Dynamic_factor_based_stock_ranking(object):
         return pd.read_csv(result_file_path, index_col='INDEX')
     
     def gaugeStocks(self, context, factor_result_file_path=None):
-        factor_code_list_positive, factor_code_list_negative, factor_code_list = self.get_ranked_factors(factor_result_file_path, context.current_dt.date())
+        factor_code_list_positive, factor_code_list_negative, factor_code_list = self.get_ranked_factors(factor_result_file_path, context.previous_date)
         
 #         factor_code_list = factor_code_list_positive + factor_code_list_negative
         index_code = self.get_idx_code(self.index_scope)
@@ -150,7 +157,7 @@ class Dynamic_factor_based_stock_ranking(object):
                 ranked_stock_score = factor_stock_tmp if ranked_stock_score is None else ranked_stock_score.join(factor_stock_tmp)
             
             # remove extreme value and standardize by column
-            ranked_stock_score = winsorize(ranked_stock_score, scale = 5, axis = 0)
+#             ranked_stock_score = winsorize(ranked_stock_score, scale = 5, axis = 0)
             ranked_stock_score = standardlize(ranked_stock_score, axis = 0)
             
             # sum all factors by rows
