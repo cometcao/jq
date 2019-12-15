@@ -37,6 +37,7 @@ class KBarProcessor(object):
         self.kDataFrame_standardized = copy.deepcopy(kDf)
         self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_high=np.nan, new_low=np.nan, trend_type=np.nan)
         self.kDataFrame_marked = None
+        self.gap_XD = []
     
     def synchForChart(self):
         self.kDataFrame_standardized = self.kDataFrame_standardized.drop('new_high', 1)
@@ -509,5 +510,221 @@ class KBarProcessor(object):
         self.standardize(initial_state)
         self.markTopBot(initial_state)
         self.defineBi()
+#         self.defineBi_new()
         return self.kDataFrame_origin.join(self.kDataFrame_marked[['new_index', 'tb']])
+            
+    def find_initial_direction(self, working_df):
+        # use simple solution to find initial direction
+        max_price_idx = working_df.head(10)['chan_price'].idxmax()
+        min_price_idx = working_df.head(10)['chan_price'].idxmin()
+        initial_idx = min(max_price_idx, min_price_idx)
+        initial_direction = TopBotType.bot2top if max_price_idx > min_price_idx else TopBotType.top2bot
+        return working_df.index.get_loc(initial_idx), initial_direction        
+    
+    
+    def is_XD_inclusion_free(self, direction, firstElem, secondElem, thirdElem, forthElem):
+        '''
+        check the 4 elems are inclusion free by direction, if not operate the inclusion
+        '''
+        if direction == TopBotType.top2bot:
+            assert firstElem.tb == thirdElem.tb == TopBotType.bot and  secondElem.tb == forthElem.tb == TopBotType.top, "Invalid tb status for checking inclusion"
+        elif direction == TopBotType.bot2top:
+            assert firstElem.tb == thirdElem.tb == TopBotType.top and  secondElem.tb == forthElem.tb == TopBotType.bot, "Invalid tb status for checking inclusion"        
+            
+        if (firstElem.chan_price <= thirdElem.chan_price and secondElem.chan_price >= forthElem.chan_price) or\
+            (firstElem.chan_price >= thirdElem.chan_price and secondElem.chan_price <= forthElem.chan_price):        
+            secondElem.tb = TopBotType.noTopBot
+            thirdElem.tb = TopBotType.noTopBot
+            return False
+        return True
+    
+    def check_inclusion_by_direction(self, current_loc, working_df, direction, with_gap):    
+        '''
+        make sure next 6 (with gap) / 4 (without gap) bi are inclusive free, assuming the starting loc is the start of characteristic elem
+        '''
+        i = current_loc
+        first_run = True
+
+        count_num = 6 if with_gap else 4
+            
+
+        while first_run or (i+count_num-1 < working_df.shape[0]):
+            first_run = False
+            
+            next_valid_elems = self.get_next_N_elem(i, working_df, count_num)            
+            
+            firstElem = next_valid_elems[0]
+            secondElem = next_valid_elems[1]
+            thirdElem = next_valid_elems[2]
+            forthElem = next_valid_elems[3]
+            
+            if with_gap:
+                fifthElem = next_valid_elems[4]
+                sixthElem = next_valid_elems[5]
+            
+                if self.is_XD_inclusion_free(direction, firstElem, secondElem, thirdElem, forthElem):
+                    if self.is_XD_inclusion_free(direction, thirdElem, forthElem, fifthElem, sixElem):
+                        break
+            else:
+                if self.is_XD_inclusion_free(direction, firstElem, secondElem, thirdElem, forthElem):
+                    break
+                
+        pass
+    
+    def check_XD_topbot(self, first, second, third, forth, fifth, sixth):
+        assert first.tb == third.tb == fifth.tb and second.tb == forth.tb == sixth.tb, "invalid tb status!"
         
+        result_status = TopBotType.noTopBot
+        with_gap = False
+        
+        if third.tb == TopBotType.top:    
+            if third.chan_price > first.chan_price and\
+             third.chan_price > fifth.chan_price and\
+             forth.chan_price > sixth.chan_price:
+                result_status = TopBotType.top
+                with_gap = first.chan_price < forth.chan_price
+                
+        elif third.tb == TopBotType.bot:
+            if third.chan_price < first.chan_price and\
+             third.chan_price < fifth.chan_price and\
+             forth.chan_price < sixth.chan_price:
+                result_status = TopBotType.bot
+                with_gap = first.chan_price > forth.chan_price
+                            
+        else:
+            print("Error, invalid tb status!")
+        
+        return result_status, with_gap
+    
+    def defineXD(self):
+        # only use the price relavent
+        self.kDataFrame_marked['chan_price'] = self.kDataFrame_marked.apply(lambda row: row['high'] if row['tb'] == TopBotType.top else row['low'], axis=1)
+        
+        working_df = self.kDataFrame_marked[['chan_price', 'tb']]
+        print("self.kDataFrame_marked: {0}".format(self.kDataFrame_marked[['high', 'low', 'tb']]))
+        print("working_df: {0}".format(working_df))
+        working_df['original_tb'] = working_df['tb']
+    
+        # find initial direction
+        initial_i, initial_direction = self.find_initial_direction(working_df)
+        
+        # loop through to find XD top bot
+        self.find_XD(initial_i, initial_direction, working_df)
+        
+        return working_df
+
+    def get_next_N_elem(self, loc, working_df, N=4):
+        '''
+        get the next N number of elems if tb isn't noTopBot
+        '''
+        i = loc
+        result_locs = []
+        while i < working_df.shape[0]:
+            current_elem = working_df.iloc[i]
+            if current_elem.tb != TopBotType.noTopBot:
+                result_locs.append(i)
+                if len(result_locs) == N:
+                    break
+            i = i + 1
+        return result_locs
+
+    def find_XD(self, initial_i, initial_direction, working_df):      
+        current_direction = initial_direction  
+        i = initial_i
+        while i+5 < working_df.shape[0]:
+            previous_gap = len(self.gap_XD) != 0
+            
+            if previous_gap:
+                # do inclusion till find DING DI
+                self.check_inclusion_by_direction(i, working_df, current_direction, previous_gap)
+                
+                next_valid_elems = self.get_next_N_elem(i, working_df, 6)
+                firstElem = working_df.iloc[next_valid_elems[0]]
+                secondElem = working_df.iloc[next_valid_elems[1]]
+                thirdElem = working_df.iloc[next_valid_elems[2]]
+                forthElem = working_df.iloc[next_valid_elems[3]]
+                fifthElem = working_df.iloc[next_valid_elems[4]]
+                sixthElem = working_df.iloc[next_valid_elems[5]]
+                
+                # make sure we are checking the right elem by direction
+                if not self.direction_assert(firstElem, current_direction):
+                    i = i+1
+                    continue     
+                
+                current_status, with_gap = self.check_XD_topbot(firstElem, secondElem, thirdElem, forthElem, fifthElem, sixthElem)  
+
+                if current_status != TopBotType.noTopBot:
+                    if with_gap:
+                        # save existing gapped Ding/Di
+                        self.gap_XD.append(next_valid_elems[2])
+                    else:
+                        # fixed Ding/Di, clear the record
+                        self.gap_XD = []
+                    working_df.at[working_df.index[i+2], 'xd_tb'] = current_status
+                    current_direction = TopBotType.top2bot if current_status == TopBotType.top else TopBotType.bot2top
+                    i = i + 3
+                    continue
+                else:
+                    previous_gap_elem = working_df.iloc[self.gap_XD[-1]]
+                    if current_direction == TopBotType.top2bot:
+                        if firstElem.chan_price < previous_gap_elem.chan_price:
+                            # found new low
+                            previous_gap_loc = self.gap_XD.pop()
+                            working_df.at[working_df.index[previous_gap_loc], 'xd_tb'] = TopBotType.noTopBot                            
+                    elif current_direction == TopBotType.bot2top:
+                        if firstElem.chan_price > previous_gap_elem.chan_price:
+                            previous_gap_loc = self.gap_XD.pop()
+                            working_df.at[working_df.index[previous_gap_loc], 'xd_tb'] = TopBotType.noTopBot
+                    else:
+                        print("Invalid current direction!")
+                    i = i + 2 # check next bi with same direction
+                    
+            else:
+                # find DING DI directly
+                next_valid_elems = self.get_next_N_elem(i, working_df, 6)
+                firstElem = working_df.iloc[next_valid_elems[0]]
+                secondElem = working_df.iloc[next_valid_elems[1]]
+                thirdElem = working_df.iloc[next_valid_elems[2]]
+                forthElem = working_df.iloc[next_valid_elems[3]]
+                fifthElem = working_df.iloc[next_valid_elems[4]]
+                sixthElem = working_df.iloc[next_valid_elems[5]]
+                
+                # make sure we are checking the right elem by direction
+                if not self.direction_assert(firstElem, current_direction):
+                    i = i + 1
+                    continue
+                
+                current_status, with_gap = self.check_XD_topbot(firstElem, secondElem, thirdElem, forthElem, fifthElem, sixthElem)                      
+                
+                if current_status != TopBotType.noTopBot:
+                    # do inclusion till find DING DI
+                    self.check_inclusion_by_direction(i+2, working_df, current_direction, with_gap)
+                    if with_gap:
+                        # save existing gapped Ding/Di
+                        self.gap_XD.append(next_valid_elems[2])
+                    else:
+                        # cleanest case
+                        pass
+                    current_direction = TopBotType.top2bot if current_status == TopBotType.top else TopBotType.bot2top
+                    working_df.at[working_df.index[i+2], 'xd_tb'] = current_status
+                    i = i + 3
+                    continue
+                else:
+                    i = i + 2
+                
+    def direction_assert(self, firstElem, direction):
+        # make sure we are checking the right elem by direction
+        result = True
+        if direction == TopBotType.top2bot:
+            if firstElem.tb != TopBotType.bot:
+                print("We have invalid elem tb value: {0}".format(firstElem.tb))
+                result = False
+        elif direction == TopBotType.bot2top:
+            if firstElem.tb != TopBotType.top:
+                print("We have invalid elem tb value: {0}".format(firstElem.tb))
+                result = False
+        else:
+            result = False
+            print("We have invalid direction value!!!!!")
+            
+        return result
