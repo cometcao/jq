@@ -522,19 +522,28 @@ class KBarProcessor(object):
         return working_df.index.get_loc(initial_idx), initial_direction        
     
     
-    def is_XD_inclusion_free(self, direction, firstElem, secondElem, thirdElem, forthElem):
+    def is_XD_inclusion_free(self, direction, next_valid_elems, working_df):
         '''
         check the 4 elems are inclusion free by direction, if not operate the inclusion
         '''
+        if len(next_valid_elems) < 4:
+            print("Invalid number of elems found")
+            return False
+        
+        firstElem = working_df.iloc[next_valid_elems[0]]
+        secondElem = working_df.iloc[next_valid_elems[1]]
+        thirdElem = working_df.iloc[next_valid_elems[2]]
+        forthElem = working_df.iloc[next_valid_elems[3]]
+        
         if direction == TopBotType.top2bot:
-            assert firstElem.tb == thirdElem.tb == TopBotType.bot and  secondElem.tb == forthElem.tb == TopBotType.top, "Invalid tb status for checking inclusion"
+            assert firstElem.tb == thirdElem.tb == TopBotType.bot and  secondElem.tb == forthElem.tb == TopBotType.top, "Invalid starting tb status for checking inclusion"
         elif direction == TopBotType.bot2top:
-            assert firstElem.tb == thirdElem.tb == TopBotType.top and  secondElem.tb == forthElem.tb == TopBotType.bot, "Invalid tb status for checking inclusion"        
+            assert firstElem.tb == thirdElem.tb == TopBotType.top and  secondElem.tb == forthElem.tb == TopBotType.bot, "Invalid starting tb status for checking inclusion"        
             
         if (firstElem.chan_price <= thirdElem.chan_price and secondElem.chan_price >= forthElem.chan_price) or\
             (firstElem.chan_price >= thirdElem.chan_price and secondElem.chan_price <= forthElem.chan_price):        
-            secondElem.tb = TopBotType.noTopBot
-            thirdElem.tb = TopBotType.noTopBot
+            working_df.iloc[next_valid_elems[1], working_df.columns.get_loc('tb')] = TopBotType.noTopBot
+            working_df.iloc[next_valid_elems[2], working_df.columns.get_loc('tb')] = TopBotType.noTopBot
             return False
         return True
     
@@ -553,20 +562,20 @@ class KBarProcessor(object):
             
             next_valid_elems = self.get_next_N_elem(i, working_df, count_num)            
             
-            firstElem = next_valid_elems[0]
-            secondElem = next_valid_elems[1]
-            thirdElem = next_valid_elems[2]
-            forthElem = next_valid_elems[3]
+            firstElem = working_df.iloc[next_valid_elems[0]]
+            secondElem = working_df.iloc[next_valid_elems[1]]
+            thirdElem = working_df.iloc[next_valid_elems[2]]
+            forthElem = working_df.iloc[next_valid_elems[3]]
             
             if with_gap:
-                fifthElem = next_valid_elems[4]
-                sixthElem = next_valid_elems[5]
+                fifthElem = working_df.iloc[next_valid_elems[4]]
+                sixthElem = working_df.iloc[next_valid_elems[5]]
             
-                if self.is_XD_inclusion_free(direction, firstElem, secondElem, thirdElem, forthElem):
-                    if self.is_XD_inclusion_free(direction, thirdElem, forthElem, fifthElem, sixElem):
+                if self.is_XD_inclusion_free(direction, next_valid_elems, working_df):
+                    if self.is_XD_inclusion_free(direction, next_valid_elems, working_df):
                         break
             else:
-                if self.is_XD_inclusion_free(direction, firstElem, secondElem, thirdElem, forthElem):
+                if self.is_XD_inclusion_free(direction, next_valid_elems, working_df):
                     break
                 
         pass
@@ -602,8 +611,10 @@ class KBarProcessor(object):
         
         working_df = self.kDataFrame_marked[['chan_price', 'tb']]
         print("self.kDataFrame_marked: {0}".format(self.kDataFrame_marked[['high', 'low', 'tb']]))
+
+#         working_df['original_tb'] = working_df['tb']
+        working_df.loc[:,'original_tb'] = working_df['tb']
         print("working_df: {0}".format(working_df))
-        working_df['original_tb'] = working_df['tb']
     
         # find initial direction
         initial_i, initial_direction = self.find_initial_direction(working_df)
