@@ -610,11 +610,9 @@ class KBarProcessor(object):
         self.kDataFrame_marked['chan_price'] = self.kDataFrame_marked.apply(lambda row: row['high'] if row['tb'] == TopBotType.top else row['low'], axis=1)
         
         working_df = self.kDataFrame_marked[['chan_price', 'tb']]
-        print("self.kDataFrame_marked: {0}".format(self.kDataFrame_marked[['high', 'low', 'tb']]))
 
 #         working_df['original_tb'] = working_df['tb']
         working_df.loc[:,'original_tb'] = working_df['tb']
-        print("working_df: {0}".format(working_df))
     
         # find initial direction
         initial_i, initial_direction = self.find_initial_direction(working_df)
