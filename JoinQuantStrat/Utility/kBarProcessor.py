@@ -495,13 +495,19 @@ class KBarProcessor(object):
         self.markTopBot()
         if not isSimple:
             self.defineBi() # not necessary for biaoli status
+            self.getPureBi()
         return self.getCurrentKBarStatus(isSimple)
     
     def getMarkedBL(self):
         self.standardize()
         self.markTopBot()
         self.defineBi()
+        self.getPureBi()
         return self.kDataFrame_marked
+    
+    def getPureBi(self):
+        # only use the price relavent
+        self.kDataFrame_marked['chan_price'] = self.kDataFrame_marked.apply(lambda row: row['high'] if row['tb'] == TopBotType.top else row['low'], axis=1)
     
     def getStandardized(self):
         return self.standardize()
@@ -605,10 +611,7 @@ class KBarProcessor(object):
         
         return result_status, with_gap
     
-    def defineXD(self):
-        # only use the price relavent
-        self.kDataFrame_marked['chan_price'] = self.kDataFrame_marked.apply(lambda row: row['high'] if row['tb'] == TopBotType.top else row['low'], axis=1)
-        
+    def defineXD(self):
         working_df = self.kDataFrame_marked[['chan_price', 'tb']]
 
 #         working_df['original_tb'] = working_df['tb']
@@ -618,7 +621,9 @@ class KBarProcessor(object):
         initial_i, initial_direction = self.find_initial_direction(working_df)
         
         # loop through to find XD top bot
-        self.find_XD(initial_i, initial_direction, working_df)
+        working_df = self.find_XD(initial_i, initial_direction, working_df)
+        
+        working_df = working_df[(working_df['xd_tb']==TopBotType.top) | (working_df['xd_tb']==TopBotType.bot)]
         
         return working_df
 
@@ -720,6 +725,8 @@ class KBarProcessor(object):
                     continue
                 else:
                     i = i + 2
+        
+        return working_df
                 
     def direction_assert(self, firstElem, direction):
         # make sure we are checking the right elem by direction
