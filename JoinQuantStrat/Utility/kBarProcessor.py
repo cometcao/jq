@@ -521,8 +521,8 @@ class KBarProcessor(object):
             
     def find_initial_direction(self, working_df):
         # use simple solution to find initial direction
-        max_price_idx = working_df.head(10)['chan_price'].idxmax()
-        min_price_idx = working_df.head(10)['chan_price'].idxmin()
+        max_price_idx = working_df.head(6)['chan_price'].idxmax()
+        min_price_idx = working_df.head(6)['chan_price'].idxmin()
         initial_idx = min(max_price_idx, min_price_idx)
         initial_direction = TopBotType.bot2top if max_price_idx > min_price_idx else TopBotType.top2bot
         return working_df.index.get_loc(initial_idx), initial_direction        
@@ -542,14 +542,16 @@ class KBarProcessor(object):
         forthElem = working_df.iloc[next_valid_elems[3]]
         
         if direction == TopBotType.top2bot:
-            assert firstElem.tb == thirdElem.tb == TopBotType.bot and  secondElem.tb == forthElem.tb == TopBotType.top, "Invalid starting tb status for checking inclusion"
+            assert firstElem.tb == thirdElem.tb == TopBotType.bot and  secondElem.tb == forthElem.tb == TopBotType.top, "Invalid starting tb status for checking inclusion top2bot: {0}, {1}, {2}, {3}".format(firstElem, thirdElem, secondElem, forthElem)
         elif direction == TopBotType.bot2top:
-            assert firstElem.tb == thirdElem.tb == TopBotType.top and  secondElem.tb == forthElem.tb == TopBotType.bot, "Invalid starting tb status for checking inclusion"        
+            assert firstElem.tb == thirdElem.tb == TopBotType.top and  secondElem.tb == forthElem.tb == TopBotType.bot, "Invalid starting tb status for checking inclusion bot2top: {0}, {1}, {2}, {3}".format(firstElem, thirdElem, secondElem, forthElem)       
             
         if (firstElem.chan_price <= thirdElem.chan_price and secondElem.chan_price >= forthElem.chan_price) or\
             (firstElem.chan_price >= thirdElem.chan_price and secondElem.chan_price <= forthElem.chan_price):        
             working_df.iloc[next_valid_elems[1], working_df.columns.get_loc('tb')] = TopBotType.noTopBot
             working_df.iloc[next_valid_elems[2], working_df.columns.get_loc('tb')] = TopBotType.noTopBot
+            
+            print("location {0}, {1} removed for combination".format(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]]))
             return False
         return True
     
@@ -560,8 +562,7 @@ class KBarProcessor(object):
         i = current_loc
         first_run = True
 
-        count_num = 6 if with_gap else 4
-            
+        count_num = 6 if with_gap else 4
 
         while first_run or (i+count_num-1 < working_df.shape[0]):
             first_run = False
@@ -577,11 +578,11 @@ class KBarProcessor(object):
                 fifthElem = working_df.iloc[next_valid_elems[4]]
                 sixthElem = working_df.iloc[next_valid_elems[5]]
             
-                if self.is_XD_inclusion_free(direction, next_valid_elems, working_df):
-                    if self.is_XD_inclusion_free(direction, next_valid_elems, working_df):
+                if self.is_XD_inclusion_free(direction, next_valid_elems[:4], working_df):
+                    if self.is_XD_inclusion_free(direction, next_valid_elems[-4:], working_df):
                         break
             else:
-                if self.is_XD_inclusion_free(direction, next_valid_elems, working_df):
+                if self.is_XD_inclusion_free(direction, next_valid_elems[:4], working_df):
                     break
                 
         pass
@@ -627,15 +628,19 @@ class KBarProcessor(object):
         
         return working_df
 
-    def get_next_N_elem(self, loc, working_df, N=4):
+    def get_next_N_elem(self, loc, working_df, N=4, start_tb=TopBotType.noTopBot):
         '''
-        get the next N number of elems if tb isn't noTopBot
+        get the next N number of elems if tb isn't noTopBot, 
+        if start_tb is set, find the first N number of elems starting with tb given
         '''
         i = loc
         result_locs = []
         while i < working_df.shape[0]:
             current_elem = working_df.iloc[i]
             if current_elem.tb != TopBotType.noTopBot:
+                if start_tb != TopBotType.noTopBot and current_elem.tb != start_tb and len(result_locs) == 0:
+                    i = i + 1
+                    continue
                 result_locs.append(i)
                 if len(result_locs) == N:
                     break
@@ -646,6 +651,9 @@ class KBarProcessor(object):
         current_direction = initial_direction  
         i = initial_i
         while i+5 < working_df.shape[0]:
+            
+            print("working at {0}, {1}".format(working_df.index[i], working_df.iloc[i].tb))
+            
             previous_gap = len(self.gap_XD) != 0
             
             if previous_gap:
@@ -662,7 +670,8 @@ class KBarProcessor(object):
                 
                 # make sure we are checking the right elem by direction
                 if not self.direction_assert(firstElem, current_direction):
-                    i = i+1
+                    i = self.get_next_N_elem(i+1, working_df, N=1, start_tb=TopBotType.top if current_direction==TopBotType.bot2top else TopBotType.bot)[0]
+#                     i = i+1
                     continue     
                 
                 current_status, with_gap = self.check_XD_topbot(firstElem, secondElem, thirdElem, forthElem, fifthElem, sixthElem)  
@@ -671,27 +680,49 @@ class KBarProcessor(object):
                     if with_gap:
                         # save existing gapped Ding/Di
                         self.gap_XD.append(next_valid_elems[2])
+                        
+                        [print("gap info 1:{0}, {1}".format(working_df.index[gap_loc], working_df.iloc[gap_loc].tb)) for gap_loc in self.gap_XD]
+                        
                     else:
                         # fixed Ding/Di, clear the record
                         self.gap_XD = []
+                        
+                        [print("gap info 2:{0}, {1}".format(working_df.index[gap_loc], working_df.iloc[gap_loc].tb)) for gap_loc in self.gap_XD]
                     working_df.at[working_df.index[i+2], 'xd_tb'] = current_status
                     current_direction = TopBotType.top2bot if current_status == TopBotType.top else TopBotType.bot2top
-                    i = i + 3
+                    i = self.get_next_N_elem(i+3, working_df, N=1, start_tb=TopBotType.top if current_direction==TopBotType.bot2top else TopBotType.bot)[0]
+#                     i = i + 3
                     continue
                 else:
                     previous_gap_elem = working_df.iloc[self.gap_XD[-1]]
                     if current_direction == TopBotType.top2bot:
-                        if firstElem.chan_price < previous_gap_elem.chan_price:
+                        if secondElem.chan_price < previous_gap_elem.chan_price:
                             # found new low
                             previous_gap_loc = self.gap_XD.pop()
-                            working_df.at[working_df.index[previous_gap_loc], 'xd_tb'] = TopBotType.noTopBot                            
+                            working_df.at[working_df.index[previous_gap_loc], 'xd_tb'] = TopBotType.noTopBot
+                            
+                            # restore any combined bi due to the gapped XD
+                            working_df.iloc[previous_gap_loc:i, working_df.columns.get_loc('tb')] = working_df.iloc[previous_gap_loc:i, working_df.columns.get_loc('original_tb')]
+                            current_direction = TopBotType.top2bot if current_direction == TopBotType.bot2top else TopBotType.bot2top
+                            i = previous_gap_loc
+                            continue                            
                     elif current_direction == TopBotType.bot2top:
-                        if firstElem.chan_price > previous_gap_elem.chan_price:
+                        if secondElem.chan_price > previous_gap_elem.chan_price:
                             previous_gap_loc = self.gap_XD.pop()
                             working_df.at[working_df.index[previous_gap_loc], 'xd_tb'] = TopBotType.noTopBot
+                            
+                            # restore any combined bi due to the gapped XD
+                            working_df.iloc[previous_gap_loc:i, working_df.columns.get_loc('tb')] = working_df.iloc[previous_gap_loc:i, working_df.columns.get_loc('original_tb')]
+                            current_direction = TopBotType.top2bot if current_direction == TopBotType.bot2top else TopBotType.bot2top
+                            i = previous_gap_loc
+                            continue
+                            
                     else:
                         print("Invalid current direction!")
-                    i = i + 2 # check next bi with same direction
+                        break
+                    [print("gap info 3:{0}, {1}".format(working_df.index[gap_loc],  working_df.iloc[gap_loc].tb)) for gap_loc in self.gap_XD]
+                    i = self.get_next_N_elem(i+2, working_df, N=1, start_tb=TopBotType.top if current_direction==TopBotType.bot2top else TopBotType.bot)[0]
+#                     i = i + 2 # check next bi with same direction
                     
             else:
                 # find DING DI directly
@@ -705,26 +736,32 @@ class KBarProcessor(object):
                 
                 # make sure we are checking the right elem by direction
                 if not self.direction_assert(firstElem, current_direction):
-                    i = i + 1
+                    i = self.get_next_N_elem(i+1, working_df, N=1, start_tb=TopBotType.top if current_direction==TopBotType.bot2top else TopBotType.bot)[0]
+#                     i = i + 1
                     continue
                 
                 current_status, with_gap = self.check_XD_topbot(firstElem, secondElem, thirdElem, forthElem, fifthElem, sixthElem)                      
                 
                 if current_status != TopBotType.noTopBot:
                     # do inclusion till find DING DI
-                    self.check_inclusion_by_direction(i+2, working_df, current_direction, with_gap)
+                    self.check_inclusion_by_direction(i+2, working_df, current_direction, previous_gap)
                     if with_gap:
                         # save existing gapped Ding/Di
                         self.gap_XD.append(next_valid_elems[2])
+                        
+                        [print("gap info 4:{0}, {1}".format(working_df.index[gap_loc], working_df.iloc[gap_loc].tb)) for gap_loc in self.gap_XD]
+                    
                     else:
                         # cleanest case
                         pass
                     current_direction = TopBotType.top2bot if current_status == TopBotType.top else TopBotType.bot2top
                     working_df.at[working_df.index[i+2], 'xd_tb'] = current_status
-                    i = i + 3
+                    i = self.get_next_N_elem(i+3, working_df, N=1, start_tb=TopBotType.top if current_direction==TopBotType.bot2top else TopBotType.bot)[0]
+#                     i = i + 3
                     continue
                 else:
-                    i = i + 2
+                    i = self.get_next_N_elem(i+2, working_df, N=1, start_tb=TopBotType.top if current_direction==TopBotType.bot2top else TopBotType.bot)[0]
+#                     i = i + 2
         
         return working_df
                 
