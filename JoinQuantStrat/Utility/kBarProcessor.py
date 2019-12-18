@@ -612,6 +612,15 @@ class KBarProcessor(object):
         
         return result_status, with_gap
     
+    def check_XD_topbot_directed(self, first, second, third, forth, fifth, sixth, direction):
+        result, with_gap = self.check_XD_topbot(first, second, third, forth, fifth, sixth)
+        
+        if (result == TopBotType.top and direction == TopBotType.bot2top) or (result == TopBotType.bot and direction == TopBotType.top2bot):
+            # desired top/bot with direction
+            return result, with_gap
+        else:
+            return TopBotType.noTopBot, with_gap
+    
     def defineXD(self):
         working_df = self.kDataFrame_marked[['chan_price', 'tb']]
 
@@ -652,7 +661,7 @@ class KBarProcessor(object):
         i = initial_i
         while i+5 < working_df.shape[0]:
             
-            print("working at {0}, {1}".format(working_df.index[i], working_df.iloc[i].tb))
+            print("working at {0}, {1}, {2}".format(working_df.index[i], working_df.iloc[i].tb, current_direction))
             
             previous_gap = len(self.gap_XD) != 0
             
@@ -674,7 +683,7 @@ class KBarProcessor(object):
 #                     i = i+1
                     continue     
                 
-                current_status, with_gap = self.check_XD_topbot(firstElem, secondElem, thirdElem, forthElem, fifthElem, sixthElem)  
+                current_status, with_gap = self.check_XD_topbot_directed(firstElem, secondElem, thirdElem, forthElem, fifthElem, sixthElem, current_direction)  
 
                 if current_status != TopBotType.noTopBot:
                     if with_gap:
@@ -686,8 +695,7 @@ class KBarProcessor(object):
                     else:
                         # fixed Ding/Di, clear the record
                         self.gap_XD = []
-                        
-                        [print("gap info 2:{0}, {1}".format(working_df.index[gap_loc], working_df.iloc[gap_loc].tb)) for gap_loc in self.gap_XD]
+                        print("gap cleaned!")
                     working_df.at[working_df.index[i+2], 'xd_tb'] = current_status
                     current_direction = TopBotType.top2bot if current_status == TopBotType.top else TopBotType.bot2top
                     i = self.get_next_N_elem(i+3, working_df, N=1, start_tb=TopBotType.top if current_direction==TopBotType.bot2top else TopBotType.bot)[0]
@@ -696,7 +704,7 @@ class KBarProcessor(object):
                 else:
                     previous_gap_elem = working_df.iloc[self.gap_XD[-1]]
                     if current_direction == TopBotType.top2bot:
-                        if secondElem.chan_price < previous_gap_elem.chan_price:
+                        if secondElem.chan_price > previous_gap_elem.chan_price:
                             # found new low
                             previous_gap_loc = self.gap_XD.pop()
                             working_df.at[working_df.index[previous_gap_loc], 'xd_tb'] = TopBotType.noTopBot
@@ -704,16 +712,18 @@ class KBarProcessor(object):
                             # restore any combined bi due to the gapped XD
                             working_df.iloc[previous_gap_loc:i, working_df.columns.get_loc('tb')] = working_df.iloc[previous_gap_loc:i, working_df.columns.get_loc('original_tb')]
                             current_direction = TopBotType.top2bot if current_direction == TopBotType.bot2top else TopBotType.bot2top
+                            print("gap closed 1:{0}, {1}".format(working_df.index[previous_gap_loc],  working_df.iloc[previous_gap_loc].tb)) 
                             i = previous_gap_loc
                             continue                            
                     elif current_direction == TopBotType.bot2top:
-                        if secondElem.chan_price > previous_gap_elem.chan_price:
+                        if secondElem.chan_price < previous_gap_elem.chan_price:
                             previous_gap_loc = self.gap_XD.pop()
                             working_df.at[working_df.index[previous_gap_loc], 'xd_tb'] = TopBotType.noTopBot
                             
                             # restore any combined bi due to the gapped XD
                             working_df.iloc[previous_gap_loc:i, working_df.columns.get_loc('tb')] = working_df.iloc[previous_gap_loc:i, working_df.columns.get_loc('original_tb')]
                             current_direction = TopBotType.top2bot if current_direction == TopBotType.bot2top else TopBotType.bot2top
+                            print("gap closed 2:{0}, {1}".format(working_df.index[previous_gap_loc],  working_df.iloc[previous_gap_loc].tb))
                             i = previous_gap_loc
                             continue
                             
@@ -740,7 +750,7 @@ class KBarProcessor(object):
 #                     i = i + 1
                     continue
                 
-                current_status, with_gap = self.check_XD_topbot(firstElem, secondElem, thirdElem, forthElem, fifthElem, sixthElem)                      
+                current_status, with_gap = self.check_XD_topbot_directed(firstElem, secondElem, thirdElem, forthElem, fifthElem, sixthElem, current_direction)                      
                 
                 if current_status != TopBotType.noTopBot:
                     # do inclusion till find DING DI
