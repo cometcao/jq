@@ -182,7 +182,7 @@ class KBarProcessor(object):
             if topBotType != TopBotType.noTopBot:
                 self.kDataFrame_standardized.ix[idx+1, 'tb'] = topBotType
         if self.isdebug:
-            print(self.kDataFrame_standardized)
+            print("self.kDataFrame_standardized:{0}".format(self.kDataFrame_standardized[['new_index', 'tb']]))
 
     def trace_back_index(self, working_df, previous_index):
         # find the closest FenXing with top/bot backwards from previous_index
@@ -198,9 +198,30 @@ class KBarProcessor(object):
             print("We don't have previous valid FenXing")
         return None
         
+    def gap_exists_in_range(self, start_idx, end_idx): # end_idx included
+        gap_working_df = self.kDataFrame_origin.loc[start_idx:end_idx, :]
+        return len(gap_working_df[gap_working_df['gap']==True]) > 0
+        
+#         gap_working_df.loc[:, 'high_1'] = gap_working_df['high'].shift(1)
+#         gap_working_df.loc[:, 'low_high'] = gap_working_df['low'] - gap_working_df['high_1']
+#         gap_result = gap_working_df[gap_working_df['low_high'] > 0].shape[0] > 0
+#         if gap_result:
+#             return gap_result
+#         
+#         gap_working_df.loc[:, 'low_1'] = gap_working_df['low'].shift(1)
+#         gap_working_df.loc[:, 'high_low'] = gap_working_df['high'] - gap_working_df['low_1']
+#         gap_result = gap_working_df[gap_working_df['high_low'] < 0].shape[0] > 0
+#         return gap_result
+
+    def gap_exists(self):
+#         self.kDataFrame_origin.loc[:, 'low_high'] = (self.kDataFrame_origin['low'] - self.kDataFrame_origin['high'].shift(1)) > 0
+#         self.kDataFrame_origin.loc[:, 'high_low'] = (self.kDataFrame_origin['high'] - self.kDataFrame_origin['low'].shift(1)) < 0
+        self.kDataFrame_origin.loc[:, 'gap'] = ((self.kDataFrame_origin['low'] - self.kDataFrame_origin['high'].shift(1)) > 0) | ((self.kDataFrame_origin['high'] - self.kDataFrame_origin['low'].shift(1)) < 0)
+        print(self.kDataFrame_origin[self.kDataFrame_origin['gap']==True])
 
     def defineBi(self):
         self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_index=[i for i in range(len(self.kDataFrame_standardized))])
+        self.gap_exists() # work out gap in the original kline
         working_df = self.kDataFrame_standardized[self.kDataFrame_standardized['tb']!=TopBotType.noTopBot]
         
         ############################# clean up the base case for Bi definition ###########################
@@ -280,7 +301,7 @@ class KBarProcessor(object):
 
             # possible BI status 1 check top high > bot low 2 check more than 3 bars (strict BI) in between
             # under this section of code we expect there are no two adjacent fenxings with the same status
-            if (nextFenXing.new_index - currentFenXing.new_index) >= 4:
+            if (nextFenXing.new_index - currentFenXing.new_index) >= 4 or self.gap_exists_in_range(working_df.index[current_index], working_df.index[next_index]):
                 if currentFenXing.tb == TopBotType.top and nextFenXing.tb == TopBotType.bot and currentFenXing['high'] > nextFenXing['high']:
                     pass
                 elif currentFenXing.tb == TopBotType.top and nextFenXing.tb == TopBotType.bot and currentFenXing['high'] <= nextFenXing['high']:
@@ -328,10 +349,11 @@ class KBarProcessor(object):
         ###################################    
         self.kDataFrame_marked = working_df[working_df['tb']!=TopBotType.noTopBot]
         if self.isdebug:
-            print(self.kDataFrame_marked)
+            print("self.kDataFrame_marked: {0}".format(self.kDataFrame_marked))
 
     def defineBi_new(self):
         self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_index=[i for i in range(len(self.kDataFrame_standardized))])
+        self.gap_exists() # work out gap in the original kline
         working_df = self.kDataFrame_standardized[self.kDataFrame_standardized['tb']!=TopBotType.noTopBot]
         
         ############################# clean up the base case for Bi definition ###########################
@@ -365,7 +387,7 @@ class KBarProcessor(object):
             # possible BI status 1 check top high > bot low 2 check more than 3 bars (strict BI) in between
             # under this section of code we expect there are no two adjacent fenxings with the same status, and any fenxing got eleminated which cause 
             # two fenxing with the same status will be future dealt by the next session of code. So each loop we start with legitimate fenxing data
-            if (nextFenXing.new_index - currentFenXing.new_index) >= 4:
+            if (nextFenXing.new_index - currentFenXing.new_index) >= 4 or self.gap_exists_in_range(working_df.index[current_index], working_df.index[next_index]):
                 if currentFenXing.tb == TopBotType.top and nextFenXing.tb == TopBotType.bot and currentFenXing['high'] > nextFenXing['high']:
                     pass
                 elif currentFenXing.tb == TopBotType.top and nextFenXing.tb == TopBotType.bot and currentFenXing['high'] <= nextFenXing['high']:
@@ -454,7 +476,7 @@ class KBarProcessor(object):
         ###################################    
         self.kDataFrame_marked = working_df[working_df['tb']!=TopBotType.noTopBot]
         if self.isdebug:
-            print(self.kDataFrame_marked)
+            print("self.kDataFrame_marked: {0}".format(self.kDataFrame_marked))
     
     
     def getCurrentKBarStatus(self, isSimple=True):
@@ -502,6 +524,7 @@ class KBarProcessor(object):
         self.standardize()
         self.markTopBot()
         self.defineBi()
+#         self.defineBi_new()
         self.getPureBi()
         return self.kDataFrame_marked
     
@@ -518,6 +541,8 @@ class KBarProcessor(object):
         self.defineBi()
 #         self.defineBi_new()
         return self.kDataFrame_origin.join(self.kDataFrame_marked[['new_index', 'tb']])
+            
+################################################## XD defintion ##################################################            
             
     def find_initial_direction(self, working_df):
         # use simple solution to find initial direction
@@ -551,7 +576,8 @@ class KBarProcessor(object):
             working_df.iloc[next_valid_elems[1], working_df.columns.get_loc('tb')] = TopBotType.noTopBot
             working_df.iloc[next_valid_elems[2], working_df.columns.get_loc('tb')] = TopBotType.noTopBot
             
-            print("location {0}, {1} removed for combination".format(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]]))
+            if self.isdebug:
+                print("location {0}, {1} removed for combination".format(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]]))
             return False
         return True
     
@@ -661,7 +687,8 @@ class KBarProcessor(object):
         i = initial_i
         while i+5 < working_df.shape[0]:
             
-            print("working at {0}, {1}, {2}".format(working_df.index[i], working_df.iloc[i].tb, current_direction))
+            if self.isdebug:
+                print("working at {0}, {1}, {2}".format(working_df.index[i], working_df.iloc[i].tb, current_direction))
             
             previous_gap = len(self.gap_XD) != 0
             
@@ -690,12 +717,14 @@ class KBarProcessor(object):
                         # save existing gapped Ding/Di
                         self.gap_XD.append(next_valid_elems[2])
                         
-                        [print("gap info 1:{0}, {1}".format(working_df.index[gap_loc], working_df.iloc[gap_loc].tb)) for gap_loc in self.gap_XD]
+                        if self.isdebug:
+                            [print("gap info 1:{0}, {1}".format(working_df.index[gap_loc], working_df.iloc[gap_loc].tb)) for gap_loc in self.gap_XD]
                         
                     else:
                         # fixed Ding/Di, clear the record
                         self.gap_XD = []
-                        print("gap cleaned!")
+                        if self.isdebug:
+                            print("gap cleaned!")
                     working_df.at[working_df.index[i+2], 'xd_tb'] = current_status
                     current_direction = TopBotType.top2bot if current_status == TopBotType.top else TopBotType.bot2top
                     i = self.get_next_N_elem(i+3, working_df, N=1, start_tb=TopBotType.top if current_direction==TopBotType.bot2top else TopBotType.bot)[0]
@@ -712,7 +741,8 @@ class KBarProcessor(object):
                             # restore any combined bi due to the gapped XD
                             working_df.iloc[previous_gap_loc:i, working_df.columns.get_loc('tb')] = working_df.iloc[previous_gap_loc:i, working_df.columns.get_loc('original_tb')]
                             current_direction = TopBotType.top2bot if current_direction == TopBotType.bot2top else TopBotType.bot2top
-                            print("gap closed 1:{0}, {1}".format(working_df.index[previous_gap_loc],  working_df.iloc[previous_gap_loc].tb)) 
+                            if self.isdebug:
+                                print("gap closed 1:{0}, {1}".format(working_df.index[previous_gap_loc],  working_df.iloc[previous_gap_loc].tb)) 
                             i = previous_gap_loc
                             continue                            
                     elif current_direction == TopBotType.bot2top:
@@ -723,14 +753,16 @@ class KBarProcessor(object):
                             # restore any combined bi due to the gapped XD
                             working_df.iloc[previous_gap_loc:i, working_df.columns.get_loc('tb')] = working_df.iloc[previous_gap_loc:i, working_df.columns.get_loc('original_tb')]
                             current_direction = TopBotType.top2bot if current_direction == TopBotType.bot2top else TopBotType.bot2top
-                            print("gap closed 2:{0}, {1}".format(working_df.index[previous_gap_loc],  working_df.iloc[previous_gap_loc].tb))
+                            if self.isdebug:
+                                print("gap closed 2:{0}, {1}".format(working_df.index[previous_gap_loc],  working_df.iloc[previous_gap_loc].tb))
                             i = previous_gap_loc
                             continue
                             
                     else:
                         print("Invalid current direction!")
                         break
-                    [print("gap info 3:{0}, {1}".format(working_df.index[gap_loc],  working_df.iloc[gap_loc].tb)) for gap_loc in self.gap_XD]
+                    if self.isdebug:
+                        [print("gap info 3:{0}, {1}".format(working_df.index[gap_loc],  working_df.iloc[gap_loc].tb)) for gap_loc in self.gap_XD]
                     i = self.get_next_N_elem(i+2, working_df, N=1, start_tb=TopBotType.top if current_direction==TopBotType.bot2top else TopBotType.bot)[0]
 #                     i = i + 2 # check next bi with same direction
                     
@@ -758,8 +790,8 @@ class KBarProcessor(object):
                     if with_gap:
                         # save existing gapped Ding/Di
                         self.gap_XD.append(next_valid_elems[2])
-                        
-                        [print("gap info 4:{0}, {1}".format(working_df.index[gap_loc], working_df.iloc[gap_loc].tb)) for gap_loc in self.gap_XD]
+                        if self.isdebug:
+                            [print("gap info 4:{0}, {1}".format(working_df.index[gap_loc], working_df.iloc[gap_loc].tb)) for gap_loc in self.gap_XD]
                     
                     else:
                         # cleanest case
