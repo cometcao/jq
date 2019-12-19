@@ -643,10 +643,20 @@ class KBarProcessor(object):
         
         return result_status, with_gap
     
-    def check_XD_topbot_directed(self, first, second, third, forth, fifth, sixth, direction):
+    def check_XD_topbot_directed(self, first, second, third, forth, fifth, sixth, direction, first_loc, working_df):
         result, with_gap = self.check_XD_topbot(first, second, third, forth, fifth, sixth)
         
         if (result == TopBotType.top and direction == TopBotType.bot2top) or (result == TopBotType.bot and direction == TopBotType.top2bot):
+            
+            if with_gap: # check previous elements to see if the gap can be closed
+                previous_elem = self.get_previous_N_elem(first_loc, working_df, N=0, end_tb=first.tb, single_direction=True)
+                if len(previous_elem) >= 2:
+                    if first.tb == TopBotType.top:
+                        with_gap = working_df.iloc[previous_elem, working_df.columns.get_loc('chan_price')].max() >= forth.chan_price
+                    elif first.tb == TopBotType.bot:
+                        with_gap = working_df.iloc[previous_elem, working_df.columns.get_loc('chan_price')].min() <= forth.chan_price
+                    else:
+                        assert first.tb == TopBotType.top or first.tb == TopBotType.bot, "Invalid first elem tb"
             # desired top/bot with direction
             return result, with_gap
         else:
@@ -657,6 +667,7 @@ class KBarProcessor(object):
 
 #         working_df['original_tb'] = working_df['tb']
         working_df.loc[:,'original_tb'] = working_df['tb']
+        working_df = working_df.assign(xd_tb=TopBotType.noTopBot)
     
         # find initial direction
         initial_i, initial_direction = self.find_initial_direction(working_df)
@@ -672,6 +683,7 @@ class KBarProcessor(object):
         '''
         get the next N number of elems if tb isn't noTopBot, 
         if start_tb is set, find the first N number of elems starting with tb given
+        starting from loc(inclusive)
         '''
         i = loc
         result_locs = []
@@ -685,6 +697,34 @@ class KBarProcessor(object):
                 if len(result_locs) == N:
                     break
             i = i + 1
+        return result_locs
+
+    def get_previous_N_elem(self, loc, working_df, N=0, end_tb=TopBotType.noTopBot, single_direction=True):
+        '''
+        get the previous N number of elems if tb isn't noTopBot, 
+        if start_tb is set, find the first N number of elems ending with tb given (order preserved)
+        ending with loc (exclusive)
+        We are only expecting elem from the same XD, meaning the same direction. So we fetch upto previous xd_tb if N == 0
+        single_direction meaning only return elem with the same tb as end_tb
+        '''
+        i = loc-1
+        result_locs = []
+        while i > 0:
+            current_elem = working_df.iloc[i]
+            if current_elem.tb != TopBotType.noTopBot:
+                if end_tb != TopBotType.noTopBot and current_elem.tb != end_tb and len(result_locs) == 0:
+                    i = i - 1
+                    continue
+                if single_direction: 
+                    if current_elem.tb == end_tb:
+                        result_locs.insert(0, i)
+                else:
+                    result_locs.insert(0, i)
+                if N != 0 and len(result_locs) == N:
+                    break
+                if N == 0 and (current_elem.xd_tb == TopBotType.top or current_elem.xd_tb == TopBotType.bot):
+                    break
+            i = i - 1
         return result_locs
 
     def find_XD(self, initial_i, initial_direction, working_df):      
@@ -715,7 +755,7 @@ class KBarProcessor(object):
 #                     i = i+1
                     continue     
                 
-                current_status, with_gap = self.check_XD_topbot_directed(firstElem, secondElem, thirdElem, forthElem, fifthElem, sixthElem, current_direction)  
+                current_status, with_gap = self.check_XD_topbot_directed(firstElem, secondElem, thirdElem, forthElem, fifthElem, sixthElem, current_direction, next_valid_elems[0], working_df)  
 
                 if current_status != TopBotType.noTopBot:
                     if with_gap:
@@ -787,7 +827,7 @@ class KBarProcessor(object):
 #                     i = i + 1
                     continue
                 
-                current_status, with_gap = self.check_XD_topbot_directed(firstElem, secondElem, thirdElem, forthElem, fifthElem, sixthElem, current_direction)                      
+                current_status, with_gap = self.check_XD_topbot_directed(firstElem, secondElem, thirdElem, forthElem, fifthElem, sixthElem, current_direction, next_valid_elems[0], working_df)                      
                 
                 if current_status != TopBotType.noTopBot:
                     # do inclusion till find DING DI
