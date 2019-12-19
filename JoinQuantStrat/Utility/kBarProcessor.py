@@ -144,9 +144,10 @@ class KBarProcessor(object):
                 firstElemIdx = secondElemIdx
                 secondElemIdx += 1
                 
-
+        # clean up
         self.kDataFrame_standardized['high'] = self.kDataFrame_standardized['new_high']
         self.kDataFrame_standardized['low'] = self.kDataFrame_standardized['new_low']
+        self.kDataFrame_standardized.drop(['new_high', 'new_low'], axis=1, inplace=True)
 
         self.kDataFrame_standardized = self.kDataFrame_standardized[np.isfinite(self.kDataFrame_standardized['high'])]
         # lines below is for chart drawing
@@ -182,7 +183,7 @@ class KBarProcessor(object):
             if topBotType != TopBotType.noTopBot:
                 self.kDataFrame_standardized.ix[idx+1, 'tb'] = topBotType
         if self.isdebug:
-            print("self.kDataFrame_standardized:{0}".format(self.kDataFrame_standardized[['new_index', 'tb']]))
+            print("self.kDataFrame_standardized:{0}".format(self.kDataFrame_standardized.head(20)))
 
     def trace_back_index(self, working_df, previous_index):
         # find the closest FenXing with top/bot backwards from previous_index
@@ -200,6 +201,9 @@ class KBarProcessor(object):
         
     def gap_exists_in_range(self, start_idx, end_idx): # end_idx included
         gap_working_df = self.kDataFrame_origin.loc[start_idx:end_idx, :]
+        
+        # drop the first row, as we only need to find gaps from start_idx(non-inclusive) to end_idx(inclusive)        
+        gap_working_df.drop(gap_working_df.index[0], inplace=True)
         return len(gap_working_df[gap_working_df['gap']==True]) > 0
         
 #         gap_working_df.loc[:, 'high_1'] = gap_working_df['high'].shift(1)
@@ -217,7 +221,8 @@ class KBarProcessor(object):
 #         self.kDataFrame_origin.loc[:, 'low_high'] = (self.kDataFrame_origin['low'] - self.kDataFrame_origin['high'].shift(1)) > 0
 #         self.kDataFrame_origin.loc[:, 'high_low'] = (self.kDataFrame_origin['high'] - self.kDataFrame_origin['low'].shift(1)) < 0
         self.kDataFrame_origin.loc[:, 'gap'] = ((self.kDataFrame_origin['low'] - self.kDataFrame_origin['high'].shift(1)) > 0) | ((self.kDataFrame_origin['high'] - self.kDataFrame_origin['low'].shift(1)) < 0)
-        print(self.kDataFrame_origin[self.kDataFrame_origin['gap']==True])
+        if self.isdebug:
+            print(self.kDataFrame_origin[self.kDataFrame_origin['gap']==True])
 
     def defineBi(self):
         self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_index=[i for i in range(len(self.kDataFrame_standardized))])
