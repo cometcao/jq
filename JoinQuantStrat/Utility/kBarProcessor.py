@@ -715,17 +715,19 @@ class KBarProcessor(object):
         ending with loc (exclusive)
         We are only expecting elem from the same XD, meaning the same direction. So we fetch upto previous xd_tb if N == 0
         single_direction meaning only return elem with the same tb as end_tb
+        We are checking the original_tb field to avoid BI been combined. 
+        This function is only used for xd gap check
         '''
         i = loc-1
         result_locs = []
         while i >= 0:
             current_elem = working_df.iloc[i]
-            if current_elem.tb != TopBotType.noTopBot:
-                if end_tb != TopBotType.noTopBot and current_elem.tb != end_tb and len(result_locs) == 0:
+            if current_elem.original_tb != TopBotType.noTopBot:
+                if end_tb != TopBotType.noTopBot and current_elem.original_tb != end_tb and len(result_locs) == 0:
                     i = i - 1
                     continue
                 if single_direction: 
-                    if current_elem.tb == end_tb:
+                    if current_elem.original_tb == end_tb:
                         result_locs.insert(0, i)
                 else:
                     result_locs.insert(0, i)
@@ -846,7 +848,8 @@ class KBarProcessor(object):
                         [print("gap info 3:{0}, {1}".format(working_df.index[gap_loc],  working_df.iloc[gap_loc].tb)) for gap_loc in self.gap_XD]
                     i = next_valid_elems[2] #  i = i + 2 # check next bi with same direction
                     
-            else:                # find next 3 elems with the same tb info
+            else:    # no gap case            
+                # find next 3 elems with the same tb info
                 next_valid_elems = self.get_next_N_elem(i, working_df, 3, start_tb = TopBotType.top if current_direction == TopBotType.bot2top else TopBotType.bot, single_direction=True)
                 firstElem = working_df.iloc[next_valid_elems[0]]
                 
