@@ -37,6 +37,7 @@ class KBarProcessor(object):
         self.kDataFrame_standardized = copy.deepcopy(kDf)
         self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_high=np.nan, new_low=np.nan, trend_type=np.nan)
         self.kDataFrame_marked = None
+        self.kDataFrame_xd = None
         self.gap_XD = []
     
     def synchForChart(self):
@@ -199,6 +200,9 @@ class KBarProcessor(object):
             print("We don't have previous valid FenXing")
         return None
         
+    def prepare_original_kdf(self):    
+        _, _, self.kDataFrame_origin.loc[:,'macd'] = talib.MACD(self.kDataFrame_origin['close'].values)
+        
     def gap_exists_in_range(self, start_idx, end_idx): # end_idx included
         gap_working_df = self.kDataFrame_origin.loc[start_idx:end_idx, :]
         
@@ -209,8 +213,8 @@ class KBarProcessor(object):
 
     def gap_exists(self):
         self.kDataFrame_origin.loc[:, 'gap'] = ((self.kDataFrame_origin['low'] - self.kDataFrame_origin['high'].shift(1)) > 0) | ((self.kDataFrame_origin['high'] - self.kDataFrame_origin['low'].shift(1)) < 0)
-        if self.isdebug:
-            print(self.kDataFrame_origin[self.kDataFrame_origin['gap']==True])
+#         if self.isdebug:
+#             print(self.kDataFrame_origin[self.kDataFrame_origin['gap']==True])
 
     def gap_region(self, start_idx, end_idx):
         gap_working_df = self.kDataFrame_origin.loc[start_idx:end_idx, :]
@@ -521,6 +525,16 @@ class KBarProcessor(object):
                     resultStatus = KBarStatus.upTrend
         return resultStatus
         
+    def getXDStatus(self):
+        gauge_df = self.kDataFrame_xd[self.kDataFrame_xd['xd_tb'] != TopBotType.noTopBot]
+        if not gauge_df.empty:
+            if gauge_df.iloc[-1, 'xd_tb'] == TopBotType.top:
+                return TopBotType.top2bot
+            elif gauge_df.iloc[-1, 'xd_tb'] == TopBotType.bot:
+                return TopBotType.bot2top
+        return TopBotType.noTopBot
+        
+        
     def gaugeStatus(self, isSimple=True):
         self.standardize()
         self.markTopBot()
@@ -548,8 +562,15 @@ class KBarProcessor(object):
         self.standardize(initial_state)
         self.markTopBot(initial_state)
         self.defineBi()
+        self.getPureBi()
 #         self.defineBi_new()
-        return self.kDataFrame_origin.join(self.kDataFrame_marked[['new_index', 'tb']])
+        return self.kDataFrame_origin.join(self.kDataFrame_marked[['new_index', 'tb', 'chan_price']])
+    
+    def getIntegradedXD(self, initial_state=TopBotType.noTopBot):
+        temp_df = self.getIntegraded(initial_state)
+        self.defineXD()
+        
+        return temp_df.join(self.kDataFrame_xd['xd_tb'])
             
 ################################################## XD defintion ##################################################            
             
@@ -694,9 +715,10 @@ class KBarProcessor(object):
                 if without_gap:
                     with_xd_gap = True
                     if self.isdebug:
-                        print("XD represented by kline gap, {0}, {1}".format(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]]))
+                        print("XD represented by kline gap 1, {0}, {1}".format(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]]))
         
-        if next_valid_elems[2] + 1 == next_valid_elems[3] and\
+        if not with_xd_gap and\
+        next_valid_elems[2] + 1 == next_valid_elems[3] and\
         self.gap_exists_in_range(working_df.index[next_valid_elems[2]], working_df.index[next_valid_elems[3]]):
             gap_ranges = self.gap_region(working_df.index[next_valid_elems[2]], working_df.index[next_valid_elems[3]])
             
@@ -706,13 +728,16 @@ class KBarProcessor(object):
                 if without_gap:
                     with_xd_gap = True
                     if self.isdebug:
-                        print("XD represented by kline gap, {0}, {1}".format(working_df.index[next_valid_elems[2]], working_df.index[next_valid_elems[3]]))
+                        print("XD represented by kline gap 2, {0}, {1}".format(working_df.index[next_valid_elems[2]], working_df.index[next_valid_elems[3]]))
                         
         if with_xd_gap:
             if (direction == TopBotType.bot2top and third.chan_price > fifth.chan_price and third.chan_price > first.chan_price):
                 xd_gap_result = TopBotType.top
             elif (direction == TopBotType.top2bot and third.chan_price < first.chan_price and third.chan_price < fifth.chan_price):
                 xd_gap_result = TopBotType.bot
+            else:
+                if self.isdebug:
+                    print("XD represented by kline gap 3")
         
         return xd_gap_result, not without_gap, with_xd_gap
         ######################################################################################################
@@ -758,8 +783,7 @@ class KBarProcessor(object):
         else:
             return TopBotType.noTopBot, with_gap, with_xd_gap
     
-    def defineXD(self):
-        working_df = self.kDataFrame_marked[['chan_price', 'tb']]
+    def defineXD(self):        working_df = self.kDataFrame_marked[['chan_price', 'tb','new_index']] # new index used for central region
 
 #         working_df['original_tb'] = working_df['tb']
         working_df.loc[:,'original_tb'] = working_df['tb']
@@ -773,6 +797,7 @@ class KBarProcessor(object):
         
         working_df = working_df[(working_df['xd_tb']==TopBotType.top) | (working_df['xd_tb']==TopBotType.bot)]
         
+        self.kDataFrame_xd = working_df
         return working_df
 
     def get_next_N_elem(self, loc, working_df, N=4, start_tb=TopBotType.noTopBot, single_direction=False):
