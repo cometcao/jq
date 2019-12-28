@@ -80,32 +80,21 @@ class ZouShi(object):
         self.zslx_all_nodes = all_nodes
         self.zslx_result = []
         self.isdebug = isdebug
-    
-    def work_out_direction(self, first, third):
-        assert first.tb == third.tb, "Invalid tb information for direction"
-        result_direction = TopBotType.noTopBot
-        if first.tb == TopBotType.top:
-            result_direction = TopBotType.bot2top if third.chan_price > first.chan_price else TopBotType.top2bot
-        elif first.tb == TopBotType.bot:
-            result_direction = TopBotType.bot2top if third.chan_price > first.chan_price else TopBotType.top2bot
-        else:
-            pass
-            
-        return result_direction
             
     
     def analyze(self, initial_direction):
         i = 0
         temp_zslx = ZouShiLeiXing(initial_direction, [])
         previous_node = None
-        while i < len(self.zslx_all_nodes) - 4:
+        while i < len(self.zslx_all_nodes) - 1:
             first = self.zslx_all_nodes[i]
             second = self.zslx_all_nodes[i+1]
-            third = self.zslx_all_nodes[i+2]
-            forth = self.zslx_all_nodes[i+3]
+
+            third = self.zslx_all_nodes[i+2] if i+2 < len(self.zslx_all_nodes) else None
+            forth = self.zslx_all_nodes[i+3] if i+3 < len(self.zslx_all_nodes) else None
             
             if type(temp_zslx) is ZouShiLeiXing:
-                if ZouShiLeiXing.is_valid_central_region(temp_zslx.direction, first, second, third, forth):
+                if third is not None and forth is not None and ZouShiLeiXing.is_valid_central_region(temp_zslx.direction, first, second, third, forth):
                     # new zs found end previous zslx
                     if not temp_zslx.isEmpty():
                         temp_zslx.add_new_nodes(first)
@@ -115,7 +104,7 @@ class ZouShi(object):
                     if self.isdebug:
                         print("start new Zhong Shu, end previous zslx")
                     previous_node = forth
-                    i = i + 4
+                    i = i + 3
                 else:
                     # continue in zslx
                     temp_zslx.add_new_nodes(first)
@@ -139,6 +128,11 @@ class ZouShi(object):
                             print("continue zhong shu: {0}".format(temp_zslx))
                         previous_node = first
                         i = i + 1
+        
+#         # add remaining nodes
+        temp_zslx.add_new_nodes(self.zslx_all_nodes[i:])
+        self.zslx_result.append(temp_zslx)
+
         return self.zslx_result
 
 class ZouShiLeiXing(object):
@@ -159,6 +153,7 @@ class ZouShiLeiXing(object):
     
     def add_new_nodes(self, tb_nodes):
         if type(tb_nodes) is list:
+#             list(OrderedDict.fromkeys(self.zoushi_nodes + tb_nodes))
             self.zoushi_nodes = self.zoushi_nodes + tb_nodes
         else:
             if tb_nodes not in self.zoushi_nodes:
@@ -234,8 +229,9 @@ class ZhongShu(ZouShiLeiXing):
     
     def add_new_nodes(self, tb_nodes):
         if type(tb_nodes) is list:
+#             list(OrderedDict.fromkeys(self.extra_nodes + tb_nodes))
             self.extra_nodes = self.extra_nodes + tb_nodes
-            self.get_amplitude_region(tb_nodes)   
+            self.get_amplitude_region(tb_nodes)
         else:
             self.extra_nodes.append(tb_nodes)
             self.get_amplitude_region([tb_nodes])    
@@ -262,8 +258,8 @@ class ZhongShu(ZouShiLeiXing):
             upper = min(self.first.chan_price, self.third.chan_price)
             lower = max(self.second.chan_price, self.forth.chan_price)
         elif self.direction == TopBotType.top2bot and self.first.tb == self.third.tb == TopBotType.bot and self.second.tb == self.forth.tb == TopBotType.top:
-            upper = max(self.first.chan_price, self.third.chan_price)
-            lower = min(self.second.chan_price, self.forth.chan_price)
+            lower = max(self.first.chan_price, self.third.chan_price)
+            upper = min(self.second.chan_price, self.forth.chan_price)
         else:
             print("Invalid central region")       
         self.core_region = [lower, upper] 
@@ -333,11 +329,37 @@ class CentralRegionProcess(object):
             print("initial direction: {0}, start idx {1}".format(initial_direction, initial_idx))
         return initial_idx, initial_direction  
     
-    def find_initial_direction(self): 
-        max_price_idx = self.original_xd_df['chan_price'].idxmax()
-        min_price_idx = self.original_xd_df['chan_price'].idxmin()
-        initial_idx = min(max_price_idx, min_price_idx)
-        initial_direction = TopBotType.bot2top if max_price_idx > min_price_idx else TopBotType.top2bot
+
+    def work_out_direction(self, first, second, third, forth):
+        assert first.tb == third.tb and second.tb == forth.tb, "Invalid tb information for direction"
+        result_direction = TopBotType.noTopBot
+        if first.tb == TopBotType.top and second.tb == TopBotType.bot:
+            result_direction = TopBotType.bot2top if third.chan_price > first.chan_price else TopBotType.top2bot
+        elif first.tb == TopBotType.bot and second.tb == TopBotType.top:
+            result_direction = TopBotType.bot2top if third.chan_price > first.chan_price else TopBotType.top2bot
+        else:
+            print("Invalid tb data!!")
+            
+        return result_direction
+    
+    
+    def find_initial_direction(self, working_df): 
+        i = 0
+        first = working_df.iloc[i]
+        second = working_df.iloc[i+1]
+        third = working_df.iloc[i+2]
+        forth = working_df.iloc[i+3]
+        
+        if ZouShiLeiXing.is_valid_central_region(TopBotType.bot2top, first, second, third, forth):
+            initial_direction = TopBotType.bot2top
+            initial_idx = working_df.index[i]
+        elif ZouShiLeiXing.is_valid_central_region(TopBotType.top2bot, first, second, third, forth):
+            initial_direction = TopBotType.bot2top
+            initial_idx = working_df.index[i]
+        else: # case of ZSLX
+            initial_direction = self.work_out_direction(first, second, third, forth)
+            initial_idx = working_df.index[i]
+        
         if self.isdebug:
             print("initial direction: {0}, start idx {1}".format(initial_direction, initial_idx))
         return initial_idx, initial_direction  
@@ -357,7 +379,7 @@ class CentralRegionProcess(object):
         
         working_df = self.prepare_df_data(working_df)
         
-        init_idx, init_d = self.find_initial_direction()
+        init_idx, init_d = self.find_initial_direction(working_df)
         
         self.analytic_result = self.find_central_region(init_idx, init_d, working_df)
         
@@ -374,8 +396,8 @@ class CentralRegionProcess(object):
         y_axis = []
         for zs in self.analytic_result:
             if type(zs) is ZhongShu:
-                x_axis = x_axis + zs.get_core_region()
-                y_axis = y_axis + zs.get_core_time_region()
+                x_axis = x_axis + zs.get_core_time_region()
+                y_axis = y_axis + zs.get_core_region()
             else:
                 continue
         
