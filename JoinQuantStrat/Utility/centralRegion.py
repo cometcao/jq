@@ -27,6 +27,7 @@ class XianDuan_Node(Chan_Node):
     def __init__(self, df_node):
         Chan_Node.__init__(self, df_node)
         self.tb = df_node.xd_tb
+        self.macd_acc = df_node.macd_acc_xd_tb
         
     def __repr__(self):
         return super().__repr__() + "tb: {0}".format(self.tb)
@@ -38,6 +39,7 @@ class BI_Node(Chan_Node):
     def __init__(self, df_node):
         Chan_Node.__init__(self, df_node)
         self.tb = df_node.tb
+        self.macd_acc = df_node.macd_acc_tb
 
     def __repr__(self):
         return super().__repr__() + "tb: {0}".format(self.tb)
@@ -58,14 +60,18 @@ class Double_Nodes(object):
     def get_time_region(self):
         return self.start.time, self.end.time
 
-class XianDuan(object):
+    def work_out_slope(self):
+        return (end.chan_price - start.chan_price) / (end.loc - start.loc)
+
+class XianDuan(Double_Nodes):
     '''
     This class takes two xd nodes 
     '''
     def __init__(self, start, end):
         Double_Nodes.__init__(self, start, end)
     
-class BI(object):
+    
+class BI(Double_Nodes):
     '''
     This class takes two bi nodes 
     '''
@@ -104,7 +110,7 @@ class ZouShi(object):
                     if self.isdebug:
                         print("start new Zhong Shu, end previous zslx")
                     previous_node = forth
-                    i = i + 3
+                    i = i + 2 # use to be 3, but we accept the case where last XD of ZhongShu can be zslx
                 else:
                     # continue in zslx
                     temp_zslx.add_new_nodes(first)
@@ -123,7 +129,8 @@ class ZouShi(object):
                             print("start new zou shi lei xing, end previous zhong shu")
                     else:
                         # continue in the zs
-                        temp_zslx.add_new_nodes(first)
+                        if first != temp_zslx.first and first != temp_zslx.second and first != temp_zslx.third and first != temp_zslx.forth:
+                            temp_zslx.add_new_nodes(first)
                         if self.isdebug:
                             print("continue zhong shu: {0}".format(temp_zslx))
                         previous_node = first
@@ -169,9 +176,9 @@ class ZouShiLeiXing(object):
     def is_valid_central_region(cls, direction, first, second, third, forth):
         valid = False
         if direction == TopBotType.top2bot:
-            valid = first.chan_price < second.chan_price and second.chan_price > third.chan_price and third.chan_price < forth.chan_price
+            valid = first.chan_price < second.chan_price and second.chan_price > third.chan_price and third.chan_price < forth.chan_price and first.chan_price <= forth.chan_price
         elif direction == TopBotType.bot2top:
-            valid = first.chan_price > second.chan_price and second.chan_price < third.chan_price and third.chan_price > forth.chan_price            
+            valid = first.chan_price > second.chan_price and second.chan_price < third.chan_price and third.chan_price > forth.chan_price and first.chan_price >= forth.chan_price           
         else:
             print("Invalid direction: {0}".format(direction))
         return valid
@@ -199,6 +206,60 @@ class ZouShiLeiXing(object):
             self.time_region = [self.zoushi_nodes[0].time, self.zoushi_nodes[-1].time]
         return self.time_region
 
+    def get_amplitude_loc(self):
+        all_node_price = [node.chan_price for node in self.zoushi_nodes]
+        max_price_loc = self.zoushi_nodes[all_node_price.index(min(all_node_price))].loc
+        min_price_loc = self.zoushi_nodes[all_node_price.index(max(all_node_price))].loc
+        return min_price_loc, max_price_loc
+    
+    def work_out_slope(self):
+        '''
+        negative slope meaning price going down
+        '''
+        if not self.zoushi_nodes:
+            return 0
+        min_price_loc, max_price_loc = self.get_amplitude_loc()
+        off_set = max_price_loc - min_price_loc # this could be negative
+        if np.isclose(off_set, 0.0):
+            print("0 offset, INVALID")
+            return 0
+        
+        [min_price, max_price] = self.get_amplitude_region()
+        return (max_price - min_price) / off_set
+    
+    def get_macd_acc(self):
+        top_nodes = [node for node in self.zoushi_nodes if node.tb == TopBotType.top]
+        bot_nodes = [node for node in self.zoushi_nodes if node.tb == TopBotType.bot]
+        macd_acc = 0.0
+        if self.direction == TopBotType.bot2top:
+            macd_acc = sum([node.macd_acc for node in top_nodes])
+        elif self.direction == TopBotType.top2bot:
+            macd_acc = sum([node.macd_acc for node in bot_nodes])
+        else:
+            print("We have invalid direction for ZhongShu")
+        return macd_acc
+    
+    def check_exhaustion(self):
+        '''
+        check most recent two XD or BI at current direction on slopes
+        '''
+        i = 0
+        all_double_nodes = []
+        while i < len(self.zoushi_nodes)-1:
+            current_node = self.zoushi_nodes[i]
+            next_node = self.zoushi_nodes[i+1]
+            dn = Double_Nodes(current_node, next_node)
+            all_double_nodes.append(dn)
+            i = i + 1
+        
+        same_direction_nodes = [n for n in all_double_nodes if n.direction == self.direction]
+        if (self.direction == TopBotType.top2bot and same_direction_nodes[-1].end.tb == TopBotType.bot) or\
+            (self.direction == TopBotType.bot2top and same_direction_nodes[-1].end.tb == TopBotType.top):
+            return abs(same_direction_nodes[-1].work_out_slope()) < abs(same_direction_nodes[-3].work_out_slope())
+        else:
+            return False
+        
+
 class ZhongShu(ZouShiLeiXing):
     '''
     This class store all information of a central region. core data is in the format of pandas series, obtained from iloc
@@ -225,7 +286,7 @@ class ZhongShu(ZouShiLeiXing):
     
     def __repr__(self):
         [s, e] = self.get_time_region()
-        return "\nZhong Shu {0}:{1}-{2}-{3}-{4} {5}->{6}\n[".format(self.direction, self.first.chan_price, self.second.chan_price, self.third.chan_price, self.forth.chan_price, s, e) + '\n'.join([node.__repr__() for node in self.extra_nodes]) + ']'        
+        return "\nZhong Shu {0}:{1}-{2}-{3}-{4} {5}->{6} level@{7}\n[".format(self.direction, self.first.chan_price, self.second.chan_price, self.third.chan_price, self.forth.chan_price, s, e, self.get_level()) + '\n'.join([node.__repr__() for node in self.extra_nodes]) + ']'        
     
     def add_new_nodes(self, tb_nodes):
         if type(tb_nodes) is list:
@@ -293,26 +354,44 @@ class ZhongShu(ZouShiLeiXing):
             if not self.extra_nodes:
                 self.time_region = self.get_core_time_region()
             else:
-                self.time_region = [self.core_time_region[0], self.extra_nodes[-1].time]
+                self.time_region = [self.core_time_region[0], max(self.core_time_region[-1], self.extra_nodes[-1].time)]
         else:
             if self.extra_nodes:
                 self.extra_nodes.sort(key=lambda x: x.time)
-                self.time_region = [self.core_time_region[0], self.extra_nodes[-1].time]
+                self.time_region = [self.core_time_region[0], max(self.core_time_region[-1], self.extra_nodes[-1].time)]
         return self.time_region
 
-    def get_entrance_node(self):
-        return self.first
+    def get_level(self):
+        # 4 core nodes + 6 extra nodes => 9 xd as next level
+        return ZhongShuLevel.current if len(self.extra_nodes) < 6 else ZhongShuLevel.next if 6 <= len(self.extra_nodes) < 24 else ZhongShuLevel.nextnext
+
+    def take_last_xd_as_zslx(self):
+        if (self.direction == TopBotType.top2bot and self.extra_nodes[-1].tb == TopBotType.bot) or\
+            (self.direction == TopBotType.bot2top and self.extra_nodes[-1].tb == TopBotType.top):
+            return ZouShiLeiXing(self.extra_nodes)
+        return ZouShiLeiXing(self.direction)
+
+    def is_complex_type(self):
+        # if the ZhongShu contain more than 3 XD, it's a complex ZhongShu, in practice the direction of it can be interpreted differently
+        return bool(self.extra_nodes)
     
-    def get_exit_node(self):
-        return self.extra_nodes[-1]
+    def is_running_type(self):
+        running_type = False
+        if self.direction == TopBotType.bot2top:
+            pass
+        elif self.direction == TopBotType.top2bot:
+            pass
+        else:
+            pass
     
 class CentralRegionProcess(object):
     '''
     This lib takes XD data, and the dataframe must contain chan_price, new_index, xd_tb, macd columns
     '''
-    def __init__(self, kDf, high_df=None, isdebug=False):    
+    def __init__(self, kDf, high_df=None, isdebug=False, use_xd=True):    
         self.original_xd_df = kDf
         self.high_level_df = high_df
+        self.use_xd = use_xd
         self.analytic_result = []
         self.isdebug = isdebug
         
@@ -350,15 +429,15 @@ class CentralRegionProcess(object):
         third = working_df.iloc[i+2]
         forth = working_df.iloc[i+3]
         
-        if ZouShiLeiXing.is_valid_central_region(TopBotType.bot2top, first, second, third, forth):
-            initial_direction = TopBotType.bot2top
-            initial_idx = working_df.index[i]
-        elif ZouShiLeiXing.is_valid_central_region(TopBotType.top2bot, first, second, third, forth):
-            initial_direction = TopBotType.bot2top
-            initial_idx = working_df.index[i]
-        else: # case of ZSLX
-            initial_direction = self.work_out_direction(first, second, third, forth)
-            initial_idx = working_df.index[i]
+#         if ZouShiLeiXing.is_valid_central_region(TopBotType.bot2top, first, second, third, forth):
+#             initial_direction = TopBotType.bot2top
+#             initial_idx = working_df.index[i]
+#         elif ZouShiLeiXing.is_valid_central_region(TopBotType.top2bot, first, second, third, forth):
+#             initial_direction = TopBotType.bot2top
+#             initial_idx = working_df.index[i]
+#         else: # case of ZSLX
+        initial_direction = self.work_out_direction(first, second, third, forth)
+        initial_idx = working_df.index[i]
         
         if self.isdebug:
             print("initial direction: {0}, start idx {1}".format(initial_direction, initial_idx))
@@ -367,8 +446,8 @@ class CentralRegionProcess(object):
     
     def find_central_region(self, initial_idx, initial_direction, working_df):
         working_df = working_df.loc[initial_idx:,:]
-#         zoushi = ZouShi(working_df.apply(lambda row: XianDuan_Node(row), axis=1).tolist(), initial_direction)
-        zoushi = ZouShi([XianDuan_Node(working_df.iloc[i]) for i in range(working_df.shape[0])], isdebug=self.isdebug)
+        
+        zoushi = ZouShi([XianDuan_Node(working_df.iloc[i]) for i in range(working_df.shape[0])], isdebug=self.isdebug) if self.use_xd else ZouShi([BI_Node(working_df.iloc[i]) for i in range(working_df.shape[0])], isdebug=self.isdebug)
         return zoushi.analyze(initial_direction)
     
     def define_central_region(self):
@@ -386,16 +465,18 @@ class CentralRegionProcess(object):
         if self.isdebug:
             print("Zou Shi disassembled: {0}".format(self.analytic_result))
             
+        return self.analytic_result
         
         
     def convert_to_graph_data(self):
         '''
-        We are assuming the Zou Shi is disassembled properly with data in time order
+        We are assuming the Zou Shi is disassembled properly with data in timely order
         '''
         x_axis = []
         y_axis = []
         for zs in self.analytic_result:
             if type(zs) is ZhongShu:
+                print(zs)
                 x_axis = x_axis + zs.get_core_time_region()
                 y_axis = y_axis + zs.get_core_region()
             else:
@@ -407,20 +488,13 @@ class CentralRegionProcess(object):
     def prepare_df_data(self, working_df):        
         _, _, working_df.loc[:,'macd'] = talib.MACD(working_df['close'].values)
 
-#         working_df['tb_pivot'] = working_df.apply(lambda row: 0 if pd.isnull(row['xd_tb']) else 1, axis=1)
-#         groups = working_df['tb_pivot'][::-1].cumsum()[::-1]
-#         working_df['tb_pivot_acc'] = groups
-#         
-#         df_macd_acc = working_df.groupby(groups)['macd'].agg([('macd_acc_negative' , lambda x : x[x < 0].sum()) , ('macd_acc_positive' , lambda x : x[x > 0].sum())])
-#         working_df = pd.merge(working_df, df_macd_acc, left_on='tb_pivot_acc', right_index=True)
-#         working_df['macd_acc'] = working_df.apply(lambda row: 0 if pd.isnull(row['xd_tb']) else row['macd_acc_negative'] if row['xd_tb'] == TopBotType.bot else row['macd_acc_positive'] if row['xd_tb'] == TopBotType.top else 0, axis=1)
-        working_df = self.prepare_macd(working_df, 'tb')
-        working_df = self.prepare_macd(working_df, 'xd_tb')
+        tb_name = 'xd_tb' if self.use_xd else 'tb'
+        working_df = self.prepare_macd(working_df, tb_name)
 
-        working_df = working_df[(working_df['xd_tb']==TopBotType.top) | (working_df['xd_tb']==TopBotType.bot)]
+        working_df = working_df[(working_df[tb_name]==TopBotType.top) | (working_df[tb_name]==TopBotType.bot)]
         
         if self.isdebug:
-            print("working_df: {0}".format(working_df.head(10)[['chan_price', 'xd_tb', 'new_index','macd_acc_tb', 'macd_acc_xd_tb']]))
+            print("working_df: {0}".format(working_df.head(10)[['chan_price', tb_name, 'new_index','macd_acc_'+tb_name]]))
         return working_df
     
     def prepare_macd(self, working_df, tb_col):
