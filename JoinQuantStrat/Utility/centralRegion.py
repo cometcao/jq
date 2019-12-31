@@ -8,8 +8,16 @@ Created on 23 Dec 2019
 import numpy as np
 import pandas as pd
 import talib
+from enum import Enum 
 from biaoLiStatus import * 
 from kBarProcessor import *
+
+class ZhongShuLevel(Enum):
+    previousprevious = -2
+    previous = -1
+    current = 0
+    next = 1
+    nextnext = 2
 
 class Chan_Node(object):
     def __init__(self, df_node):
@@ -156,7 +164,7 @@ class ZouShiLeiXing(object):
         self.time_region = []
     
     def isEmpty(self):
-        return self.zoushi_nodes == []
+        return not bool(self.zoushi_nodes)
     
     def add_new_nodes(self, tb_nodes):
         if type(tb_nodes) is list:
@@ -169,6 +177,8 @@ class ZouShiLeiXing(object):
         self.get_amplitude_region(self.zoushi_nodes)
     
     def __repr__(self):
+        if self.isEmpty():
+            return "Empty Zou Shi Lei Xing!"
         [s, e] = self.get_time_region()
         return "\nZou Shi Lei Xing: {0} {1}->{2}\n[\n".format(self.direction, s, e) + '\n'.join([node.__repr__() for node in self.zoushi_nodes]) + '\n]'
 
@@ -199,6 +209,8 @@ class ZouShiLeiXing(object):
         return self.amplitude_region
 
     def get_time_region(self):    
+        if self.isEmpty():
+            return [None, None]
         if not self.time_region: # assume node stored in time order
             self.time_region = [self.zoushi_nodes[0].time, self.zoushi_nodes[-1].time]
         else:
@@ -208,8 +220,8 @@ class ZouShiLeiXing(object):
 
     def get_amplitude_loc(self):
         all_node_price = [node.chan_price for node in self.zoushi_nodes]
-        max_price_loc = self.zoushi_nodes[all_node_price.index(min(all_node_price))].loc
-        min_price_loc = self.zoushi_nodes[all_node_price.index(max(all_node_price))].loc
+        min_price_loc = self.zoushi_nodes[all_node_price.index(min(all_node_price))].loc
+        max_price_loc = self.zoushi_nodes[all_node_price.index(max(all_node_price))].loc
         return min_price_loc, max_price_loc
     
     def work_out_slope(self):
@@ -217,6 +229,7 @@ class ZouShiLeiXing(object):
         negative slope meaning price going down
         '''
         if not self.zoushi_nodes:
+            print("Empty zslx")
             return 0
         min_price_loc, max_price_loc = self.get_amplitude_loc()
         off_set = max_price_loc - min_price_loc # this could be negative
@@ -366,10 +379,8 @@ class ZhongShu(ZouShiLeiXing):
         return ZhongShuLevel.current if len(self.extra_nodes) < 6 else ZhongShuLevel.next if 6 <= len(self.extra_nodes) < 24 else ZhongShuLevel.nextnext
 
     def take_last_xd_as_zslx(self):
-        if (self.direction == TopBotType.top2bot and self.extra_nodes[-1].tb == TopBotType.bot) or\
-            (self.direction == TopBotType.bot2top and self.extra_nodes[-1].tb == TopBotType.top):
-            return ZouShiLeiXing(self.extra_nodes)
-        return ZouShiLeiXing(self.direction)
+        exiting_nodes = [self.forth] + self.extra_nodes if self.extra_nodes else []
+        return ZouShiLeiXing(self.direction, exiting_nodes) 
 
     def is_complex_type(self):
         # if the ZhongShu contain more than 3 XD, it's a complex ZhongShu, in practice the direction of it can be interpreted differently

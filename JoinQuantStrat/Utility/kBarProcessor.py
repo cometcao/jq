@@ -1008,6 +1008,19 @@ class KBarProcessor(object):
                 else:
                     i = next_valid_elems[2]
         
+        # We need to deal with the remaining BI tb and make an assumption that current XD ends
+        if i < working_df.shape[0]:
+            if current_direction == TopBotType.top2bot:
+                working_df.loc[working_df.iloc[i:,working_df.columns.get_loc('chan_price')].idxmin(), 'xd_tb'] = TopBotType.bot
+                if self.isdebug:
+                    print("final xd_tb located {0}".format(working_df.index[i]))
+            elif current_direction == TopBotType.bot2top:
+                working_df.loc[working_df.iloc[i:,working_df.columns.get_loc('chan_price')].idxmax(), 'xd_tb'] = TopBotType.top
+                if self.isdebug:
+                    print("final xd_tb located {0}".format(working_df.index[i]))
+            else:
+                print("Invalid direction")        
+        
         return working_df
                 
     def direction_assert(self, firstElem, direction):

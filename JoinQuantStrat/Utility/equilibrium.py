@@ -25,7 +25,7 @@ class Equilibrium():
         Make sure we return the most recent Zhong Shu and the Zou Shi Lei Xing Entering it.
         The Zou Shi Lei Xing Exiting it will be reworked on the original df
         '''
-        if type(self.analytic_result[-1]) is ZhongShu:
+        if type(self.analytic_result[-1]) is ZhongShu and self.analytic_result[-1].is_complex_type():
             filled_zslx = self.analytic_result[-1].take_last_xd_as_zslx()
             return self.analytic_result[-2], self.analytic_result[-1], filled_zslx
         elif type(self.analytic_result[-1]) is ZouShiLeiXing:
@@ -52,8 +52,8 @@ class Equilibrium():
                 print("Invalid slope {0}, {1}".format(zslx_slope, latest_slope))
             return False
         
-        if np.sign(latest_slope) == np.sign(zslx_slop) and abs(latest_slope) < abs(zslx_slope):
-            if self.isdebug:
+        if np.sign(latest_slope) == np.sign(zslx_slope) and abs(latest_slope) < abs(zslx_slope):
+            if self.isdebug or self.isDescription:
                 print("exhaustion found by reduced slope: {0} {1}".format(zslx_slope, latest_slope))
             return True
 
