@@ -378,14 +378,14 @@ class ZouShi(object):
                         self.zslx_result.append(temp_zslx)
                     # use previous zslx direction for new sz direction
                     temp_zslx = ZhongShu(first, second, third, forth, temp_zslx.direction)
-        if self.isdebug:
+                    if self.isdebug:
                         print("start new Zhong Shu, end previous zslx")
                     previous_node = forth
                     i = i + 2 # use to be 3, but we accept the case where last XD of ZhongShu can be zslx
-        else:
+                else:
                     # continue in zslx
                     temp_zslx.add_new_nodes(first)
-        if self.isdebug:
+                    if self.isdebug:
                         print("continue current zou shi lei xing: {0}".format(temp_zslx))
                     previous_node = first
                     i = i + 1
@@ -396,9 +396,9 @@ class ZouShi(object):
                         # new zsxl going out of zs
                         self.zslx_result.append(temp_zslx)
                         temp_zslx = ZouShiLeiXing(ed, [previous_node])
-        if self.isdebug:
+                        if self.isdebug:
                             print("start new zou shi lei xing, end previous zhong shu")
-            else:
+                    else:
                         # continue in the zs
                         if first != temp_zslx.first and first != temp_zslx.second and first != temp_zslx.third and first != temp_zslx.forth:
                             temp_zslx.add_new_nodes(first)

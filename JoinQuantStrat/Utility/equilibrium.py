@@ -345,7 +345,7 @@ class Equilibrium():
                 # TODO weak III
             
                 
-                    if self.isDescription or self.isdebug:
+        if self.isDescription or self.isdebug:
             print("all chan types {0}".format(all_types))
             
         return all_types
