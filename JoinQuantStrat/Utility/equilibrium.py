@@ -266,7 +266,7 @@ class Equilibrium():
             
             if type(self.analytic_result[-1]) is ZhongShu: # last XD in zhong shu must make top or bot
                 zs = self.analytic_result[-1]
-                [l,u] = zs.get_amplitude_region
+                [l,u] = zs.get_amplitude_region()
                 if zs.is_complex_type() and len(zs.extra_nodes) == 1:
                     if zslx.direction == TopBotType.top2bot and\
                         zslx.extra_nodes[-1].tb == TopBotType.bot and\
