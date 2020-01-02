@@ -183,6 +183,8 @@ class Equilibrium():
         
         if len(recent_zhongshu) < 2:
             self.isQvShi = False
+            if self.isdebug:
+                print("less than two zhong shu")
             return
         
         # STARDARD CASE
@@ -196,7 +198,7 @@ class Equilibrium():
         # TWO ZHONG SHU followed by ZHONGYIN ZHONGSHU
         # first two zhong shu no interaction
         # last zhong shu interacts with second, this is for TYPE II trade point
-        if len(recent_zhongshu) == 3 and\
+        if len(recent_zhongshu) >= 3 and\
             (recent_zhongshu[-3].direction == recent_zhongshu[-2].direction or recent_zhongshu[-3].is_complex_type()):
             first_two_zs_qs = self.two_zhongshu_form_qvshi(recent_zhongshu[-3], recent_zhongshu[-2])
             second_third_interact = self.two_zslx_interact(recent_zhongshu[-2], recent_zhongshu[-1])
@@ -322,7 +324,7 @@ class Equilibrium():
                     print("TYPE III trade point 5")
         
         # TYPE III where zslx form reverse direction zhongshu, and last XD of new zhong shu didn't go back 
-        if type(self.analytic_result[-1]) is ZhongShu:
+        if len(self.analytic_result) >= 3 and type(self.analytic_result[-1]) is ZhongShu:
             pre_zs = self.analytic_result[-3]
             zslx = self.analytic_result[-2]
             now_zs = self.analytic_result[-1]            
@@ -338,7 +340,7 @@ class Equilibrium():
                     # TODO weak III
                 
         # TYPE III two reverse direction zslx, with new reverse direction zhongshu in the middle
-        if type(self.analytic_result[-1]) is ZouShiLeiXing:
+        if len(self.analytic_result) >= 4 and type(self.analytic_result[-1]) is ZouShiLeiXing:
             latest_zslx = self.analytic_result[-1]
             now_zs = self.analytic_result[-2]
             pre_zs = self.analytic_result[-4]
