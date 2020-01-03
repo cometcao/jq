@@ -29,8 +29,8 @@ class CentralRegionProcess(object):
         return initial_idx, initial_direction  
     
 
-    def work_out_direction(self, first, second, third, forth):
-        assert first.tb == third.tb and second.tb == forth.tb, "Invalid tb information for direction"
+    def work_out_direction(self, first, second, third):
+        assert first.tb == third.tb, "Invalid tb information for direction"
         result_direction = TopBotType.noTopBot
         if first.tb == TopBotType.top and second.tb == TopBotType.bot:
             result_direction = TopBotType.bot2top if third.chan_price > first.chan_price else TopBotType.top2bot
@@ -44,10 +44,14 @@ class CentralRegionProcess(object):
     
     def find_initial_direction(self, working_df): 
         i = 0
+        if working_df.shape[0] < 3:
+            if self.isdebug:
+                print("not enough data for checking initial direction")
+            return 0, TopBotType.noTopBot
+        
         first = working_df.iloc[i]
         second = working_df.iloc[i+1]
         third = working_df.iloc[i+2]
-        forth = working_df.iloc[i+3]
         
 #         if ZouShiLeiXing.is_valid_central_region(TopBotType.bot2top, first, second, third, forth):
 #             initial_direction = TopBotType.bot2top
@@ -56,7 +60,7 @@ class CentralRegionProcess(object):
 #             initial_direction = TopBotType.bot2top
 #             initial_idx = working_df.index[i]
 #         else: # case of ZSLX
-        initial_direction = self.work_out_direction(first, second, third, forth)
+        initial_direction = self.work_out_direction(first, second, third)
         initial_idx = working_df.index[i]
         
         if self.isdebug:
@@ -81,6 +85,11 @@ class CentralRegionProcess(object):
         working_df = self.prepare_df_data(working_df)
         
         init_idx, init_d = self.find_initial_direction(working_df)
+        
+        if init_d == TopBotType.noTopBot: # not enough data, we don't do anything
+            if self.isdebug:
+                print("not enough data, return define_central_region")
+            return []
         
         self.zoushi = self.find_central_region(init_idx, init_d, working_df)
             
@@ -213,11 +222,20 @@ class Equilibrium():
         return self.isQvShi        
         
     def define_equilibrium(self):        
+        if len(self.analytic_result) < 2: # if we don't have enough data, return False directly
+            if self.isdebug:
+                print("Not enough DATA define_equilibrium")
+            return False
         a, B, c = self.find_most_recent_zoushi()
         
         return self.check_exhaustion(a, B, c)
         
     def check_exhaustion(self, zslx_a, zs_B, zslx_c):
+        if zslx_a is None or zslx_c is None:
+            if self.isdebug:
+                print("Not enough DATA check_exhaustion")
+            return False
+        
         zslx_slope = zslx_a.work_out_slope()
         
         latest_slope = zslx_c.work_out_slope()
@@ -371,6 +389,11 @@ class NestedInterval():
     def analyze_zoushi(self, use_xd):
         crp = CentralRegionProcess(self.df_xd_bi, isdebug=self.isdebug, use_xd=use_xd) # XD
         anal_result = crp.define_central_region()
+        
+        if not anal_result:
+            if self.isdebug:
+                print("not enough data analyze_zoushi")
+            return False, TopBotType.noTopBot
         
         eq = Equilibrium(self.df_xd_bi, anal_result, self.isdebug)
         return eq.define_equilibrium(), anal_result[-1].direction
