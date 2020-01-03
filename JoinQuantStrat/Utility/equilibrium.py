@@ -286,15 +286,15 @@ class Equilibrium():
                 zs = self.analytic_result[-1]
                 [l,u] = zs.get_amplitude_region()
                 if zs.is_complex_type() and len(zs.extra_nodes) == 1:
-                    if zslx.direction == TopBotType.top2bot and\
-                        zslx.extra_nodes[-1].tb == TopBotType.bot and\
-                        zslx.extra_nodes[-1].chan_price == l:
+                    if zs.direction == TopBotType.top2bot and\
+                        zs.extra_nodes[-1].tb == TopBotType.bot and\
+                        zs.extra_nodes[-1].chan_price == l:
                         if self.isdebug:
                             print("TYPE I trade point 3")
                         all_types.append((Chan_Type.I, TopBotType.top2bot))
-                    elif zslx.direction == TopBotType.bot2top and\
-                        zslx.extra_nodes[-1].tb == TopBotType.top and\
-                        zslx.extra_nodes[-1].chan_price == u:
+                    elif zs.direction == TopBotType.bot2top and\
+                        zs.extra_nodes[-1].tb == TopBotType.top and\
+                        zs.extra_nodes[-1].chan_price == u:
                         all_types.append((Chan_Type.I, TopBotType.bot2top))
                         if self.isdebug:
                             print("TYPE I trade point 4")
