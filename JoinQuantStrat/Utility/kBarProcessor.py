@@ -353,12 +353,32 @@ class KBarProcessor(object):
             current_index=next_index
             next_index = current_index+1
             
-            # if nextIndex is the last one
-            if next_index == working_df.shape[0]-1 \
-            and ((working_df.ix[current_index,'tb']==TopBotType.top and self.kDataFrame_origin.ix[-1,'high'] > working_df.ix[current_index, 'high']) \
-            or (working_df.ix[current_index,'tb']==TopBotType.bot and self.kDataFrame_origin.ix[-1, 'low'] < working_df.ix[current_index, 'low']) ):
+        # if nextIndex is the last one, final clean up
+        tb_loc = working_df.columns.get_loc('tb')
+        high_loc = working_df.columns.get_loc('high')
+        low_loc = working_df.columns.get_loc('low')
+        if next_index == working_df.shape[0]:
+            if ((working_df.ix[current_index,'tb']==TopBotType.top and self.kDataFrame_origin.ix[-1,'high'] > working_df.ix[current_index, 'high']) \
+                or (working_df.ix[current_index,'tb']==TopBotType.bot and self.kDataFrame_origin.ix[-1, 'low'] < working_df.ix[current_index, 'low']) ):
                 working_df.ix[current_index, 'tb'] = TopBotType.noTopBot
 
+            if working_df.iloc[current_index, tb_loc] == TopBotType.noTopBot and\
+                ((working_df.iloc[previous_index, tb_loc]==TopBotType.top and self.kDataFrame_origin.ix[-1,'high'] > working_df.ix[previous_index, 'high']) or\
+                 (working_df.iloc[previous_index, tb_loc]==TopBotType.bot and self.kDataFrame_origin.ix[-1,'low'] < working_df.ix[previous_index, 'low'])):
+                working_df.ix[previous_index, 'tb'] = TopBotType.noTopBot
+                
+            if working_df.iloc[previous_index, tb_loc] == working_df.iloc[current_index, tb_loc]:
+                if working_df.iloc[current_index, tb_loc] == TopBotType.top:
+                    if working_df.iloc[current_index, high_loc] > working_df.iloc[previous_index, high_loc]:
+                        working_df.iloc[previous_index, tb_loc] = TopBotType.noTopBot
+                    else:
+                        working_df.iloc[current_index, tb_loc] = TopBotType.noTopBot
+                elif working_df.iloc[current_index, tb_loc] == TopBotType.bot:
+                    if working_df.iloc[current_index, low_loc] < working_df.iloc[previous_index, low_loc]:
+                        working_df.iloc[previous_index, tb_loc] = TopBotType.noTopBot
+                    else:
+                        working_df.iloc[current_index, tb_loc] = TopBotType.noTopBot  
+                                          
         ###################################    
         self.kDataFrame_marked = working_df[working_df['tb']!=TopBotType.noTopBot]
         if self.isdebug:
@@ -480,11 +500,32 @@ class KBarProcessor(object):
             current_index=next_index
             next_index = current_index+1
             
-                    # if nextIndex is the last one
-            if next_index == working_df.shape[0]-1 \
-            and ((working_df.ix[current_index,'tb']==TopBotType.top and self.kDataFrame_origin.ix[-1,'high'] > working_df.ix[current_index, 'high']) \
-            or (working_df.ix[current_index,'tb']==TopBotType.bot and self.kDataFrame_origin.ix[-1, 'low'] < working_df.ix[current_index, 'low']) ):
+        # if nextIndex is the last one, final clean up
+        tb_loc = working_df.columns.get_loc('tb')
+        high_loc = working_df.columns.get_loc('high')
+        low_loc = working_df.columns.get_loc('low')
+        if next_index == working_df.shape[0]:
+            if ((working_df.ix[current_index,'tb']==TopBotType.top and self.kDataFrame_origin.ix[-1,'high'] > working_df.ix[current_index, 'high']) \
+                or (working_df.ix[current_index,'tb']==TopBotType.bot and self.kDataFrame_origin.ix[-1, 'low'] < working_df.ix[current_index, 'low']) ):
                 working_df.ix[current_index, 'tb'] = TopBotType.noTopBot
+                
+
+            if working_df.iloc[current_index, tb_loc] == TopBotType.noTopBot and\
+                ((working_df.iloc[previous_index, tb_loc]==TopBotType.top and self.kDataFrame_origin.ix[-1,'high'] > working_df.ix[previous_index, 'high']) or\
+                 (working_df.iloc[previous_index, tb_loc]==TopBotType.bot and self.kDataFrame_origin.ix[-1,'low'] < working_df.ix[previous_index, 'low'])):
+                working_df.ix[previous_index, 'tb'] = TopBotType.noTopBot
+                
+            if working_df.iloc[previous_index, tb_loc] == working_df.iloc[current_index, tb_loc]:
+                if working_df.iloc[current_index, tb_loc] == TopBotType.top:
+                    if working_df.iloc[current_index, high_loc] > working_df.iloc[previous_index, high_loc]:
+                        working_df.iloc[previous_index, tb_loc] = TopBotType.noTopBot
+                    else:
+                        working_df.iloc[current_index, tb_loc] = TopBotType.noTopBot
+                elif working_df.iloc[current_index, tb_loc] == TopBotType.bot:
+                    if working_df.iloc[current_index, low_loc] < working_df.iloc[previous_index, low_loc]:
+                        working_df.iloc[previous_index, tb_loc] = TopBotType.noTopBot
+                    else:
+                        working_df.iloc[current_index, tb_loc] = TopBotType.noTopBot  
                 
         ###################################    
         self.kDataFrame_marked = working_df[working_df['tb']!=TopBotType.noTopBot]
@@ -631,7 +672,7 @@ class KBarProcessor(object):
             
             if self.isdebug:
                 print("location {0}, {1} removed for combination".format(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]]))
-            return False
+            return False
         return True
     
     def check_inclusion_by_direction(self, current_loc, working_df, direction, with_gap):    
@@ -641,7 +682,7 @@ class KBarProcessor(object):
         i = current_loc
         first_run = True
 
-        count_num = 6 if with_gap else 4
+        count_num = 6 if with_gap else 4
 
         while first_run or (i+count_num-1 < working_df.shape[0]):
             first_run = False
@@ -650,7 +691,7 @@ class KBarProcessor(object):
             if len(next_valid_elems) < count_num:
                 break
             
-            if with_gap:
+            if with_gap:
                 if self.is_XD_inclusion_free(direction, next_valid_elems[:4], working_df):
                     if self.is_XD_inclusion_free(direction, next_valid_elems[-4:], working_df):
                         break
@@ -684,7 +725,7 @@ class KBarProcessor(object):
              third.chan_price < fifth.chan_price and\
              forth.chan_price < sixth.chan_price:
                 result_status = TopBotType.bot
-            
+            
         else:
             print("Error, invalid tb status!")
         
