@@ -733,6 +733,7 @@ class KBarProcessor(object):
     
     def check_kline_gap_as_xd(self, next_valid_elems, working_df, direction):
         first = working_df.iloc[next_valid_elems[0]]
+        second = working_df.iloc[next_valid_elems[1]]
         third = working_df.iloc[next_valid_elems[2]]
         forth = working_df.iloc[next_valid_elems[3]]
         fifth = working_df.iloc[next_valid_elems[4]]
@@ -746,26 +747,26 @@ class KBarProcessor(object):
         # B with_gap is determined by checking if the kline gap range cover between first and forth
         # C change direction as usual, and increment counter by 1 only
         
-        if next_valid_elems[1] + 1 == next_valid_elems[2] and\
-        self.gap_exists_in_range(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]]):
-            gap_ranges = self.gap_region(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]])
+#         if next_valid_elems[1] + 1 == next_valid_elems[2] and\
+#         self.gap_exists_in_range(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]]):
+#             gap_ranges = self.gap_region(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]])
+#                 
+#             for (l,h) in gap_ranges:
+#                 # make sure first is within the gap_XD range
+#                 without_gap = (first.chan_price >= l and first.chan_price <= h) and (forth.chan_price >= l and forth.chan_price <= h)
+#                 if without_gap:
+#                     with_xd_gap = True
+#                     if self.isdebug:
+#                         print("XD represented by kline gap 1, {0}, {1}".format(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]]))
             
-            for (l,h) in gap_ranges:
-                # make sure first is within the gap_XD range
-                without_gap = (first.chan_price >= l and first.chan_price <= h) and (forth.chan_price >= l and forth.chan_price <= h)
-                if without_gap:
-                    with_xd_gap = True
-                    if self.isdebug:
-                        print("XD represented by kline gap 1, {0}, {1}".format(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]]))
-        
         if not with_xd_gap and\
         next_valid_elems[2] + 1 == next_valid_elems[3] and\
         self.gap_exists_in_range(working_df.index[next_valid_elems[2]], working_df.index[next_valid_elems[3]]):
             gap_ranges = self.gap_region(working_df.index[next_valid_elems[2]], working_df.index[next_valid_elems[3]])
             
             for (l,h) in gap_ranges:
-                # make sure first : second is within the gap_XD range
-                without_gap = first.chan_price >= l and first.chan_price <= h and forth.chan_price >= l and forth.chan_price <= h
+                # make sure the gap break previous FIRST FEATURED ELEMENT
+                without_gap = second.chan_price > l and second.chan_price < h
                 if without_gap:
                     with_xd_gap = True
                     if self.isdebug:

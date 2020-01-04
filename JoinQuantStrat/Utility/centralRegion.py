@@ -102,11 +102,13 @@ class ZouShiLeiXing(object):
     A central region
     B normal zou shi
     '''
-    def __init__(self, direction, nodes=None):
+    def __init__(self, direction, original_df, nodes=None):
+        self.original_df = original_df
         self.zoushi_nodes = nodes
         self.direction = direction
         
         self.amplitude_region = []
+        self.amplitude_region_origin = []
         self.time_region = []
     
     def isEmpty(self):
@@ -120,7 +122,9 @@ class ZouShiLeiXing(object):
             if tb_nodes not in self.zoushi_nodes:
                 self.zoushi_nodes.append(tb_nodes)
         
-        self.get_amplitude_region(self.zoushi_nodes)
+        self.get_amplitude_region(re_evaluate=True)
+        self.get_amplitude_region_original(re_evaluate=True)
+        self.get_time_region(re_evaluate=True)
     
     def __repr__(self):
         if self.isEmpty():
@@ -147,27 +151,23 @@ class ZouShiLeiXing(object):
         toporbotprice = max(all_price) if self.direction == TopBotType.bot2top else min(all_price)
         return TopBotType.top2bot if self.direction == TopBotType.bot2top else TopBotType.top2bot, self.zoushi_nodes[all_price.index(toporbotprice):]
 
-    def get_amplitude_region(self, xd_tb_nodes=None):
-        if not self.amplitude_region:
+    def get_amplitude_region(self, re_evaluate=False):
+        if not self.amplitude_region or re_evaluate:
             chan_price_list = [node.chan_price for node in self.zoushi_nodes]
             self.amplitude_region = [min(chan_price_list), max(chan_price_list)]
-        else:
-            if xd_tb_nodes is not None:
-                xd_prices = [xp.chan_price for xp in xd_tb_nodes]
-                max_p = max(xd_prices)
-                min_p = min(xd_prices)
-                self.amplitude_region = [min(self.amplitude_region[0], min_p), max(self.amplitude_region[1], max_p)]
-            else:
-                chan_price_list = [node.chan_price for node in self.zoushi_nodes]
-                self.amplitude_region = [min(chan_price_list), max(chan_price_list)]
         return self.amplitude_region
 
-    def get_time_region(self):    
+    def get_amplitude_region_original(self, re_evaluate=False):
+        if not self.amplitude_region_origin or re_evaluate:
+            [s, e] = self.get_time_region(re_evaluate)
+            price_series = self.original_df.loc[s:e, ['high', 'low']]
+            self.amplitude_region_origin = [price_series['low'].min(), price_series['high'].max()]
+        return self.amplitude_region_origin
+
+    def get_time_region(self, re_evaluate=False):    
         if self.isEmpty():
             return [None, None]
-        if not self.time_region: # assume node stored in time order
-            self.time_region = [self.zoushi_nodes[0].time, self.zoushi_nodes[-1].time]
-        else:
+        if not self.time_region or re_evaluate: # assume node stored in time order
             self.zoushi_nodes.sort(key=lambda x: x.time)
             self.time_region = [self.zoushi_nodes[0].time, self.zoushi_nodes[-1].time]
         return self.time_region
@@ -233,8 +233,8 @@ class ZhongShu(ZouShiLeiXing):
     The first four nodes must be in time order
     '''
     
-    def __init__(self, first, second, third, forth, direction):
-        super(ZhongShu, self).__init__(direction, None)
+    def __init__(self, first, second, third, forth, direction, original_df):
+        super(ZhongShu, self).__init__(direction, original_df, None)
         self.first = first
         self.second = second
         self.third = third
@@ -259,10 +259,10 @@ class ZhongShu(ZouShiLeiXing):
         if type(tb_nodes) is list:
 #             list(OrderedDict.fromkeys(self.extra_nodes + tb_nodes))
             self.extra_nodes = self.extra_nodes + tb_nodes
-            self.get_amplitude_region(tb_nodes)
+            self.get_amplitude_region(re_evaluate=True)
         else:
             self.extra_nodes.append(tb_nodes)
-            self.get_amplitude_region([tb_nodes])    
+            self.get_amplitude_region(re_evaluate=True)    
     
     def out_of_zhongshu(self, node1, node2):
         [l,h] = self.get_core_region()
@@ -301,29 +301,25 @@ class ZhongShu(ZouShiLeiXing):
         self.core_time_region = [self.first.time, self.forth.time]
         return self.core_time_region    
     
-    def get_amplitude_region(self, xd_tb_nodes=None):
-        if not self.amplitude_region:
-            self.amplitude_region = [min(self.first.chan_price, self.second.chan_price, self.third.chan_price, self.forth.chan_price), max(self.first.chan_price, self.second.chan_price, self.third.chan_price, self.forth.chan_price)]
-        else:
-            if xd_tb_nodes is not None:
-                xd_prices = [xp.chan_price for xp in xd_tb_nodes]
-                max_p = max(xd_prices)
-                min_p = min(xd_prices)
-                self.amplitude_region = [min(self.amplitude_region[0], min_p), max(self.amplitude_region[1], max_p)]
-            else:
-                all_nodes = [self.first, self.second, self.third, self.forth] + self.extra_nodes
-                all_nodes_price = [n.chan_price for n in all_nodes]
-                self.amplitude_region = [min(all_nodes_price), max(all_nodes_price)]
+    def get_amplitude_region(self, re_evaluate=False):
+        if not self.amplitude_region or re_evaluate:
+            all_price_list = [self.first.chan_price, self.second.chan_price, self.third.chan_price, self.forth.chan_price] + [node.chan_price for node in self.extra_nodes]
+            self.amplitude_region = [min(all_price_list), max(all_price_list)]
         return self.amplitude_region    
 
-    def get_time_region(self):    
-        if not self.time_region: # assume node stored in time order
+    def get_amplitude_region_original(self, re_evaluate=False):
+        if not self.amplitude_region_origin or re_evaluate:
+            [s, e] = self.get_time_region(re_evaluate)
+            region_price_series = self.original_df.loc[s:e, ['high','low']]
+            self.amplitude_region_origin = [region_price_series['low'].min(), region_price_series['high'].max()]
+        return self.amplitude_region_origin
+        
+
+    def get_time_region(self, re_evaluate=False):    
+        if not self.time_region or re_evaluate: # assume node stored in time order
             if not self.extra_nodes:
                 self.time_region = self.get_core_time_region()
             else:
-                self.time_region = [self.core_time_region[0], max(self.core_time_region[-1], self.extra_nodes[-1].time)]
-        else:
-            if self.extra_nodes:
                 self.extra_nodes.sort(key=lambda x: x.time)
                 self.time_region = [self.core_time_region[0], max(self.core_time_region[-1], self.extra_nodes[-1].time)]
         return self.time_region
@@ -334,7 +330,7 @@ class ZhongShu(ZouShiLeiXing):
 
     def take_last_xd_as_zslx(self):
         exiting_nodes = [self.forth] + self.extra_nodes if self.extra_nodes else []
-        return ZouShiLeiXing(self.direction, exiting_nodes) 
+        return ZouShiLeiXing(self.direction, self.original_df, exiting_nodes) 
 
     def is_complex_type(self):
         # if the ZhongShu contain more than 3 XD, it's a complex ZhongShu, in practice the direction of it can be interpreted differently
@@ -354,14 +350,15 @@ class ZouShi(object):
     '''
     This class contain the full dissasemble of current zou shi, contains zslx and zs
     '''
-    def __init__(self, all_nodes, isdebug=False):
+    def __init__(self, all_nodes, original_df, isdebug=False):
+        self.original_df = original_df
         self.zslx_all_nodes = all_nodes
         self.zslx_result = []
         self.isdebug = isdebug
         
     def analyze(self, initial_direction):
         i = 0
-        temp_zslx = ZouShiLeiXing(initial_direction, [])
+        temp_zslx = ZouShiLeiXing(initial_direction, self.original_df, [])
         previous_node = None
         while i < len(self.zslx_all_nodes) - 1:
             first = self.zslx_all_nodes[i]
@@ -377,7 +374,7 @@ class ZouShi(object):
                         temp_zslx.add_new_nodes(first)
                         self.zslx_result.append(temp_zslx)
                     # use previous zslx direction for new sz direction
-                    temp_zslx = ZhongShu(first, second, third, forth, temp_zslx.direction)
+                    temp_zslx = ZhongShu(first, second, third, forth, temp_zslx.direction, self.original_df)
                     if self.isdebug:
                         print("start new Zhong Shu, end previous zslx")
                     previous_node = forth
@@ -395,7 +392,7 @@ class ZouShi(object):
                     if ed != TopBotType.noTopBot:
                         # new zsxl going out of zs
                         self.zslx_result.append(temp_zslx)
-                        temp_zslx = ZouShiLeiXing(ed, [previous_node])
+                        temp_zslx = ZouShiLeiXing(ed, self.original_df, [previous_node])
                         if self.isdebug:
                             print("start new zou shi lei xing, end previous zhong shu")
                     else:
