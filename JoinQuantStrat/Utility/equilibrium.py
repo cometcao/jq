@@ -71,7 +71,7 @@ class CentralRegionProcess(object):
     def find_central_region(self, initial_idx, initial_direction, working_df):
         working_df = working_df.loc[initial_idx:,:]
         
-        zoushi = ZouShi([XianDuan_Node(working_df.iloc[i]) for i in range(working_df.shape[0])], isdebug=self.isdebug) if self.use_xd else ZouShi([BI_Node(working_df.iloc[i]) for i in range(working_df.shape[0])], isdebug=self.isdebug)
+        zoushi = ZouShi([XianDuan_Node(working_df.iloc[i]) for i in range(working_df.shape[0])], self.original_xd_df,isdebug=self.isdebug) if self.use_xd else ZouShi([BI_Node(working_df.iloc[i]) for i in range(working_df.shape[0])], self.original_xd_df, isdebug=self.isdebug)
         zoushi.analyze(initial_direction)
 
         return zoushi
@@ -101,7 +101,7 @@ class CentralRegionProcess(object):
         '''
         x_axis = []
         y_axis = []
-        for zs in self.analytic_result:
+        for zs in self.zoushi.zslx_result:
             if type(zs) is ZhongShu:
                 print(zs)
                 x_axis = x_axis + zs.get_core_time_region()
@@ -159,17 +159,23 @@ class Equilibrium():
         if type(self.analytic_result[-1]) is ZhongShu and self.analytic_result[-1].is_complex_type():
             filled_zslx = self.analytic_result[-1].take_last_xd_as_zslx()
             return self.analytic_result[-2], self.analytic_result[-1], filled_zslx
-        elif type(self.analytic_result[-1]) is ZouShiLeiXing:
+        elif type(self.analytic_result[-1]) is ZouShiLeiXing and len(self.analytic_result) >= 3:
             return self.analytic_result[-3], self.analytic_result[-2], self.analytic_result[-1]
         else:
             print("Invalid Zou Shi type")
             return None, None, None
     
-    def two_zhongshu_form_qvshi(self, zs1, zs2):
+    def two_zhongshu_form_qvshi(self, zs1, zs2, zs_level=ZhongShuLevel.current):
+        '''
+        We are only dealing with current level of QV SHI by default, and the first ZS can be higher level 
+        due to the rule of connectivity:
+        two adjacent ZhongShu going in the same direction, or the first ZhongShu is complex(can be both direction)
+        '''
         result = False
-        if zs1.get_level().value >= zs2.get_level().value:
-            [l1, u1] = zs1.get_amplitude_region()
-            [l2, u2] = zs2.get_amplitude_region()
+        if zs1.get_level().value >= zs2.get_level().value == zs_level and\
+            (zs1.direction == zs2.direction or zs2.is_complex_type()):
+            [l1, u1] = zs1.get_amplitude_region_original()
+            [l2, u2] = zs2.get_amplitude_region_original()
             if l1 > u2 or l2 > u1: # two Zhong Shu without intersection
                 if self.isdebug:
                     print("current Zou Shi is QV SHI \n{0} \n{1}".format(zs1, zs2))
@@ -180,7 +186,13 @@ class Equilibrium():
         result = False
         [l1, u1] = zs1.get_amplitude_region()
         [l2, u2] = zs2.get_amplitude_region()
-        return l1 <= l2 <= u1 or l1 <= u2 <= u1
+        return l1 <= l2 <= u1 or l1 <= u2 <= u1 or l2 <= l1 <= u2 or l2 <= u1 <= u2
+    
+    def two_zslx_interact_original(self, zs1, zs2):
+        result = False
+        [l1, u1] = zs1.get_amplitude_region_original()
+        [l2, u2] = zs2.get_amplitude_region_original()
+        return l1 <= l2 <= u1 or l1 <= u2 <= u1 or l2 <= l1 <= u2 or l2 <= u1 <= u2
     
     def check_zoushi_status(self):
         # check if current status beichi or panzhengbeichi
@@ -196,24 +208,24 @@ class Equilibrium():
                 print("less than two zhong shu")
             return
         
-        # STARDARD CASE
-        if (recent_zhongshu[-2].direction == recent_zhongshu[-1].direction or recent_zhongshu[-2].is_complex_type()):
-            self.isQvShi = self.two_zhongshu_form_qvshi(recent_zhongshu[-2], recent_zhongshu[-1])
-            if self.isQvShi:
-                if self.isdebug:
-                    print("QU SHI 1")
-                return
+        # STARDARD CASE: 
+        self.isQvShi = self.two_zhongshu_form_qvshi(recent_zhongshu[-2], recent_zhongshu[-1])
+        if self.isQvShi:
+            if self.isdebug:
+                print("QU SHI 1")
+            return self.isQvShi
         
         # TWO ZHONG SHU followed by ZHONGYIN ZHONGSHU
         # first two zhong shu no interaction
         # last zhong shu interacts with second, this is for TYPE II trade point
         if len(recent_zhongshu) >= 3 and\
-            (recent_zhongshu[-3].direction == recent_zhongshu[-2].direction or recent_zhongshu[-3].is_complex_type()):
+            (recent_zhongshu[-2].direction == recent_zhongshu[-1].direction) and\
+            (not recent_zhongshu[-1].is_complex_type()):
             first_two_zs_qs = self.two_zhongshu_form_qvshi(recent_zhongshu[-3], recent_zhongshu[-2])
-            second_third_interact = self.two_zslx_interact(recent_zhongshu[-2], recent_zhongshu[-1])
+            second_third_interact = self.two_zslx_interact_original(recent_zhongshu[-2], recent_zhongshu[-1])
             self.isQvShi = first_two_zs_qs and second_third_interact
             if self.isQvShi and self.isdebug:
-                print("QU SHI 1")
+                print("QU SHI 2")
         else:
             self.isQvShi = False
             
@@ -284,7 +296,7 @@ class Equilibrium():
             
             if type(self.analytic_result[-1]) is ZhongShu: # last XD in zhong shu must make top or bot
                 zs = self.analytic_result[-1]
-                [l,u] = zs.get_amplitude_region()
+                [l,u] = zs.get_amplitude_region_original()
                 if zs.is_complex_type() and len(zs.extra_nodes) == 1:
                     if zs.direction == TopBotType.top2bot and\
                         zs.extra_nodes[-1].tb == TopBotType.bot and\
@@ -304,7 +316,7 @@ class Equilibrium():
                 zs = self.analytic_result[-1]
                 if zs.is_complex_type() and len(zs.extra_nodes) >= 3:
                     core_region = zs.get_core_region()
-                    amplitude_region = zs.get_amplitude_region()
+                    amplitude_region = zs.get_amplitude_region_original()
                     if zs.extra_nodes[-3].chan_price > core_region[1] or zs.extra_nodes[-3].chan_price < core_region[0]:
                         if zs.extra_nodes[-1].chan_price > core_region[1] or zs.extra_nodes[-1].chan_price < core_region[0]:
                             all_types.append((Chan_Type.II, TopBotType.top2bot if zs.extra_nodes[-1].tb == TopBotType.bot else TopBotType.bot2top))
@@ -317,16 +329,16 @@ class Equilibrium():
             zslx = self.analytic_result[-1]
             zs = self.analytic_result[-2]
             core_region = zs.get_core_region()
-            amplitude_region = zs.get_amplitude_region()
+            amplitude_region_original = zs.get_amplitude_region_original()
             
-            if len(zslx.zoushi_nodes) == 2 and\
-                (zslx.zoushi_nodes[-1].chan_price < amplitude_region[0] or zslx.zoushi_nodes[-1].chan_price > amplitude_region[1]):
+            if len(zslx.zoushi_nodes) == 3 and\
+                (zslx.zoushi_nodes[-1].chan_price < amplitude_region_original[0] or zslx.zoushi_nodes[-1].chan_price > amplitude_region_original[1]):
                 if (zslx.direction == TopBotType.top2bot and zslx.zoushi_nodes[-1].tb == TopBotType.top) or\
                    (zslx.direction == TopBotType.bot2top and zslx.zoushi_nodes[-1].tb == TopBotType.bot):
                     all_types.append((Chan_Type.III, TopBotType.top2bot if zslx.zoushi_nodes[-1].tb == TopBotType.bot else TopBotType.bot2top))
                     if self.isdebug:
                         print("TYPE III trade point 1")
-            elif len(zslx.zoushi_nodes) == 2 and\
+            elif len(zslx.zoushi_nodes) == 3 and\
                 (zslx.zoushi_nodes[-1].chan_price < core_region[0] or zslx.zoushi_nodes[-1].chan_price > core_region[1]):
                 if (zslx.direction == TopBotType.top2bot and zslx.zoushi_nodes[-1].tb == TopBotType.top) or\
                    (zslx.direction == TopBotType.bot2top and zslx.zoushi_nodes[-1].tb == TopBotType.bot):                
@@ -334,12 +346,14 @@ class Equilibrium():
                     if self.isdebug:
                         print("TYPE III trade point 2")
                     
+            # a bit more complex type than standard two XD away and not back case, no new zs formed        
             split_direction, split_nodes = zslx.get_reverse_split_zslx()
-            pure_zslx = ZouShiLeiXing(split_direction, split_nodes)
-            if not self.two_zslx_interact(zs, pure_zslx):
+            pure_zslx = ZouShiLeiXing(split_direction, self.original_df, split_nodes)
+            # at least two split nodes required to form a zslx
+            if len(split_nodes) >= 2 and not self.two_zslx_interact_original(zs, pure_zslx):
                 all_types.append((Chan_Type.III, pure_zslx.direction))
                 if self.isdebug:
-                    print("TYPE III trade point 5")
+                    print("TYPE III trade point 7")
         
         # TYPE III where zslx form reverse direction zhongshu, and last XD of new zhong shu didn't go back 
         if len(self.analytic_result) >= 3 and type(self.analytic_result[-1]) is ZhongShu:
@@ -347,32 +361,39 @@ class Equilibrium():
             zslx = self.analytic_result[-2]
             now_zs = self.analytic_result[-1]            
 
-            core_region = pre_zs.get_core_region()
-            amplitude_region = pre_zs.get_amplitude_region()
-            
             if not now_zs.is_complex_type() and\
                 ((now_zs.forth.tb == TopBotType.bot and now_zs.direction == TopBotType.bot2top) or\
                  (now_zs.forth.tb == TopBotType.top and now_zs.direction == TopBotType.top2bot)): # reverse type here
-                if not self.two_zslx_interact(pre_zs, now_zs):
+                if not self.two_zslx_interact_original(pre_zs, now_zs):
                     all_types.append((Chan_Type.III, TopBotType.top2bot if now_zs.direction == TopBotType.bot2top else TopBotType.bot2top))
                     if self.isdebug:
                         print("TYPE III trade point 3")
-                    # TODO weak III
+                elif not self.two_zslx_interact(pre_zs, now_zs):
+                    all_types.append((Chan_Type.III_weak, TopBotType.top2bot if now_zs.direction == TopBotType.bot2top else TopBotType.bot2top))
+                    if self.isdebug:
+                        print("TYPE III trade point 4")                    
                 
         # TYPE III two reverse direction zslx, with new reverse direction zhongshu in the middle
         if len(self.analytic_result) >= 4 and type(self.analytic_result[-1]) is ZouShiLeiXing:
             latest_zslx = self.analytic_result[-1]
             now_zs = self.analytic_result[-2]
             pre_zs = self.analytic_result[-4]
-            if not self.two_zslx_interact(pre_zs, latest_zslx) and latest_zslx.direction != now_zs.direction:
+            if not self.two_zslx_interact_original(pre_zs, latest_zslx) and\
+                latest_zslx.direction != now_zs.direction and\
+                not now_zs.is_complex_type():
                 all_types.append((Chan_Type.III, latest_zslx.direction))
                 if self.isdebug:
-                    print("TYPE III trade point 4")        
-                # TODO weak III
+                    print("TYPE III trade point 5")   
+            if not self.two_zslx_interact(pre_zs, latest_zslx) and\
+                latest_zslx.direction != now_zs.direction and\
+                not now_zs.is_complex_type():
+                all_types.append((Chan_Type.III_weak, latest_zslx.direction))
+                if self.isdebug:
+                    print("TYPE III trade point 6")                             
             
                 
         if all_types and (self.isDescription or self.isdebug):
-            print("all chan types {0}".format(all_types))
+            print("all chan types found: {0}".format(all_types))
             
         return all_types
     
