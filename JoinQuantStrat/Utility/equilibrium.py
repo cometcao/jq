@@ -209,7 +209,7 @@ class Equilibrium():
             return
         
         # STARDARD CASE: 
-        self.isQvShi = self.two_zhongshu_form_qvshi(recent_zhongshu[-2], recent_zhongshu[-1])
+        self.isQvShi = self.two_zhongshu_form_qvshi(recent_zhongshu[-2], recent_zhongshu[-1]) 
         if self.isQvShi:
             if self.isdebug:
                 print("QU SHI 1")
@@ -345,7 +345,7 @@ class Equilibrium():
                     all_types.append((Chan_Type.III_weak, TopBotType.top2bot if zslx.zoushi_nodes[-1].tb == TopBotType.bot else TopBotType.bot2top))
                     if self.isdebug:
                         print("TYPE III trade point 2")
-                    
+            
             # a bit more complex type than standard two XD away and not back case, no new zs formed        
             split_direction, split_nodes = zslx.get_reverse_split_zslx()
             pure_zslx = ZouShiLeiXing(split_direction, self.original_df, split_nodes)
@@ -360,7 +360,7 @@ class Equilibrium():
             pre_zs = self.analytic_result[-3]
             zslx = self.analytic_result[-2]
             now_zs = self.analytic_result[-1]            
-
+            
             if not now_zs.is_complex_type() and\
                 ((now_zs.forth.tb == TopBotType.bot and now_zs.direction == TopBotType.bot2top) or\
                  (now_zs.forth.tb == TopBotType.top and now_zs.direction == TopBotType.top2bot)): # reverse type here
@@ -390,7 +390,6 @@ class Equilibrium():
                 all_types.append((Chan_Type.III_weak, latest_zslx.direction))
                 if self.isdebug:
                     print("TYPE III trade point 6")                             
-            
                 
         if all_types and (self.isDescription or self.isdebug):
             print("all chan types found: {0}".format(all_types))
@@ -438,7 +437,3 @@ class NestedInterval():
             print("Fen Bi {0} {1}".format(bi_direction, "exhausted" if bi_exhausted else "continues"))
         
         return xd_direction == bi_direction == direction and xd_exhausted and bi_exhausted
-
-
-        
-                
