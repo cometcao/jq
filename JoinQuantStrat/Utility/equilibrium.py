@@ -184,13 +184,13 @@ class Equilibrium():
         result = False
         [l1, u1] = zs1.get_amplitude_region()
         [l2, u2] = zs2.get_amplitude_region()
-        return l1 <= l2 <= u1 or l1 <= u2 <= u1
+        return l1 <= l2 <= u1 or l1 <= u2 <= u1 or l2 <= l1 <= u2 or l2 <= u1 <= u2
     
     def two_zslx_interact_original(self, zs1, zs2):
         result = False
         [l1, u1] = zs1.get_amplitude_region_original()
         [l2, u2] = zs2.get_amplitude_region_original()
-        return l1 <= l2 <= u1 or l1 <= u2 <= u1
+        return l1 <= l2 <= u1 or l1 <= u2 <= u1 or l2 <= l1 <= u2 or l2 <= u1 <= u2
     
     def check_zoushi_status(self):
         # check if current status beichi or panzhengbeichi

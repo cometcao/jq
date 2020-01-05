@@ -149,7 +149,7 @@ class ZouShiLeiXing(object):
         '''
         all_price = [node.chan_price for node in self.zoushi_nodes]
         toporbotprice = max(all_price) if self.direction == TopBotType.bot2top else min(all_price)
-        return TopBotType.top2bot if self.direction == TopBotType.bot2top else TopBotType.top2bot, self.zoushi_nodes[all_price.index(toporbotprice):]
+        return TopBotType.top2bot if self.direction == TopBotType.bot2top else TopBotType.bot2top, self.zoushi_nodes[all_price.index(toporbotprice):]
 
     def get_amplitude_region(self, re_evaluate=False):
         if not self.amplitude_region or re_evaluate:
