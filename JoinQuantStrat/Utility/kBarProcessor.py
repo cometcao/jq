@@ -1053,20 +1053,25 @@ class KBarProcessor(object):
         # We need to deal with the remaining BI tb and make an assumption that current XD ends
         if i < working_df.shape[0]:
             # + 3 to make sure we have 3 BI at least in XD
-            previous_xd_tb_loc = self.get_previous_N_elem(i, working_df, N=0, single_direction=False)[0]+3
-            column_locs = [working_df.columns.get_loc(x) for x in ['chan_price', 'tb']]
-            temp_df = working_df.iloc[previous_xd_tb_loc:,column_locs]
-            temp_df = temp_df[temp_df['tb'] != TopBotType.noTopBot]
-            if current_direction == TopBotType.top2bot:
-                working_df.loc[temp_df['chan_price'].idxmin(), 'xd_tb'] = TopBotType.bot
-                if self.isdebug:
-                    print("final xd_tb located from {0} for {1}".format(temp_df['chan_price'].idxmin(), TopBotType.bot))
-            elif current_direction == TopBotType.bot2top:
-                working_df.loc[temp_df['chan_price'].idxmax(), 'xd_tb'] = TopBotType.top
-                if self.isdebug:
-                    print("final xd_tb located from {0} for {1}".format(temp_df['chan_price'].idxmax(), TopBotType.top))
-            else:
-                print("Invalid direction")        
+            previous_xd_tb_locs = self.get_previous_N_elem(i, working_df, N=0, single_direction=False)
+            if previous_xd_tb_locs:
+                previous_xd_tb_loc = previous_xd_tb_locs[0]+3
+                column_locs = [working_df.columns.get_loc(x) for x in ['chan_price', 'tb']]
+                temp_df = working_df.iloc[previous_xd_tb_loc:,column_locs]
+                if not temp_df.empty:
+                    temp_df = temp_df[temp_df['tb'] != TopBotType.noTopBot]
+                    if current_direction == TopBotType.top2bot:
+                        working_df.loc[temp_df['chan_price'].idxmin(), 'xd_tb'] = TopBotType.bot
+                        if self.isdebug:
+                            print("final xd_tb located from {0} for {1}".format(temp_df['chan_price'].idxmin(), TopBotType.bot))
+                    elif current_direction == TopBotType.bot2top:
+                        working_df.loc[temp_df['chan_price'].idxmax(), 'xd_tb'] = TopBotType.top
+                        if self.isdebug:
+                            print("final xd_tb located from {0} for {1}".format(temp_df['chan_price'].idxmax(), TopBotType.top))
+                    else:
+                        print("Invalid direction")
+                else:
+                    print("empty temp_df, continue")
         
         return working_df
                 
