@@ -259,10 +259,11 @@ class ZhongShu(ZouShiLeiXing):
         if type(tb_nodes) is list:
 #             list(OrderedDict.fromkeys(self.extra_nodes + tb_nodes))
             self.extra_nodes = self.extra_nodes + tb_nodes
-            self.get_amplitude_region(re_evaluate=True)
         else:
             self.extra_nodes.append(tb_nodes)
             self.get_amplitude_region(re_evaluate=True)    
+        self.get_amplitude_region_original(re_evaluate=True)
+        self.get_time_region(re_evaluate=True)
     
     def out_of_zhongshu(self, node1, node2):
         [l,h] = self.get_core_region()

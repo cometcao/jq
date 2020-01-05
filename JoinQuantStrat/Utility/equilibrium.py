@@ -159,7 +159,7 @@ class Equilibrium():
         if type(self.analytic_result[-1]) is ZhongShu and self.analytic_result[-1].is_complex_type():
             filled_zslx = self.analytic_result[-1].take_last_xd_as_zslx()
             return self.analytic_result[-2], self.analytic_result[-1], filled_zslx
-        elif type(self.analytic_result[-1]) is ZouShiLeiXing:
+        elif type(self.analytic_result[-1]) is ZouShiLeiXing and len(self.analytic_result) >= 3:
             return self.analytic_result[-3], self.analytic_result[-2], self.analytic_result[-1]
         else:
             print("Invalid Zou Shi type")
@@ -168,10 +168,12 @@ class Equilibrium():
     def two_zhongshu_form_qvshi(self, zs1, zs2, zs_level=ZhongShuLevel.current):
         '''
         We are only dealing with current level of QV SHI by default, and the first ZS can be higher level 
-        due to the rule of connectivity
+        due to the rule of connectivity:
+        two adjacent ZhongShu going in the same direction, or the first ZhongShu is complex(can be both direction)
         '''
         result = False
-        if zs1.get_level().value >= zs2.get_level().value == zs_level:
+        if zs1.get_level().value >= zs2.get_level().value == zs_level and\
+            (zs1.direction == zs2.direction or zs2.is_complex_type()):
             [l1, u1] = zs1.get_amplitude_region_original()
             [l2, u2] = zs2.get_amplitude_region_original()
             if l1 > u2 or l2 > u1: # two Zhong Shu without intersection
@@ -206,24 +208,24 @@ class Equilibrium():
                 print("less than two zhong shu")
             return
         
-        # STARDARD CASE
-        if (recent_zhongshu[-2].direction == recent_zhongshu[-1].direction or recent_zhongshu[-2].is_complex_type()):
-            self.isQvShi = self.two_zhongshu_form_qvshi(recent_zhongshu[-2], recent_zhongshu[-1])
-            if self.isQvShi:
-                if self.isdebug:
-                    print("QU SHI 1")
-                return
+        # STARDARD CASE: 
+        self.isQvShi = self.two_zhongshu_form_qvshi(recent_zhongshu[-2], recent_zhongshu[-1])
+        if self.isQvShi:
+            if self.isdebug:
+                print("QU SHI 1")
+            return self.isQvShi
         
         # TWO ZHONG SHU followed by ZHONGYIN ZHONGSHU
         # first two zhong shu no interaction
         # last zhong shu interacts with second, this is for TYPE II trade point
         if len(recent_zhongshu) >= 3 and\
-            (recent_zhongshu[-3].direction == recent_zhongshu[-2].direction or recent_zhongshu[-3].is_complex_type()):
+            (recent_zhongshu[-2].direction == recent_zhongshu[-1].direction) and\
+            (not recent_zhongshu[-1].is_complex_type()):
             first_two_zs_qs = self.two_zhongshu_form_qvshi(recent_zhongshu[-3], recent_zhongshu[-2])
             second_third_interact = self.two_zslx_interact_original(recent_zhongshu[-2], recent_zhongshu[-1])
             self.isQvShi = first_two_zs_qs and second_third_interact
             if self.isQvShi and self.isdebug:
-                print("QU SHI 1")
+                print("QU SHI 2")
         else:
             self.isQvShi = False
             
@@ -329,14 +331,14 @@ class Equilibrium():
             core_region = zs.get_core_region()
             amplitude_region_original = zs.get_amplitude_region_original()
             
-            if len(zslx.zoushi_nodes) == 2 and\
+            if len(zslx.zoushi_nodes) == 3 and\
                 (zslx.zoushi_nodes[-1].chan_price < amplitude_region_original[0] or zslx.zoushi_nodes[-1].chan_price > amplitude_region_original[1]):
                 if (zslx.direction == TopBotType.top2bot and zslx.zoushi_nodes[-1].tb == TopBotType.top) or\
                    (zslx.direction == TopBotType.bot2top and zslx.zoushi_nodes[-1].tb == TopBotType.bot):
                     all_types.append((Chan_Type.III, TopBotType.top2bot if zslx.zoushi_nodes[-1].tb == TopBotType.bot else TopBotType.bot2top))
                     if self.isdebug:
                         print("TYPE III trade point 1")
-            elif len(zslx.zoushi_nodes) == 2 and\
+            elif len(zslx.zoushi_nodes) == 3 and\
                 (zslx.zoushi_nodes[-1].chan_price < core_region[0] or zslx.zoushi_nodes[-1].chan_price > core_region[1]):
                 if (zslx.direction == TopBotType.top2bot and zslx.zoushi_nodes[-1].tb == TopBotType.top) or\
                    (zslx.direction == TopBotType.bot2top and zslx.zoushi_nodes[-1].tb == TopBotType.bot):                
@@ -344,6 +346,7 @@ class Equilibrium():
                     if self.isdebug:
                         print("TYPE III trade point 2")
                     
+            # a bit more complex type than standard two XD away and not back case, no new zs formed        
             split_direction, split_nodes = zslx.get_reverse_split_zslx()
             pure_zslx = ZouShiLeiXing(split_direction, self.original_df, split_nodes)
             # at least two split nodes required to form a zslx
@@ -375,11 +378,15 @@ class Equilibrium():
             latest_zslx = self.analytic_result[-1]
             now_zs = self.analytic_result[-2]
             pre_zs = self.analytic_result[-4]
-            if not self.two_zslx_interact_original(pre_zs, latest_zslx) and latest_zslx.direction != now_zs.direction:
+            if not self.two_zslx_interact_original(pre_zs, latest_zslx) and\
+                latest_zslx.direction != now_zs.direction and\
+                not now_zs.is_complex_type():
                 all_types.append((Chan_Type.III, latest_zslx.direction))
                 if self.isdebug:
                     print("TYPE III trade point 5")   
-            if not self.two_zslx_interact(pre_zs, latest_zslx) and latest_zslx.direction != now_zs.direction:
+            if not self.two_zslx_interact(pre_zs, latest_zslx) and\
+                latest_zslx.direction != now_zs.direction and\
+                not now_zs.is_complex_type():
                 all_types.append((Chan_Type.III_weak, latest_zslx.direction))
                 if self.isdebug:
                     print("TYPE III trade point 6")                             
