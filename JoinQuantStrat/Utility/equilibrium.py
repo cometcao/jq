@@ -13,8 +13,8 @@ def check_chan_high(stock, end_time, count, period, direction, chan_type):
     anal_result_high = crp_high.define_central_region()
     eq = Equilibrium(xd_df_high, anal_result_high, isdebug=False, isDescription=True)
     chan_types = eq.check_chan_type()
-    for chan_type, chan_d in chan_types:
-        if chan_type == chan_type and chan_d == direction:
+    for chan_t, chan_d in chan_types:
+        if chan_t == chan_type and chan_d == direction:
             return True
     return False
 
@@ -194,7 +194,7 @@ class Equilibrium():
         '''
         result = False
         if zs1.get_level().value >= zs2.get_level().value == zs_level and\
-            (zs1.direction == zs2.direction or zs2.is_complex_type()):
+            (zs1.direction == zs2.direction or zs1.is_complex_type()):
             [l1, u1] = zs1.get_amplitude_region_original()
             [l2, u2] = zs2.get_amplitude_region_original()
             if l1 > u2 or l2 > u1: # two Zhong Shu without intersection
@@ -286,6 +286,8 @@ class Equilibrium():
         if self.isQvShi: # if QV SHI => at least two Zhong Shu, We could also use macd for help
             zslx_macd = zslx_a.get_macd_acc()
             latest_macd = zslx_c.get_macd_acc()
+            if self.isdebug or self.isDescription:
+                print("exhaustion found by macd: {0}, {1}".format(zslx_macd, latest_macd))
             return abs(zslx_macd) > abs(latest_macd)
         
         # TODO check zslx exhaustion
