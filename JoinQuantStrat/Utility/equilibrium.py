@@ -321,11 +321,12 @@ class Equilibrium():
             # I current Zou Shi must end
             if type(self.analytic_result[-1]) is ZouShiLeiXing: # last zslx escape last zhong shu
                 zslx = self.analytic_result[-1]
-                if zslx.direction == TopBotType.top2bot and zslx.zoushi_nodes[-1].tb == TopBotType.bot:
+                zslx2= self.analytic_result[-3]
+                if zslx.direction == TopBotType.top2bot == zslx2.direction and zslx.zoushi_nodes[-1].tb == TopBotType.bot:
                     if self.isdebug:
                         print("TYPE I trade point 1")
                     all_types.append((Chan_Type.I, TopBotType.top2bot))
-                elif zslx.direction == TopBotType.bot2top and zslx.zoushi_nodes[-1].tb == TopBotType.top:
+                elif zslx.direction == TopBotType.bot2top == zslx2.direction and zslx.zoushi_nodes[-1].tb == TopBotType.top:
                     if self.isdebug:
                         print("TYPE I trade point 1")
                     all_types.append((Chan_Type.I, TopBotType.bot2top))
@@ -333,7 +334,7 @@ class Equilibrium():
             if type(self.analytic_result[-1]) is ZhongShu: # last XD in zhong shu must make top or bot
                 zs = self.analytic_result[-1]
                 [l,u] = zs.get_amplitude_region_original()
-                if zs.is_complex_type() and len(zs.extra_nodes) == 1:
+                if zs.is_complex_type() and len(zs.extra_nodes) >= 1:
                     if zs.direction == TopBotType.top2bot and\
                         zs.extra_nodes[-1].tb == TopBotType.bot and\
                         zs.extra_nodes[-1].chan_price == l:
