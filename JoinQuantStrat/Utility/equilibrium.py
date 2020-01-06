@@ -5,6 +5,27 @@ from centralRegion import *
 import numpy as np
 import pandas as pd
 
+def check_chan_high(stock, end_time, count, period, direction, chan_type):
+    stock_high = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close', 'money'])
+    kb_high = KBarProcessor(stock_high, isdebug=False)
+    xd_df_high = kb_high.getIntegradedXD()
+    crp_high = CentralRegionProcess(xd_df_high, isdebug=False, use_xd=True)
+    anal_result_high = crp_high.define_central_region()
+    eq = Equilibrium(xd_df_high, anal_result_high, isdebug=False, isDescription=True)
+    chan_types = eq.check_chan_type()
+    for chan_type, chan_d in chan_types:
+        if chan_type == chan_type and chan_d == direction:
+            return True
+    return False
+
+def check_chan_low(stock, end_time, count, period, direction):
+    stock_low = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close', 'money'])
+    kb_low = KBarProcessor(stock_low, isdebug=False)
+    xd_df_low = kb_low.getIntegradedXD()
+    ni = NestedInterval(xd_df_low, isdebug=False, isDescription=True)        
+    result = ni.is_trade_point(direction=direction)
+    return result
+
 
 class CentralRegionProcess(object):
     '''
@@ -424,7 +445,7 @@ class NestedInterval():
         '''
         use direction param to check long/short point
         '''
-        if self.isDescription or self.isdebug:
+        if self.isdebug:
             print("looking for {0} point".format("long" if direction == TopBotType.top2bot else "short"))
         # XD
         xd_exhausted, xd_direction = self.analyze_zoushi(use_xd=True)
