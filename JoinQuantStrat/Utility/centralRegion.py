@@ -73,6 +73,8 @@ class Double_Nodes(object):
         self.direction = TopBotType.bot2top if self.start.chan_price < self.end.chan_price else TopBotType.top2bot        
 
     def get_time_region(self):
+#         # first node timestamp loc + 1, since first node connect backwords
+#         real_start_time = self.original_df.index[self.original_df.index.get_loc(self.start.time)+1]
         return self.start.time, self.end.time
 
     def work_out_slope(self):
@@ -169,7 +171,10 @@ class ZouShiLeiXing(object):
             return [None, None]
         if not self.time_region or re_evaluate: # assume node stored in time order
             self.zoushi_nodes.sort(key=lambda x: x.time)
-            self.time_region = [self.zoushi_nodes[0].time, self.zoushi_nodes[-1].time]
+            
+            # first node timestamp loc + 1, since first node connect backwords
+            real_start_time = self.original_df.index[self.original_df.index.get_loc(self.zoushi_nodes[0].time)+1]
+            self.time_region = [real_start_time, self.zoushi_nodes[-1].time]
         return self.time_region
     
     def get_amplitude_loc(self):
@@ -298,8 +303,10 @@ class ZhongShu(ZouShiLeiXing):
         price_list = [self.first.chan_price, self.second.chan_price, self.third.chan_price, self.forth.chan_price]
         self.core_amplitude_region = [min(price_list), max(price_list)]
     
-    def get_core_time_region(self):
-        self.core_time_region = [self.first.time, self.forth.time]
+    def get_core_time_region(self, re_evaluate=False):
+        if not self.core_time_region or re_evaluate:
+            real_start_time = self.original_df.index[self.original_df.index.get_loc(self.first.time)+1]
+            self.core_time_region = [real_start_time, self.forth.time]
         return self.core_time_region    
     
     def get_amplitude_region(self, re_evaluate=False):
@@ -319,7 +326,7 @@ class ZhongShu(ZouShiLeiXing):
     def get_time_region(self, re_evaluate=False):    
         if not self.time_region or re_evaluate: # assume node stored in time order
             if not self.extra_nodes:
-                self.time_region = self.get_core_time_region()
+                self.time_region = self.get_core_time_region(re_evaluate)
             else:
                 self.extra_nodes.sort(key=lambda x: x.time)
                 self.time_region = [self.core_time_region[0], max(self.core_time_region[-1], self.extra_nodes[-1].time)]
