@@ -35,7 +35,7 @@ def check_chan_by_type_exhaustion(stock, end_time, count, period, direction, cha
     eq = Equilibrium(xd_df, anal_result_df, isdebug=False, isDescription=True)
     chan_types = eq.check_chan_type()
     for chan_t, chan_d in chan_types:
-        if chan_t == chan_type and chan_d == direction:    
+        if ((chan_t in chan_type) if type(chan_type) is list else (chan_t == chan_type)) and chan_d == direction:      
             ni = NestedInterval(xd_df, isdebug=False, isDescription=True)   
             return ni.is_trade_point(direction=direction)
     return False
