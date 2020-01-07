@@ -25,6 +25,7 @@ class Chan_Type(Enum):
     II = 2
     III = 3
     III_weak = 4
+    II_weak = 5
 
 class Chan_Node(object):
     def __init__(self, df_node):
