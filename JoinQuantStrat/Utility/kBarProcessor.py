@@ -360,11 +360,13 @@ class KBarProcessor(object):
         if next_index == working_df.shape[0]:
             if ((working_df.ix[current_index,'tb']==TopBotType.top and self.kDataFrame_origin.ix[-1,'high'] > working_df.ix[current_index, 'high']) \
                 or (working_df.ix[current_index,'tb']==TopBotType.bot and self.kDataFrame_origin.ix[-1, 'low'] < working_df.ix[current_index, 'low']) ):
+                working_df.ix[-1, 'tb'] = working_df.ix[current_index, 'tb']
                 working_df.ix[current_index, 'tb'] = TopBotType.noTopBot
 
             if working_df.iloc[current_index, tb_loc] == TopBotType.noTopBot and\
                 ((working_df.iloc[previous_index, tb_loc]==TopBotType.top and self.kDataFrame_origin.ix[-1,'high'] > working_df.ix[previous_index, 'high']) or\
                  (working_df.iloc[previous_index, tb_loc]==TopBotType.bot and self.kDataFrame_origin.ix[-1,'low'] < working_df.ix[previous_index, 'low'])):
+                working_df.ix[-1, 'tb'] = working_df.ix[previous_index, 'tb']
                 working_df.ix[previous_index, 'tb'] = TopBotType.noTopBot
                 
             if working_df.iloc[previous_index, tb_loc] == working_df.iloc[current_index, tb_loc]:
@@ -507,12 +509,14 @@ class KBarProcessor(object):
         if next_index == working_df.shape[0]:
             if ((working_df.ix[current_index,'tb']==TopBotType.top and self.kDataFrame_origin.ix[-1,'high'] > working_df.ix[current_index, 'high']) \
                 or (working_df.ix[current_index,'tb']==TopBotType.bot and self.kDataFrame_origin.ix[-1, 'low'] < working_df.ix[current_index, 'low']) ):
+                working_df.ix[-1, 'tb'] = working_df.ix[current_index, 'tb']
                 working_df.ix[current_index, 'tb'] = TopBotType.noTopBot
                 
 
             if working_df.iloc[current_index, tb_loc] == TopBotType.noTopBot and\
                 ((working_df.iloc[previous_index, tb_loc]==TopBotType.top and self.kDataFrame_origin.ix[-1,'high'] > working_df.ix[previous_index, 'high']) or\
                  (working_df.iloc[previous_index, tb_loc]==TopBotType.bot and self.kDataFrame_origin.ix[-1,'low'] < working_df.ix[previous_index, 'low'])):
+                working_df.ix[-1, 'tb'] = working_df.ix[previous_index, 'tb']
                 working_df.ix[previous_index, 'tb'] = TopBotType.noTopBot
                 
             if working_df.iloc[previous_index, tb_loc] == working_df.iloc[current_index, tb_loc]:
