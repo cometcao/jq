@@ -593,11 +593,12 @@ class KBarProcessor(object):
         return self.kDataFrame_marked
     
     def getPureBi(self):
-        if self.kDataFrame_marked.empty:
-            self.kDataFrame_marked['chan_price'] = None
         # only use the price relavent
-        else:
+        try:
             self.kDataFrame_marked['chan_price'] = self.kDataFrame_marked.apply(lambda row: row['high'] if row['tb'] == TopBotType.top else row['low'], axis=1)
+        except:
+            print("empty dataframe")
+            self.kDataFrame_marked['chan_price'] = None
     
     def getStandardized(self):
         return self.standardize()
@@ -612,7 +613,6 @@ class KBarProcessor(object):
     
     def getIntegradedXD(self, initial_state=TopBotType.noTopBot):
         temp_df = self.getIntegraded(initial_state)
-        temp_df = temp_df.dropna(subset=['chan_price'])
         if temp_df.empty:
             return temp_df
         self.defineXD()
