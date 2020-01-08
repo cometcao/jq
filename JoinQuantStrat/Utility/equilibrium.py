@@ -37,8 +37,8 @@ def check_chan_by_type_exhaustion(stock, end_time, count, period, direction, cha
     for chan_t, chan_d in chan_types:
         if ((chan_t in chan_type) if type(chan_type) is list else (chan_t == chan_type)) and chan_d == direction:      
             ni = NestedInterval(xd_df, isdebug=False, isDescription=True)   
-            return ni.is_trade_point(direction=direction)
-    return False
+            return ni.is_trade_point(direction=direction), chan_t
+    return False, Chan_Type.INVALID
 
 class CentralRegionProcess(object):
     '''
@@ -210,13 +210,27 @@ class Equilibrium():
         two adjacent ZhongShu going in the same direction, or the first ZhongShu is complex(can be both direction)
         '''
         result = False
-        if zs1.get_level().value >= zs2.get_level().value == zs_level.value and\
+        if zs1.get_level().value == zs2.get_level().value == zs_level.value and\
             (zs1.direction == zs2.direction or zs1.is_complex_type()):
             [l1, u1] = zs1.get_amplitude_region_original()
             [l2, u2] = zs2.get_amplitude_region_original()
             if l1 > u2 or l2 > u1: # two Zhong Shu without intersection
                 if self.isdebug:
-                    print("current Zou Shi is QV SHI \n{0} \n{1}".format(zs1, zs2))
+                    print("1 current Zou Shi is QV SHI \n{0} \n{1}".format(zs1, zs2))
+                result = True        
+        
+        if not result and zs1.get_level().value > zs2.get_level().value == zs_level.value and\
+            (zs1.direction == zs2.direction or zs1.is_complex_type()):
+            split_nodes = zs1.get_split_zs(zs2.direction)
+            if len(split_nodes) >= 5:
+                new_zs = ZhongShu(split_nodes[1], split_nodes[2], split_nodes[3], split_nodes[4], zs2.direction, zs2.original_df)
+                new_zs.add_new_nodes(split_nodes[5:])
+    
+                [l1, u1] = new_zs.get_amplitude_region_original()
+                [l2, u2] = zs2.get_amplitude_region_original()
+                if l1 > u2 or l2 > u1: # two Zhong Shu without intersection
+                    if self.isdebug:
+                        print("2 current Zou Shi is QV SHI \n{0} \n{1}".format(zs1, zs2))
                 result = True        
         return result
     

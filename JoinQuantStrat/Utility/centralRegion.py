@@ -323,6 +323,20 @@ class ZhongShu(ZouShiLeiXing):
             self.amplitude_region_origin = [region_price_series['low'].min(), region_price_series['high'].max()]
         return self.amplitude_region_origin
         
+    def get_split_zs(self, split_direction):
+        '''
+        higher level Zhong Shu can be split into lower level ones, we can do it at the top or bot nodes
+        depends on the given direction of Zous Shi,
+        We should only split if current Zhong Shu is higher than current level, meaning we are splitting
+        at extra_nodes
+        '''
+        node_tb, method = (TopBotType.bot, np.min) if split_direction == TopBotType.bot2top else (TopBotType.top, np.max)
+        if self.get_level().value >= ZhongShuLevel.current.value:
+            all_price = [n.chan_price for n in self.extra_nodes]
+            ex_price = method(all_price)
+            return self.extra_nodes[all_price.index(ex_price):]
+        else:
+            return []
 
     def get_time_region(self, re_evaluate=False):    
         if not self.time_region or re_evaluate: # assume node stored in time order
