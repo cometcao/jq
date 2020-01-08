@@ -51,6 +51,9 @@ class XianDuan_Node(Chan_Node):
     def __eq__(self, node):
         return super().__eq__(node) and self.tb == node.tb
         
+    def __hash__(self):
+        return hash((self.time, self.chan_price, self.loc, self.tb.value, self.macd_acc))
+        
 class BI_Node(Chan_Node):
     def __init__(self, df_node):
         super(BI_Node, self).__init__(df_node)
@@ -62,6 +65,9 @@ class BI_Node(Chan_Node):
     
     def __eq__(self, node):
         return super().__eq__(node) and self.tb == node.tb
+
+    def __hash__(self):
+        return hash((self.time, self.chan_price, self.loc, self.tb.value, self.macd_acc))
 
 class Double_Nodes(object):
     def __init__(self, start, end):
@@ -118,16 +124,19 @@ class ZouShiLeiXing(object):
         return not bool(self.zoushi_nodes)
     
     def add_new_nodes(self, tb_nodes):
+        added = False
         if type(tb_nodes) is list:
-#             list(OrderedDict.fromkeys(self.zoushi_nodes + tb_nodes))
-            self.zoushi_nodes = self.zoushi_nodes + tb_nodes
+            self.zoushi_nodes = list(OrderedDict.fromkeys(self.zoushi_nodes + tb_nodes))
+            added = True
+#             self.zoushi_nodes = self.zoushi_nodes + tb_nodes
         else:
             if tb_nodes not in self.zoushi_nodes:
                 self.zoushi_nodes.append(tb_nodes)
+                added = True
         
-        self.get_amplitude_region(re_evaluate=True)
-        self.get_amplitude_region_original(re_evaluate=True)
-        self.get_time_region(re_evaluate=True)
+        self.get_amplitude_region(re_evaluate=added)
+        self.get_amplitude_region_original(re_evaluate=added)
+        self.get_time_region(re_evaluate=added)
     
     def __repr__(self):
         if self.isEmpty():
@@ -261,15 +270,27 @@ class ZhongShu(ZouShiLeiXing):
         [s, e] = self.get_time_region()
         return "\nZhong Shu {0}:{1}-{2}-{3}-{4} {5}->{6} level@{7}\n[".format(self.direction, self.first.chan_price, self.second.chan_price, self.third.chan_price, self.forth.chan_price, s, e, self.get_level()) + '\n'.join([node.__repr__() for node in self.extra_nodes]) + ']'        
     
-    def add_new_nodes(self, tb_nodes):
+    def add_new_nodes(self, tb_nodes, added = False):
         if type(tb_nodes) is list:
-#             list(OrderedDict.fromkeys(self.extra_nodes + tb_nodes))
-            self.extra_nodes = self.extra_nodes + tb_nodes
+            if len(tb_nodes) == 1:
+                if tb_nodes[0] != self.first and tb_nodes[0] != self.second and tb_nodes[0] != self.third and tb_nodes[0] != self.forth and tb_nodes[0] not in self.extra_nodes:
+                    added = True
+                    self.extra_nodes.append(tb_nodes[0])
+    
+                self.get_amplitude_region(re_evaluate=added)
+                self.get_amplitude_region_original(re_evaluate=added)
+                self.get_time_region(re_evaluate=added)
+            elif len(tb_nodes) > 1:
+                if tb_nodes[0] != self.first and tb_nodes[0] != self.second and tb_nodes[0] != self.third and tb_nodes[0] != self.forth and tb_nodes[0] not in self.extra_nodes:
+                    added = True
+                    self.extra_nodes.append(tb_nodes[0])
+                self.add_new_nodes(tb_nodes[1:], added)
         else:
+            if tb_nodes != self.first and tb_nodes != self.second and tb_nodes != self.third and tb_nodes != self.forth and tb_nodes not in self.extra_nodes:
             self.extra_nodes.append(tb_nodes)
-            self.get_amplitude_region(re_evaluate=True)    
-        self.get_amplitude_region_original(re_evaluate=True)
-        self.get_time_region(re_evaluate=True)
+                self.get_amplitude_region(re_evaluate=added)
+                self.get_amplitude_region_original(re_evaluate=added)
+                self.get_time_region(re_evaluate=added)
     
     def out_of_zhongshu(self, node1, node2):
         [l,h] = self.get_core_region()
