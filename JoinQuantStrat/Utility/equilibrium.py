@@ -35,7 +35,7 @@ def check_chan_by_type_exhaustion(stock, end_time, count, period, direction, cha
     eq = Equilibrium(xd_df, anal_result_df, isdebug=False, isDescription=True)
     chan_types = eq.check_chan_type()
     for chan_t, chan_d in chan_types:
-        if ((chan_t in chan_type) if type(chan_type) is list else (chan_t == chan_type)) and chan_d == direction:      
+        if ((chan_t in chan_type) if type(chan_type) is list else (chan_t == chan_type)) and chan_d == direction:    
             ni = NestedInterval(xd_df, isdebug=False, isDescription=True)   
             return ni.is_trade_point(direction=direction), chan_t
     return False, Chan_Type.INVALID
@@ -231,7 +231,7 @@ class Equilibrium():
                 if l1 > u2 or l2 > u1: # two Zhong Shu without intersection
                     if self.isdebug:
                         print("2 current Zou Shi is QV SHI \n{0} \n{1}".format(zs1, zs2))
-                result = True        
+                    result = True        
         return result
     
     def two_zslx_interact(self, zs1, zs2):
@@ -525,8 +525,11 @@ class NestedInterval():
             print("Xian Duan {0} {1}".format(xd_direction, "exhausted" if xd_exhausted else "continues"))
         
         # BI
-        bi_exhausted, bi_direction = self.analyze_zoushi(use_xd=False)
-        if self.isDescription or self.isdebug:
-            print("Fen Bi {0} {1}".format(bi_direction, "exhausted" if bi_exhausted else "continues"))
+        if xd_exhausted:
+            bi_exhausted, bi_direction = self.analyze_zoushi(use_xd=False)
+            if self.isDescription or self.isdebug:
+                print("Fen Bi {0} {1}".format(bi_direction, "exhausted" if bi_exhausted else "continues"))
         
-        return xd_direction == bi_direction == direction and xd_exhausted and bi_exhausted
+            return xd_direction == bi_direction == direction and xd_exhausted and bi_exhausted
+        else:
+            return xd_exhausted
