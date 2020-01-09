@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import talib
 from enum import Enum 
+from collections import OrderedDict
 from biaoLiStatus import * 
 from kBarProcessor import *
 
@@ -287,7 +288,7 @@ class ZhongShu(ZouShiLeiXing):
                 self.add_new_nodes(tb_nodes[1:], added)
         else:
             if tb_nodes != self.first and tb_nodes != self.second and tb_nodes != self.third and tb_nodes != self.forth and tb_nodes not in self.extra_nodes:
-            self.extra_nodes.append(tb_nodes)
+                self.extra_nodes.append(tb_nodes)
                 self.get_amplitude_region(re_evaluate=added)
                 self.get_amplitude_region_original(re_evaluate=added)
                 self.get_time_region(re_evaluate=added)

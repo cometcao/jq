@@ -496,10 +496,11 @@ class NestedInterval():
     existing level goes:
     current_level -> XD -> BI
     '''
-    def __init__(self, df_xd_bi, isdebug=False, isDescription=True):
+    def __init__(self, df_xd_bi, isdebug=False, isDescription=True, check_bi=False):
         self.df_xd_bi = df_xd_bi
         self.isdebug = isdebug
         self.isDescription = isDescription
+        self.check_bi = check_bi
     
     def analyze_zoushi(self, use_xd):
         crp = CentralRegionProcess(self.df_xd_bi, isdebug=self.isdebug, use_xd=use_xd) # XD
@@ -525,7 +526,7 @@ class NestedInterval():
             print("Xian Duan {0} {1}".format(xd_direction, "exhausted" if xd_exhausted else "continues"))
         
         # BI
-        if xd_exhausted:
+        if xd_exhausted and self.check_bi:
             bi_exhausted, bi_direction = self.analyze_zoushi(use_xd=False)
             if self.isDescription or self.isdebug:
                 print("Fen Bi {0} {1}".format(bi_direction, "exhausted" if bi_exhausted else "continues"))
