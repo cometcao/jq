@@ -757,17 +757,17 @@ class KBarProcessor(object):
         # B with_gap is determined by checking if the kline gap range cover between first and forth
         # C change direction as usual, and increment counter by 1 only
         
-#         if next_valid_elems[1] + 1 == next_valid_elems[2] and\
-#         self.gap_exists_in_range(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]]):
-#             gap_ranges = self.gap_region(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]])
-#                 
-#             for (l,h) in gap_ranges:
-#                 # make sure first is within the gap_XD range
-#                 without_gap = (first.chan_price >= l and first.chan_price <= h) and (forth.chan_price >= l and forth.chan_price <= h)
-#                 if without_gap:
-#                     with_xd_gap = True
-#                     if self.isdebug:
-#                         print("XD represented by kline gap 1, {0}, {1}".format(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]]))
+        if next_valid_elems[1] + 1 == next_valid_elems[2] and\
+        self.gap_exists_in_range(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]]):
+            gap_ranges = self.gap_region(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]])
+                 
+            for (l,h) in gap_ranges:
+                # make sure first is within the gap_XD range
+                without_gap = forth.chan_price >= l and forth.chan_price <= h
+                if without_gap:
+                    with_xd_gap = True
+                    if self.isdebug:
+                        print("XD represented by kline gap 1, {0}, {1}".format(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]]))
             
         if not with_xd_gap and\
         next_valid_elems[2] + 1 == next_valid_elems[3] and\
@@ -776,7 +776,7 @@ class KBarProcessor(object):
             
             for (l,h) in gap_ranges:
                 # make sure the gap break previous FIRST FEATURED ELEMENT
-                without_gap = second.chan_price > l and second.chan_price < h
+                without_gap = second.chan_price >= l and second.chan_price <= h
                 if without_gap:
                     with_xd_gap = True
                     if self.isdebug:
@@ -940,7 +940,7 @@ class KBarProcessor(object):
         while i+5 < working_df.shape[0]:
             
             if self.isdebug:
-                print("working at {0}, {1}, {2}".format(working_df.index[i], working_df.iloc[i].tb, current_direction))
+                print("working at {0}, {1}, {2}, {3}, {4}".format(working_df.index[i], working_df.iloc[i].chan_price, current_direction, working_df.iloc[i].new_index, working_df.iloc[i].tb))
             
             previous_gap = len(self.gap_XD) != 0
             
@@ -989,10 +989,10 @@ class KBarProcessor(object):
                             working_df.at[working_df.index[previous_gap_loc], 'xd_tb'] = TopBotType.noTopBot
                             
                             # restore any combined bi due to the gapped XD
-                            working_df.iloc[previous_gap_loc:next_valid_elems[1], working_df.columns.get_loc('tb')] = working_df.iloc[previous_gap_loc:next_valid_elems[1], working_df.columns.get_loc('original_tb')]
+                            working_df.iloc[previous_gap_loc:next_valid_elems[-1], working_df.columns.get_loc('tb')] = working_df.iloc[previous_gap_loc:next_valid_elems[-1], working_df.columns.get_loc('original_tb')]
                             current_direction = TopBotType.top2bot if current_direction == TopBotType.bot2top else TopBotType.bot2top
                             if self.isdebug:
-                                print("gap closed 1:{0}, {1} tb info restored to {2}".format(working_df.index[previous_gap_loc],  working_df.iloc[previous_gap_loc].tb, working_df.index[next_valid_elems[1]])) 
+                                print("gap closed 1:{0}, {1} tb info restored to {2}".format(working_df.index[previous_gap_loc],  working_df.iloc[previous_gap_loc].tb, working_df.index[next_valid_elems[-1]])) 
                             i = previous_gap_loc
                             continue                            
                     elif current_direction == TopBotType.bot2top:
@@ -1001,10 +1001,10 @@ class KBarProcessor(object):
                             working_df.at[working_df.index[previous_gap_loc], 'xd_tb'] = TopBotType.noTopBot
                             
                             # restore any combined bi due to the gapped XD
-                            working_df.iloc[previous_gap_loc:next_valid_elems[1], working_df.columns.get_loc('tb')] = working_df.iloc[previous_gap_loc:next_valid_elems[1], working_df.columns.get_loc('original_tb')]
+                            working_df.iloc[previous_gap_loc:next_valid_elems[-1], working_df.columns.get_loc('tb')] = working_df.iloc[previous_gap_loc:next_valid_elems[-1], working_df.columns.get_loc('original_tb')]
                             current_direction = TopBotType.top2bot if current_direction == TopBotType.bot2top else TopBotType.bot2top
                             if self.isdebug:
-                                print("gap closed 2:{0}, {1} tb info restored to {2}".format(working_df.index[previous_gap_loc],  working_df.iloc[previous_gap_loc].tb, working_df.index[next_valid_elems[1]]))
+                                print("gap closed 2:{0}, {1} tb info restored to {2}".format(working_df.index[previous_gap_loc],  working_df.iloc[previous_gap_loc].tb, working_df.index[next_valid_elems[-1]]))
                             i = previous_gap_loc
                             continue
                             
