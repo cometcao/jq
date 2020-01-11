@@ -289,9 +289,9 @@ class ZhongShu(ZouShiLeiXing):
         else:
             if tb_nodes != self.first and tb_nodes != self.second and tb_nodes != self.third and tb_nodes != self.forth and tb_nodes not in self.extra_nodes:
                 self.extra_nodes.append(tb_nodes)
-                self.get_amplitude_region(re_evaluate=added)
-                self.get_amplitude_region_original(re_evaluate=added)
-                self.get_time_region(re_evaluate=added)
+                self.get_amplitude_region(re_evaluate=True)
+                self.get_amplitude_region_original(re_evaluate=True)
+                self.get_time_region(re_evaluate=True)
     
     def out_of_zhongshu(self, node1, node2):
         [l,h] = self.get_core_region()
