@@ -637,7 +637,7 @@ class KBarProcessor(object):
     
     def is_XD_inclusion_free(self, direction, next_valid_elems, working_df):
         '''
-        check the 4 elems are inclusion free by direction, if not operate the inclusion
+        check the 4 elems are inclusion free by direction, if not operate the inclusion, gaps are defined as pure gap
         '''
         if len(next_valid_elems) < 4:
             print("Invalid number of elems found")
@@ -657,12 +657,12 @@ class KBarProcessor(object):
             (firstElem.chan_price >= thirdElem.chan_price and secondElem.chan_price <= forthElem.chan_price):        
             
             ############################## special case of kline gap as XD ##############################
+            # only checking if any one node is in pure gap range. The same logic as gap for XD
             if next_valid_elems[0] + 1 == next_valid_elems[1] and\
             self.gap_exists_in_range(working_df.index[next_valid_elems[0]], working_df.index[next_valid_elems[1]]):
                 regions = self.gap_region(working_df.index[next_valid_elems[0]], working_df.index[next_valid_elems[1]])
                 for re in regions:
-                    if re[0] <= thirdElem.chan_price <= forthElem.chan_price <= re[1] or\
-                        re[0] <= forthElem.chan_price <= thirdElem.chan_price <= re[1]:
+                    if re[0] <= thirdElem.chan_price <= re[1]:
                         if self.isdebug:
                             print("inclusion ignored due to kline gaps, with loc {0}, {1}".format(working_df.index[next_valid_elems[0]], working_df.index[next_valid_elems[1]]))
                         return True
@@ -671,8 +671,7 @@ class KBarProcessor(object):
             self.gap_exists_in_range(working_df.index[next_valid_elems[2]], working_df.index[next_valid_elems[3]]):
                 regions = self.gap_region(working_df.index[next_valid_elems[2]], working_df.index[next_valid_elems[3]])
                 for re in regions:
-                    if re[0] <= firstElem.chan_price <= secondElem.chan_price <= re[1] or\
-                        re[0] <= secondElem.chan_price <= firstElem.chan_price <= re[1]:
+                    if re[0] <= secondElem.chan_price <= re[1]:
                         if self.isdebug:
                             print("inclusion ignored due to kline gaps, with loc {0}, {1}".format(working_df.index[next_valid_elems[2]], working_df.index[next_valid_elems[3]]))
                         return True             
