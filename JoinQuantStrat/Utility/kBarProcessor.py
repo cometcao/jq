@@ -39,6 +39,7 @@ class KBarProcessor(object):
         self.kDataFrame_marked = None
         self.kDataFrame_xd = None
         self.gap_XD = []
+        self.previous_with_xd_gap = False # help to check current gap as XD
     
     def synchForChart(self):
         self.kDataFrame_standardized = self.kDataFrame_standardized.drop('new_high', 1)
@@ -681,7 +682,7 @@ class KBarProcessor(object):
             working_df.iloc[next_valid_elems[2], working_df.columns.get_loc('tb')] = TopBotType.noTopBot
             
             if self.isdebug:
-                print("location {0}, {1} removed for combination".format(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]]))
+                print("location {0}@{1}, {2}@{3} removed for combination".format(working_df.index[next_valid_elems[1]], working_df.iloc[next_valid_elems[1]].chan_price, working_df.index[next_valid_elems[2]], working_df.iloc[next_valid_elems[2]].chan_price))
             return False
         return True
     
@@ -757,19 +758,7 @@ class KBarProcessor(object):
         # B with_gap is determined by checking if the kline gap range cover between first and forth
         # C change direction as usual, and increment counter by 1 only
         
-        if next_valid_elems[1] + 1 == next_valid_elems[2] and\
-        self.gap_exists_in_range(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]]):
-            gap_ranges = self.gap_region(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]])
-                 
-            for (l,h) in gap_ranges:
-                # make sure first is within the gap_XD range
-                without_gap = forth.chan_price >= l and forth.chan_price <= h
-                if without_gap:
-                    with_xd_gap = True
-                    if self.isdebug:
-                        print("XD represented by kline gap 1, {0}, {1}".format(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]]))
-            
-        if not with_xd_gap and\
+        if not self.previous_with_xd_gap and\
         next_valid_elems[2] + 1 == next_valid_elems[3] and\
         self.gap_exists_in_range(working_df.index[next_valid_elems[2]], working_df.index[next_valid_elems[3]]):
             gap_ranges = self.gap_region(working_df.index[next_valid_elems[2]], working_df.index[next_valid_elems[3]])
@@ -779,9 +768,24 @@ class KBarProcessor(object):
                 without_gap = second.chan_price >= l and second.chan_price <= h
                 if without_gap:
                     with_xd_gap = True
+                    self.previous_with_xd_gap = True #open status
                     if self.isdebug:
                         print("XD represented by kline gap 2, {0}, {1}".format(working_df.index[next_valid_elems[2]], working_df.index[next_valid_elems[3]]))
                         
+        if not with_xd_gap and\
+        self.previous_with_xd_gap and next_valid_elems[1] + 1 == next_valid_elems[2] and\
+        self.gap_exists_in_range(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]]):
+            gap_ranges = self.gap_region(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]])
+            self.previous_with_xd_gap=False # close status
+            for (l,h) in gap_ranges:
+                # make sure first is within the gap_XD range
+                without_gap = forth.chan_price >= l and forth.chan_price <= h
+                if without_gap:
+                    with_xd_gap = True
+                    if self.isdebug:
+                        print("XD represented by kline gap 1, {0}, {1}".format(working_df.index[next_valid_elems[1]], working_df.index[next_valid_elems[2]]))
+        
+
         if with_xd_gap:
             if (direction == TopBotType.bot2top and third.chan_price > fifth.chan_price and third.chan_price > first.chan_price):
                 xd_gap_result = TopBotType.top
@@ -1063,10 +1067,13 @@ class KBarProcessor(object):
         # We need to deal with the remaining BI tb and make an assumption that current XD ends
         if i < working_df.shape[0]:
             # + 3 to make sure we have 3 BI at least in XD
-            previous_xd_tb_locs = self.get_previous_N_elem(i, working_df, N=0, single_direction=False)
+            previous_xd_tb_locs = self.get_previous_N_elem(working_df.shape[0]-1, working_df, N=0, single_direction=False)
             if previous_xd_tb_locs:
+                column_locs = [working_df.columns.get_loc(x) for x in ['chan_price', 'tb', 'original_tb']]
                 previous_xd_tb_loc = previous_xd_tb_locs[0]+3
-                column_locs = [working_df.columns.get_loc(x) for x in ['chan_price', 'tb']]
+                # restore tb info from loc found from original_tb as we don't need them?
+                working_df.iloc[previous_xd_tb_loc:,column_locs[1]] = working_df.iloc[previous_xd_tb_loc:,column_locs[2]]
+                
                 temp_df = working_df.iloc[previous_xd_tb_loc:,column_locs]
                 if not temp_df.empty:
                     temp_df = temp_df[temp_df['tb'] != TopBotType.noTopBot]
