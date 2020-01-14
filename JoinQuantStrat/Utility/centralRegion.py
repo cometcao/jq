@@ -74,8 +74,8 @@ class Double_Nodes(object):
     def __init__(self, start, end):
         self.start = start
         self.end = end
-        assert type(self.start) is Chan_Node, "Invalid starting node type"
-        assert type(self.end) is Chan_Node, "Invalid ending node type"
+        assert isinstance(self.start, (Chan_Node, XianDuan_Node, BI_Node)), "Invalid starting node type"
+        assert isinstance(self.end, (Chan_Node, XianDuan_Node, BI_Node)), "Invalid ending node type"
         assert (start.tb == TopBotType.top and end.tb == TopBotType.bot) or (start.tb == TopBotType.bot and end.tb == TopBotType.top), "Invalid tb info" 
         assert (start.time < end.time), "Invalid node timing order"
         self.direction = TopBotType.bot2top if self.start.chan_price < self.end.chan_price else TopBotType.top2bot        
@@ -352,11 +352,12 @@ class ZhongShu(ZouShiLeiXing):
         '''
         higher level Zhong Shu can be split into lower level ones, we can do it at the top or bot nodes
         depends on the given direction of Zous Shi,
-        We should only split if current Zhong Shu is higher than current level, meaning we are splitting
+        We could split if current Zhong Shu is higher than current level, meaning we are splitting
         at extra_nodes
+        Order we can just split on complex ZhongShu
         '''
         node_tb, method = (TopBotType.bot, np.min) if split_direction == TopBotType.bot2top else (TopBotType.top, np.max)
-        if self.get_level().value >= ZhongShuLevel.current.value:
+        if self.is_complex_type() or self.get_level().value >= ZhongShuLevel.current.value:
             all_price = [n.chan_price for n in self.extra_nodes]
             ex_price = method(all_price)
             return self.extra_nodes[all_price.index(ex_price):]
@@ -378,13 +379,19 @@ class ZhongShu(ZouShiLeiXing):
 
     def take_last_xd_as_zslx(self):
         exiting_nodes = [self.forth] + self.extra_nodes if self.extra_nodes else []
-        xd = XianDuan(exiting_nodes[-2:])
-        return ZouShiLeiXing(xd.direction, self.original_df, exiting_nodes[-2:]) 
+        if len(exiting_nodes) < 2:
+            return ZouShiLeiXing(TopBotType.noTopBot, self.original_df, [])
+        else:
+            xd = XianDuan(exiting_nodes[-2], exiting_nodes[-1])
+            return ZouShiLeiXing(xd.direction, self.original_df, exiting_nodes[-2:])
 
     def take_first_xd_as_zslx(self):
         remaining_nodes = self.get_split_zs(self.direction)
-        xd = XianDuan(remaining_nodes[:2])
-        return ZouShiLeiXing(xd.direction, self.original_df, remaining_nodes[:2])
+        if len(remaining_nodes) < 2:
+            return ZouShiLeiXing(TopBotType.noTopBot, self.original_df, [])
+        else:
+            xd = XianDuan(remaining_nodes[0], remaining_nodes[1])
+            return ZouShiLeiXing(xd.direction, self.original_df, remaining_nodes[:2])
 
     def is_complex_type(self):
         # if the ZhongShu contain more than 3 XD, it's a complex ZhongShu, in practice the direction of it can be interpreted differently
