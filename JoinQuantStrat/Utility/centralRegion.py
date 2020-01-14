@@ -383,7 +383,7 @@ class ZhongShu(ZouShiLeiXing):
 
     def take_first_xd_as_zslx(self):
         remaining_nodes = self.get_split_zs(self.direction)
-        xd = XianDuan(remaining_nodess[:2])
+        xd = XianDuan(remaining_nodes[:2])
         return ZouShiLeiXing(xd.direction, self.original_df, remaining_nodes[:2])
 
     def is_complex_type(self):
