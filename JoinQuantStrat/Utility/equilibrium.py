@@ -11,7 +11,7 @@ def check_chan_high(stock, end_time, count, period, direction, chan_type):
     xd_df_high = kb_high.getIntegradedXD()
     crp_high = CentralRegionProcess(xd_df_high, isdebug=False, use_xd=True)
     anal_result_high = crp_high.define_central_region()
-    eq = Equilibrium(xd_df_high, anal_result_high, isdebug=False, isDescription=True)
+    eq = Equilibrium(xd_df_high, anal_result_high, isdebug=False, isDescription=True, check_bi=False)
     chan_types = eq.check_chan_type()
     for chan_t, chan_d in chan_types:
         if chan_t == chan_type and chan_d == direction:
@@ -22,7 +22,7 @@ def check_chan_low(stock, end_time, count, period, direction):
     stock_low = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close', 'money'], skip_paused=True)
     kb_low = KBarProcessor(stock_low, isdebug=False)
     xd_df_low = kb_low.getIntegradedXD()
-    ni = NestedInterval(xd_df_low, isdebug=False, isDescription=True)        
+    ni = NestedInterval(xd_df_low, isdebug=False, isDescription=True, check_bi=False)        
     result = ni.is_trade_point(direction=direction)
     return result
 
@@ -36,7 +36,7 @@ def check_chan_by_type_exhaustion(stock, end_time, count, period, direction, cha
     chan_types = eq.check_chan_type()
     for chan_t, chan_d in chan_types:
         if ((chan_t in chan_type) if type(chan_type) is list else (chan_t == chan_type)) and chan_d == direction:    
-            ni = NestedInterval(xd_df, isdebug=False, isDescription=True)   
+            ni = NestedInterval(xd_df, isdebug=False, isDescription=True, check_bi=False)   
             return ni.is_trade_point(direction=direction), chan_t
     return False, Chan_Type.INVALID
 
@@ -194,11 +194,28 @@ class Equilibrium():
         Make sure we return the most recent Zhong Shu and the Zou Shi Lei Xing Entering it.
         The Zou Shi Lei Xing Exiting it will be reworked on the original df
         '''
+        # complex zhongshu comparison within
         if type(self.analytic_result[-1]) is ZhongShu and self.analytic_result[-1].is_complex_type():
-            filled_zslx = self.analytic_result[-1].take_last_xd_as_zslx()
-            return self.analytic_result[-2], self.analytic_result[-1], filled_zslx
-        elif type(self.analytic_result[-1]) is ZouShiLeiXing and len(self.analytic_result) >= 3:
+            zs = self.analytic_result[-1]
+            first_xd = zs.take_first_xd_as_zslx()
+            last_xd = zs.take_last_xd_as_zslx()
+            return first_xd, self.analytic_result[-1], last_xd
+        elif len(self.analytic_result) >= 3 and\
+            type(self.analytic_result[-1]) is ZouShiLeiXing and\
+            type(self.analytic_result[-2]) is ZhongShu and\
+            type(self.analytic_result[-3]) is ZouShiLeiXing:
             return self.analytic_result[-3], self.analytic_result[-2], self.analytic_result[-1]
+        ## zhong shu combination
+        elif len(self.analytic_result) >= 5 and\
+            type(self.analytic_result[-1]) is ZouShiLeiXing and\
+            type(self.analytic_result[-2]) is ZhongShu and\
+            type(self.analytic_result[-4]) is Zhongshu:
+            i = -2
+            while -i <= len(self.analytic_result):
+                if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]):
+                    return self.analytic_result[i-1], self.analytic_result[-1]
+                i = i - 2
+            return None, None, None
         else:
             print("Invalid Zou Shi type")
             return None, None, None
@@ -290,11 +307,11 @@ class Equilibrium():
             if self.isdebug:
                 print("Not enough DATA define_equilibrium")
             return False
-        a, B, c = self.find_most_recent_zoushi()
+        a, _, c = self.find_most_recent_zoushi()
         
-        return self.check_exhaustion(a, B, c)
+        return self.check_exhaustion(a, c)
         
-    def check_exhaustion(self, zslx_a, zs_B, zslx_c):
+    def check_exhaustion(self, zslx_a, zslx_c):
         if zslx_a is None or zslx_c is None:
             if self.isdebug:
                 print("Not enough DATA check_exhaustion")

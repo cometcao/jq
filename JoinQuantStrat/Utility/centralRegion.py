@@ -124,6 +124,9 @@ class ZouShiLeiXing(object):
     def isEmpty(self):
         return not bool(self.zoushi_nodes)
     
+    def isSimple(self):
+        return len(self.zoushi_nodes) == 2
+    
     def add_new_nodes(self, tb_nodes):
         added = False
         if type(tb_nodes) is list:
@@ -375,7 +378,13 @@ class ZhongShu(ZouShiLeiXing):
 
     def take_last_xd_as_zslx(self):
         exiting_nodes = [self.forth] + self.extra_nodes if self.extra_nodes else []
-        return ZouShiLeiXing(self.direction, self.original_df, exiting_nodes) 
+        xd = XianDuan(exiting_nodes[-2:])
+        return ZouShiLeiXing(xd.direction, self.original_df, exiting_nodes[-2:]) 
+
+    def take_first_xd_as_zslx(self):
+        remaining_nodes = self.get_split_zs(self.direction)
+        xd = XianDuan(remaining_nodess[:2])
+        return ZouShiLeiXing(xd.direction, self.original_df, remaining_nodes[:2])
 
     def is_complex_type(self):
         # if the ZhongShu contain more than 3 XD, it's a complex ZhongShu, in practice the direction of it can be interpreted differently
