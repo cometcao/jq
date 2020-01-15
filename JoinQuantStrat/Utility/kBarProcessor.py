@@ -1069,12 +1069,14 @@ class KBarProcessor(object):
                     i = next_valid_elems[2]
         
         # We need to deal with the remaining BI tb and make an assumption that current XD ends
-        if i < working_df.shape[0]:
-            # + 3 to make sure we have 3 BI at least in XD
-            previous_xd_tb_locs = self.get_previous_N_elem(working_df.shape[0]-1, working_df, N=0, single_direction=False)
-            if previous_xd_tb_locs:
-                column_locs = [working_df.columns.get_loc(x) for x in ['chan_price', 'tb', 'original_tb']]
-                previous_xd_tb_loc = previous_xd_tb_locs[0]+3
+
+        # + 3 to make sure we have 3 BI at least in XD
+        previous_xd_tb_locs = self.get_previous_N_elem(working_df.shape[0]-1, working_df, N=0, single_direction=False)
+        if previous_xd_tb_locs:
+            column_locs = [working_df.columns.get_loc(x) for x in ['chan_price', 'tb', 'original_tb']]
+            previous_xd_tb_loc = previous_xd_tb_locs[0]+3
+            
+            if previous_xd_tb_loc < working_df.shape[0]:
                 # restore tb info from loc found from original_tb as we don't need them?
                 working_df.iloc[previous_xd_tb_loc:,column_locs[1]] = working_df.iloc[previous_xd_tb_loc:,column_locs[2]]
                 
