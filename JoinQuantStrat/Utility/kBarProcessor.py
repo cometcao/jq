@@ -1192,9 +1192,9 @@ class KBarProcessor(object):
                 forth = high_df.iloc[-2]
                 fifth = high_df.iloc[-1]
                 check_result, k_m, k_l = cls.contain_zhongshu(first, second, third)
-                if check_result and fifth.close < fifth.open and fifth.close < forth.close:
+                if check_result and fifth.close < fifth.open:
                     result = fifth.low > k_m if direction == TopBotType.top2bot else fifth.high < k_l
-                if not result and fifth.close < fifth.open and fifth.close < forth.close:
+                if not result and fifth.close < fifth.open:
                     check_result, k_m, k_l = cls.contain_zhongshu(second, third, forth)
                     result = check_result and fifth.low > k_m if direction == TopBotType.top2bot else fifth.high < k_l
         else:
@@ -1207,9 +1207,9 @@ class KBarProcessor(object):
                 fifth = kbar_list[-1]
                 
                 check_result, k_m, k_l = cls.contain_zhongshu(first, second, third)
-                if check_result and fifth.close < fifth.open and fifth.close < forth.close:
+                if check_result and fifth.close < fifth.open:
                     result = fifth.low > k_m if direction == TopBotType.top2bot else fifth.high < k_l
-                if not result and fifth.close < fifth.open and fifth.close < forth.close:
+                if not result and fifth.close < fifth.open:
                     check_result, k_m, k_l = cls.contain_zhongshu(second, third, forth)
                     result = check_result and fifth.low > k_m if direction == TopBotType.top2bot else fifth.high < k_l                
                 
