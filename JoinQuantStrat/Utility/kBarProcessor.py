@@ -18,7 +18,7 @@ def filter_high_level_type_III_by_index(period = '1w',direction=TopBotType.top2b
     for stock in all_stocks:
         stock_high = get_bars(stock, 
                                count=5, 
-                               end_date=pd.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
+                               end_dt=pd.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
                                unit=period,
                                fields= ['open',  'high', 'low','close', 'money'], 
                                include_now=True,
