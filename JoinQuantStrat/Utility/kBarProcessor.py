@@ -7,6 +7,7 @@ Created on 1 Aug 2017
 # from kuanke.user_space_api import *
 from jqdata import *
 import numpy as np
+import pandas as pd
 import copy
 from biaoLiStatus import * 
 
