@@ -24,9 +24,9 @@ def filter_high_level_by_index(direction=TopBotType.top2bot, stock_index='000985
                                     fields= ['open',  'high', 'low','close', 'money'], 
                                     df = df)
             if KBar.filter_high_level_kbar(stock_high, direction=direction, df=df, chan_type=Chan_Type.III):
-                result_stocks.append(stock)
+                result_stocks.add(stock)
             if KBar.filter_high_level_kbar(stock_high, direction=direction, df=df, chan_type=Chan_Type.I):
-                result_stocks.append(stock)
+                result_stocks.add(stock)
     print("qualifying stocks:{0}".format(result_stocks))
     
     return sorted(list(result_stocks))
