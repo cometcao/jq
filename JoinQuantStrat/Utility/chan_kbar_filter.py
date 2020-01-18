@@ -7,7 +7,6 @@ Created on 18 Jan 2020
 import numpy as np
 from centralRegion import Chan_Type
 from biaoLiStatus import TopBotType
-from securityDataManager import *
 
 TYPE_III_NUM = 5
 TYPE_I_NUM = 10
