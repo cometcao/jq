@@ -12,20 +12,21 @@ from securityDataManager import *
 TYPE_III_NUM = 5
 TYPE_I_NUM = 10
 
-def filter_high_level_by_index(period = '5d',direction=TopBotType.top2bot, stock_index='000985.XSHG', df=False):
+def filter_high_level_by_index(direction=TopBotType.top2bot, stock_index='000985.XSHG', df=False, period = ['60m', '120m', '1d']):
     all_stocks = JqDataRetriever.get_index_stocks(stock_index)
     result_stocks = []
     for stock in all_stocks:
-        stock_high = JqDataRetriever.get_bars(stock, 
-                                               count=max(TYPE_I_NUM, TYPE_III_NUM), 
-                                               end_dt=pd.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
-                                               unit=period,
-                                               fields= ['open',  'high', 'low','close', 'money'], 
-                                               df = df)
-        if KBar.filter_high_level_kbar(stock_high, direction=direction, df=df, chan_type=Chan_Type.III):
-            result_stocks.append(stock)
-        if KBar.filter_high_level_kbar(stock_high, direction=direction, df=df, chan_type=Chan_Type.I):
-            result_stocks.append(stock)
+        for p in periods:
+            stock_high = JqDataRetriever.get_bars(stock, 
+                                                  count=max(TYPE_I_NUM, TYPE_III_NUM), 
+                                                  end_dt=pd.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
+                                                  unit=p,
+                                                  fields= ['open',  'high', 'low','close', 'money'], 
+                                                  df = df)
+            if KBar.filter_high_level_kbar(stock_high, direction=direction, df=df, chan_type=Chan_Type.III):
+                result_stocks.append(stock)
+            if KBar.filter_high_level_kbar(stock_high, direction=direction, df=df, chan_type=Chan_Type.I):
+                result_stocks.append(stock)
     print("qualifying stocks:{0}".format(result_stocks))
     
     return result_stocks
