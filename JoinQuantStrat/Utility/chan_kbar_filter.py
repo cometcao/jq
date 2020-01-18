@@ -14,7 +14,7 @@ TYPE_I_NUM = 10
 
 def filter_high_level_by_index(direction=TopBotType.top2bot, stock_index='000985.XSHG', df=False, periods = ['60m', '120m', '1d'],end_dt=pd.datetime.now().strftime("%Y-%m-%d %H:%M:%S")):
     all_stocks = get_index_stocks(stock_index)
-    result_stocks = []
+    result_stocks = set()
     for stock in all_stocks:
         for p in periods:
             stock_high = get_bars(stock, 
@@ -29,7 +29,7 @@ def filter_high_level_by_index(direction=TopBotType.top2bot, stock_index='000985
                 result_stocks.append(stock)
     print("qualifying stocks:{0}".format(result_stocks))
     
-    return result_stocks
+    return sorted(list(result_stocks))
 
 class KBar(object):
     '''
