@@ -48,7 +48,9 @@ class KBar(object):
     def contain_zhongshu(cls, first, second, third, return_core_range=False):
         '''
         check consecutive three kbars with intersection, 
-        return_core_range controls return range type, default return core range to increase the robostness of initial filters
+        return_core_range controls return range type, 
+        in case of true only core range
+        otherwise, we take the max range of first three kbars
         TYPE III: False
         TYPE I : True
         '''
@@ -62,7 +64,7 @@ class KBar(object):
                 third.high >= new_high >= third.low or\
                 third.high >= new_low >= third.low:
                 if return_core_range:
-                    return True, min(first.high, second.high, third.high), max(first.low, second.low, third.low)
+                    return True, min(new_high, third.high), max(new_low, third.low)
                 else:
                     return True, max(first.high, second.high, third.high), min(first.low, second.low, third.low)
         return False, 0, 0
@@ -112,7 +114,7 @@ class KBar(object):
             first = kbar_list[i]
             second = kbar_list[i+1]
             third = kbar_list[i+2]
-            check_result, ma, mi = cls.contain_zhongshu(first, second, third, return_core_range=True)
+            check_result, ma, mi = cls.contain_zhongshu(first, second, third, return_core_range=not first_zs)
             if not first_zs:
                 if check_result:
                     first_zs = True
