@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import copy
 import talib
-from utility.biaoLiStatus import * 
+from biaoLiStatus import * 
 
 def synchOpenPrice(open, close, high, low):
     if open > close:
