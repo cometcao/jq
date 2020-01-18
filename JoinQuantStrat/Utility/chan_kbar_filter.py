@@ -12,7 +12,7 @@ from securityDataManager import *
 TYPE_III_NUM = 5
 TYPE_I_NUM = 10
 
-def filter_high_level_by_index(direction=TopBotType.top2bot, stock_index='000985.XSHG', df=False, period = ['60m', '120m', '1d']):
+def filter_high_level_by_index(direction=TopBotType.top2bot, stock_index='000985.XSHG', df=False, periods = ['60m', '120m', '1d']):
     all_stocks = JqDataRetriever.get_index_stocks(stock_index)
     result_stocks = []
     for stock in all_stocks:
