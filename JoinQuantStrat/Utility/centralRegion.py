@@ -417,6 +417,24 @@ class ZouShi(object):
         self.zslx_result = []
         self.isdebug = isdebug
         
+    def split_by_time(self, ts):
+        '''
+        This method is used after analyze, split the latest zoushi from ts time
+        '''
+        i = 0
+        while i < len(self.zslx_result):
+            zs = self.zslx_result[i]
+            stime = zs.get_time_region()[0]
+            if ts > stime:
+                i = i - 1
+                break
+            elif ts == stime:
+                break
+            i = i + 1
+            
+        return self.zslx_result[i:]
+            
+    
     def analyze(self, initial_direction):
         i = 0
         temp_zslx = ZouShiLeiXing(initial_direction, self.original_df, [])

@@ -363,7 +363,7 @@ class Equilibrium():
                     all_types.append((Chan_Type.I, TopBotType.top2bot))
                 elif zslx.direction == TopBotType.bot2top == zslx2.direction and zslx.zoushi_nodes[-1].tb == TopBotType.top:
                     if self.isdebug:
-                        print("TYPE I trade point 1")
+                        print("TYPE I trade point 2")
                     all_types.append((Chan_Type.I, TopBotType.bot2top))
             
             if type(self.analytic_result[-1]) is ZhongShu: # last XD in zhong shu must make top or bot
