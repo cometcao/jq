@@ -5,20 +5,21 @@ Created on 18 Jan 2020
 @author: MetalInvest
 '''
 import numpy as np
+import pandas as pd
 from centralRegion import Chan_Type
 from biaoLiStatus import TopBotType
 
 TYPE_III_NUM = 5
 TYPE_I_NUM = 10
 
-def filter_high_level_by_index(direction=TopBotType.top2bot, stock_index='000985.XSHG', df=False, periods = ['60m', '120m', '1d']):
+def filter_high_level_by_index(direction=TopBotType.top2bot, stock_index='000985.XSHG', df=False, periods = ['60m', '120m', '1d'],end_dt=pd.datetime.now().strftime("%Y-%m-%d %H:%M:%S")):
     all_stocks = get_index_stocks(stock_index)
     result_stocks = []
     for stock in all_stocks:
         for p in periods:
             stock_high = get_bars(stock, 
                                     count=max(TYPE_I_NUM, TYPE_III_NUM), 
-                                    end_dt=pd.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
+                                    end_dt=end_dt, 
                                     unit=p,
                                     fields= ['open',  'high', 'low','close', 'money'], 
                                     df = df)
