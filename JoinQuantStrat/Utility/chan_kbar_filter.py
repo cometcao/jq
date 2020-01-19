@@ -168,4 +168,4 @@ class KBar(object):
                     result = cls.chan_type_III_check(kbar_list, direction)
                 elif chan_type == Chan_Type.I:
                     result = cls.chan_type_I_check(kbar_list, direction)          
-        return result 
+        return result
