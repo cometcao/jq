@@ -85,6 +85,11 @@ class KBar(object):
         '''
         max 5 high level KBars
         '''
+        # early check
+        if (kbar_list[-1].high < kbar_list[-2].high and direction == TopBotType.top2bot) or\
+            (kbar_list[-1].low > kbar_list[-2].low and direction == TopBotType.bot2top):
+            return False
+        
         first = kbar_list[-TYPE_III_NUM]
         second = kbar_list[-TYPE_III_NUM+1] 
         third = kbar_list[-TYPE_III_NUM+2]
@@ -105,6 +110,11 @@ class KBar(object):
         '''
         Max number of high level Kbars.
         '''
+        # early check for Type I, we expect straight up or down
+        if (kbar_list[0].high <= kbar_list[-1].low and direction == TopBotType.top2bot) or\
+            (kbar_list[0].low >= kbar_list[-1].high and direction == TopBotType.bot2top):
+            return False
+        
         result = False
         i = 0
         first_zs = False
