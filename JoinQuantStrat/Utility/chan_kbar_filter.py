@@ -103,18 +103,19 @@ class KBar(object):
     @classmethod
     def chan_type_I_check(cls, kbar_list, direction):
         '''
-        Max number of high level Kbars
+        Max number of high level Kbars.
         '''
         result = False
         i = 0
         first_zs = False
         first_zs_ma = 0
         first_zs_mi = 0
-        while i+3 < len(kbar_list):
+        extra_count = 2 # the round of checks after finding the first ZS
+        while i+4 < len(kbar_list) and extra_count > 0:
             first = kbar_list[i]
             second = kbar_list[i+1]
             third = kbar_list[i+2]
-            check_result, ma, mi = cls.contain_zhongshu(first, second, third, return_core_range=not first_zs)
+            check_result, ma, mi = cls.contain_zhongshu(first, second, third, return_core_range=False)
             if not first_zs:
                 if check_result:
                     first_zs = True
@@ -125,10 +126,13 @@ class KBar(object):
                     i = i + 1
             else:
                 if check_result:
-                    result = first_zs_ma < mi if direction == TopBotType.bot2top else first_zs_mi > ma
+                    forth = kbar_list[i+3]
+                    result = first_zs_ma < mi if direction == TopBotType.bot2top else first_zs_mi > ma and\
+                            forth.low < mi if direction == TopBotType.top2bot else forth.high > ma 
                     if result:
                         break
                 i = i + 1
+                extra_count = extra_count - 1
         return result
 
     @classmethod
