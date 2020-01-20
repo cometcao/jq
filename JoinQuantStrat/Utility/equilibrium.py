@@ -574,6 +574,8 @@ class NestedInterval():
         xd_df, anal_zoushi = self.df_zoushi_tuple_list[0]
         eq = Equilibrium(xd_df, anal_zoushi.zslx_result, isdebug=self.isdebug, isDescription=self.isDescription)
         chan_types = eq.check_chan_type(check_end_tb=False)
+        if not chan_types:
+            return False, chan_types
         for chan_t, chan_d in chan_types:
             eq = Equilibrium(xd_df, anal_zoushi.zslx_result, isdebug=self.isdebug, isDescription=self.isDescription)
             high_exhausted = ((chan_t in chan_type) if type(chan_type) is list else (chan_t == chan_type)) and\
