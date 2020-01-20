@@ -29,12 +29,12 @@ def check_chan_exhaustion(stock, end_time, count, period, direction):
     eq = Equilibrium(xd_df, anal_zoushi.zslx_result, isdebug=False, isDescription=True)
     return eq.define_equilibrium()
 
-def check_chan_by_type_exhaustion(stock, end_time, periods, count, direction, chan_type, debug):
+def check_chan_by_type_exhaustion(stock, end_time, periods, count, direction, chan_type, isdebug):
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
                         periods=periods, 
                         count=count, 
-                        isdebug=debug, 
+                        isdebug=isdebug, 
                         isDescription=True)
     return ni.analyze_zoushi(direction, chan_type)
 
@@ -584,7 +584,7 @@ class NestedInterval():
             if self.isDescription or self.isdebug:
                 print("Top level {0} {1} {2}".format(self.periods[0], chan_d, "exhausted" if high_exhausted else "continues"))
             if not high_exhausted:
-                return False
+                return False, chan_types
 
             split_time = anal_zoushi.sub_zoushi_time(chan_t, chan_d)
             if self.isdebug:
@@ -599,7 +599,7 @@ class NestedInterval():
                 if self.isDescription or self.isdebug:
                     print("Sub level {0} {1}".format(self.periods[i], "exhausted" if low_exhausted else "continues"))
                 if not low_exhausted:
-                    return False
+                    return False, chan_types
                 # update split time for next level
                 i = i + 1
                 if i < len(self.df_zoushi_tuple_list):
