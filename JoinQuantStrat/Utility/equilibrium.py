@@ -559,7 +559,7 @@ class NestedInterval():
     
     def prepare_data(self):
         for pe in self.periods:
-            stock_df = get_price(self.stock, count=self.count, end_date=self.end_dt, frequency=pe,fields= ['open',  'high', 'low','close'],skip_suspended=True)
+            stock_df = get_price(self.stock, count=self.count, end_date=self.end_dt, frequency=pe,fields= ['open',  'high', 'low','close'],skip_paused=True)
             kb_df = KBarProcessor(stock_df, isdebug=self.isdebug)
             xd_df = kb_df.getIntegradedXD()
             crp_df = CentralRegionProcess(xd_df, isdebug=self.isdebug, use_xd=True)
