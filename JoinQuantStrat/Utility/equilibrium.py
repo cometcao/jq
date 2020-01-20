@@ -587,6 +587,8 @@ class NestedInterval():
                 return False
 
             split_time = anal_zoushi.sub_zoushi_time(chan_t, chan_d)
+            if self.isdebug:
+                print("split time at {0}".format(split_time))
             
             i = 1
             while i < len(self.df_zoushi_tuple_list):
