@@ -600,7 +600,7 @@ class NestedInterval():
                 i = i + 1
                 if i < len(self.df_zoushi_tuple_list):
                     split_time = split_anal_zoushi_low.sub_zoushi_time(Chan_Type.INVALID, direction)
-        return anal_result
+        return anal_result, chan_types
     
 #     def is_trade_point(self, direction, chan_type):
 #         '''
