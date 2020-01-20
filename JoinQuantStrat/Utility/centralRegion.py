@@ -425,7 +425,7 @@ class ZouShi(object):
         while i < len(self.zslx_result):
             zs = self.zslx_result[i]
             stime = zs.get_time_region()[0]
-            if ts > stime:
+            if ts < stime:
                 i = i - 1
                 break
             elif ts == stime:
@@ -435,6 +435,28 @@ class ZouShi(object):
         return self.zslx_result[i:]
             
     
+    def sub_zoushi_time(self, chan_type, direction):
+        '''
+        This method finds the split DT at high level
+        '''
+        if chan_type == Chan_Type.I: # we should end up with zslx - zs - zslx
+            if type(self.zslx_result[-1]) is ZouShiLeiXing:
+                return self.zslx_result[-1].get_time_region()[0]
+            elif type(self.zslx_result[-1]) is ZhongShu:
+                return self.zslx_result[-1].take_last_xd_as_zslx().get_time_region()[0]
+        elif chan_type == Chan_Type.III: # we need to split from past top / bot
+            if type(self.zslx_result[-1]) is ZouShiLeiXing:
+                [s, e] = self.zslx_result[-1].get_time_region()
+                temp_df = self.original_df.iloc[self.original_df.index.get_loc(s):,:]
+                return temp_df['high'].idxmax() if direction == TopBotType.top2bot else temp_df['low'].idxmin()
+            elif type(self.zslx_result[-1]) is ZhongShu:
+                return self.zslx_result[-1].take_last_xd_as_zslx().get_time_region()[0]
+        else:
+            if type(self.zslx_result[-1]) is ZouShiLeiXing:
+                return self.zslx_result[-1].get_time_region()[0]
+            elif type(self.zslx_result[-1]) is ZhongShu:
+                return self.zslx_result[-1].take_last_xd_as_zslx().get_time_region()[0]            
+
     def analyze(self, initial_direction):
         i = 0
         temp_zslx = ZouShiLeiXing(initial_direction, self.original_df, [])

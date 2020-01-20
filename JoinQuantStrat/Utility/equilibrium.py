@@ -5,40 +5,38 @@ from centralRegion import *
 import numpy as np
 import pandas as pd
 
-def check_chan_high(stock, end_time, count, period, direction, chan_type):
+def check_chan_type(stock, end_time, count, period, direction, chan_type):
     stock_high = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close', 'money'], skip_paused=True)
     kb_high = KBarProcessor(stock_high, isdebug=False)
     xd_df_high = kb_high.getIntegradedXD()
     crp_high = CentralRegionProcess(xd_df_high, isdebug=False, use_xd=True)
-    anal_result_high = crp_high.define_central_region()
-    eq = Equilibrium(xd_df_high, anal_result_high, isdebug=False, isDescription=True, check_bi=False)
-    chan_types = eq.check_chan_type()
+    anal_result_high_zoushi = crp_high.define_central_region()
+    eq = Equilibrium(xd_df_high, anal_result_high_zoushi.zslx_result, isdebug=False, isDescription=True, check_bi=False)
+    chan_types = eq.check_chan_type(check_end_tb=False)
     for chan_t, chan_d in chan_types:
         if chan_t == chan_type and chan_d == direction:
             return True
     return False
 
-def check_chan_low(stock, end_time, count, period, direction):
-    stock_low = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close', 'money'], skip_paused=True)
-    kb_low = KBarProcessor(stock_low, isdebug=False)
-    xd_df_low = kb_low.getIntegradedXD()
-    ni = NestedInterval(xd_df_low, isdebug=False, isDescription=True, check_bi=False)        
-    result = ni.is_trade_point(direction=direction)
-    return result
+def check_chan_exhaustion(stock, end_time, count, period, direction):
+    stock_df = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close', 'money'],skip_paused=True)
+    kb = KBarProcessor(stock_df, isdebug=False)
+    xd_df = kb.getIntegradedXD()
+    
+    crp = CentralRegionProcess(xd_df_high, isdebug=False, use_xd=True)
+    anal_result_zoushi = crp.define_central_region()
+    
+    eq = Equilibrium(xd_df, anal_zoushi.zslx_result, isdebug=False, isDescription=True)
+    return eq.define_equilibrium()
 
-def check_chan_by_type_exhaustion(stock, end_time, count, period, direction, chan_type):
-    stock_df = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close', 'money'], skip_paused=True)
-    kb_df = KBarProcessor(stock_df, isdebug=False)
-    xd_df = kb_df.getIntegradedXD()
-    crp_df = CentralRegionProcess(xd_df, isdebug=False, use_xd=True)
-    anal_result_df = crp_df.define_central_region()
-    eq = Equilibrium(xd_df, anal_result_df, isdebug=False, isDescription=True)
-    chan_types = eq.check_chan_type()
-    for chan_t, chan_d in chan_types:
-        if ((chan_t in chan_type) if type(chan_type) is list else (chan_t == chan_type)) and chan_d == direction:    
-            ni = NestedInterval(xd_df, isdebug=False, isDescription=True, check_bi=False)   
-            return ni.is_trade_point(direction=direction), chan_t
-    return False, Chan_Type.INVALID
+def check_chan_by_type_exhaustion(stock, end_time, periods, count, direction, chan_type, debug):
+    ni = NestedInterval(stock, 
+                        end_dt=end_time, 
+                        periods=periods, 
+                        count=count, 
+                        isdebug=debug, 
+                        isDescription=True)
+    return ni.analyze_zoushi(direction, chan_type)
 
 class CentralRegionProcess(object):
     '''
@@ -131,7 +129,7 @@ class CentralRegionProcess(object):
         
         self.zoushi = self.find_central_region(init_idx, init_d, working_df)
             
-        return self.zoushi.zslx_result
+        return self.zoushi
         
     def convert_to_graph_data(self):
         '''
@@ -194,31 +192,43 @@ class Equilibrium():
         Make sure we return the most recent Zhong Shu and the Zou Shi Lei Xing Entering it.
         The Zou Shi Lei Xing Exiting it will be reworked on the original df
         '''
-        # complex zhongshu comparison within
-        if type(self.analytic_result[-1]) is ZhongShu and self.analytic_result[-1].is_complex_type():
-            zs = self.analytic_result[-1]
-            first_xd = zs.take_first_xd_as_zslx()
-            last_xd = zs.take_last_xd_as_zslx()
-            return first_xd, self.analytic_result[-1], last_xd
-        elif len(self.analytic_result) >= 3 and\
-            type(self.analytic_result[-1]) is ZouShiLeiXing and\
-            type(self.analytic_result[-2]) is ZhongShu and\
-            type(self.analytic_result[-3]) is ZouShiLeiXing:
-            return self.analytic_result[-3], self.analytic_result[-2], self.analytic_result[-1]
-        ## zhong shu combination
-        elif len(self.analytic_result) >= 5 and\
-            type(self.analytic_result[-1]) is ZouShiLeiXing and\
-            type(self.analytic_result[-2]) is ZhongShu and\
-            type(self.analytic_result[-4]) is Zhongshu:
-            i = -2
-            while -i <= len(self.analytic_result):
-                if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]):
-                    return self.analytic_result[i-1], self.analytic_result[-1]
-                i = i - 2
-            return None, None, None
+        if self.isQvShi:
+            if type(self.analytic_result[-1]) is ZhongShu and self.analytic_result[-1].is_complex_type():  
+                zs = self.analytic_result[-1]
+                first_zslx = self.analytic_result[-2]
+                last_xd = zs.take_last_xd_as_zslx()
+                return first_zslx, self.analytic_result[-1], last_xd                          
+            elif type(self.analytic_result[-1]) is ZouShiLeiXing:
+                return self.analytic_result[-3], self.analytic_result[-2], self.analytic_result[-1]
+            else:
+                print("Invalid Zou Shi type")
+                return None, None, None               
         else:
-            print("Invalid Zou Shi type")
-            return None, None, None
+            # complex zhongshu comparison within
+            if type(self.analytic_result[-1]) is ZhongShu and self.analytic_result[-1].is_complex_type():
+                zs = self.analytic_result[-1]
+                first_xd = zs.take_first_xd_as_zslx()
+                last_xd = zs.take_last_xd_as_zslx()
+                return first_xd, self.analytic_result[-1], last_xd
+            elif len(self.analytic_result) >= 3 and\
+                type(self.analytic_result[-1]) is ZouShiLeiXing and\
+                type(self.analytic_result[-2]) is ZhongShu and\
+                type(self.analytic_result[-3]) is ZouShiLeiXing:
+                return self.analytic_result[-3], self.analytic_result[-2], self.analytic_result[-1]
+            ## zhong shu combination
+            elif len(self.analytic_result) >= 5 and\
+                type(self.analytic_result[-1]) is ZouShiLeiXing and\
+                type(self.analytic_result[-2]) is ZhongShu and\
+                type(self.analytic_result[-4]) is Zhongshu:
+                i = -2
+                while -i <= len(self.analytic_result):
+                    if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]):
+                        return self.analytic_result[i-1], self.analytic_result[-1]
+                    i = i - 2
+                return None, None, None
+            else:
+                print("Invalid Zou Shi type")
+                return None, None, None
     
     def two_zhongshu_form_qvshi(self, zs1, zs2, zs_level=ZhongShuLevel.current):
         '''
@@ -248,7 +258,7 @@ class Equilibrium():
                 if l1 > u2 or l2 > u1: # two Zhong Shu without intersection
                     if self.isdebug:
                         print("2 current Zou Shi is QV SHI \n{0} \n{1}".format(zs1, zs2))
-                    result = True        
+                    result = True
         return result
     
     def two_zslx_interact(self, zs1, zs2):
@@ -342,7 +352,7 @@ class Equilibrium():
 #         latest_slope.check_exhaustion()
         return False
          
-    def check_chan_type(self):
+    def check_chan_type(self, check_end_tb=False):
         '''
         This method determines potential TYPE of trade point under CHAN
         '''
@@ -357,14 +367,20 @@ class Equilibrium():
             if type(self.analytic_result[-1]) is ZouShiLeiXing: # last zslx escape last zhong shu
                 zslx = self.analytic_result[-1]
                 zslx2= self.analytic_result[-3]
-                if zslx.direction == TopBotType.top2bot == zslx2.direction and zslx.zoushi_nodes[-1].tb == TopBotType.bot:
-                    if self.isdebug:
-                        print("TYPE I trade point 1")
-                    all_types.append((Chan_Type.I, TopBotType.top2bot))
-                elif zslx.direction == TopBotType.bot2top == zslx2.direction and zslx.zoushi_nodes[-1].tb == TopBotType.top:
-                    if self.isdebug:
-                        print("TYPE I trade point 2")
-                    all_types.append((Chan_Type.I, TopBotType.bot2top))
+                if zslx.direction == zslx2.direction:
+                    if check_end_tb:
+                        if zslx.direction == TopBotType.top2bot and zslx.zoushi_nodes[-1].tb == TopBotType.bot:
+                            if self.isdebug:
+                                print("TYPE I trade point 1")
+                            all_types.append((Chan_Type.I, TopBotType.top2bot))
+                        elif zslx.direction == TopBotType.bot2top and zslx.zoushi_nodes[-1].tb == TopBotType.top:
+                            if self.isdebug:
+                                print("TYPE I trade point 2")
+                            all_types.append((Chan_Type.I, TopBotType.bot2top))
+                    else:
+                        if self.isdebug:
+                            print("TYPE I trade point 3")
+                        all_types.append((Chan_Type.I, zslx.direction))
             
             if type(self.analytic_result[-1]) is ZhongShu: # last XD in zhong shu must make top or bot
                 zs = self.analytic_result[-1]
@@ -392,16 +408,21 @@ class Equilibrium():
                     if (zs.extra_nodes[-3].chan_price > core_region[1] and\
                         zs.extra_nodes[-2].chan_price <= core_region[1] and\
                         zs.extra_nodes[-1].chan_price > core_region[1] and\
-                        zs.extra_nodes[-1].tb == TopBotType.top and\
                         zs.direction == TopBotType.bot2top) or\
                         (zs.extra_nodes[-3].chan_price < core_region[0] and\
                          zs.extra_nodes[-2].chan_price >= core_region[0] and\
                          zs.extra_nodes[-1].chan_price < core_region[0] and\
-                         zs.extra_nodes[-1].tb == TopBotType.bot and\
                          zs.direction == TopBotType.top2bot):
-                            all_types.append((Chan_Type.II, zs.direction))
-                            if self.isdebug:
-                                print("TYPE II trade point 1")
+                            if check_end_tb:
+                                if ((zs.extra_nodes[-1].tb == TopBotType.top and zs.direction == TopBotType.bot2top) or\
+                                    (zs.extra_nodes[-1].tb == TopBotType.bot and zs.direction == TopBotType.top2bot)):
+                                    all_types.append((Chan_Type.II, zs.direction))
+                                    if self.isdebug:
+                                        print("TYPE II trade point 1")                            
+                            else:
+                                all_types.append((Chan_Type.II, zs.direction))
+                                if self.isdebug:
+                                    print("TYPE II trade point 2")
 
             # case of return into last QV shi amplitude zhong yin zhongshu about to form
             # simple case where weak III short forms.
@@ -411,23 +432,26 @@ class Equilibrium():
                 if zs.direction == zslx.direction and\
                     len(zslx.zoushi_nodes) >= 3:
                     core_region = zs.get_core_region()
-                    amplitude_region = zs.get_amplitude_region_original()
+                    amplitude_region = zs.get_amplitude_region_original()  
                     if (zslx.zoushi_nodes[-3].chan_price > core_region[1] and\
                         zslx.zoushi_nodes[-2].chan_price <= amplitude_region[1] and\
                         zslx.zoushi_nodes[-1].chan_price > core_region[1] and\
-                        zslx.zoushi_nodes[-1].tb == TopBotType.top and\
                         zs.direction == TopBotType.bot2top) or\
                         (zslx.zoushi_nodes[-3].chan_price < core_region[0] and\
                          zslx.zoushi_nodes[-2].chan_price >= amplitude_region[0] and\
                          zslx.zoushi_nodes[-1].chan_price < core_region[0] and\
-                         zslx.zoushi_nodes[-1].tb == TopBotType.bot and\
-                         zs.direction == TopBotType.top2bot):                                      
-                            all_types.append((Chan_Type.II_weak, zs.direction))
-                            if self.isdebug:
-                                print("TYPE II trade point 2")              
-                
-                            
-                    
+                         zs.direction == TopBotType.top2bot):     
+                            if check_end_tb:
+                                if ((zslx.zoushi_nodes[-1].tb == TopBotType.top and zs.direction == TopBotType.bot2top) or\
+                                    (zslx.zoushi_nodes[-1].tb == TopBotType.bot and zs.direction == TopBotType.top2bot)):
+                                    all_types.append((Chan_Type.II_weak, zs.direction))
+                                    if self.isdebug:
+                                        print("TYPE II trade point 3")                            
+                            else:
+                                all_types.append((Chan_Type.II_weak, zs.direction))
+                                if self.isdebug:
+                                    print("TYPE II trade point 4")                        
+                        
         # III current Zhong Shu must end, simple case
         if type(self.analytic_result[-1]) is ZouShiLeiXing:
             zslx = self.analytic_result[-1]
@@ -437,14 +461,16 @@ class Equilibrium():
             
             if len(zslx.zoushi_nodes) == 3 and\
                 (zslx.zoushi_nodes[-1].chan_price < amplitude_region_original[0] or zslx.zoushi_nodes[-1].chan_price > amplitude_region_original[1]):
-                if (zslx.direction == TopBotType.top2bot and zslx.zoushi_nodes[-1].tb == TopBotType.top) or\
+                if not check_end_tb or\
+                    (zslx.direction == TopBotType.top2bot and zslx.zoushi_nodes[-1].tb == TopBotType.top) or\
                    (zslx.direction == TopBotType.bot2top and zslx.zoushi_nodes[-1].tb == TopBotType.bot):
                     all_types.append((Chan_Type.III, TopBotType.top2bot if zslx.zoushi_nodes[-1].tb == TopBotType.bot else TopBotType.bot2top))
                     if self.isdebug:
                         print("TYPE III trade point 1")
             elif len(zslx.zoushi_nodes) == 3 and\
                 (zslx.zoushi_nodes[-1].chan_price < core_region[0] or zslx.zoushi_nodes[-1].chan_price > core_region[1]):
-                if (zslx.direction == TopBotType.top2bot and zslx.zoushi_nodes[-1].tb == TopBotType.top) or\
+                if not check_end_tb or\
+                    (zslx.direction == TopBotType.top2bot and zslx.zoushi_nodes[-1].tb == TopBotType.top) or\
                    (zslx.direction == TopBotType.bot2top and zslx.zoushi_nodes[-1].tb == TopBotType.bot):                
                     all_types.append((Chan_Type.III_weak, TopBotType.top2bot if zslx.zoushi_nodes[-1].tb == TopBotType.bot else TopBotType.bot2top))
                     if self.isdebug:
@@ -454,12 +480,13 @@ class Equilibrium():
             split_direction, split_nodes = zslx.get_reverse_split_zslx()
             pure_zslx = ZouShiLeiXing(split_direction, self.original_df, split_nodes)
             # at least two split nodes required to form a zslx
-            if len(split_nodes) >= 2 and not self.two_zslx_interact_original(zs, pure_zslx) and\
-                (pure_zslx.direction == TopBotType.top2bot and pure_zslx.zoushi_nodes[-1].tb == TopBotType.bot) and\
-                (pure_zslx.direction == TopBotType.bot2top and pure_zslx.zoushi_nodes[-1].tb == TopBotType.top):
-                all_types.append((Chan_Type.III, pure_zslx.direction))
-                if self.isdebug:
-                    print("TYPE III trade point 7")
+            if len(split_nodes) >= 2 and not self.two_zslx_interact_original(zs, pure_zslx):
+                if not check_end_tb or\
+                ((pure_zslx.direction == TopBotType.top2bot and pure_zslx.zoushi_nodes[-1].tb == TopBotType.bot) and\
+                (pure_zslx.direction == TopBotType.bot2top and pure_zslx.zoushi_nodes[-1].tb == TopBotType.top)):
+                    all_types.append((Chan_Type.III, pure_zslx.direction))
+                    if self.isdebug:
+                        print("TYPE III trade point 7")
         
         # TYPE III where zslx form reverse direction zhongshu, and last XD of new zhong shu didn't go back 
         if len(self.analytic_result) >= 3 and type(self.analytic_result[-1]) is ZhongShu:
@@ -467,17 +494,18 @@ class Equilibrium():
             zslx = self.analytic_result[-2]
             now_zs = self.analytic_result[-1]            
             
-            if not now_zs.is_complex_type() and\
+            if not now_zs.is_complex_type():
+                if not check_end_tb or\
                 ((now_zs.forth.tb == TopBotType.bot and now_zs.direction == TopBotType.bot2top) or\
                  (now_zs.forth.tb == TopBotType.top and now_zs.direction == TopBotType.top2bot)): # reverse type here
-                if not self.two_zslx_interact_original(pre_zs, now_zs):
-                    all_types.append((Chan_Type.III, TopBotType.top2bot if now_zs.direction == TopBotType.bot2top else TopBotType.bot2top))
-                    if self.isdebug:
-                        print("TYPE III trade point 3")
-                elif not self.two_zslx_interact(pre_zs, now_zs):
-                    all_types.append((Chan_Type.III_weak, TopBotType.top2bot if now_zs.direction == TopBotType.bot2top else TopBotType.bot2top))
-                    if self.isdebug:
-                        print("TYPE III trade point 4")                    
+                    if not self.two_zslx_interact_original(pre_zs, now_zs):
+                        all_types.append((Chan_Type.III, TopBotType.top2bot if now_zs.direction == TopBotType.bot2top else TopBotType.bot2top))
+                        if self.isdebug:
+                            print("TYPE III trade point 3")
+                    elif not self.two_zslx_interact(pre_zs, now_zs):
+                        all_types.append((Chan_Type.III_weak, TopBotType.top2bot if now_zs.direction == TopBotType.bot2top else TopBotType.bot2top))
+                        if self.isdebug:
+                            print("TYPE III trade point 4")                    
                 
         # TYPE III two reverse direction zslx, with new reverse direction zhongshu in the middle
         if len(self.analytic_result) >= 4 and type(self.analytic_result[-1]) is ZouShiLeiXing:
@@ -486,20 +514,22 @@ class Equilibrium():
             pre_zs = self.analytic_result[-4]
             if not self.two_zslx_interact_original(pre_zs, latest_zslx) and\
                 latest_zslx.direction != now_zs.direction and\
-                ((latest_zslx.zoushi_nodes[-1].tb == TopBotType.top and latest_zslx.direction == TopBotType.bot2top) or\
-                 (latest_zslx.zoushi_nodes[-1].tb == TopBotType.bot and latest_zslx.direction == TopBotType.top2bot)) and\
                 not now_zs.is_complex_type():
-                all_types.append((Chan_Type.III, latest_zslx.direction))
-                if self.isdebug:
-                    print("TYPE III trade point 5")   
+                if not check_end_tb or\
+                ((latest_zslx.zoushi_nodes[-1].tb == TopBotType.top and latest_zslx.direction == TopBotType.bot2top) or\
+                 (latest_zslx.zoushi_nodes[-1].tb == TopBotType.bot and latest_zslx.direction == TopBotType.top2bot)):
+                    all_types.append((Chan_Type.III, latest_zslx.direction))
+                    if self.isdebug:
+                        print("TYPE III trade point 5")   
             if not self.two_zslx_interact(pre_zs, latest_zslx) and\
                 latest_zslx.direction != now_zs.direction and\
-                ((latest_zslx.zoushi_nodes[-1].tb == TopBotType.top and latest_zslx.direction == TopBotType.bot2top) or\
-                 (latest_zslx.zoushi_nodes[-1].tb == TopBotType.bot and latest_zslx.direction == TopBotType.top2bot)) and\
                 not now_zs.is_complex_type():
-                all_types.append((Chan_Type.III_weak, latest_zslx.direction))
-                if self.isdebug:
-                    print("TYPE III trade point 6")                             
+                if not check_end_tb or\
+                ((latest_zslx.zoushi_nodes[-1].tb == TopBotType.top and latest_zslx.direction == TopBotType.bot2top) or\
+                 (latest_zslx.zoushi_nodes[-1].tb == TopBotType.bot and latest_zslx.direction == TopBotType.top2bot)):            
+                    all_types.append((Chan_Type.III_weak, latest_zslx.direction))
+                    if self.isdebug:
+                        print("TYPE III trade point 6")                             
                 
         if all_types and (self.isDescription or self.isdebug):
             print("all chan types found: {0}".format(all_types))
@@ -512,42 +542,83 @@ class NestedInterval():
     This class utilize BEI CHI and apply them to multiple nested levels, 
     existing level goes:
     current_level -> XD -> BI
+    periods goes from high to low level
     '''
-    def __init__(self, df_xd_bi, isdebug=False, isDescription=True, check_bi=False):
-        self.df_xd_bi = df_xd_bi
+    def __init__(self, stock, end_dt, periods, count=2000, isdebug=False, isDescription=True):
+        self.stock = stock
+        self.end_dt = end_dt
+        self.periods = periods
+        self.count = count
+
         self.isdebug = isdebug
         self.isDescription = isDescription
-        self.check_bi = check_bi
-    
-    def analyze_zoushi(self, use_xd):
-        crp = CentralRegionProcess(self.df_xd_bi, isdebug=self.isdebug, use_xd=use_xd) # XD
-        anal_result = crp.define_central_region()
+
+        self.df_zoushi_tuple_list = []  
         
-        if not anal_result:
-            if self.isdebug:
-                print("not enough data analyze_zoushi")
-            return False, TopBotType.noTopBot
-        
-        eq = Equilibrium(self.df_xd_bi, anal_result, self.isdebug)
-        return eq.define_equilibrium(), anal_result[-1].direction
+        self.prepare_data()
     
-    def is_trade_point(self, direction):
-        '''
-        use direction param to check long/short point
-        '''
+    def prepare_data(self):
+        for pe in self.periods:
+            stock_df = get_price(self.stock, count=self.count, end_date=self.end_dt, period=pe,fields= ['open',  'high', 'low','close'],skip_suspended=True)
+            kb_df = KBarProcessor(stock_df, isdebug=self.isdebug)
+            xd_df = kb_df.getIntegradedXD()
+            crp_df = CentralRegionProcess(xd_df, isdebug=self.isdebug, use_xd=True)
+            anal_zoushi = crp_df.define_central_region()
+            self.df_zoushi_tuple_list.append((xd_df,anal_zoushi))
+    
+    def analyze_zoushi(self, direction, chan_type = Chan_Type.INVALID):
+        anal_result = True
         if self.isdebug:
             print("looking for {0} point".format("long" if direction == TopBotType.top2bot else "short"))
-        # XD
-        xd_exhausted, xd_direction = self.analyze_zoushi(use_xd=True)
-        if self.isDescription or self.isdebug:
-            print("Xian Duan {0} {1}".format(xd_direction, "exhausted" if xd_exhausted else "continues"))
-        
-        # BI
-        if xd_exhausted and self.check_bi:
-            bi_exhausted, bi_direction = self.analyze_zoushi(use_xd=False)
+        # high level
+        xd_df, anal_zoushi = self.df_zoushi_tuple_list[0]
+        eq = Equilibrium(xd_df, anal_zoushi.zslx_result, isdebug=self.isdebug, isDescription=self.isDescription)
+        chan_types = eq.check_chan_type(check_end_tb=False)
+        for chan_t, chan_d in chan_types:
+            eq = Equilibrium(xd_df, anal_zoushi.zslx_result, isdebug=self.isdebug, isDescription=self.isDescription)
+            high_exhausted = ((chan_t in chan_type) if type(chan_type) is list else (chan_t == chan_type)) and\
+                            chan_d == direction and\
+                            eq.define_equilibrium() if chan_t == Chan_Type.I else True
             if self.isDescription or self.isdebug:
-                print("Fen Bi {0} {1}".format(bi_direction, "exhausted" if bi_exhausted else "continues"))
-        
-            return xd_direction == bi_direction == direction and xd_exhausted and bi_exhausted
-        else:
-            return xd_exhausted
+                print("Top level {0} {1} {2}".format(self.periods[0], chan_d, "exhausted" if high_exhausted else "continues"))
+            if not high_exhausted:
+                return False
+
+            split_time = anal_zoushi.sub_zoushi_time(chan_t, chan_d)
+            
+            i = 1
+            while i < len(self.df_zoushi_tuple_list):
+                xd_df_low, anal_zoushi_low = self.df_zoushi_tuple_list[i]
+                split_anal_zoushi_result = anal_zoushi_low.split_by_time(split_time)
+                eq = Equilibrium(xd_df_low, split_anal_zoushi_result, isdebug=self.isdebug, isDescription=self.isDescription)
+                low_exhausted = eq.define_equilibrium() and split_anal_zoushi_result[-1].direction == direction
+                if self.isDescription or self.isdebug:
+                    print("Sub level {0} {1}".format(self.periods[i], "exhausted" if low_exhausted else "continues"))
+                if not low_exhausted:
+                    return False
+                # update split time for next level
+                i = i + 1
+                if i < len(self.df_zoushi_tuple_list):
+                    split_time = split_anal_zoushi_low.sub_zoushi_time(Chan_Type.INVALID, direction)
+        return anal_result
+    
+#     def is_trade_point(self, direction, chan_type):
+#         '''
+#         use direction param to check long/short point
+#         '''
+#         if self.isdebug:
+#             print("looking for {0} point".format("long" if direction == TopBotType.top2bot else "short"))
+#         # XD
+#         xd_exhausted, xd_direction = self.analyze_zoushi(direction, chan_type)
+#         if self.isDescription or self.isdebug:
+#             print("Xian Duan {0} {1}".format(xd_direction, "exhausted" if xd_exhausted else "continues"))
+#         
+#         # BI
+#         if xd_exhausted and self.check_bi:
+#             bi_exhausted, bi_direction = self.analyze_zoushi(direction, chan_type)
+#             if self.isDescription or self.isdebug:
+#                 print("Fen Bi {0} {1}".format(bi_direction, "exhausted" if bi_exhausted else "continues"))
+#         
+#             return xd_direction == bi_direction == direction and xd_exhausted and bi_exhausted
+#         else:
+#             return xd_exhausted
