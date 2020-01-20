@@ -422,6 +422,8 @@ class ZouShi(object):
         This method is used after analyze, split the latest zoushi from ts time
         '''
         i = 0
+        if ts is None:
+            return self.zslx_result
         while i < len(self.zslx_result):
             zs = self.zslx_result[i]
             stime = zs.get_time_region()[0]
