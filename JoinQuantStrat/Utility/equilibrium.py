@@ -161,7 +161,7 @@ class CentralRegionProcess(object):
         working_df = working_df[(working_df[tb_name]==TopBotType.top) | (working_df[tb_name]==TopBotType.bot)]
         
         if self.isdebug:
-            print("working_df: {0}".format(working_df.head(10)[['chan_price', tb_name, 'new_index','macd_acc_'+tb_name]]))
+            print("working_df: {0}".format(working_df[['chan_price', tb_name, 'new_index','macd_acc_'+tb_name]]))
         return working_df
     
     def prepare_macd(self, working_df, tb_col):

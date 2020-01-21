@@ -318,7 +318,20 @@ class KBarProcessor(object):
 
             # possible BI status 1 check top high > bot low 2 check more than 3 bars (strict BI) in between
             # under this section of code we expect there are no two adjacent fenxings with the same status
-            if (nextFenXing.new_index - currentFenXing.new_index) >= 4 or self.gap_exists_in_range(working_df.index[current_index], working_df.index[next_index]):
+            gap_qualify = False
+            if self.gap_exists_in_range(working_df.index[current_index], working_df.index[next_index]):
+                gap_ranges = self.gap_region(working_df.index[current_index], working_df.index[next_index])
+                for gap in gap_ranges:
+                    if working_df.ix[previous_index, 'tb'] == TopBotType.top: 
+                        #gap higher than previous high
+                        gap_qualify = gap[0] < working_df.ix[previous_index, 'low'] <= working_df.ix[previous_index, 'high'] < gap[1]
+                    elif working_df.ix[previous_index, 'tb'] == TopBotType.bot:
+                        #gap higher than previous low
+                        gap_qualify = gap[1] > working_df.ix[previous_index, 'high'] >= working_df.ix[previous_index, 'low'] > gap[0]
+                    if gap_qualify:
+                        break
+            
+            if (nextFenXing.new_index - currentFenXing.new_index) >= 4 or gap_qualify:
                 if currentFenXing.tb == TopBotType.top and nextFenXing.tb == TopBotType.bot and currentFenXing['high'] > nextFenXing['high']:
                     pass
                 elif currentFenXing.tb == TopBotType.top and nextFenXing.tb == TopBotType.bot and currentFenXing['high'] <= nextFenXing['high']:
@@ -387,8 +400,8 @@ class KBarProcessor(object):
                                           
         ###################################    
         self.kDataFrame_marked = working_df[working_df['tb']!=TopBotType.noTopBot]
-        if self.isdebug:
-            print("self.kDataFrame_marked: {0}".format(self.kDataFrame_marked))
+#         if self.isdebug:
+#             print("self.kDataFrame_marked: {0}".format(self.kDataFrame_marked))
 
     def defineBi_new(self):
         self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_index=[i for i in range(len(self.kDataFrame_standardized))])
@@ -537,9 +550,8 @@ class KBarProcessor(object):
                 
         ###################################    
         self.kDataFrame_marked = working_df[working_df['tb']!=TopBotType.noTopBot]
-        if self.isdebug:
-            print("self.kDataFrame_marked: {0}".format(self.kDataFrame_marked))
-    
+#         if self.isdebug:
+#             print("self.kDataFrame_marked: {0}".format(self.kDataFrame_marked))
     
     def getCurrentKBarStatus(self, isSimple=True):
         #  at Top or Bot FenXing
@@ -604,6 +616,8 @@ class KBarProcessor(object):
         # only use the price relavent
         try:
             self.kDataFrame_marked['chan_price'] = self.kDataFrame_marked.apply(lambda row: row['high'] if row['tb'] == TopBotType.top else row['low'], axis=1)
+            if self.isdebug:
+                print("self.kDataFrame_marked:{0}".format(self.kDataFrame_marked[['chan_price', 'tb','new_index']]))
         except:
             print("empty dataframe")
             self.kDataFrame_marked['chan_price'] = None
