@@ -588,7 +588,7 @@ class NestedInterval():
                             chan_d == direction and\
                             (eq.define_equilibrium() if chan_t == Chan_Type.I else True)
             if self.isDescription or self.isdebug:
-                print("Top level {0} {1} {2}".format(self.periods[0], chan_d, "exhausted" if high_exhausted else "continues"))
+                print("Top level {0} {1} {2}".format(self.periods[0], chan_d, "ready" if high_exhausted else "not ready"))
             if not high_exhausted:
                 return False, chan_types
 
