@@ -11,11 +11,12 @@ def check_chan_type(stock, end_time, count, period, direction, chan_type):
     xd_df_high = kb_high.getIntegradedXD()
     crp_high = CentralRegionProcess(xd_df_high, isdebug=False, use_xd=True)
     anal_result_high_zoushi = crp_high.define_central_region()
-    eq = Equilibrium(xd_df_high, anal_result_high_zoushi.zslx_result, isdebug=False, isDescription=True, check_bi=False)
-    chan_types = eq.check_chan_type(check_end_tb=False)
-    for chan_t, chan_d in chan_types:
-        if chan_t == chan_type and chan_d == direction:
-            return True
+    if anal_result_high_zoushi is not None:
+        eq = Equilibrium(xd_df_high, anal_result_high_zoushi.zslx_result, isdebug=False, isDescription=True, check_bi=False)
+        chan_types = eq.check_chan_type(check_end_tb=False)
+        for chan_t, chan_d in chan_types:
+            if chan_t == chan_type and chan_d == direction:
+                return True
     return False
 
 def check_chan_exhaustion(stock, end_time, count, period, direction):
@@ -26,8 +27,11 @@ def check_chan_exhaustion(stock, end_time, count, period, direction):
     crp = CentralRegionProcess(xd_df_high, isdebug=False, use_xd=True)
     anal_result_zoushi = crp.define_central_region()
     
-    eq = Equilibrium(xd_df, anal_zoushi.zslx_result, isdebug=False, isDescription=True)
-    return eq.define_equilibrium()
+    if anal_result_zoushi is not None:
+        eq = Equilibrium(xd_df, anal_zoushi.zslx_result, isdebug=False, isDescription=True)
+        return eq.define_equilibrium()
+    else:
+        return False
 
 def check_chan_by_type_exhaustion(stock, end_time, periods, count, direction, chan_type, isdebug):
     ni = NestedInterval(stock, 
@@ -115,7 +119,7 @@ class CentralRegionProcess(object):
         if self.original_xd_df.empty:
             if self.isdebug:
                 print("empty data, return define_central_region")            
-            return []
+            return None
         working_df = self.original_xd_df        
         
         working_df = self.prepare_df_data(working_df)
@@ -125,7 +129,7 @@ class CentralRegionProcess(object):
         if init_d == TopBotType.noTopBot: # not enough data, we don't do anything
             if self.isdebug:
                 print("not enough data, return define_central_region")
-            return []
+            return None
         
         self.zoushi = self.find_central_region(init_idx, init_d, working_df)
             
@@ -572,6 +576,8 @@ class NestedInterval():
             print("looking for {0} point".format("long" if direction == TopBotType.top2bot else "short"))
         # high level
         xd_df, anal_zoushi = self.df_zoushi_tuple_list[0]
+        if anal_zoushi is None:
+            return False, Chan_Type.INVALID
         eq = Equilibrium(xd_df, anal_zoushi.zslx_result, isdebug=self.isdebug, isDescription=self.isDescription)
         chan_types = eq.check_chan_type(check_end_tb=False)
         if not chan_types:
@@ -580,7 +586,7 @@ class NestedInterval():
             eq = Equilibrium(xd_df, anal_zoushi.zslx_result, isdebug=self.isdebug, isDescription=self.isDescription)
             high_exhausted = ((chan_t in chan_type) if type(chan_type) is list else (chan_t == chan_type)) and\
                             chan_d == direction and\
-                            eq.define_equilibrium() if chan_t == Chan_Type.I else True
+                            (eq.define_equilibrium() if chan_t == Chan_Type.I else True)
             if self.isDescription or self.isdebug:
                 print("Top level {0} {1} {2}".format(self.periods[0], chan_d, "exhausted" if high_exhausted else "continues"))
             if not high_exhausted:
@@ -593,6 +599,8 @@ class NestedInterval():
             i = 1
             while i < len(self.df_zoushi_tuple_list):
                 xd_df_low, anal_zoushi_low = self.df_zoushi_tuple_list[i]
+                if anal_zoushi_low is None:
+                    return False, chan_types
                 split_anal_zoushi_result = anal_zoushi_low.split_by_time(split_time)
                 eq = Equilibrium(xd_df_low, split_anal_zoushi_result, isdebug=self.isdebug, isDescription=self.isDescription)
                 low_exhausted = eq.define_equilibrium() and split_anal_zoushi_result[-1].direction == direction
