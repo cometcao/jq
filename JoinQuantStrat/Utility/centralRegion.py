@@ -225,6 +225,9 @@ class ZouShiLeiXing(object):
             print("We have invalid direction for ZhongShu")
         return macd_acc
     
+    def get_tb_structure(self):
+        return [node.tb for node in self.zoushi_nodes]
+    
     def check_exhaustion(self):
         '''
         check most recent two XD or BI at current direction on slopes
@@ -358,9 +361,10 @@ class ZhongShu(ZouShiLeiXing):
         '''
         node_tb, method = (TopBotType.bot, np.min) if split_direction == TopBotType.bot2top else (TopBotType.top, np.max)
         if self.is_complex_type() or self.get_level().value >= ZhongShuLevel.current.value:
-            all_price = [n.chan_price for n in self.extra_nodes]
+            all_nodes = [self.first, self.second, self.third, self.forth] + self.extra_nodes
+            all_price = [n.chan_price for n in all_nodes]
             ex_price = method(all_price)
-            return self.extra_nodes[all_price.index(ex_price):]
+            return all_nodes[all_price.index(ex_price):]
         else:
             return []
 
@@ -386,7 +390,7 @@ class ZhongShu(ZouShiLeiXing):
             return ZouShiLeiXing(xd.direction, self.original_df, exiting_nodes[-2:])
 
     def take_first_xd_as_zslx(self):
-        remaining_nodes = self.get_split_zs(self.direction)
+        remaining_nodes = self.get_split_zs(TopBotType.reverse(self.direction))
         if len(remaining_nodes) < 2:
             return ZouShiLeiXing(TopBotType.noTopBot, self.original_df, [])
         else:
@@ -445,19 +449,21 @@ class ZouShi(object):
             if type(self.zslx_result[-1]) is ZouShiLeiXing:
                 return self.zslx_result[-1].get_time_region()[0]
             elif type(self.zslx_result[-1]) is ZhongShu:
-                return self.zslx_result[-1].take_last_xd_as_zslx().get_time_region()[0]
+                return self.zslx_result[-1].get_time_region()[0]
         elif chan_type == Chan_Type.III: # we need to split from past top / bot
             if type(self.zslx_result[-1]) is ZouShiLeiXing:
                 [s, e] = self.zslx_result[-1].get_time_region()
                 temp_df = self.original_df.iloc[self.original_df.index.get_loc(s):,:]
                 return temp_df['high'].idxmax() if direction == TopBotType.top2bot else temp_df['low'].idxmin()
             elif type(self.zslx_result[-1]) is ZhongShu:
-                return self.zslx_result[-1].take_last_xd_as_zslx().get_time_region()[0]
-        else:
+                return self.zslx_result[-1].get_time_region()[0]
+        elif chan_type == Chan_Type.II:
             if type(self.zslx_result[-1]) is ZouShiLeiXing:
                 return self.zslx_result[-1].get_time_region()[0]
             elif type(self.zslx_result[-1]) is ZhongShu:
-                return self.zslx_result[-1].take_last_xd_as_zslx().get_time_region()[0]            
+                return self.zslx_result[-1].get_time_region()[0]             
+        else:
+            return self.zslx_result[-1].get_time_region()[0]            
 
     def analyze(self, initial_direction):
         i = 0

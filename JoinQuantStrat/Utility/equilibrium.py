@@ -250,6 +250,7 @@ class Equilibrium():
                     print("1 current Zou Shi is QV SHI \n{0} \n{1}".format(zs1, zs2))
                 result = True        
         
+        # if the first ZhongShu is complex and can be split to form QvShi with second ZhongShu
         if not result and zs1.get_level().value > zs2.get_level().value == zs_level.value and\
             (zs1.direction == zs2.direction or zs1.is_complex_type()):
             split_nodes = zs1.get_split_zs(zs2.direction)
@@ -316,20 +317,28 @@ class Equilibrium():
             print("QU SHI FOUND")
         return self.isQvShi        
         
-    def define_equilibrium(self):        
+    def define_equilibrium(self, check_tb_structure=False):        
         if len(self.analytic_result) < 2: # if we don't have enough data, return False directly
             if self.isdebug:
                 print("Not enough DATA define_equilibrium")
             return False
         a, _, c = self.find_most_recent_zoushi()
         
-        return self.check_exhaustion(a, c)
+        return self.check_exhaustion(a, c, check_tb_structure)
         
-    def check_exhaustion(self, zslx_a, zslx_c):
-        if zslx_a is None or zslx_c is None:
+    def check_exhaustion(self, zslx_a, zslx_c, check_tb_structure=False):
+        if zslx_a is None or zslx_c is None or zslx_a.isEmpty() or zslx_c.isEmpty():
             if self.isdebug:
                 print("Not enough DATA check_exhaustion")
             return False
+        
+        if check_tb_structure:
+            a_s = zslx_a.get_tb_structure() 
+            c_s =zslx_c.get_tb_structure()
+            if a_s[0] != c_s[0] or a_s[-1] != c_s[-1]:
+                if self.isdebug:
+                    print("Not match ZSLX structure")
+                return False
         
         zslx_slope = zslx_a.work_out_slope()
         
@@ -361,7 +370,7 @@ class Equilibrium():
         This method determines potential TYPE of trade point under CHAN
         '''
         all_types = []
-        if len(self.analytic_result) < 3:
+        if len(self.analytic_result) < 2:
             all_types.append((Chan_Type.INVALID, TopBotType.noTopBot))
             return all_types
         
@@ -579,14 +588,14 @@ class NestedInterval():
         if anal_zoushi is None:
             return False, Chan_Type.INVALID
         eq = Equilibrium(xd_df, anal_zoushi.zslx_result, isdebug=self.isdebug, isDescription=self.isDescription)
-        chan_types = eq.check_chan_type(check_end_tb=False)
+        chan_types = list(set(eq.check_chan_type(check_end_tb=False)))
         if not chan_types:
             return False, chan_types
         for chan_t, chan_d in chan_types:
             eq = Equilibrium(xd_df, anal_zoushi.zslx_result, isdebug=self.isdebug, isDescription=self.isDescription)
             high_exhausted = ((chan_t in chan_type) if type(chan_type) is list else (chan_t == chan_type)) and\
                             chan_d == direction and\
-                            (eq.define_equilibrium() if chan_t == Chan_Type.I else True)
+                            (eq.define_equilibrium(check_tb_structure=False) if chan_t == Chan_Type.I else True)
             if self.isDescription or self.isdebug:
                 print("Top level {0} {1} {2}".format(self.periods[0], chan_d, "ready" if high_exhausted else "not ready"))
             if not high_exhausted:
@@ -603,7 +612,7 @@ class NestedInterval():
                     return False, chan_types
                 split_anal_zoushi_result = anal_zoushi_low.split_by_time(split_time)
                 eq = Equilibrium(xd_df_low, split_anal_zoushi_result, isdebug=self.isdebug, isDescription=self.isDescription)
-                low_exhausted = eq.define_equilibrium() and split_anal_zoushi_result[-1].direction == direction
+                low_exhausted = eq.define_equilibrium(check_tb_structure=True)
                 if self.isDescription or self.isdebug:
                     print("Sub level {0} {1}".format(self.periods[i], "exhausted" if low_exhausted else "continues"))
                 if not low_exhausted:

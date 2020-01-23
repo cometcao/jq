@@ -550,9 +550,31 @@ class KBarProcessor(object):
                 
         ###################################    
         self.kDataFrame_marked = working_df[working_df['tb']!=TopBotType.noTopBot]
-#         if self.isdebug:
-#             print("self.kDataFrame_marked: {0}".format(self.kDataFrame_marked))
     
+    def defineBi_chan(self):
+        self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_index=[i for i in range(len(self.kDataFrame_standardized))])
+        self.gap_exists() # work out gap in the original kline
+        working_df = self.kDataFrame_standardized[self.kDataFrame_standardized['tb']!=TopBotType.noTopBot]
+        
+        while not self.check_valid_bi(working_df):
+            
+            # 1. at least 1 kbar between DING DI
+            working_df['new_index_diff'] = working_df.loc[:,'new_Index'].shift(-1)-working_df.loc[:,'new_Index']
+            temp_index_list = working_df[working_df['new_index_diff']<4].index
+            temp_loc_list = [working_df.index.get_loc(idx) for idx in temp_index_list]
+            for loc in temp_loc_list:
+                # check not gap for XD
+                previous = working_df.iloc[loc-1]
+                current = working_df.iloc[loc]
+                next = working_df.iloc[loc+1]
+            
+                # check 
+            
+            # 2. DING followed by DI and DI followed by DING
+            
+            
+            # 3. DING must be higher and DI
+
     def getCurrentKBarStatus(self, isSimple=True):
         #  at Top or Bot FenXing
         resultStatus = KBarStatus.none_status
