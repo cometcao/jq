@@ -12,7 +12,7 @@ def check_chan_type(stock, end_time, count, period, direction, chan_type):
     crp_high = CentralRegionProcess(xd_df_high, isdebug=False, use_xd=True)
     anal_result_high_zoushi = crp_high.define_central_region()
     if anal_result_high_zoushi is not None:
-        eq = Equilibrium(xd_df_high, anal_result_high_zoushi.zslx_result, isdebug=False, isDescription=True, check_bi=False)
+        eq = Equilibrium(xd_df_high, anal_result_high_zoushi.zslx_result, isdebug=False, isDescription=True)
         chan_types = eq.check_chan_type(check_end_tb=False)
         for chan_t, chan_d in chan_types:
             if chan_t == chan_type and chan_d == direction:
@@ -24,11 +24,11 @@ def check_chan_exhaustion(stock, end_time, count, period, direction):
     kb = KBarProcessor(stock_df, isdebug=False)
     xd_df = kb.getIntegradedXD()
     
-    crp = CentralRegionProcess(xd_df_high, isdebug=False, use_xd=True)
+    crp = CentralRegionProcess(xd_df, isdebug=False, use_xd=True)
     anal_result_zoushi = crp.define_central_region()
     
     if anal_result_zoushi is not None:
-        eq = Equilibrium(xd_df, anal_zoushi.zslx_result, isdebug=False, isDescription=True)
+        eq = Equilibrium(xd_df, anal_result_zoushi.zslx_result, isdebug=False, isDescription=True)
         return eq.define_equilibrium()
     else:
         return False
@@ -592,7 +592,6 @@ class NestedInterval():
         if not chan_types:
             return False, chan_types
         for chan_t, chan_d in chan_types:
-            eq = Equilibrium(xd_df, anal_zoushi.zslx_result, isdebug=self.isdebug, isDescription=self.isDescription)
             high_exhausted = ((chan_t in chan_type) if type(chan_type) is list else (chan_t == chan_type)) and\
                             chan_d == direction and\
                             (eq.define_equilibrium(check_tb_structure=False) if chan_t == Chan_Type.I else True)

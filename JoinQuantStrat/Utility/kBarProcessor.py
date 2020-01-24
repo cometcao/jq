@@ -44,13 +44,6 @@ class KBarProcessor(object):
         self.gap_XD = []
         self.previous_with_xd_gap = False # help to check current gap as XD
     
-    def synchForChart(self):
-        self.kDataFrame_standardized = self.kDataFrame_standardized.drop('new_high', 1)
-        self.kDataFrame_standardized = self.kDataFrame_standardized.drop('new_low', 1)
-        self.kDataFrame_standardized = self.kDataFrame_standardized.drop('trend_type', 1)
-        self.kDataFrame_standardized['open'] = self.kDataFrame_standardized.apply(lambda row: synchOpenPrice(row['open'], row['close'], row['high'], row['low']), axis=1)
-        self.kDataFrame_standardized['close'] = self.kDataFrame_standardized.apply(lambda row: synchClosePrice(row['open'], row['close'], row['high'], row['low']), axis=1)        
-    
     def checkInclusive(self, first, second):
         # output: 0 = no inclusion, 1 = first contains second, 2 second contains first
         isInclusion = InclusionType.noInclusion
@@ -152,12 +145,10 @@ class KBarProcessor(object):
         # clean up
         self.kDataFrame_standardized['high'] = self.kDataFrame_standardized['new_high']
         self.kDataFrame_standardized['low'] = self.kDataFrame_standardized['new_low']
-        self.kDataFrame_standardized.drop(['new_high', 'new_low'], axis=1, inplace=True)
+        self.kDataFrame_standardized.drop(['new_high', 'new_low', 'trend_type'], axis=1, inplace=True)
 
         self.kDataFrame_standardized = self.kDataFrame_standardized[np.isfinite(self.kDataFrame_standardized['high'])]
-        # lines below is for chart drawing
-        if self.clean_standardzed:
-            self.synchForChart()
+
         return self.kDataFrame_standardized
     
     def checkTopBot(self, current, first, second):
@@ -551,30 +542,142 @@ class KBarProcessor(object):
         ###################################    
         self.kDataFrame_marked = working_df[working_df['tb']!=TopBotType.noTopBot]
     
+    def get_previous_loc(self, loc, working_df):
+        i = loc - 1
+        while i >= 0:
+            if working_df.iloc[i].tb != TopBotType.noTopBot:
+                return i
+            else:
+                i = i - 1
+        return None
+    
+    def get_next_loc(self, loc, working_df):
+        i = loc + 1
+        while i < working_df.shape[0]:
+            if working_df.iloc[i].tb != TopBotType.noTopBot:
+                return i
+            else:
+                i = i + 1
+        return None
+
     def defineBi_chan(self):
         self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_index=[i for i in range(len(self.kDataFrame_standardized))])
         self.gap_exists() # work out gap in the original kline
         working_df = self.kDataFrame_standardized[self.kDataFrame_standardized['tb']!=TopBotType.noTopBot]
         
-        while not self.check_valid_bi(working_df):
+        # 1. at least 1 kbar between DING DI
+        working_df['new_index_diff'] = working_df.loc[:,'new_index'].shift(-1)-working_df.loc[:,'new_index']
+        temp_index_list = working_df[working_df['new_index_diff']<4].index
+        temp_loc_list = [working_df.index.get_loc(idx) for idx in temp_index_list]
+        tb_loc = working_df.columns.get_loc('tb')
+        for loc in temp_loc_list:
+            # check not gap for XD TODO
+            p_els = self.get_previous_loc(loc, working_df)
+            n_els = self.get_next_loc(loc, working_df)
             
-            # 1. at least 1 kbar between DING DI
-            working_df['new_index_diff'] = working_df.loc[:,'new_Index'].shift(-1)-working_df.loc[:,'new_Index']
-            temp_index_list = working_df[working_df['new_index_diff']<4].index
-            temp_loc_list = [working_df.index.get_loc(idx) for idx in temp_index_list]
-            for loc in temp_loc_list:
-                # check not gap for XD
-                previous = working_df.iloc[loc-1]
-                current = working_df.iloc[loc]
-                next = working_df.iloc[loc+1]
+            if p_els is None:
+                continue
             
-                # check 
+            if n_els is None:
+                break
             
-            # 2. DING followed by DI and DI followed by DING
+            previous = p_els
+            current = loc
+            next = n_els
             
+            previous_elem = working_df.iloc[previous]
+            current_elem = working_df.iloc[current]
+            next_elem = working_df.iloc[next]
             
-            # 3. DING must be higher and DI
+            if next_elem.new_index - current_elem.new_index >= 4 or\
+                current_elem.tb == next_elem.tb or\
+                current_elem.tb == TopBotType.noTopBot:
+                continue
+            
+            gap_qualify = False
+            if self.gap_exists_in_range(working_df.index[current], working_df.index[next]):
+                gap_ranges = self.gap_region(working_df.index[current], working_df.index[next])
+                for gap in gap_ranges:
+                    if working_df.iloc[previous, tb_loc] == TopBotType.top: 
+                        #gap higher than previous high
+                        gap_qualify = gap[0] < working_df.ix[previous, 'low'] <= working_df.ix[previous, 'high'] < gap[1]
+                    elif working_df.iloc[previous, tb_loc] == TopBotType.bot:
+                        #gap higher than previous low
+                        gap_qualify = gap[1] > working_df.ix[previous, 'high'] >= working_df.ix[previous, 'low'] > gap[0]
+                    if gap_qualify:
+                        continue
+            
+            if previous_elem.tb == next_elem.tb:
+                if previous_elem.tb == TopBotType.top:
+                    if previous_elem.high >= next_elem.high:
+                        working_df.iloc[next,tb_loc] = TopBotType.noTopBot
+                    elif previous_elem.high < next_elem.high:
+                        working_df.iloc[previous,tb_loc] = TopBotType.noTopBot
+                elif previous_elem.tb == TopBotType.bot:
+                    if previous_elem.low <= next_elem.low:
+                        working_df.iloc[next,tb_loc] = TopBotType.noTopBot
+                    elif previous_elem.low > next_elem.low:
+                        working_df.iloc[previous,tb_loc] = TopBotType.noTopBot
+                else:
+                    print("something wrong here! 1")
+        working_df = working_df.drop('new_index_diff', 1)
+        working_df = working_df[working_df['tb'] != TopBotType.noTopBot]
+        
+        # 2. DING followed by DI and DI followed by DING
+        working_df['adjacent_same_tb'] = working_df.loc[:,'tb'].shift(-1) == working_df.loc[:,'tb']
+        temp_index_list = working_df[working_df['adjacent_same_tb']].index
+        temp_loc_list = [working_df.index.get_loc(idx) for idx in temp_index_list]
+        for loc in temp_loc_list:
+            
+            next_loc = self.get_next_loc(loc, working_df)
+            current_loc = self.get_previous_loc(next_loc, working_df)
+            
+            current = working_df.iloc[current_loc]
+            next = working_df.iloc[next_loc]
+            
+            if current.tb == next.tb != TopBotType.noTopBot:
+                if current.tb == TopBotType.top:
+                    if current.high >= next.high:
+                        working_df.iloc[next_loc,tb_loc] = TopBotType.noTopBot
+                    elif current.high < next.high:
+                        working_df.iloc[current_loc,tb_loc] = TopBotType.noTopBot
+                elif current.tb == TopBotType.bot:
+                    if current.low <= next.low:
+                        working_df.iloc[next_loc,tb_loc] = TopBotType.noTopBot
+                    elif current.low > next.low:
+                        working_df.iloc[current_loc,tb_loc] = TopBotType.noTopBot
+                else:
+                    print("something wrong here! 3")
+        working_df = working_df.drop('adjacent_same_tb', 1)
+        working_df = working_df[working_df['tb'] != TopBotType.noTopBot]
+        
+        # 3. DING must be higher and DI
+        working_df['high_shift'] = working_df['high'].shift(-1)
+        working_df['low_shift'] = working_df['low'].shift(-1)
+        working_df['tb_shift'] = working_df['tb'].shift(-1)
+        working_df['topbot_invalid'] = working_df.apply(lambda row: 
+                                                        (row['tb'] == TopBotType.bot and row['tb_shift'] == TopBotType.top and row['high_shift'] < row['low']) or\
+                                                        (row['tb'] == TopBotType.top and row['tb_shift'] == TopBotType.bot and row['low_shift'] > row['high']), axis=1)
 
+        temp_index_list = working_df[working_df['topbot_invalid']].index
+        temp_loc_list = [working_df.index.get_loc(idx) for idx in temp_index_list]
+        for loc in temp_loc_list:
+            preivous = working_df.iloc[loc-1]
+            current = working_df.iloc[loc]
+            next = working_df.iloc[loc+1]
+            
+            if current.tb != next.tb and current.tb != TopBotType.noTopBot and next.tb != TopBotType.noTopBot:
+                working_df.iloc[loc,tb_loc] = TopBotType.noTopBot
+                working_df.iloc[loc+1,tb_loc] = TopBotType.noTopBot
+            else:
+                print("something wrong here!")
+        working_df = working_df.drop('topbot_invalid', 1)
+        working_df = working_df.drop('high_shift', 1)
+        working_df = working_df.drop('low_shift', 1)
+        working_df = working_df.drop('tb_shift', 1)        
+        ############################################################################
+        self.kDataFrame_marked = working_df[working_df['tb'] != TopBotType.noTopBot]
+            
     def getCurrentKBarStatus(self, isSimple=True):
         #  at Top or Bot FenXing
         resultStatus = KBarStatus.none_status
@@ -650,9 +753,9 @@ class KBarProcessor(object):
     def getIntegraded(self, initial_state=TopBotType.noTopBot):
         self.standardize(initial_state)
         self.markTopBot(initial_state)
-        self.defineBi()
+#         self.defineBi()
+        self.defineBi_chan()
         self.getPureBi()
-#         self.defineBi_new()
         return self.kDataFrame_origin.join(self.kDataFrame_marked[['new_index', 'tb', 'chan_price']])
     
     def getIntegradedXD(self, initial_state=TopBotType.noTopBot):
