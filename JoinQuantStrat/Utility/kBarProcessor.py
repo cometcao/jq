@@ -592,6 +592,8 @@ class KBarProcessor(object):
             if next_elem.new_index - current_elem.new_index >= 4 or\
                 current_elem.tb == next_elem.tb or\
                 current_elem.tb == TopBotType.noTopBot:
+                if self.isdebug:
+                    print("current close distance ignored: {0}, {1}, {2}".format(previous_elem.new_index, current_elem.new_index, next_elem.new_index))
                 continue
             
             gap_qualify = False
@@ -605,17 +607,19 @@ class KBarProcessor(object):
                         #gap higher than previous low
                         gap_qualify = gap[1] > working_df.ix[previous, 'high'] >= working_df.ix[previous, 'low'] > gap[0]
                     if gap_qualify:
+                        if self.isdebug:
+                            print("gap exists between two kbars used as BI:{0},{1}".format(working_df.index[current], working_df.index[next]))
                         continue
             
             if previous_elem.tb == next_elem.tb:
                 if previous_elem.tb == TopBotType.top:
                     if previous_elem.high >= next_elem.high:
-                        working_df.iloc[next,tb_loc] = TopBotType.noTopBot
+                        working_df.iloc[current,tb_loc] = TopBotType.noTopBot
                     elif previous_elem.high < next_elem.high:
                         working_df.iloc[previous,tb_loc] = TopBotType.noTopBot
                 elif previous_elem.tb == TopBotType.bot:
                     if previous_elem.low <= next_elem.low:
-                        working_df.iloc[next,tb_loc] = TopBotType.noTopBot
+                        working_df.iloc[current,tb_loc] = TopBotType.noTopBot
                     elif previous_elem.low > next_elem.low:
                         working_df.iloc[previous,tb_loc] = TopBotType.noTopBot
                 else:
@@ -662,7 +666,6 @@ class KBarProcessor(object):
         temp_index_list = working_df[working_df['topbot_invalid']].index
         temp_loc_list = [working_df.index.get_loc(idx) for idx in temp_index_list]
         for loc in temp_loc_list:
-            preivous = working_df.iloc[loc-1]
             current = working_df.iloc[loc]
             next = working_df.iloc[loc+1]
             

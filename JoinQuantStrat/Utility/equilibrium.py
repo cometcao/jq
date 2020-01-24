@@ -5,30 +5,30 @@ from centralRegion import *
 import numpy as np
 import pandas as pd
 
-def check_chan_type(stock, end_time, count, period, direction, chan_type):
+def check_chan_type(stock, end_time, count, period, direction, chan_type, isdebug=False):
     stock_high = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close', 'money'], skip_paused=True)
-    kb_high = KBarProcessor(stock_high, isdebug=False)
+    kb_high = KBarProcessor(stock_high, isdebug=isdebug)
     xd_df_high = kb_high.getIntegradedXD()
-    crp_high = CentralRegionProcess(xd_df_high, isdebug=False, use_xd=True)
+    crp_high = CentralRegionProcess(xd_df_high, isdebug=isdebug, use_xd=True)
     anal_result_high_zoushi = crp_high.define_central_region()
     if anal_result_high_zoushi is not None:
-        eq = Equilibrium(xd_df_high, anal_result_high_zoushi.zslx_result, isdebug=False, isDescription=True)
+        eq = Equilibrium(xd_df_high, anal_result_high_zoushi.zslx_result, isdebug=isdebug, isDescription=True)
         chan_types = eq.check_chan_type(check_end_tb=False)
         for chan_t, chan_d in chan_types:
             if chan_t == chan_type and chan_d == direction:
                 return True
     return False
 
-def check_chan_exhaustion(stock, end_time, count, period, direction):
+def check_chan_exhaustion(stock, end_time, count, period, direction, isdebug=False):
     stock_df = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close', 'money'],skip_paused=True)
-    kb = KBarProcessor(stock_df, isdebug=False)
+    kb = KBarProcessor(stock_df, isdebug=isdebug)
     xd_df = kb.getIntegradedXD()
     
-    crp = CentralRegionProcess(xd_df, isdebug=False, use_xd=True)
+    crp = CentralRegionProcess(xd_df, isdebug=isdebug, use_xd=True)
     anal_result_zoushi = crp.define_central_region()
     
     if anal_result_zoushi is not None:
-        eq = Equilibrium(xd_df, anal_result_zoushi.zslx_result, isdebug=False, isDescription=True)
+        eq = Equilibrium(xd_df, anal_result_zoushi.zslx_result, isdebug=isdebug, isDescription=True)
         return eq.define_equilibrium()
     else:
         return False
