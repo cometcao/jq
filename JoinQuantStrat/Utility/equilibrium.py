@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 def check_chan_type(stock, end_time, count, period, direction, chan_type, isdebug=False):
-    stock_high = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close', 'money'], skip_paused=True)
+    stock_high = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close'], skip_paused=True)
     kb_high = KBarProcessor(stock_high, isdebug=isdebug)
     xd_df_high = kb_high.getIntegradedXD()
     crp_high = CentralRegionProcess(xd_df_high, isdebug=isdebug, use_xd=True)
@@ -20,7 +20,7 @@ def check_chan_type(stock, end_time, count, period, direction, chan_type, isdebu
     return False
 
 def check_chan_exhaustion(stock, end_time, count, period, direction, isdebug=False):
-    stock_df = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close', 'money'],skip_paused=True)
+    stock_df = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close'],skip_paused=True)
     kb = KBarProcessor(stock_df, isdebug=isdebug)
     xd_df = kb.getIntegradedXD()
     

@@ -570,12 +570,16 @@ class KBarProcessor(object):
         temp_index_list = working_df[working_df['new_index_diff']<4].index
         temp_loc_list = [working_df.index.get_loc(idx) for idx in temp_index_list]
         tb_loc = working_df.columns.get_loc('tb')
-        for loc in temp_loc_list:
+        count_idx = 0
+        while count_idx < len(temp_loc_list):
+            loc = temp_loc_list[count_idx]
+
             # check not gap for XD TODO
             p_els = self.get_previous_loc(loc, working_df)
             n_els = self.get_next_loc(loc, working_df)
             
             if p_els is None:
+                count_idx = count_idx + 1
                 continue
             
             if n_els is None:
@@ -594,6 +598,7 @@ class KBarProcessor(object):
                 current_elem.tb == TopBotType.noTopBot:
                 if self.isdebug:
                     print("current close distance ignored: {0}, {1}, {2}".format(previous_elem.new_index, current_elem.new_index, next_elem.new_index))
+                count_idx = count_idx + 1
                 continue
             
             gap_qualify = False
@@ -609,21 +614,25 @@ class KBarProcessor(object):
                     if gap_qualify:
                         if self.isdebug:
                             print("gap exists between two kbars used as BI:{0},{1}".format(working_df.index[current], working_df.index[next]))
+                        count_idx = count_idx + 1
                         continue
             
             if previous_elem.tb == next_elem.tb:
                 if previous_elem.tb == TopBotType.top:
                     if previous_elem.high >= next_elem.high:
-                        working_df.iloc[current,tb_loc] = TopBotType.noTopBot
+                        working_df.iloc[next,tb_loc] = TopBotType.noTopBot
+                        continue
                     elif previous_elem.high < next_elem.high:
                         working_df.iloc[previous,tb_loc] = TopBotType.noTopBot
                 elif previous_elem.tb == TopBotType.bot:
                     if previous_elem.low <= next_elem.low:
-                        working_df.iloc[current,tb_loc] = TopBotType.noTopBot
+                        working_df.iloc[next,tb_loc] = TopBotType.noTopBot
+                        continue
                     elif previous_elem.low > next_elem.low:
                         working_df.iloc[previous,tb_loc] = TopBotType.noTopBot
                 else:
                     print("something wrong here! 1")
+            count_idx = count_idx + 1
         working_df = working_df.drop('new_index_diff', 1)
         working_df = working_df[working_df['tb'] != TopBotType.noTopBot]
         
@@ -672,6 +681,8 @@ class KBarProcessor(object):
             if current.tb != next.tb and current.tb != TopBotType.noTopBot and next.tb != TopBotType.noTopBot:
                 working_df.iloc[loc,tb_loc] = TopBotType.noTopBot
                 working_df.iloc[loc+1,tb_loc] = TopBotType.noTopBot
+                if self.isdebug:
+                    print("DING/DI location removal:{0}, {1}".format(current.new_index, next.new_index))
             else:
                 print("something wrong here!")
         working_df = working_df.drop('topbot_invalid', 1)
