@@ -572,22 +572,18 @@ class KBarProcessor(object):
         tb_loc = working_df.columns.get_loc('tb')
         count_idx = 0
         while count_idx < len(temp_loc_list):
-            loc = temp_loc_list[count_idx]
+            current = temp_loc_list[count_idx]
 
             # check not gap for XD TODO
-            p_els = self.get_previous_loc(loc, working_df)
-            n_els = self.get_next_loc(loc, working_df)
+            previous = self.get_previous_loc(current, working_df)
+            next = self.get_next_loc(current, working_df)
             
-            if p_els is None:
+            if previous is None:
                 count_idx = count_idx + 1
                 continue
             
-            if n_els is None:
+            if next is None:
                 break
-            
-            previous = p_els
-            current = loc
-            next = n_els
             
             previous_elem = working_df.iloc[previous]
             current_elem = working_df.iloc[current]
@@ -624,12 +620,14 @@ class KBarProcessor(object):
                         continue
                     elif previous_elem.high < next_elem.high:
                         working_df.iloc[previous,tb_loc] = TopBotType.noTopBot
+                        continue
                 elif previous_elem.tb == TopBotType.bot:
                     if previous_elem.low <= next_elem.low:
                         working_df.iloc[next,tb_loc] = TopBotType.noTopBot
                         continue
                     elif previous_elem.low > next_elem.low:
                         working_df.iloc[previous,tb_loc] = TopBotType.noTopBot
+                        continue
                 else:
                     print("something wrong here! 1")
             count_idx = count_idx + 1
