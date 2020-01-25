@@ -785,8 +785,8 @@ class KBarProcessor(object):
     def getIntegraded(self, initial_state=TopBotType.noTopBot):
         self.standardize(initial_state)
         self.markTopBot(initial_state)
-#         self.defineBi()
-        self.defineBi_chan()
+        self.defineBi()
+#         self.defineBi_chan()
         self.getPureBi()
         return self.kDataFrame_origin.join(self.kDataFrame_marked[['new_index', 'tb', 'chan_price']])
     
