@@ -29,7 +29,7 @@ def check_chan_exhaustion(stock, end_time, count, period, direction, isdebug=Fal
     
     if anal_result_zoushi is not None:
         eq = Equilibrium(xd_df, anal_result_zoushi.zslx_result, isdebug=isdebug, isDescription=True)
-        return eq.define_equilibrium()
+        return eq.define_equilibrium(direction)
     else:
         return False
 
@@ -41,6 +41,15 @@ def check_chan_by_type_exhaustion(stock, end_time, periods, count, direction, ch
                         isdebug=isdebug, 
                         isDescription=True)
     return ni.analyze_zoushi(direction, chan_type)
+
+def check_chan_indepth(stock, end_time, period, count, direction, isdebug):
+    ni = NestedInterval(stock, 
+                        end_dt=end_time, 
+                        periods=[period], 
+                        count=count, 
+                        isdebug=isdebug, 
+                        isDescription=True)
+    return ni.indepth_analyze_zoushi(direction, period)
 
 class CentralRegionProcess(object):
     '''
@@ -191,7 +200,7 @@ class Equilibrium():
         self.check_zoushi_status()
         pass
     
-    def find_most_recent_zoushi(self):
+    def find_most_recent_zoushi(self, direction):
         '''
         Make sure we return the most recent Zhong Shu and the Zou Shi Lei Xing Entering it.
         The Zou Shi Lei Xing Exiting it will be reworked on the original df
@@ -201,35 +210,39 @@ class Equilibrium():
                 zs = self.analytic_result[-1]
                 first_zslx = self.analytic_result[-2]
                 last_xd = zs.take_last_xd_as_zslx()
-                return first_zslx, self.analytic_result[-1], last_xd                          
+                return (first_zslx, self.analytic_result[-1], last_xd) if last_xd.direction == direction else (None, None, None)
             elif type(self.analytic_result[-1]) is ZouShiLeiXing:
-                return self.analytic_result[-3], self.analytic_result[-2], self.analytic_result[-1]
+                return (self.analytic_result[-3], self.analytic_result[-2], self.analytic_result[-1]) if self.analytic_result[-1].direction == direction else (None, None, None)
             else:
                 print("Invalid Zou Shi type")
                 return None, None, None               
         else:
             # complex zhongshu comparison within
-            if type(self.analytic_result[-1]) is ZhongShu and self.analytic_result[-1].is_complex_type():
+            if type(self.analytic_result[-1]) is ZhongShu and\
+                self.analytic_result[-1].get_level().value >= ZhongShuLevel.current.value:
                 zs = self.analytic_result[-1]
-                first_xd = zs.take_first_xd_as_zslx()
                 last_xd = zs.take_last_xd_as_zslx()
-                return first_xd, self.analytic_result[-1], last_xd
+                first_xd = zs.take_first_xd_as_zslx(direction)
+                return (first_xd, self.analytic_result[-1], last_xd) if last_xd.direction == direction else (None, None, None)
+            elif len(self.analytic_result) >= 5 and\
+                self.analytic_result[-1].direction == direction and\
+                type(self.analytic_result[-1]) is ZouShiLeiXing and\
+                type(self.analytic_result[-2]) is ZhongShu and\
+                type(self.analytic_result[-4]) is Zhongshu and\
+                self.two_zslx_interact_original(self.analytic_result[-4], self.analytic_result[-2]):
+            ## zhong shu combination
+                i = -4
+                while -(i-2) <= len(self.analytic_result):
+                    if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]):
+                        return self.analytic_result[i-1], self.analytic_result[i:-1],self.analytic_result[-1]
+                    i = i - 2
+                return None, None, None
             elif len(self.analytic_result) >= 3 and\
                 type(self.analytic_result[-1]) is ZouShiLeiXing and\
                 type(self.analytic_result[-2]) is ZhongShu and\
-                type(self.analytic_result[-3]) is ZouShiLeiXing:
+                type(self.analytic_result[-3]) is ZouShiLeiXing and\
+                self.analytic_result[-1].direction == direction:
                 return self.analytic_result[-3], self.analytic_result[-2], self.analytic_result[-1]
-            ## zhong shu combination
-            elif len(self.analytic_result) >= 5 and\
-                type(self.analytic_result[-1]) is ZouShiLeiXing and\
-                type(self.analytic_result[-2]) is ZhongShu and\
-                type(self.analytic_result[-4]) is Zhongshu:
-                i = -2
-                while -i <= len(self.analytic_result):
-                    if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]):
-                        return self.analytic_result[i-1], self.analytic_result[-1]
-                    i = i - 2
-                return None, None, None
             else:
                 print("Invalid Zou Shi type")
                 return None, None, None
@@ -317,12 +330,12 @@ class Equilibrium():
             print("QU SHI FOUND")
         return self.isQvShi        
         
-    def define_equilibrium(self, check_tb_structure=False):        
+    def define_equilibrium(self, direction, check_tb_structure=False):        
         if len(self.analytic_result) < 2: # if we don't have enough data, return False directly
             if self.isdebug:
                 print("Not enough DATA define_equilibrium")
             return False
-        a, _, c = self.find_most_recent_zoushi()
+        a, _, c = self.find_most_recent_zoushi(direction)
         
         return self.check_exhaustion(a, c, check_tb_structure)
         
@@ -594,7 +607,7 @@ class NestedInterval():
         for chan_t, chan_d in chan_types:
             high_exhausted = ((chan_t in chan_type) if type(chan_type) is list else (chan_t == chan_type)) and\
                             chan_d == direction and\
-                            (eq.define_equilibrium(check_tb_structure=False) if chan_t == Chan_Type.I else True)
+                            (eq.define_equilibrium(direction, check_tb_structure=False) if chan_t == Chan_Type.I else True)
             if self.isDescription or self.isdebug:
                 print("Top level {0} {1} {2}".format(self.periods[0], chan_d, "ready" if high_exhausted else "not ready"))
             if not high_exhausted:
@@ -611,7 +624,7 @@ class NestedInterval():
                     return False, chan_types
                 split_anal_zoushi_result = anal_zoushi_low.split_by_time(split_time)
                 eq = Equilibrium(xd_df_low, split_anal_zoushi_result, isdebug=self.isdebug, isDescription=self.isDescription)
-                low_exhausted = eq.define_equilibrium(check_tb_structure=True)
+                low_exhausted = eq.define_equilibrium(direction, check_tb_structure=True)
                 if self.isDescription or self.isdebug:
                     print("Sub level {0} {1}".format(self.periods[i], "exhausted" if low_exhausted else "continues"))
                 if not low_exhausted:
@@ -622,23 +635,24 @@ class NestedInterval():
                     split_time = split_anal_zoushi_low.sub_zoushi_time(Chan_Type.INVALID, direction)
         return anal_result, chan_types
     
-#     def is_trade_point(self, direction, chan_type):
-#         '''
-#         use direction param to check long/short point
-#         '''
-#         if self.isdebug:
-#             print("looking for {0} point".format("long" if direction == TopBotType.top2bot else "short"))
-#         # XD
-#         xd_exhausted, xd_direction = self.analyze_zoushi(direction, chan_type)
-#         if self.isDescription or self.isdebug:
-#             print("Xian Duan {0} {1}".format(xd_direction, "exhausted" if xd_exhausted else "continues"))
-#         
-#         # BI
-#         if xd_exhausted and self.check_bi:
-#             bi_exhausted, bi_direction = self.analyze_zoushi(direction, chan_type)
-#             if self.isDescription or self.isdebug:
-#                 print("Fen Bi {0} {1}".format(bi_direction, "exhausted" if bi_exhausted else "continues"))
-#         
-#             return xd_direction == bi_direction == direction and xd_exhausted and bi_exhausted
-#         else:
-#             return xd_exhausted
+    def indepth_analyze_zoushi(self, direction, period):
+        '''
+        specifically used to gauge the smallest level of precision, check at XD level then BI level
+        '''
+        xd_df, anal_zoushi_xd = self.df_zoushi_tuple_list[0]
+        
+        # XD level check        
+        split_time = anal_zoushi_xd.sub_zoushi_time(Chan_Type.INVALID, direction)
+        
+        if self.isdebug:
+            print("XD split time at:{0}".format(split_time))
+        
+        crp_df = CentralRegionProcess(xd_df, isdebug=self.isdebug, use_xd=False)
+        anal_zoushi_bi = crp_df.define_central_region()
+        
+        split_anal_zoushi_bi = anal_zoushi_bi.split_by_time(split_time)
+        
+        eq = Equilibrium(xd_df, split_anal_zoushi_bi, isdebug=self.isdebug, isDescription=self.isDescription)
+        bi_exhausted = eq.define_equilibrium(direction, check_tb_structure=True)
+        
+        return bi_exhausted

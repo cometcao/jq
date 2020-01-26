@@ -389,8 +389,8 @@ class ZhongShu(ZouShiLeiXing):
             xd = XianDuan(exiting_nodes[-2], exiting_nodes[-1])
             return ZouShiLeiXing(xd.direction, self.original_df, exiting_nodes[-2:])
 
-    def take_first_xd_as_zslx(self):
-        remaining_nodes = self.get_split_zs(TopBotType.reverse(self.direction))
+    def take_first_xd_as_zslx(self, split_direction):
+        remaining_nodes = self.get_split_zs(split_direction)
         if len(remaining_nodes) < 2:
             return ZouShiLeiXing(TopBotType.noTopBot, self.original_df, [])
         else:

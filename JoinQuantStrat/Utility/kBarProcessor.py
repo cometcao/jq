@@ -171,6 +171,8 @@ class KBarProcessor(object):
                 print("Incorrect initial state given!!!")
                 
         # This function assume we have done the standardization process (no inclusion)
+        last_idx = 0
+        last_tb = TopBotType.noTopBot
         for idx in range(self.kDataFrame_standardized.shape[0]-2): #xrange
             currentElem = self.kDataFrame_standardized.iloc[idx]
             firstElem = self.kDataFrame_standardized.iloc[idx+1]
@@ -178,8 +180,14 @@ class KBarProcessor(object):
             topBotType = self.checkTopBot(currentElem, firstElem, secondElem)
             if topBotType != TopBotType.noTopBot:
                 self.kDataFrame_standardized.ix[idx+1, 'tb'] = topBotType
+                last_idx = idx+1
+                last_tb = topBotType
+                
+        # mark the last kbar 
+        if last_idx + 4 < self.kDataFrame_standardized.shape[0]:
+            self.kDataFrame_standardized.ix[-1, 'tb'] = TopBotType.reverse(last_tb)
         if self.isdebug:
-            print("self.kDataFrame_standardized:{0}".format(self.kDataFrame_standardized.head(20)))
+            print("self.kDataFrame_standardized:{0}".format(self.kDataFrame_standardized.tail(20)))
 
     def trace_back_index(self, working_df, previous_index):
         # find the closest FenXing with top/bot backwards from previous_index
@@ -391,8 +399,6 @@ class KBarProcessor(object):
                                           
         ###################################    
         self.kDataFrame_marked = working_df[working_df['tb']!=TopBotType.noTopBot]
-#         if self.isdebug:
-#             print("self.kDataFrame_marked: {0}".format(self.kDataFrame_marked))
 
     def defineBi_new(self):
         self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_index=[i for i in range(len(self.kDataFrame_standardized))])
