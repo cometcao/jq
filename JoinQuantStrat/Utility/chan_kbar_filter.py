@@ -12,7 +12,12 @@ from biaoLiStatus import TopBotType
 TYPE_III_NUM = 5
 TYPE_I_NUM = 10
 
-def filter_high_level_by_index(direction=TopBotType.top2bot, stock_index='000985.XSHG', df=False, periods = ['60m', '120m', '1d'],end_dt=pd.datetime.now().strftime("%Y-%m-%d %H:%M:%S")):
+def filter_high_level_by_index(direction=TopBotType.top2bot, 
+                               stock_index='000985.XSHG', 
+                               df=False, 
+                               periods = ['60m', '120m', '1d'],
+                               end_dt=pd.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                               chan_types=[Chan_Type.III, Chan_Type.I]):
     all_stocks = get_index_stocks(stock_index)
     result_stocks = set()
     for stock in all_stocks:
@@ -23,9 +28,11 @@ def filter_high_level_by_index(direction=TopBotType.top2bot, stock_index='000985
                                     unit=p,
                                     fields= ['open',  'high', 'low','close', 'money'], 
                                     df = df)
-            if KBar.filter_high_level_kbar(stock_high, direction=direction, df=df, chan_type=Chan_Type.III):
-                result_stocks.add(stock)
-            if KBar.filter_high_level_kbar(stock_high, direction=direction, df=df, chan_type=Chan_Type.I):
+            for ct in chan_types:
+                if KBar.filter_high_level_kbar(stock_high, 
+                                               direction=direction, 
+                                               df=df, 
+                                               chan_type=ct):
                 result_stocks.add(stock)
     print("qualifying stocks:{0}".format(result_stocks))
     
