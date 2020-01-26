@@ -33,7 +33,7 @@ def filter_high_level_by_index(direction=TopBotType.top2bot,
                                                direction=direction, 
                                                df=df, 
                                                chan_type=ct):
-                result_stocks.add(stock)
+                    result_stocks.add(stock)
     print("qualifying stocks:{0}".format(result_stocks))
     
     return sorted(list(result_stocks))
