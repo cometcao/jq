@@ -228,7 +228,7 @@ class Equilibrium():
                 self.analytic_result[-1].direction == direction and\
                 type(self.analytic_result[-1]) is ZouShiLeiXing and\
                 type(self.analytic_result[-2]) is ZhongShu and\
-                type(self.analytic_result[-4]) is Zhongshu and\
+                type(self.analytic_result[-4]) is ZhongShu and\
                 self.two_zslx_interact_original(self.analytic_result[-4], self.analytic_result[-2]):
             ## zhong shu combination
                 i = -4
