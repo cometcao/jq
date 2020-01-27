@@ -1020,9 +1020,12 @@ class KBarProcessor(object):
     
     def defineXD(self):        working_df = self.kDataFrame_marked[['chan_price', 'tb','new_index']] # new index used for central region
 
-#         working_df['original_tb'] = working_df['tb']
         working_df.loc[:,'original_tb'] = working_df['tb']
         working_df = working_df.assign(xd_tb=TopBotType.noTopBot)
+    
+        if working_df.empty:
+            self.kDataFrame_xd = working_df
+            return working_df
     
         # find initial direction
         initial_i, initial_direction = self.find_initial_direction(working_df)
