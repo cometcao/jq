@@ -234,6 +234,10 @@ class ZouShiLeiXing(object):
         '''
         i = 0
         all_double_nodes = []
+        # if No. of nodes less than two we pass
+        if len(self.zoushi_nodes) <= 2:
+            return True
+        
         while i < len(self.zoushi_nodes)-1:
             current_node = self.zoushi_nodes[i]
             next_node = self.zoushi_nodes[i+1]

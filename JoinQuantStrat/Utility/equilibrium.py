@@ -330,20 +330,21 @@ class Equilibrium():
             print("QU SHI FOUND")
         return self.isQvShi        
         
-    def define_equilibrium(self, direction, check_tb_structure=False):        
+    def define_equilibrium(self, direction, check_tb_structure=False, check_xd_exhaustion=False):
         if len(self.analytic_result) < 2: # if we don't have enough data, return False directly
             if self.isdebug:
                 print("Not enough DATA define_equilibrium")
             return False
         a, _, c = self.find_most_recent_zoushi(direction)
         
-        return self.check_exhaustion(a, c, check_tb_structure)
+        return self.check_exhaustion(a, c, check_tb_structure, check_xd_exhaustion=check_xd_exhaustion)
         
-    def check_exhaustion(self, zslx_a, zslx_c, check_tb_structure=False):
+    def check_exhaustion(self, zslx_a, zslx_c, check_tb_structure=False, check_xd_exhaustion=False):
+        exhaustion_result = False
         if zslx_a is None or zslx_c is None or zslx_a.isEmpty() or zslx_c.isEmpty():
             if self.isdebug:
                 print("Not enough DATA check_exhaustion")
-            return False
+            return exhaustion_result
         
         if check_tb_structure:
             a_s = zslx_a.get_tb_structure() 
@@ -351,7 +352,7 @@ class Equilibrium():
             if a_s[0] != c_s[0] or a_s[-1] != c_s[-1]:
                 if self.isdebug:
                     print("Not match ZSLX structure")
-                return False
+                return exhaustion_result
         
         zslx_slope = zslx_a.work_out_slope()
         
@@ -360,23 +361,26 @@ class Equilibrium():
         if np.sign(latest_slope) == 0 or np.sign(zslx_slope) == 0:
             if self.isdebug:
                 print("Invalid slope {0}, {1}".format(zslx_slope, latest_slope))
-            return False
+            return exhaustion_result
         
         if np.sign(latest_slope) == np.sign(zslx_slope) and abs(latest_slope) < abs(zslx_slope):
             if self.isdebug or self.isDescription:
                 print("exhaustion found by reduced slope: {0} {1}".format(zslx_slope, latest_slope))
-            return True
+            exhaustion_result = True
 
-        if self.isQvShi: # if QV SHI => at least two Zhong Shu, We could also use macd for help
+        if not exhaustion_result and self.isQvShi: # if QV SHI => at least two Zhong Shu, We could also use macd for help
             zslx_macd = zslx_a.get_macd_acc()
             latest_macd = zslx_c.get_macd_acc()
+            exhaustion_result = abs(zslx_macd) > abs(latest_macd)
             if self.isdebug or self.isDescription:
-                print("exhaustion found by macd: {0}, {1}".format(zslx_macd, latest_macd))
-            return abs(zslx_macd) > abs(latest_macd)
+                print("{0} found by macd: {1}, {2}".format("exhaustion" if exhaustion_result else "exhaustion not", zslx_macd, latest_macd))
+            
         
-        # TODO check zslx exhaustion
-#         latest_slope.check_exhaustion()
-        return False
+        if exhaustion_result and check_xd_exhaustion:
+            exhaustion_result = zslx_c.check_exhaustion()
+            if self.isdebug or self.isDescription:
+                print("{0} found at XD level".format("exhaustion" if exhaustion_result else "exhaustion not"))
+        return exhaustion_result
          
     def check_chan_type(self, check_end_tb=False):
         '''
@@ -607,7 +611,7 @@ class NestedInterval():
         for chan_t, chan_d in chan_types:
             high_exhausted = ((chan_t in chan_type) if type(chan_type) is list else (chan_t == chan_type)) and\
                             chan_d == direction and\
-                            (eq.define_equilibrium(direction, check_tb_structure=False) if chan_t == Chan_Type.I else True)
+                            (eq.define_equilibrium(direction, check_tb_structure=False, check_xd_exhaustion=False) if chan_t == Chan_Type.I else True)
             if self.isDescription or self.isdebug:
                 print("Top level {0} {1} {2}".format(self.periods[0], chan_d, "ready" if high_exhausted else "not ready"))
             if not high_exhausted:
@@ -624,7 +628,7 @@ class NestedInterval():
                     return False, chan_types
                 split_anal_zoushi_result = anal_zoushi_low.split_by_time(split_time)
                 eq = Equilibrium(xd_df_low, split_anal_zoushi_result, isdebug=self.isdebug, isDescription=self.isDescription)
-                low_exhausted = eq.define_equilibrium(direction, check_tb_structure=True)
+                low_exhausted = eq.define_equilibrium(direction, check_tb_structure=True, check_xd_exhaustion=True)
                 if self.isDescription or self.isdebug:
                     print("Sub level {0} {1}".format(self.periods[i], "exhausted" if low_exhausted else "continues"))
                 if not low_exhausted:
@@ -637,11 +641,10 @@ class NestedInterval():
     
     def indepth_analyze_zoushi(self, direction, period):
         '''
-        specifically used to gauge the smallest level of precision, check at XD level then BI level
+        specifically used to gauge the smallest level of precision, check at BI level
         '''
         xd_df, anal_zoushi_xd = self.df_zoushi_tuple_list[0]
         
-        # XD level check        
         split_time = anal_zoushi_xd.sub_zoushi_time(Chan_Type.INVALID, direction)
         
         if self.isdebug:
@@ -653,6 +656,8 @@ class NestedInterval():
         split_anal_zoushi_bi = anal_zoushi_bi.split_by_time(split_time)
         
         eq = Equilibrium(xd_df, split_anal_zoushi_bi, isdebug=self.isdebug, isDescription=self.isDescription)
-        bi_exhausted = eq.define_equilibrium(direction, check_tb_structure=True)
+        bi_exhausted = eq.define_equilibrium(direction, check_tb_structure=True, check_xd_exhaustion=True)
+        if (self.isdebug or self.isDescription) and bi_exhausted:
+            print("BI level exhausted")
         
         return bi_exhausted

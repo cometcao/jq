@@ -38,7 +38,10 @@ class KBarProcessor(object):
         self.clean_standardzed = clean_standardzed
         self.kDataFrame_origin = kDf
         self.kDataFrame_standardized = copy.deepcopy(kDf)
-        self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_high=np.nan, new_low=np.nan, trend_type=np.nan)
+        self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_high=np.nan, 
+                                                                           new_low=np.nan, 
+                                                                           trend_type=np.nan,
+                                                                           new_index=[i for i in range(len(self.kDataFrame_standardized))])
         self.kDataFrame_marked = None
         self.kDataFrame_xd = None
         self.gap_XD = []
@@ -103,6 +106,10 @@ class KBarProcessor(object):
         pastElemIdx = 0
         firstElemIdx = pastElemIdx+1
         secondElemIdx = firstElemIdx+1
+        new_high_loc = self.kDataFrame_standardized.columns.get_loc('new_high')
+        new_low_loc = self.kDataFrame_standardized.columns.get_loc('new_low')
+        trend_type_loc = self.kDataFrame_standardized.columns.get_loc('trend_type')
+        
         while secondElemIdx < self.kDataFrame_standardized.shape[0]: # xrange
             pastElem = self.kDataFrame_standardized.iloc[pastElemIdx]
             firstElem = self.kDataFrame_standardized.iloc[firstElemIdx]
@@ -112,31 +119,31 @@ class KBarProcessor(object):
                 trend = firstElem.trend_type if not np.isnan(firstElem.trend_type) else self.isBullType(pastElem, firstElem)
                 compare_func = max if trend else min
                 if inclusion_type == InclusionType.firstCsecond:
-                    secondElem.new_high=compare_func(firstElem.high if np.isnan(firstElem.new_high) else firstElem.new_high, secondElem.high if np.isnan(secondElem.new_high) else secondElem.new_high)
-                    secondElem.new_low=compare_func(firstElem.low if np.isnan(firstElem.new_low) else firstElem.new_low, secondElem.low if np.isnan(secondElem.new_low) else secondElem.new_low)
-                    secondElem.trend_type=trend
-                    firstElem.new_high=np.nan
-                    firstElem.new_low=np.nan
+                    self.kDataFrame_standardized.iloc[secondElemIdx,new_high_loc]=compare_func(firstElem.high if np.isnan(firstElem.new_high) else firstElem.new_high, secondElem.high if np.isnan(secondElem.new_high) else secondElem.new_high)
+                    self.kDataFrame_standardized.iloc[secondElemIdx,new_low_loc]=compare_func(firstElem.low if np.isnan(firstElem.new_low) else firstElem.new_low, secondElem.low if np.isnan(secondElem.new_low) else secondElem.new_low)
+                    self.kDataFrame_standardized.iloc[secondElemIdx,trend_type_loc] = trend
+                    self.kDataFrame_standardized.iloc[firstElemIdx, new_high_loc]=np.nan
+                    self.kDataFrame_standardized.iloc[firstElemIdx, new_low_loc]=np.nan
                     ############ manage index for next round ###########
                     firstElemIdx = secondElemIdx
                     secondElemIdx += 1
                 else: 
-                    firstElem.new_high=compare_func(firstElem.high if np.isnan(firstElem.new_high) else firstElem.new_high, secondElem.high if np.isnan(secondElem.new_high) else secondElem.new_high)
-                    firstElem.new_low=compare_func(firstElem.low if np.isnan(firstElem.new_low) else firstElem.new_low, secondElem.low if np.isnan(secondElem.new_low) else secondElem.new_low)                        
-                    firstElem.trend_type=trend
-                    secondElem.new_high=np.nan
-                    secondElem.new_low=np.nan
+                    self.kDataFrame_standardized.iloc[firstElemIdx, new_high_loc]=compare_func(firstElem.high if np.isnan(firstElem.new_high) else firstElem.new_high, secondElem.high if np.isnan(secondElem.new_high) else secondElem.new_high)
+                    self.kDataFrame_standardized.iloc[firstElemIdx, new_low_loc]=compare_func(firstElem.low if np.isnan(firstElem.new_low) else firstElem.new_low, secondElem.low if np.isnan(secondElem.new_low) else secondElem.new_low)                        
+                    self.kDataFrame_standardized.iloc[firstElemIdx,trend_type_loc]=trend
+                    self.kDataFrame_standardized.iloc[secondElemIdx,new_high_loc]=np.nan
+                    self.kDataFrame_standardized.iloc[secondElemIdx,new_low_loc]=np.nan
                     ############ manage index for next round ###########
                     secondElemIdx += 1
             else:
                 if np.isnan(firstElem.new_high): 
-                    firstElem.new_high = firstElem.high 
+                    self.kDataFrame_standardized.iloc[firstElemIdx, new_high_loc] = firstElem.high 
                 if np.isnan(firstElem.new_low): 
-                    firstElem.new_low = firstElem.low
+                    self.kDataFrame_standardized.iloc[firstElemIdx, new_low_loc] = firstElem.low
                 if np.isnan(secondElem.new_high): 
-                    secondElem.new_high = secondElem.high
+                    self.kDataFrame_standardized.iloc[secondElemIdx,new_high_loc] = secondElem.high
                 if np.isnan(secondElem.new_low): 
-                    secondElem.new_low = secondElem.low
+                    self.kDataFrame_standardized.iloc[secondElemIdx,new_low_loc] = secondElem.low
                 ############ manage index for next round ###########
                 pastElemIdx = firstElemIdx
                 firstElemIdx = secondElemIdx
@@ -236,7 +243,6 @@ class KBarProcessor(object):
         
 
     def defineBi(self):
-        self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_index=[i for i in range(len(self.kDataFrame_standardized))])
         self.gap_exists() # work out gap in the original kline
         working_df = self.kDataFrame_standardized[self.kDataFrame_standardized['tb']!=TopBotType.noTopBot]
         
