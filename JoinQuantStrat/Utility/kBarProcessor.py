@@ -40,8 +40,7 @@ class KBarProcessor(object):
         self.kDataFrame_standardized = copy.deepcopy(kDf)
         self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_high=np.nan, 
                                                                            new_low=np.nan, 
-                                                                           trend_type=np.nan,
-                                                                           new_index=[i for i in range(len(self.kDataFrame_standardized))])
+                                                                           trend_type=np.nan)
         self.kDataFrame_marked = None
         self.kDataFrame_xd = None
         self.gap_XD = []
@@ -154,7 +153,11 @@ class KBarProcessor(object):
         self.kDataFrame_standardized['low'] = self.kDataFrame_standardized['new_low']
         self.kDataFrame_standardized.drop(['new_high', 'new_low', 'trend_type'], axis=1, inplace=True)
 
+        # remove standardized kbars
         self.kDataFrame_standardized = self.kDataFrame_standardized[np.isfinite(self.kDataFrame_standardized['high'])]
+
+        # new index add for later distance calculation => straight after standardization
+        self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_index=[i for i in range(len(self.kDataFrame_standardized))])
 
         return self.kDataFrame_standardized
     
