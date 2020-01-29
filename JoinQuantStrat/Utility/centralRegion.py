@@ -86,7 +86,7 @@ class Double_Nodes(object):
         return self.start.time, self.end.time
 
     def work_out_slope(self):
-        return (end.chan_price - start.chan_price) / (end.loc - start.loc)
+        return (self.end.chan_price - self.start.chan_price) / (self.end.loc - self.start.loc)
 
 class XianDuan(Double_Nodes):
     '''
@@ -246,11 +246,13 @@ class ZouShiLeiXing(object):
             i = i + 1
         
         same_direction_nodes = [n for n in all_double_nodes if n.direction == self.direction]
-        if (self.direction == TopBotType.top2bot and same_direction_nodes[-1].end.tb == TopBotType.bot) or\
-            (self.direction == TopBotType.bot2top and same_direction_nodes[-1].end.tb == TopBotType.top):
-            return abs(same_direction_nodes[-1].work_out_slope()) < abs(same_direction_nodes[-3].work_out_slope())
-        else:
+        i = -len(same_direction_nodes)
+        while i < -1:
+            # make sure the slope goes flatten, if not it's NOT exhausted
+            if abs(same_direction_nodes[i+1].work_out_slope()) >= abs(same_direction_nodes[i].work_out_slope()):
             return False
+            i = i + 1
+        return True
         
 
 class ZhongShu(ZouShiLeiXing):
