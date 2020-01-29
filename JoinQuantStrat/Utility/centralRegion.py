@@ -250,7 +250,7 @@ class ZouShiLeiXing(object):
         while i < -1:
             # make sure the slope goes flatten, if not it's NOT exhausted
             if abs(same_direction_nodes[i+1].work_out_slope()) >= abs(same_direction_nodes[i].work_out_slope()):
-            return False
+                return False
             i = i + 1
         return True
         
