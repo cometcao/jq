@@ -228,6 +228,19 @@ class ZouShiLeiXing(object):
     def get_tb_structure(self):
         return [node.tb for node in self.zoushi_nodes]
     
+    def get_loc_diff(self):
+        return self.zoushi_nodes[-1].loc - self.zoushi_nodes[0].loc
+    
+    def get_magnitude(self): 
+        # by our finding of dynamic equilibrium, the magnitude (SHIJIA) is defined as time * price
+        # magnitude is defined using ln same magnitude TODO tested
+        [l, u] = self.get_amplitude_region_original()
+        if self.direction == TopBotType.top2bot:
+            delta = (u-l)/u * 100.0
+        else:
+            delta = (u-l)/l * 100.0
+        return np.log(delta * self.get_loc_diff())
+    
     def check_exhaustion(self):
         '''
         check most recent two XD or BI at current direction on slopes
