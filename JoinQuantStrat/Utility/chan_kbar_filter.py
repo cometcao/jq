@@ -26,7 +26,7 @@ def filter_high_level_by_index(direction=TopBotType.top2bot,
                                     count=max(TYPE_I_NUM, TYPE_III_NUM), 
                                     end_dt=end_dt, 
                                     unit=p,
-                                    fields= ['open',  'high', 'low','close', 'money'], 
+                                    fields= ['open',  'high', 'low','close'], 
                                     df = df)
             for ct in chan_types:
                 if KBar.filter_high_level_kbar(stock_high, 
