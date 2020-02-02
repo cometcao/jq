@@ -653,6 +653,15 @@ class NestedInterval():
             self.df_zoushi_tuple_list.append((xd_df,anal_zoushi))
     
     def analyze_zoushi(self, direction, chan_type = Chan_Type.INVALID):
+        '''
+        The code original designed for more than two levels
+        1. check high level chan type
+        2. check sub level exhaustion
+        return value:
+        a. At current two level trading point
+        b. top level chan types
+        '''
+        
         anal_result = True
         if self.isdebug:
             print("looking for {0} at top level {1} point with type:{2}".format("long" if direction == TopBotType.top2bot else "short",
@@ -697,13 +706,13 @@ class NestedInterval():
                 eq = Equilibrium(xd_df_low, split_anal_zoushi_result, isdebug=self.isdebug, isDescription=self.isDescription)
                 low_exhausted = eq.define_equilibrium(direction, check_tb_structure=True, check_xd_exhaustion=True)
                 if self.isDescription or self.isdebug:
-                    print("Sub level {0} {1}".format(self.periods[i], "exhausted" if low_exhausted else "continues"))
+                    print("Sub level {0} {1} {2}".format(self.periods[i], eq.isQvShi,"exhausted" if low_exhausted else "continues"))
                 if not low_exhausted:
                     return False, chan_types
                 # update split time for next level
                 i = i + 1
                 if i < len(self.df_zoushi_tuple_list):
-                    split_time = split_anal_zoushi_low.sub_zoushi_time(Chan_Type.INVALID, direction)
+                    split_time = anal_zoushi_low.sub_zoushi_time(Chan_Type.INVALID, direction)
         return anal_result, chan_types
     
     def indepth_analyze_zoushi(self, direction, period):
