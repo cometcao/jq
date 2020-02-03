@@ -65,6 +65,7 @@ class Global_variable(object):
     market_timing_check = {}
     stock_index_dict = {}
     position_proportion = {} # 仓位控制比例
+    stock_chan_type = {} # record chan types
 
     def __init__(self, owner):
         self._owner = owner

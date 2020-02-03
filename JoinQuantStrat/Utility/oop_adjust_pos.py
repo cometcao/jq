@@ -98,7 +98,6 @@ class Period_condition(Weight_Base):
 
 '''===================================调仓相关============================'''
 
-
 # '''---------------卖出股票规则--------------'''
 class Sell_stocks(Rule):
     def __init__(self, params):
@@ -754,3 +753,57 @@ class Buy_stocks_pair(Buy_stocks_var):
 
     def __str__(self):
         return '股票调仓买入规则：配对交易买入'
+
+
+
+class Short_Chan(Sell_stocks):
+    def __init__(self, params):
+        Sell_stocks.__init__(self, params)
+    
+    def handle_data(self, context, data):
+        to_check = context.portfolio.positions.keys()
+        for stock in to_check:
+            result = check_chan_indepth(stock,
+                                      end_time=context.current_dt, 
+                                      period=self.period, 
+                                      count=3000, 
+                                      direction=TopBotType.bot2top,
+                                      isdebug=self.is_debug)
+            if result:
+                self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+            else:
+                chan_t, chan_d, chan_p = self.g.stock_chan_type[stock][0]
+                position_time = context.portfolio.positions[stock].transact_time
+                if chan_t == Chan_Type.I:
+                    stock_data = attribute_history(stock,240, unit='1m', fields=('high'), skip_paused=True, df=True)
+                    if stock_data.loc[position_time, 'high'].max() > chan_p:
+                        self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+            
+    def __str__(self):
+        return '缠论调仓卖出规则'
+
+
+class Long_Chan(Buy_stocks_portion):
+    def __init__(self, params):
+        Buy_stocks_portion.__init__(self, params)
+        self.buy_count = params.get('buy_count', 3)
+        self.to_buy = []
+        
+    def handle_data(self, context, data):
+        if self.is_to_return:
+            self.log_warn('无法执行买入!! self.is_to_return 未开启')
+            return
+
+        self.to_buy = self.g.monitor_buy_list
+        type_I_stocks = []
+        for stock in self.to_buy:
+            # only check the top level in our case 5m level
+            if Chan_Type.I in self.g.stock_chan_type[stock][0]:
+                type_I_stocks.append(stock)
+                self.to_buy.remove(stock)
+        self.to_buy = type_I_stocks + self.to_buy
+        self.adjust(context, data, to_buy)
+        
+    def __str__(self):
+        return '缠论调仓买入规则'
+  

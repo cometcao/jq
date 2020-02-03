@@ -20,6 +20,7 @@ from pair_trading_ols import *
 from value_factor_lib import *
 from quant_lib import *
 from functools import reduce
+from centralRegion import Chan_Type
 
 
 '''=========================选股规则相关==================================='''
@@ -305,6 +306,48 @@ class Filter_financial_data(Early_Filter_stock_list):
             s += '参数错误'
         return s    
 
+
+################## Chan Filter ##################
+class Pick_Chan_Stocks(Create_stock_list):
+    def __init__(self, params):
+        Create_stock_list.__init__(self, params)
+        self.index = params.get('stock_index', '000985.XSHG')
+        self.periods = params.get('periods', ['1w'])
+        self.chan_types = params.get('chan_types', [Chan_Type.III, Chan_Type.I])
+        
+    def update_params(self, context, params):
+        pass
+    
+    def before_trading_start(self, context):
+        stock_list = filter_high_level_by_index(direction=TopBotType.top2bot, 
+                                   stock_index=self.index, 
+                                   df=False, 
+                                   periods = self.periods,
+                                   end_dt=context.current_dt, #strftime("%Y-%m-%d %H:%M:%S")
+                                   chan_types=self.chan_types)
+        
+        for stock in stock_list:
+            result, stock_profile = check_stock_full(stock,
+                                                      end_time=context.current_dt, 
+                                                      periods=['5m', '1m'], 
+                                                      count=3000, 
+                                                      direction=TopBotType.top2bot,
+                                                      isdebug=self.is_debug)
+            if result:
+                self.g.stock_chan_type[stock] = stock_profile
+        if self.is_debug:
+            print(str(self.g.stock_chan_type))
+        return list(self.g.stock_chan_type.keys())
+
+    def after_trading_end(self, context):
+        holding_pos = context.portfolio.positions.keys()
+        stored_stocks = list(self.g.stock_chan_type.keys())
+        to_be_removed = [stock for stock in stored_stocks if stock not in holding_pos]
+        [self.g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
+    
+    def __str__(self):
+        return "Chan Selection Params: {0}, {1}, {2}".format(self.index, self.periods, self.chan_types)
+
 ################## 缠论强势板块 #################
 class Pick_rank_sector(Create_stock_list):
     def __init__(self, params):
@@ -559,7 +602,30 @@ class Pick_stock_list_from_file(Filter_stock_list):
     def __str__(self):
         return "从文件中读取已经写好的股票列表"
         
-    
+class Filter_Chan_Stocks(Filter_stock_list):
+    def __init__(self, params):
+        Filter_stock_list.__init__(self, params)
+        self.period = params.get('period', '1m')
+        self.is_debug = params.get('is_debug', False)
+        
+    def filter(self, context, data, stock_list):
+        filter_stock_list = []
+        for stock in stock_list:
+            result = check_chan_indepth(stock,
+                                      end_time=context.current_dt, 
+                                      period=self.period, 
+                                      count=3000, 
+                                      direction=TopBotType.top2bot,
+                                      isdebug=self.is_debug)
+            if result:
+                filter_stock_list.append(stock)
+        if self.is_debug:
+            print("Stocks ready: {0}".format(filter_stock_list))
+        return filter_stock_list
+
+    def __str__(self):
+        return "Chan Filter Params: {0}".format( self.period)
+
 class Filter_Pair_Trading(Filter_stock_list):
     def __init__(self, params):
         Filter_stock_list.__init__(self, params)
