@@ -604,6 +604,7 @@ class Set_sys_params(Rule):
         try:
             # 一律使用真实价格
             set_option('use_real_price', self._params.get('use_real_price', True))
+            set_option("avoid_future_data", True)
         except:
             pass
         try:
@@ -616,8 +617,6 @@ class Set_sys_params(Rule):
             set_benchmark(self._params.get('benchmark', '000300.XSHG'))
         except:
             pass
-            # set_benchmark('399006.XSHE')
-            # set_slippage(FixedSlippage(0.04))
 
     def __str__(self):
         return '设置系统参数：[使用真实价格交易] [忽略order 的 log] [设置基准]'
