@@ -317,6 +317,7 @@ class Pick_Chan_Stocks(Create_stock_list):
         self.periods = params.get('periods', ['1w'])
         self.chan_types = params.get('chan_types', [Chan_Type.I,Chan_Type.III])
         self.is_debug = params.get('isdebug', False)
+        self.num_of_stocks = params.get('number_of_stock', 8)
         
     def update_params(self, context, params):
         pass
@@ -329,11 +330,12 @@ class Pick_Chan_Stocks(Create_stock_list):
                                    end_dt=context.current_dt, #strftime("%Y-%m-%d %H:%M:%S")
                                    chan_types=self.chan_types)
         stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
+        stock_list = stock_list[:self.num_of_stocks]
         for stock in stock_list:
             result, chan_type, split_time = check_chan_by_type_exhaustion(stock,
                                                                           end_time=context.current_dt, 
                                                                           periods=['5m'], 
-                                                                          count=1500, 
+                                                                          count=2000, 
                                                                           direction=TopBotType.top2bot,
                                                                           chan_type=self.chan_types,
                                                                           isdebug=self.is_debug, 
@@ -612,6 +614,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         Filter_stock_list.__init__(self, params)
         self.period = params.get('period', '1m')
         self.isdebug = params.get('isdebug', False)
+        self.chan_type = params.get('chan_type', Chan_Type.I)
         
     def filter(self, context, data, stock_list):
         filter_stock_list = []
@@ -622,6 +625,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                       periods=[self.period], 
                                       count=2000, 
                                       direction=TopBotType.top2bot,
+                                      chan_type=self.chan_type,
                                       isdebug=self.isdebug, 
                                       is_anal=False,
                                       split_time=self.g.stock_chan_type[stock][1])

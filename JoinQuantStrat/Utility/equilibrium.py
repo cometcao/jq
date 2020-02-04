@@ -69,7 +69,7 @@ def check_chan_indepth(stock, end_time, period, count, direction, isdebug=False,
                         isAnal=is_anal)
     return ni.indepth_analyze_zoushi(direction)
 
-def check_stock_sub(stock, end_time, periods, count=2000, direction=TopBotType.top2bot, isdebug=False, is_anal=False, split_time=None):
+def check_stock_sub(stock, end_time, periods, count=2000, direction=TopBotType.top2bot, chan_type=Chan_Type.INVALID, isdebug=False, is_anal=False, split_time=None):
     print("check_stock_sub working on stock: {0} at {1}".format(stock, periods))
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
@@ -82,6 +82,7 @@ def check_stock_sub(stock, end_time, periods, count=2000, direction=TopBotType.t
     for pe in periods:
         exhausted, chan_types, split_time = ni.full_check_zoushi(pe, 
                                                              direction, 
+                                                             chan_type=chan_type,
                                                              check_end_tb=True, 
                                                              check_tb_structure=True, 
                                                              check_xd_exhaustion=True, 
@@ -847,7 +848,12 @@ class NestedInterval():
         
         return bi_exhausted
 
-    def full_check_zoushi(self, period, direction, check_end_tb=False, check_tb_structure=False, check_xd_exhaustion=False, split_time=None):
+    def full_check_zoushi(self, period, direction, 
+                          chan_type=Chan_Type.INVALID,
+                          check_end_tb=False, 
+                          check_tb_structure=False, 
+                          check_xd_exhaustion=False, 
+                          split_time=None):
         '''
         return current level:
         a exhausted(bool)
@@ -871,12 +877,21 @@ class NestedInterval():
         if top_chan_types:
             chan_types = top_chan_types
         
-        for _, chan_d, _ in chan_types: # early checks if we have any types found with opposite direction, no need to go further
+        found_chan_type = False
+        for chan_t, chan_d, _ in chan_types: # early checks if we have any types found with opposite direction, no need to go further
             if chan_d == TopBotType.reverse(direction):
                 if self.isdebug:
                     print("opposite direction chan type found")
                 return False, chan_types, None
+            
+            if chan_type != Chan_Type.INVALID and chan_t == chan_type:
+                found_chan_type = True
         
+        if not found_chan_type:
+            if self.isdebug:
+                print("chan type {0} not found".format(chan_type))
+            return False, chan_types, None
+
         # only type II and III can coexist, only need to check the first one
         # reverse direction case are dealt above
         chan_t, chan_d, chan_p = chan_types[0] 
