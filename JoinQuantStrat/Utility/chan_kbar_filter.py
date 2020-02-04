@@ -177,7 +177,7 @@ class KBar(object):
         result = False
         num_of_kbar = TYPE_III_NUM if chan_type == Chan_Type.III else TYPE_I_NUM
         if df:
-            if high_df.shape[0] >= 4:
+            if high_df.shape[0] >= num_of_kbar:
                 i = -num_of_kbar
                 kbar_list = []
                 while i <= -1:
@@ -189,7 +189,7 @@ class KBar(object):
                 elif chan_type == Chan_Type.I:
                     result = cls.chan_type_I_check(kbar_list, direction)
         else:
-            if len(high_df['open']) >= 4:
+            if len(high_df['open']) >= num_of_kbar:
                 kbar_list = cls.create_N_kbar(high_df, n=num_of_kbar)
                 if chan_type == Chan_Type.III:
                     result = cls.chan_type_III_check(kbar_list, direction)
