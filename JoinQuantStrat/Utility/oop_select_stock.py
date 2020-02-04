@@ -315,7 +315,7 @@ class Pick_Chan_Stocks(Create_stock_list):
         Create_stock_list.__init__(self, params)
         self.index = params.get('stock_index', '000985.XSHG')
         self.periods = params.get('periods', ['1w'])
-        self.chan_types = params.get('chan_types', [Chan_Type.III, Chan_Type.I])
+        self.chan_types = params.get('chan_types', [Chan_Type.I,Chan_Type.III])
         self.is_debug = params.get('isdebug', False)
         
     def update_params(self, context, params):
@@ -330,15 +330,16 @@ class Pick_Chan_Stocks(Create_stock_list):
                                    chan_types=self.chan_types)
         
         for stock in stock_list:
-            result, stock_profile = check_stock_full(stock,
-                                                      end_time=context.current_dt, 
-                                                      periods=['5m', '1m'], 
-                                                      count=2000, 
-                                                      direction=TopBotType.top2bot,
-                                                      isdebug=self.is_debug, 
-                                                      is_anal=False)
+            result, chan_type, split_time = check_chan_by_type_exhaustion(stock,
+                                                                          end_time=context.current_dt, 
+                                                                          periods=['5m'], 
+                                                                          count=2000, 
+                                                                          direction=TopBotType.top2bot,
+                                                                          chan_type=self.chan_types,
+                                                                          isdebug=self.is_debug, 
+                                                                          is_anal=False)
             if result:
-                self.g.stock_chan_type[stock] = stock_profile
+                self.g.stock_chan_type[stock] = (chan_type, split_time)
         if self.is_debug:
             print(str(self.g.stock_chan_type))
         return list(self.g.stock_chan_type.keys())
@@ -610,20 +611,22 @@ class Filter_Chan_Stocks(Filter_stock_list):
     def __init__(self, params):
         Filter_stock_list.__init__(self, params)
         self.period = params.get('period', '1m')
-        self.is_debug = params.get('is_debug', False)
+        self.isdebug = params.get('isdebug', False)
         
     def filter(self, context, data, stock_list):
         filter_stock_list = []
         for stock in stock_list:
-            result = check_chan_indepth(stock,
+            result = check_stock_sub(stock,
                                       end_time=context.current_dt, 
-                                      period=self.period, 
-                                      count=3000, 
+                                      periods=[self.period], 
+                                      count=2000, 
                                       direction=TopBotType.top2bot,
-                                      isdebug=self.is_debug)
+                                      isdebug=self.isdebug, 
+                                      is_anal=False,
+                                      split_time=self.g.stock_chan_type[stock][1])
             if result:
                 filter_stock_list.append(stock)
-        if self.is_debug:
+        if self.isdebug:
             print("Stocks ready: {0}".format(filter_stock_list))
         return filter_stock_list
 
