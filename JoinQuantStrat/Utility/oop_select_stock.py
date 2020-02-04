@@ -333,7 +333,7 @@ class Pick_Chan_Stocks(Create_stock_list):
             result, chan_type, split_time = check_chan_by_type_exhaustion(stock,
                                                                           end_time=context.current_dt, 
                                                                           periods=['5m'], 
-                                                                          count=2000, 
+                                                                          count=1500, 
                                                                           direction=TopBotType.top2bot,
                                                                           chan_type=self.chan_types,
                                                                           isdebug=self.is_debug, 
