@@ -802,7 +802,7 @@ class Long_Chan(Buy_stocks_portion):
                 type_I_stocks.append(stock)
                 self.to_buy.remove(stock)
         self.to_buy = type_I_stocks + self.to_buy
-        self.adjust(context, data, to_buy)
+        self.adjust(context, data, self.to_buy)
         
     def __str__(self):
         return '缠论调仓买入规则'

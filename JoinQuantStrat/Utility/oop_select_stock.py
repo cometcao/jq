@@ -21,6 +21,8 @@ from value_factor_lib import *
 from quant_lib import *
 from functools import reduce
 from centralRegion import Chan_Type
+from chan_kbar_filter import *
+from equilibrium import *
 
 
 '''=========================选股规则相关==================================='''
@@ -314,6 +316,7 @@ class Pick_Chan_Stocks(Create_stock_list):
         self.index = params.get('stock_index', '000985.XSHG')
         self.periods = params.get('periods', ['1w'])
         self.chan_types = params.get('chan_types', [Chan_Type.III, Chan_Type.I])
+        self.is_debug = params.get('isdebug', False)
         
     def update_params(self, context, params):
         pass
@@ -330,9 +333,10 @@ class Pick_Chan_Stocks(Create_stock_list):
             result, stock_profile = check_stock_full(stock,
                                                       end_time=context.current_dt, 
                                                       periods=['5m', '1m'], 
-                                                      count=3000, 
+                                                      count=2000, 
                                                       direction=TopBotType.top2bot,
-                                                      isdebug=self.is_debug)
+                                                      isdebug=self.is_debug, 
+                                                      is_anal=False)
             if result:
                 self.g.stock_chan_type[stock] = stock_profile
         if self.is_debug:
