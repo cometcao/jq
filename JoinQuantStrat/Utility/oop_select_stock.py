@@ -328,7 +328,7 @@ class Pick_Chan_Stocks(Create_stock_list):
                                    periods = self.periods,
                                    end_dt=context.current_dt, #strftime("%Y-%m-%d %H:%M:%S")
                                    chan_types=self.chan_types)
-        
+        stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
         for stock in stock_list:
             result, chan_type, split_time = check_chan_by_type_exhaustion(stock,
                                                                           end_time=context.current_dt, 
@@ -615,6 +615,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
     def filter(self, context, data, stock_list):
         filter_stock_list = []
+        stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
         for stock in stock_list:
             result = check_stock_sub(stock,
                                       end_time=context.current_dt, 

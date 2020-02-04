@@ -15,6 +15,8 @@ from oop_strategy_frame import *
 from position_control_analysis import *
 from rsrs_timing import *
 from centralRegion import Chan_Type
+from equilibrium import check_chan_indepth
+from biaoLiStatus import TopBotType
 import json
 
 '''==================================调仓条件相关规则========================================='''
@@ -279,7 +281,8 @@ class Buy_stocks_portion(Buy_stocks):
                     if stock in self.g.sell_stocks:
                         continue
                     if context.subportfolios[pindex].long_positions[stock].total_amount == 0:
-                        buy_portion = portion_gen.next()
+                        buy_portion = next(portion_gen)
+#                         buy_portion = portion_gen.next()
                         value = available_cash * buy_portion
                         if self.g.open_position(self, stock, value, pindex):
                             if len(context.subportfolios[pindex].long_positions) == self.buy_count:
@@ -760,24 +763,28 @@ class Buy_stocks_pair(Buy_stocks_var):
 class Short_Chan(Sell_stocks):
     def __init__(self, params):
         Sell_stocks.__init__(self, params)
+        self.period = params.get('period', '1m')
+        self.isdebug = params.get('isdebug', False)
     
     def handle_data(self, context, data):
         to_check = context.portfolio.positions.keys()
+        to_check = [stock for stock in to_check if context.portfolio.positions[stock].closeable_amount > 0]
         for stock in to_check:
+            position_time = context.portfolio.positions[stock].transact_time
             result = check_chan_indepth(stock,
                                       end_time=context.current_dt, 
                                       period=self.period, 
-                                      count=3000, 
+                                      count=2000, 
                                       direction=TopBotType.bot2top,
-                                      isdebug=self.is_debug)
+                                      isdebug=self.isdebug, 
+                                      is_anal=False)
             if result:
                 self.g.close_position(self, context.portfolio.positions[stock], True, 0)
             else:
-                chan_t, chan_d, chan_p = self.g.stock_chan_type[stock][0]
-                position_time = context.portfolio.positions[stock].transact_time
+                chan_t, chan_d, chan_p = self.g.stock_chan_type[stock][0][0]
                 if chan_t == Chan_Type.I:
                     stock_data = attribute_history(stock,240, unit='1m', fields=('high'), skip_paused=True, df=True)
-                    if stock_data.loc[position_time, 'high'].max() > chan_p:
+                    if stock_data.loc[position_time:, 'high'].max() > chan_p:
                         self.g.close_position(self, context.portfolio.positions[stock], True, 0)
             
     def __str__(self):
@@ -799,7 +806,7 @@ class Long_Chan(Buy_stocks_portion):
         type_I_stocks = []
         for stock in self.to_buy:
             # only check the top level in our case 5m level
-            if Chan_Type.I in self.g.stock_chan_type[stock][0]:
+            if Chan_Type.I in self.g.stock_chan_type[stock][0][0]:
                 type_I_stocks.append(stock)
                 self.to_buy.remove(stock)
         self.to_buy = type_I_stocks + self.to_buy

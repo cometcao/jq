@@ -29,7 +29,7 @@ def check_chan_type(stock, end_time, count, period, direction, chan_type, isdebu
     return False
 
 def check_chan_exhaustion(stock, end_time, count, period, direction, isdebug=False, is_anal=True):
-    print("working on stock: {0}, {1}".format(stock, period))
+    print("check_chan_exhaustion working on stock: {0}, {1}".format(stock, period))
     if is_anal:
         stock_df = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close'],skip_paused=True)
     else:
@@ -47,7 +47,7 @@ def check_chan_exhaustion(stock, end_time, count, period, direction, isdebug=Fal
         return False
 
 def check_chan_by_type_exhaustion(stock, end_time, periods, count, direction, chan_type, isdebug=False, is_anal=False):
-    print("working on stock: {0} at {1}".format(stock, periods))
+    print("check_chan_by_type_exhaustion working on stock: {0} at {1}".format(stock, periods))
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
                         periods=periods, 
@@ -59,7 +59,7 @@ def check_chan_by_type_exhaustion(stock, end_time, periods, count, direction, ch
     return ni.analyze_zoushi(direction, chan_type)
 
 def check_chan_indepth(stock, end_time, period, count, direction, isdebug=False, is_anal=False):
-    print("working on stock: {0}".format(stock))
+    print("check_chan_indepth working on stock: {0} at {1}".format(stock, period))
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
                         periods=[period], 
@@ -70,7 +70,7 @@ def check_chan_indepth(stock, end_time, period, count, direction, isdebug=False,
     return ni.indepth_analyze_zoushi(direction)
 
 def check_stock_sub(stock, end_time, periods, count=2000, direction=TopBotType.top2bot, isdebug=False, is_anal=False, split_time=None):
-    print("working on stock: {0} at {1}".format(stock, periods))
+    print("check_stock_sub working on stock: {0} at {1}".format(stock, periods))
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
                         periods=periods, 
@@ -93,7 +93,7 @@ def check_stock_sub(stock, end_time, periods, count=2000, direction=TopBotType.t
     
 
 def check_stock_full(stock, end_time, periods=['5m', '1m'], count=2000, direction=TopBotType.top2bot, isdebug=False, is_anal=False):
-    print("working on stock: {0}".format(stock))
+    print("check_stock_full working on stock: {0} at {1}".format(stock, periods))
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
                         periods=periods, 
