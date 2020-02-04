@@ -14,6 +14,7 @@ from ta_analysis import *
 from oop_strategy_frame import *
 from position_control_analysis import *
 from rsrs_timing import *
+from centralRegion import Chan_Type
 import json
 
 '''==================================调仓条件相关规则========================================='''
