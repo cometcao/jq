@@ -877,7 +877,7 @@ class NestedInterval():
         if top_chan_types:
             chan_types = top_chan_types
         
-        found_chan_type = False
+        found_chan_type = chan_type == Chan_Type.INVALID
         for chan_t, chan_d, _ in chan_types: # early checks if we have any types found with opposite direction, no need to go further
             if chan_d == TopBotType.reverse(direction):
                 if self.isdebug:
