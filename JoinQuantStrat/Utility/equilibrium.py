@@ -554,18 +554,18 @@ class Equilibrium():
             
             if type(self.analytic_result[-1]) is ZhongShu: # last XD in zhong shu must make top or bot
                 zs = self.analytic_result[-1]
-                [l,u] = zs.get_amplitude_region_original()
+#                 [l,u] = zs.get_amplitude_region_original()
                 [lc, uc] = zs.get_core_region()
                 if zs.is_complex_type() and len(zs.extra_nodes) >= 1:
                     if zs.extra_nodes[-1].tb == TopBotType.bot and\
                         zs.direction == TopBotType.top2bot and\
-                        zs.extra_nodes[-1].chan_price == l:
+                        zs.extra_nodes[-1].chan_price < lc:
                         if self.isdebug:
                             print("TYPE I trade point 3")
                         all_types.append((Chan_Type.I, TopBotType.top2bot, lc))
                     elif zs.direction == TopBotType.bot2top and\
                         zs.extra_nodes[-1].tb == TopBotType.top and\
-                        zs.extra_nodes[-1].chan_price == u:
+                        zs.extra_nodes[-1].chan_price > uc:
                         all_types.append((Chan_Type.I, TopBotType.bot2top, uc))
                         if self.isdebug:
                             print("TYPE I trade point 4")
@@ -782,7 +782,7 @@ class NestedInterval():
         if not chan_types:
             return False, chan_types, None
         for _, chan_d,_ in chan_types: # early checks if we have any types found with opposite direction, no need to go further
-            if chan_d != direction:
+            if chan_d == TopBotType.reverse(direction):
                 if self.isdebug:
                     print("opposite direction chan type found")
                 return False, chan_types, None
@@ -868,13 +868,11 @@ class NestedInterval():
                          isdebug=self.isdebug, 
                          isDescription=self.isDescription)
         top_chan_types = eq.check_chan_type(check_end_tb=check_end_tb)
-        if not top_chan_types:
-            return False, chan_types, None
-        else:
+        if top_chan_types:
             chan_types = top_chan_types
         
         for _, chan_d, _ in chan_types: # early checks if we have any types found with opposite direction, no need to go further
-            if chan_d != direction:
+            if chan_d == TopBotType.reverse(direction):
                 if self.isdebug:
                     print("opposite direction chan type found")
                 return False, chan_types, None
