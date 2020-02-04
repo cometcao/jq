@@ -1,3 +1,9 @@
+try:
+    from kuanke.user_space_api import *         
+except ImportError as ie:
+    print(str(ie))
+from jqdata import *
+
 from biaoLiStatus import * 
 from kBarProcessor import *
 from centralRegion import *
@@ -5,8 +11,11 @@ from centralRegion import *
 import numpy as np
 import pandas as pd
 
-def check_chan_type(stock, end_time, count, period, direction, chan_type, isdebug=False):
-    stock_high = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close'], skip_paused=True)
+def check_chan_type(stock, end_time, count, period, direction, chan_type, isdebug=False, is_anal=True):
+    if is_anal:
+        stock_high = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close'], skip_paused=True)
+    else:
+        stock_high = attribute_history(stock, count=count, unit=period,fields= ['open',  'high', 'low','close'], skip_paused=True)
     kb_high = KBarProcessor(stock_high, isdebug=isdebug)
     xd_df_high = kb_high.getIntegradedXD()
     crp_high = CentralRegionProcess(xd_df_high, isdebug=isdebug, use_xd=True)
@@ -19,8 +28,11 @@ def check_chan_type(stock, end_time, count, period, direction, chan_type, isdebu
                 return True
     return False
 
-def check_chan_exhaustion(stock, end_time, count, period, direction, isdebug=False):
-    stock_df = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close'],skip_paused=True)
+def check_chan_exhaustion(stock, end_time, count, period, direction, isdebug=False, is_anal=True):
+    if is_anal:
+        stock_df = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close'],skip_paused=True)
+    else:
+        stock_df = attribute_history(stock, count=count, unit=period, fields= ['open',  'high', 'low','close'],skip_paused=True)
     kb = KBarProcessor(stock_df, isdebug=isdebug)
     xd_df = kb.getIntegradedXD()
     
@@ -33,31 +45,36 @@ def check_chan_exhaustion(stock, end_time, count, period, direction, isdebug=Fal
     else:
         return False
 
-def check_chan_by_type_exhaustion(stock, end_time, periods, count, direction, chan_type, isdebug=False):
+def check_chan_by_type_exhaustion(stock, end_time, periods, count, direction, chan_type, isdebug=False, is_anal=False):
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
                         periods=periods, 
                         count=count, 
                         isdebug=isdebug, 
-                        isDescription=True)
+                        isDescription=True,
+                        isAnal=is_anal)
+    
     return ni.analyze_zoushi(direction, chan_type)
 
-def check_chan_indepth(stock, end_time, period, count, direction, isdebug=False):
+def check_chan_indepth(stock, end_time, period, count, direction, isdebug=False, is_anal=False):
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
                         periods=[period], 
                         count=count, 
                         isdebug=isdebug, 
-                        isDescription=True)
+                        isDescription=True,
+                        isAnal=is_anal)
     return ni.indepth_analyze_zoushi(direction)
 
-def check_stock_full(stock, end_time, periods=['5m', '1m'], count=2000, direction=TopBotType.top2bot, isdebug=False):
+def check_stock_full(stock, end_time, periods=['5m', '1m'], count=2000, direction=TopBotType.top2bot, isdebug=False, is_anal=False):
+    print("working on stock: {0}".format(stock))
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
                         periods=periods, 
                         count=count,
                         isdebug=isdebug, 
-                        isDescription=True)
+                        isDescription=True,
+                        isAnal=is_anal)
     
     top_pe = periods[0]
     exhausted, chan_types, splitTime = ni.full_check_zoushi(top_pe, 
@@ -689,11 +706,12 @@ class NestedInterval():
     current_level -> XD -> BI
     periods goes from high to low level
     '''
-    def __init__(self, stock, end_dt, periods, count=2000, isdebug=False, isDescription=True):
+    def __init__(self, stock, end_dt, periods, count=2000, isdebug=False, isDescription=True, isAnal=True):
         self.stock = stock
         self.end_dt = end_dt
         self.periods = periods
         self.count = count
+        self.is_anal = isAnal
 
         self.isdebug = isdebug
         self.isDescription = isDescription
@@ -704,7 +722,10 @@ class NestedInterval():
     
     def prepare_data(self):
         for pe in self.periods:
-            stock_df = get_price(self.stock, count=self.count, end_date=self.end_dt, frequency=pe,fields= ['open',  'high', 'low','close'],skip_paused=True)
+            if self.is_anal:
+                stock_df = get_price(self.stock, count=self.count, end_date=self.end_dt, frequency=pe,fields= ['open',  'high', 'low','close'],skip_paused=True)
+            else:
+                stock_df = attribute_history(self.stock, count=self.count, unit=pe,fields= ['open',  'high', 'low','close'],skip_paused=True)
             kb_df = KBarProcessor(stock_df, isdebug=self.isdebug)
             xd_df = kb_df.getIntegradedXD()
             crp_df = CentralRegionProcess(xd_df, isdebug=self.isdebug, use_xd=True)
