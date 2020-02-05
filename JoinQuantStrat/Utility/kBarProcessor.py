@@ -24,6 +24,7 @@ def synchClosePrice(open, close, high, low):
     else:
         return low    
 
+MIN_PRICE_UNIT=0.01
 
 class KBarProcessor(object):
     '''
@@ -225,7 +226,7 @@ class KBarProcessor(object):
         
 
     def gap_exists(self):
-        self.kDataFrame_origin.loc[:, 'gap'] = ((self.kDataFrame_origin['low'] - self.kDataFrame_origin['high'].shift(1)) > 0) | ((self.kDataFrame_origin['high'] - self.kDataFrame_origin['low'].shift(1)) < 0)
+        self.kDataFrame_origin.loc[:, 'gap'] = ((self.kDataFrame_origin['low'] - self.kDataFrame_origin['high'].shift(1)) > MIN_PRICE_UNIT) | ((self.kDataFrame_origin['high'] - self.kDataFrame_origin['low'].shift(1)) < -MIN_PRICE_UNIT)
 #         if self.isdebug:
 #             print(self.kDataFrame_origin[self.kDataFrame_origin['gap']==True])
 
@@ -241,7 +242,7 @@ class KBarProcessor(object):
         # the gap take the pure range between two klines including the range of kline themself, 
         # ############# pure gap of high_s1, low / high, low_s1
         # ########## gap with kline low_s1, high / high_s1, low
-        gap_working_df['gap_range'] = gap_working_df.apply(lambda row: (row['high_s1'], row['low']) if (row['low'] - row['high_s1']) > 0 else (row['high'], row['low_s1']) if (row['high'] - row['low_s1']) < 0 else np.nan, axis=1)
+        gap_working_df['gap_range'] = gap_working_df.apply(lambda row: (row['high_s1'], row['low']) if (row['low'] - row['high_s1']) > MIN_PRICE_UNIT else (row['high'], row['low_s1']) if (row['high'] - row['low_s1']) < -MIN_PRICE_UNIT else np.nan, axis=1)
         return gap_working_df[gap_working_df['gap'] == True]['gap_range'].tolist()
         
 
