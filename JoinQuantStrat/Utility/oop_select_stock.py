@@ -615,9 +615,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.period = params.get('period', '1m')
         self.isdebug = params.get('isdebug', False)
         self.chan_type = params.get('chan_type', Chan_Type.I)
+        self.long_stock_num = params.get('long_stock_num', 0)
         
     def filter(self, context, data, stock_list):
         filter_stock_list = []
+        if len(context.portfolio.positions) == self.long_stock_num != 0:
+            return filter_stock_list
         stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
         for stock in stock_list:
             result = check_stock_sub(stock,

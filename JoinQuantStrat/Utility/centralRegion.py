@@ -211,7 +211,8 @@ class ZouShiLeiXing(object):
             return 0
         
         [min_price, max_price] = self.get_amplitude_region()
-        return (max_price - min_price) / off_set
+        delta = 100 * (((max_price - min_price) / max_price) if self.direction == TopBotType.top2bot else ((max_price-min_price) / min_price))
+        return delta / off_set
     
     def get_macd_acc(self):
         top_nodes = [node for node in self.zoushi_nodes if node.tb == TopBotType.top]
@@ -239,7 +240,8 @@ class ZouShiLeiXing(object):
             delta = (u-l)/u * 100.0
         else:
             delta = (u-l)/l * 100.0
-        return np.log(delta * self.get_loc_diff())
+        loc_diff = self.get_loc_diff()
+        return np.log10(delta * loc_diff)
     
     def check_exhaustion(self):
         '''

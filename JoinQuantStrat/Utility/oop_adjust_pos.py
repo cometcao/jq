@@ -779,12 +779,14 @@ class Short_Chan(Sell_stocks):
                                       isdebug=self.isdebug, 
                                       is_anal=False)
             if result:
+                print("exhausted at {0} level".format(self.period))
                 self.g.close_position(self, context.portfolio.positions[stock], True, 0)
             else:
                 chan_t, chan_d, chan_p = self.g.stock_chan_type[stock][0][0]
                 if chan_t == Chan_Type.I:
                     stock_data = attribute_history(stock,240, unit='1m', fields=('high'), skip_paused=True, df=True)
                     if stock_data.loc[position_time:, 'high'].max() > chan_p:
+                        print("reached target price: {0}".format(chan_p))
                         self.g.close_position(self, context.portfolio.positions[stock], True, 0)
             
     def __str__(self):
