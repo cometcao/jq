@@ -90,6 +90,7 @@ def check_stock_sub(stock,
                         isdebug=isdebug, 
                         isDescription=True,
                         isAnal=is_anal, 
+                        use_xd=True,
                         initial_pe_prep=periods[0],
                         initial_split_time=split_time)
     i = 0
@@ -530,7 +531,7 @@ class Equilibrium():
             return exhaustion_result
         
         if np.sign(latest_slope) == np.sign(zslx_slope) and abs(latest_slope) < abs(zslx_slope):
-            if self.isdebug or self.isDescription:
+            if self.isdebug:
                 print("exhaustion found by reduced slope: {0} {1}".format(zslx_slope, latest_slope))
             exhaustion_result = True
 
@@ -538,13 +539,13 @@ class Equilibrium():
             zslx_macd = zslx_a.get_macd_acc()
             latest_macd = zslx_c.get_macd_acc()
             exhaustion_result = abs(zslx_macd) > abs(latest_macd)
-            if self.isdebug or self.isDescription:
+            if self.isdebug:
                 print("{0} found by macd: {1}, {2}".format("exhaustion" if exhaustion_result else "exhaustion not", zslx_macd, latest_macd))
             
         
         if exhaustion_result and check_xd_exhaustion:
             exhaustion_result = zslx_c.check_exhaustion()
-            if self.isdebug or self.isDescription:
+            if self.isdebug:
                 print("{0} found at XD level".format("exhaustion" if exhaustion_result else "exhaustion not"))
         return exhaustion_result
          
@@ -743,9 +744,8 @@ class Equilibrium():
                     if self.isdebug:
                         print("TYPE III trade point 6")
         all_types = list(set(all_types))
-        if all_types and (self.isDescription or self.isdebug):
+        if all_types and self.isdebug:
             print("all chan types found: {0}".format(all_types))
-
         return all_types
     
     
@@ -838,8 +838,9 @@ class NestedInterval():
         high_exhausted = ((chan_t in chan_type) if type(chan_type) is list else (chan_t == chan_type)) and\
                         (eq.define_equilibrium(direction, check_tb_structure=False, check_xd_exhaustion=False) if chan_t == Chan_Type.I else True)
         if self.isDescription or self.isdebug:
-            print("Top level {0} {1} {2} with price level: {3}".format(self.periods[0], 
+            print("Top level {0} {1} {2} {3} with price level: {4}".format(self.periods[0], 
                                                                        chan_d, 
+                                                                       chan_t,
                                                                        "ready" if high_exhausted else "not ready",
                                                                        chan_p))
         if not high_exhausted:

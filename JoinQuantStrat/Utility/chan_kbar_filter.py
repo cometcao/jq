@@ -115,7 +115,8 @@ class KBar(object):
                 result = fifth.low > k_m if direction == TopBotType.top2bot else fifth.high < k_l
             if not result:
                 check_result, k_m, k_l = cls.contain_zhongshu(second, third, forth, return_core_range=False)
-                result = check_result and fifth.close > k_m if direction == TopBotType.top2bot else fifth.high < k_l 
+                # last kbar contains out-going and returning zoushi
+                result = check_result and fifth.close > k_m if direction == TopBotType.top2bot else fifth.close < k_l 
         return result
     
     @classmethod
@@ -124,12 +125,12 @@ class KBar(object):
         Max number of high level Kbars.
         '''
         # early check for Type I, we expect straight up or down
-        if ((kbar_list[0].high <= kbar_list[-1].low or\
-            min([kl.low for kl in kbar_list]) != kbar_list[-1].low) and\
-            direction == TopBotType.top2bot) or\
-            ((kbar_list[0].low >= kbar_list[-1].high or\
-             max([kl.high for kl in kbar_list]) != kbar_list[-1].high) and\
-             direction == TopBotType.bot2top):
+        if (direction == TopBotType.top2bot and\
+            (kbar_list[0].high <= kbar_list[-1].low or\
+            min([kl.low for kl in kbar_list]) != kbar_list[-1].low)) or\
+            (direction == TopBotType.bot2top and\
+            (kbar_list[0].low >= kbar_list[-1].high or\
+             max([kl.high for kl in kbar_list]) != kbar_list[-1].high)):
             return False
         
         result = False
@@ -155,7 +156,7 @@ class KBar(object):
                 if check_result:
                     forth = kbar_list[i+3]
                     result = first_zs_ma < mi if direction == TopBotType.bot2top else first_zs_mi > ma and\
-                            forth.low < mi if direction == TopBotType.top2bot else forth.high > ma 
+                            forth.close < mi if direction == TopBotType.top2bot else forth.close > ma 
                     if result:
                         break
                 i = i + 1
