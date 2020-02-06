@@ -771,23 +771,25 @@ class Short_Chan(Sell_stocks):
         to_check = [stock for stock in to_check if context.portfolio.positions[stock].closeable_amount > 0]
         for stock in to_check:
             position_time = context.portfolio.positions[stock].transact_time
-            result = check_chan_indepth(stock,
-                                      end_time=context.current_dt, 
-                                      period=self.period, 
-                                      count=2000, 
-                                      direction=TopBotType.bot2top,
-                                      isdebug=self.isdebug, 
-                                      is_anal=False)
-            if result:
-                print("exhausted at {0} level".format(self.period))
-                self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+            chan_t, chan_d, chan_p = self.g.stock_chan_type[stock][0][0]
+            if chan_t == Chan_Type.I: # for TYPE we can wait till target price
+                stock_data = attribute_history(stock,240, unit='1m', fields=('high'), skip_paused=True, df=True)
+                if stock_data.loc[position_time:, 'high'].max() > chan_p:
+                    print("reached target price: {0}".format(chan_p))
+                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
             else:
-                chan_t, chan_d, chan_p = self.g.stock_chan_type[stock][0][0]
-                if chan_t == Chan_Type.I:
-                    stock_data = attribute_history(stock,240, unit='1m', fields=('high'), skip_paused=True, df=True)
-                    if stock_data.loc[position_time:, 'high'].max() > chan_p:
-                        print("reached target price: {0}".format(chan_p))
-                        self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+                result = check_chan_indepth(stock,
+                                          end_time=context.current_dt, 
+                                          period=self.period, 
+                                          count=2000, 
+                                          direction=TopBotType.bot2top,
+                                          isdebug=self.isdebug, 
+                                          is_anal=False,
+                                          split_time=position_time)
+                if result:
+                    print("exhausted at {0} BI level".format(self.period))
+                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+
             
     def __str__(self):
         return '缠论调仓卖出规则'
