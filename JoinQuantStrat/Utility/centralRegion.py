@@ -167,6 +167,10 @@ class ZouShiLeiXing(object):
         toporbotprice = max(all_price) if self.direction == TopBotType.bot2top else min(all_price)
         return TopBotType.top2bot if self.direction == TopBotType.bot2top else TopBotType.bot2top, self.zoushi_nodes[all_price.index(toporbotprice):]
 
+    def take_last_xd_as_zslx(self):
+        xd = XianDuan(self.zoushi_nodes[-2], self.zoushi_nodes[-1])
+        return ZouShiLeiXing(xd.direction, self.original_df, self.zoushi_nodes[-2:])
+
     def get_amplitude_region(self, re_evaluate=False):
         if not self.amplitude_region or re_evaluate:
             chan_price_list = [node.chan_price for node in self.zoushi_nodes]
@@ -462,33 +466,41 @@ class ZouShi(object):
         return self.zslx_result[i:]
             
     
-    def sub_zoushi_time(self, chan_type, direction):
+    def sub_zoushi_time(self, chan_type, direction, check_xd_exhaustion=False):
         '''
-        This method finds the split DT at high level
+        This method finds the split DT at high level:
+        for zhongshu, we split from top/bot by direction and connect with remaining nodes to form zslx
+        for zslx we split from the zhongshu before and connect it with zslx
+        
+        for both cases above if we checked xd exhaustion, we just need to last XD in the formed zslx
         '''
         if chan_type == Chan_Type.I: # we should end up with zslx - zs - zslx
             if type(self.zslx_result[-1]) is ZouShiLeiXing:
                 zs = self.zslx_result[-2]
-                sub_zslx = zs.take_first_xd_as_zslx(direction)
-                return sub_zslx.get_time_region()[0]
+                zslx = self.zslx_result[-1]
+                sub_zslx = zs.take_first_xd_as_zslx(direction) 
+                return sub_zslx.get_time_region()[0] if not check_xd_exhaustion else zslx.take_last_xd_as_zslx().get_time_region()[0]
             elif type(self.zslx_result[-1]) is ZhongShu:
                 zs = self.zslx_result[-1]
-                sub_zslx = zs.take_first_xd_as_zslx(direction)
+                sub_zslx = zs.take_first_xd_as_zslx(direction) if not check_xd_exhaustion else zs.take_last_xd_as_zslx()
                 return sub_zslx.get_time_region()[0]
-        elif chan_type == Chan_Type.III: # we need to split from past top / bot
+        elif chan_type == Chan_Type.III or chan_type == Chan_Type.III_weak: # we need to split from past top / bot
             if type(self.zslx_result[-1]) is ZouShiLeiXing:
                 [s, e] = self.zslx_result[-1].get_time_region()
                 temp_df = self.original_df.iloc[self.original_df.index.get_loc(s):,:]
                 return temp_df['high'].idxmax() if direction == TopBotType.top2bot else temp_df['low'].idxmin()
             elif type(self.zslx_result[-1]) is ZhongShu:
-                return self.zslx_result[-1].get_time_region()[0]
-        elif chan_type == Chan_Type.II:
+                zs = self.zslx_result[-1]
+                return zs.get_time_region()[0] if not check_xd_exhaustion else zs.take_last_xd_as_zslx().get_time_region()[0]
+        elif chan_type == Chan_Type.II or chan_type == Chan_Type.II_weak:
             if type(self.zslx_result[-1]) is ZouShiLeiXing:
-                return self.zslx_result[-1].get_time_region()[0]
+                zslx = self.zslx_result[-1]
+                return zslx.get_time_region()[0] if not check_xd_exhaustion else zslx.take_last_xd_as_zslx().get_time_region()[0]
             elif type(self.zslx_result[-1]) is ZhongShu:
-                return self.zslx_result[-1].get_time_region()[0]             
+                zs = self.zslx_result[-1]
+                return zs.take_first_xd_as_zslx(direction).get_time_region()[0] if not check_xd_exhaustion else zs.take_last_xd_as_zslx().get_time_region()[0]
         else:
-            return self.zslx_result[-1].get_time_region()[0]            
+            return self.zslx_result[-1].get_time_region()[0]
 
     def analyze(self, initial_direction):
         i = 0
