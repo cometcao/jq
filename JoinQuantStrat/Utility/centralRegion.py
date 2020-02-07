@@ -468,9 +468,13 @@ class ZouShi(object):
         '''
         if chan_type == Chan_Type.I: # we should end up with zslx - zs - zslx
             if type(self.zslx_result[-1]) is ZouShiLeiXing:
-                return self.zslx_result[-1].get_time_region()[0]
+                zs = self.zslx_result[-2]
+                sub_zslx = zs.take_first_xd_as_zslx(direction)
+                return sub_zslx.get_time_region()[0]
             elif type(self.zslx_result[-1]) is ZhongShu:
-                return self.zslx_result[-1].get_time_region()[0]
+                zs = self.zslx_result[-1]
+                sub_zslx = zs.take_first_xd_as_zslx(direction)
+                return sub_zslx.get_time_region()[0]
         elif chan_type == Chan_Type.III: # we need to split from past top / bot
             if type(self.zslx_result[-1]) is ZouShiLeiXing:
                 [s, e] = self.zslx_result[-1].get_time_region()

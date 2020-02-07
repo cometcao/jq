@@ -101,12 +101,12 @@ def check_stock_sub(stock,
                                                              chan_type=chan_type,
                                                              check_end_tb=True, 
                                                              check_tb_structure=True, 
-                                                             check_xd_exhaustion=True, 
+                                                             check_xd_exhaustion=False, 
                                                              split_time=None) # data split at retrieval time
         if not exhausted:
             return exhausted
         elif check_bi:
-            exhausted = ni.indepth_analyze_zoushi(direction, split_time)
+            exhausted = ni.indepth_analyze_zoushi(direction, None)
         i = i + 1
         if i < len(periods):
             ni.prepare_data(periods[i], split_time)
@@ -143,7 +143,7 @@ def check_stock_full(stock, end_time, periods=['5m', '1m'], count=2000, directio
                                                                                  direction, 
                                                                                  check_end_tb=True, 
                                                                                  check_tb_structure=True, 
-                                                                                 check_xd_exhaustion=True, 
+                                                                                 check_xd_exhaustion=False, 
                                                                                  split_time=None) # data split at retrieval time
             stock_profile.append(sub_chan_types[0])
             if not sub_exhausted:
@@ -543,7 +543,7 @@ class Equilibrium():
                 print("{0} found by macd: {1}, {2}".format("exhaustion" if exhaustion_result else "exhaustion not", zslx_macd, latest_macd))
             
         
-        if exhaustion_result and check_xd_exhaustion:
+        if exhaustion_result and check_xd_exhaustion: # should only be used at BI level
             exhaustion_result = zslx_c.check_exhaustion()
             if self.isdebug:
                 print("{0} found at XD level".format("exhaustion" if exhaustion_result else "exhaustion not"))
@@ -958,7 +958,11 @@ class NestedInterval():
         chan_t, chan_d, chan_p = chan_types[0] 
         exhausted = eq.define_equilibrium(direction, check_tb_structure=check_tb_structure, check_xd_exhaustion=check_xd_exhaustion)
         if self.isDescription or self.isdebug:
-            print("current level {0} {1} {2}".format(period, chan_d, "ready" if exhausted else "not ready"))
+            print("current level {0} {1} {2} {3} with price:{4}".format(period, 
+                                                                        chan_d, 
+                                                                        "ready" if exhausted else "not ready",
+                                                                        chan_t,
+                                                                        chan_p))
         if not exhausted:
             return False, chan_types, None
         else:
