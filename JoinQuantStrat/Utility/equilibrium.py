@@ -546,7 +546,7 @@ class Equilibrium():
             
         # try to see if there is xd level zslx exhaustion
         check_xd_exhaustion = zslx_c.check_exhaustion() if not zslx_c.isSimple() else False
-            if self.isdebug:
+        if self.isdebug:
             print("{0} found at XD level".format("exhaustion" if check_xd_exhaustion else "exhaustion not"))
         return exhaustion_result, check_xd_exhaustion
          

@@ -772,7 +772,7 @@ class Short_Chan(Sell_stocks):
         for stock in to_check:
             position_time = context.portfolio.positions[stock].transact_time
             chan_t, chan_d, chan_p = self.g.stock_chan_type[stock][0][0]
-            allow_check=False
+            allow_check=chan_t != Chan_Type.I
             if chan_t == Chan_Type.I: # for TYPE we can wait till target price
                 stock_data = get_price(stock,
                                        start_date=position_time, 
