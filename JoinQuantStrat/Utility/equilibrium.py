@@ -58,7 +58,14 @@ def check_chan_by_type_exhaustion(stock, end_time, periods, count, direction, ch
     
     return ni.analyze_zoushi(direction, chan_type)
 
-def check_chan_indepth(stock, end_time, period, count, direction, isdebug=False, is_anal=False, split_time=None):
+def check_chan_indepth(stock, 
+                       end_time, 
+                       period, 
+                       count, 
+                       direction, 
+                       isdebug=False, 
+                       is_anal=False, 
+                       split_time=None):
     print("check_chan_indepth working on stock: {0} at {1}".format(stock, period))
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
@@ -104,7 +111,14 @@ def check_stock_sub(stock,
         if not exhausted:
             return exhausted
         elif check_bi:
-            exhausted = ni.indepth_analyze_zoushi(direction, split_time)
+            exhausted = check_chan_indepth(stock, 
+                                           end_time=end_time, 
+                                           period=pe, 
+                                           count=count, 
+                                           direction, 
+                                           isdebug=False, 
+                                           is_anal=False, 
+                                           split_time=split_time)
         i = i + 1
         if i < len(periods):
             ni.prepare_data(periods[i], split_time, initial_direction=direction)
@@ -893,7 +907,7 @@ class NestedInterval():
         split_time param once provided meaning we need to split zoushi otherwise split done at data level
         this split_by_time method should only be used HERE
         '''
-        if not self.use_xd:
+        if self.use_xd:
             xd_df, anal_zoushi_xd = self.df_zoushi_tuple_list[self.periods[0]]
             
             if anal_zoushi_xd is None:
@@ -926,7 +940,8 @@ class NestedInterval():
     def full_check_zoushi(self, period, direction, 
                           chan_type=Chan_Type.INVALID,
                           check_end_tb=False, 
-                          check_tb_structure=False):
+                          check_tb_structure=False,
+                          combine_xd_check_result=False):
         '''
         split done at data level
         
@@ -976,8 +991,9 @@ class NestedInterval():
                                                                         "ready" if exhausted else "not ready",
                                                                         chan_t,
                                                                         chan_p))
+        result = (exhausted and check_xd_exhaustion) if combine_xd_check_result else exhausted
         if not exhausted:
-            return False, chan_types, None
+            return result, chan_types, None
         else:
             splitTime = anal_zoushi.sub_zoushi_time(chan_t, chan_d, check_xd_exhaustion)
-            return True, chan_types, splitTime
+            return result, chan_types, splitTime

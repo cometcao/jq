@@ -772,8 +772,7 @@ class Short_Chan(Sell_stocks):
         for stock in to_check:
             position_time = context.portfolio.positions[stock].transact_time
             chan_t, chan_d, chan_p = self.g.stock_chan_type[stock][0][0]
-            allow_check=chan_t != Chan_Type.I
-            if chan_t == Chan_Type.I: # for TYPE we can wait till target price
+            if chan_t == Chan_Type.I: # for TYPE I we wait till target price
                 stock_data = get_price(stock,
                                        start_date=position_time, 
                                        end_date=context.current_dt, 
@@ -782,19 +781,20 @@ class Short_Chan(Sell_stocks):
                                        skip_paused=True)
                 if stock_data.loc[position_time:, 'high'].max() > chan_p:
                     print("reached target price: {0}".format(chan_p))
-                    allow_check=True
-                    
-            if allow_check:
-                result = check_chan_indepth(stock,
+                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+            else:
+                result = check_stock_sub(stock,
                                           end_time=context.current_dt, 
-                                          period=self.period, 
+                                          periods=[self.period], 
                                           count=2000, 
                                           direction=TopBotType.bot2top,
+                                          chan_type=Chan_Type.INVALID,
                                           isdebug=self.isdebug, 
                                           is_anal=False,
-                                          split_time=position_time)
+                                          split_time=position_time,
+                                          check_bi=False)
                 if result:
-                    print("exhausted at {0} BI level".format(self.period))
+                    print("exhausted at {0} level".format(self.period))
                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
 
             
