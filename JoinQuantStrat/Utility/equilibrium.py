@@ -365,6 +365,7 @@ class Equilibrium():
 
             elif type(self.analytic_result[-1]) is ZouShiLeiXing:
                 last_xd = self.analytic_result[-1]
+                zs = None
                 if last_xd.direction != direction:
                     return None, None, None
                 
@@ -505,7 +506,7 @@ class Equilibrium():
         if zslx_a is None or zslx_c is None or zslx_a.isEmpty() or zslx_c.isEmpty():
             if self.isdebug:
                 print("Not enough DATA check_exhaustion")
-            return exhaustion_result
+            return exhaustion_result, False
         
         
         a_s = zslx_a.get_tb_structure() 
@@ -514,13 +515,13 @@ class Equilibrium():
             a_s != c_s:
             if self.isdebug:
                 print("Not matching magnitude")
-            return exhaustion_result
+            return exhaustion_result, False
         
         if check_tb_structure:
             if a_s[0] != c_s[0] or a_s[-1] != c_s[-1]:
                 if self.isdebug:
                     print("Not matching structure")
-                return exhaustion_result
+                return exhaustion_result, False
         
         
         zslx_slope = zslx_a.work_out_slope()
@@ -530,7 +531,7 @@ class Equilibrium():
         if np.sign(latest_slope) == 0 or np.sign(zslx_slope) == 0:
             if self.isdebug:
                 print("Invalid slope {0}, {1}".format(zslx_slope, latest_slope))
-            return exhaustion_result
+            return exhaustion_result, False
         
         if np.sign(latest_slope) == np.sign(zslx_slope) and abs(latest_slope) < abs(zslx_slope):
             if self.isdebug:
@@ -840,8 +841,16 @@ class NestedInterval():
                 return False, chan_types, None
         
         chan_t, chan_d, chan_p = chan_types[0]
-        high_exhausted, check_xd_exhaustion = ((chan_t in chan_type) if type(chan_type) is list else (chan_t == chan_type)) and\
-                        (eq.define_equilibrium(direction, check_tb_structure=False) if chan_t == Chan_Type.I else True)
+        chan_type_check = (chan_t in chan_type) if (type(chan_type) is list) else (chan_t == chan_type)
+        
+        if chan_type_check: # there is no need to do current level check if it's type III
+            if chan_t == Chan_Type.III:
+                high_exhausted, check_xd_exhaustion = True, False
+            else:
+                high_exhausted, check_xd_exhaustion = eq.define_equilibrium(direction, check_tb_structure=False)
+        else:
+            high_exhausted, check_xd_exhaustion = False, False
+                
         if self.isDescription or self.isdebug:
             print("Top level {0} {1} {2} {3} with price level: {4}".format(self.periods[0], 
                                                                        chan_d, 

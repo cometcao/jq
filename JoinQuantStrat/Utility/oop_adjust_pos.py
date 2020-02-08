@@ -777,10 +777,9 @@ class Short_Chan(Sell_stocks):
                 stock_data = get_price(stock,
                                        start_date=position_time, 
                                        end_date=context.current_dt, 
-                                       unit='1m', 
+                                       frequency='1m', 
                                        fields=('high'), 
-                                       skip_paused=True, 
-                                       df=True)
+                                       skip_paused=True)
                 if stock_data.loc[position_time:, 'high'].max() > chan_p:
                     print("reached target price: {0}".format(chan_p))
                     allow_check=True
