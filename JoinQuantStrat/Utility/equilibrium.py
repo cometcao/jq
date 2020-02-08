@@ -367,7 +367,6 @@ class Equilibrium():
 
             elif type(self.analytic_result[-1]) is ZouShiLeiXing:
                 last_xd = self.analytic_result[-1]
-                zs = self.analytic_result[-2]
                 if last_xd.direction != direction:
                     return None, None, None
                 
@@ -392,6 +391,7 @@ class Equilibrium():
                         first_xd = sorted(all_first_xd, key=take_start_price, reverse=direction==TopBotType.top2bot)[0]
                         
                 elif len(self.analytic_result) < 3 or self.analytic_result[-3].direction != last_xd.direction:
+                    zs = self.analytic_result[-2]
                     first_xd = zs.take_first_xd_as_zslx(direction)
                 else:
                     first_xd = self.analytic_result[-3]
