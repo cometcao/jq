@@ -492,7 +492,7 @@ class Equilibrium():
 
         
     def define_equilibrium(self, direction, check_tb_structure=False, check_xd_exhaustion=False):
-        if len(self.analytic_result) < 2 and type(self.analytic_result[-1]) is ZouShiLeiXig: # if we don't have enough data, return False directly
+        if len(self.analytic_result) < 2 and type(self.analytic_result[-1]) is ZouShiLeiXing: # if we don't have enough data, return False directly
             if self.isdebug:
                 print("Not Enough Data, ZhongShu not yet formed")
             return False
