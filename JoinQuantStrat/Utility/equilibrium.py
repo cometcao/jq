@@ -494,7 +494,7 @@ class Equilibrium():
         if len(self.analytic_result) < 2 and type(self.analytic_result[-1]) is ZouShiLeiXing: # if we don't have enough data, return False directly
             if self.isdebug:
                 print("Not Enough Data, ZhongShu not yet formed")
-            return False
+            return False, False
         
         a, _, c = self.find_most_recent_zoushi(direction)
         
