@@ -115,7 +115,7 @@ def check_stock_sub(stock,
                                            end_time=end_time, 
                                            period=pe, 
                                            count=count, 
-                                           direction, 
+                                           direction=direction, 
                                            isdebug=False, 
                                            is_anal=False, 
                                            split_time=split_time)
