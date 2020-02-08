@@ -772,12 +772,20 @@ class Short_Chan(Sell_stocks):
         for stock in to_check:
             position_time = context.portfolio.positions[stock].transact_time
             chan_t, chan_d, chan_p = self.g.stock_chan_type[stock][0][0]
+            allow_check=False
             if chan_t == Chan_Type.I: # for TYPE we can wait till target price
-                stock_data = attribute_history(stock,240, unit='1m', fields=('high'), skip_paused=True, df=True)
+                stock_data = get_price(stock,
+                                       start_date=position_time, 
+                                       end_date=context.current_dt, 
+                                       unit='1m', 
+                                       fields=('high'), 
+                                       skip_paused=True, 
+                                       df=True)
                 if stock_data.loc[position_time:, 'high'].max() > chan_p:
                     print("reached target price: {0}".format(chan_p))
-                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
-            else:
+                    allow_check=True
+                    
+            if allow_check:
                 result = check_chan_indepth(stock,
                                           end_time=context.current_dt, 
                                           period=self.period, 
