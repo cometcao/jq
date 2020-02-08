@@ -315,7 +315,7 @@ class Pick_Chan_Stocks(Create_stock_list):
         Create_stock_list.__init__(self, params)
         self.index = params.get('stock_index', '000985.XSHG')
         self.periods = params.get('periods', ['1w'])
-        self.chan_types = params.get('chan_types', [Chan_Type.I, Chan_Type.II_weak, Chan_Type.III])
+        self.chan_types = params.get('chan_types', [Chan_Type.I, Chan_Type.III])
         self.is_debug = params.get('isdebug', False)
         self.num_of_stocks = params.get('number_of_stock', 8)
         
