@@ -190,6 +190,7 @@ class CentralRegionProcess(object):
     
     def find_initial_direction(self, working_df, initial_direction=TopBotType.noTopBot): 
         i = 0
+        
         if working_df.shape[0] < 3:
             if self.isdebug:
                 print("not enough data for checking initial direction")
@@ -391,8 +392,11 @@ class Equilibrium():
                         first_xd = sorted(all_first_xd, key=take_start_price, reverse=direction==TopBotType.top2bot)[0]
                         
                 elif len(self.analytic_result) < 3 or self.analytic_result[-3].direction != last_xd.direction:
-                    zs = self.analytic_result[-2]
-                    first_xd = zs.take_first_xd_as_zslx(direction)
+                    if len(self.analytic_result) > 1:
+                        zs = self.analytic_result[-2]
+                        first_xd = zs.take_first_xd_as_zslx(direction)
+                    else: # no ZhongShu found
+                        return None, None, None
                 else:
                     first_xd = self.analytic_result[-3]
                     
@@ -488,6 +492,11 @@ class Equilibrium():
 
         
     def define_equilibrium(self, direction, check_tb_structure=False, check_xd_exhaustion=False):
+        if len(self.analytic_result) < 2 and type(self.analytic_result[-1]) is ZouShiLeiXig: # if we don't have enough data, return False directly
+            if self.isdebug:
+                print("Not Enough Data, ZhongShu not yet formed")
+            return False
+        
         a, _, c = self.find_most_recent_zoushi(direction)
         
         return self.check_exhaustion(a, c, 
