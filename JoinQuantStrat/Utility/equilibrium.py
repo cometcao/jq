@@ -11,40 +11,40 @@ from chan_common_include import *
 import numpy as np
 import pandas as pd
 
-def check_chan_type(stock, end_time, count, period, direction, chan_type, isdebug=False, is_anal=True):
-    if is_anal:
-        stock_high = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close'], skip_paused=True)
-    else:
-        stock_high = attribute_history(stock, count=count, unit=period,fields= ['open',  'high', 'low','close'], skip_paused=True)
-    kb_high = KBarProcessor(stock_high, isdebug=isdebug)
-    xd_df_high = kb_high.getIntegradedXD()
-    crp_high = CentralRegionProcess(xd_df_high, isdebug=isdebug, use_xd=True)
-    anal_result_high_zoushi = crp_high.define_central_region()
-    if anal_result_high_zoushi is not None:
-        eq = Equilibrium(xd_df_high, anal_result_high_zoushi.zslx_result, isdebug=isdebug, isDescription=True)
-        chan_types = eq.check_chan_type(check_end_tb=False)
-        for chan_t, chan_d,_ in chan_types:
-            if chan_t == chan_type and chan_d == direction:
-                return True
-    return False
-
-def check_chan_exhaustion(stock, end_time, count, period, direction, isdebug=False, is_anal=True):
-    print("check_chan_exhaustion working on stock: {0}, {1}".format(stock, period))
-    if is_anal:
-        stock_df = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close'],skip_paused=True)
-    else:
-        stock_df = attribute_history(stock, count=count, unit=period, fields= ['open',  'high', 'low','close'],skip_paused=True)
-    kb = KBarProcessor(stock_df, isdebug=isdebug)
-    xd_df = kb.getIntegradedXD()
-    
-    crp = CentralRegionProcess(xd_df, isdebug=isdebug, use_xd=True)
-    anal_result_zoushi = crp.define_central_region()
-    
-    if anal_result_zoushi is not None:
-        eq = Equilibrium(xd_df, anal_result_zoushi.zslx_result, isdebug=isdebug, isDescription=True)
-        return eq.define_equilibrium(direction)
-    else:
-        return False
+# def check_chan_type(stock, end_time, count, period, direction, chan_type, isdebug=False, is_anal=True):
+#     if is_anal:
+#         stock_high = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close'], skip_paused=True)
+#     else:
+#         stock_high = attribute_history(stock, count=count, unit=period,fields= ['open',  'high', 'low','close'], skip_paused=True)
+#     kb_high = KBarProcessor(stock_high, isdebug=isdebug)
+#     xd_df_high = kb_high.getIntegradedXD()
+#     crp_high = CentralRegionProcess(xd_df_high, isdebug=isdebug, use_xd=True)
+#     anal_result_high_zoushi = crp_high.define_central_region()
+#     if anal_result_high_zoushi is not None:
+#         eq = Equilibrium(xd_df_high, anal_result_high_zoushi.zslx_result, isdebug=isdebug, isDescription=True)
+#         chan_types = eq.check_chan_type(check_end_tb=False)
+#         for chan_t, chan_d,_ in chan_types:
+#             if chan_t == chan_type and chan_d == direction:
+#                 return True
+#     return False
+# 
+# def check_chan_exhaustion(stock, end_time, count, period, direction, isdebug=False, is_anal=True):
+#     print("check_chan_exhaustion working on stock: {0}, {1}".format(stock, period))
+#     if is_anal:
+#         stock_df = get_price(stock, count=count, end_date=end_time, frequency=period,fields= ['open',  'high', 'low','close'],skip_paused=True)
+#     else:
+#         stock_df = attribute_history(stock, count=count, unit=period, fields= ['open',  'high', 'low','close'],skip_paused=True)
+#     kb = KBarProcessor(stock_df, isdebug=isdebug)
+#     xd_df = kb.getIntegradedXD()
+#     
+#     crp = CentralRegionProcess(xd_df, isdebug=isdebug, use_xd=True)
+#     anal_result_zoushi = crp.define_central_region()
+#     
+#     if anal_result_zoushi is not None:
+#         eq = Equilibrium(xd_df, anal_result_zoushi.zslx_result, isdebug=isdebug, isDescription=True)
+#         return eq.define_equilibrium(direction)
+#     else:
+#         return False
 
 def check_chan_by_type_exhaustion(stock, end_time, periods, count, direction, chan_type, isdebug=False, is_anal=False):
     print("check_chan_by_type_exhaustion working on stock: {0} at {1}".format(stock, periods))
@@ -111,14 +111,10 @@ def check_stock_sub(stock,
         if not exhausted and not check_bi:
             return exhausted, xd_exhausted
         elif check_bi and xd_exhausted:
-            exhausted, xd_exhausted = check_chan_indepth(stock, 
-                                           end_time=end_time, 
-                                           period=pe, 
-                                           count=count, 
-                                           direction=direction, 
-                                           isdebug=False, 
-                                           is_anal=False, 
-                                           split_time=split_time)
+            ni.use_xd=True
+            ni.prepare_data(periods[i], split_time, initial_direction=direction)
+            exhausted, xd_exhausted = ni.indepth_analyze_zoushi(direction, split_time)
+            
         i = i + 1
         if i < len(periods):
             ni.prepare_data(periods[i], split_time, initial_direction=direction)
@@ -145,7 +141,7 @@ def check_stock_full(stock, end_time, periods=['5m', '1m'], count=2000, directio
                                                      check_tb_structure=True)
     stock_profile = [chan_types[0]]
     
-    if exhausted and xd_exhausted:
+    if exhausted:
         i = 1
         while i < len(periods):
             ni.prepare_data(periods[i], splitTime, initial_direction=direction)
@@ -154,14 +150,14 @@ def check_stock_full(stock, end_time, periods=['5m', '1m'], count=2000, directio
                                                                                  check_end_tb=True, 
                                                                                  check_tb_structure=True) # data split at retrieval time
             stock_profile.append(sub_chan_types[0])
-            if not (sub_exhausted and sub_xd_exhausted):
+            if not (sub_exhausted or sub_xd_exhausted):
                 return False, stock_profile
             i = i + 1
             if i < len(periods):
                 ni.prepare_data(periods[i], splitTime, initial_direction=direction)
-        return (sub_exhausted and sub_xd_exhausted), stock_profile
+        return (xd_exhausted or sub_exhausted) and sub_xd_exhausted, stock_profile
     else:
-        return (exhausted and xd_exhausted), stock_profile
+        return exhausted, stock_profile
 
 class CentralRegionProcess(object):
     '''

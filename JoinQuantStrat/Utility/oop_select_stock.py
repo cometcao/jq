@@ -615,7 +615,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.period = params.get('period', '1m')
         self.isdebug = params.get('isdebug', False)
         self.long_stock_num = params.get('long_stock_num', 0)
-        
+    
+    #Chan_Type.INVALID if chan_t == Chan_Type.I else Chan_Type.I if chan_t==Chan_Type.III else Chan_Type.INVALID,
     def filter(self, context, data, stock_list):
         filter_stock_list = []
         if len(context.portfolio.positions) == self.long_stock_num != 0:
@@ -628,12 +629,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                       periods=[self.period],
                                       count=2000,
                                       direction=TopBotType.top2bot,
-                                      chan_type=Chan_Type.INVALID if chan_t == Chan_Type.I else Chan_Type.I if chan_t==Chan_Type.III else Chan_Type.INVALID,
+                                      chan_type=Chan_Type.INVALID,
                                       isdebug=self.isdebug,
                                       is_anal=False,
                                       split_time=self.g.stock_chan_type[stock][1],
                                       check_bi=False)
-            if result and xd_result:
+            if result:
                 filter_stock_list.append(stock)
         if self.isdebug:
             print("Stocks ready: {0}".format(filter_stock_list))

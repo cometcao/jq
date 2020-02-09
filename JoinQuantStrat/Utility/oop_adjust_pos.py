@@ -15,7 +15,7 @@ from oop_strategy_frame import *
 from position_control_analysis import *
 from rsrs_timing import *
 from chan_common_include import Chan_Type
-from equilibrium import check_chan_indepth
+from equilibrium import check_stock_sub
 from biaoLiStatus import TopBotType
 import json
 
