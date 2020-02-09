@@ -1155,8 +1155,6 @@ class KBarProcessor(object):
 
 
     def find_XD(self, initial_i, initial_direction, working_df):      
-        
-        working_df.at[working_df.index[initial_i], 'xd_tb'] = TopBotType.top if initial_direction == TopBotType.top2bot else TopBotType.bot
         if self.isdebug:
             print("Initial direction {0} at location {1} with new_index {2}".format(initial_direction, initial_i, working_df.iloc[initial_i].new_index))
         
