@@ -201,7 +201,7 @@ class CentralRegionProcess(object):
         if working_df.shape[0] < 3:
             if self.isdebug:
                 print("not enough data for checking initial direction")
-            return working_df.index[0], TopBotType.noTopBot
+            return None, TopBotType.noTopBot
         
         if initial_direction != TopBotType.noTopBot:
             return working_df.index[0], initial_direction
