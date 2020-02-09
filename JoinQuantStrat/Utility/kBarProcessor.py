@@ -817,11 +817,29 @@ class KBarProcessor(object):
             
     def find_initial_direction(self, working_df):
         # use simple solution to find initial direction
-        max_price_idx = working_df.head(6)['chan_price'].idxmax()
-        min_price_idx = working_df.head(6)['chan_price'].idxmin()
-        initial_idx = min(max_price_idx, min_price_idx)
-        initial_direction = TopBotType.bot2top if max_price_idx > min_price_idx else TopBotType.top2bot
-        return working_df.index.get_loc(initial_idx), initial_direction        
+        initial_loc = current_loc = 0
+        initial_direction = TopBotType.noTopBot
+        while current_loc + 3 < working_df.shape[0]:
+            first = working_df.iloc[current_loc]
+            second = working_df.iloc[current_loc+1]
+            third = working_df.iloc[current_loc+2]
+            forth = working_df.iloc[current_loc+3]
+            
+            if first.chan_price < second.chan_price:
+                found_direction = (first.chan_price<=third.chan_price and second.chan_price<forth.chan_price) or\
+                                    (first.chan_price>=third.chan_price and second.chan_price>forth.chan_price)
+            else:
+                found_direction = (first.chan_price<third.chan_price and second.chan_price<=forth.chan_price) or\
+                                    (first.chan_price>third.chan_price and second.chan_price>=forth.chan_price)
+                                
+            if found_direction:
+                initial_direction = TopBotType.bot2top if (first.chan_price<third.chan_price or second.chan_price<forth.chan_price) else TopBotType.top2bot
+                initial_loc = current_loc
+                break
+            else:
+                current_loc = current_loc + 1
+                
+        return initial_loc, initial_direction
     
     
     def is_XD_inclusion_free(self, direction, next_valid_elems, working_df):
