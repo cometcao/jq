@@ -20,7 +20,7 @@ from pair_trading_ols import *
 from value_factor_lib import *
 from quant_lib import *
 from functools import reduce
-from centralRegion import Chan_Type
+from chan_common_include import Chan_Type
 from chan_kbar_filter import *
 from equilibrium import *
 
@@ -332,7 +332,7 @@ class Pick_Chan_Stocks(Create_stock_list):
         stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
         stock_list = stock_list[:self.num_of_stocks]
         for stock in stock_list:
-            result, chan_type, split_time = check_chan_by_type_exhaustion(stock,
+            result, _, chan_type, split_time = check_chan_by_type_exhaustion(stock,
                                                                           end_time=context.current_dt, 
                                                                           periods=['5m'], 
                                                                           count=2000, 
@@ -614,7 +614,6 @@ class Filter_Chan_Stocks(Filter_stock_list):
         Filter_stock_list.__init__(self, params)
         self.period = params.get('period', '1m')
         self.isdebug = params.get('isdebug', False)
-        self.chan_type = params.get('chan_type', Chan_Type.I)
         self.long_stock_num = params.get('long_stock_num', 0)
         
     def filter(self, context, data, stock_list):
@@ -623,16 +622,18 @@ class Filter_Chan_Stocks(Filter_stock_list):
             return filter_stock_list
         stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
         for stock in stock_list:
-            result = check_stock_sub(stock,
-                                      end_time=context.current_dt, 
-                                      periods=[self.period], 
-                                      count=2000, 
+            chan_t, chan_d, chan_p = self.g.stock_chan_type[stock][0][0]
+            result, xd_result = check_stock_sub(stock,
+                                      end_time=context.current_dt,
+                                      periods=[self.period],
+                                      count=2000,
                                       direction=TopBotType.top2bot,
-                                      chan_type=self.chan_type,
-                                      isdebug=self.isdebug, 
+                                      chan_type=Chan_Type.INVALID if chan_t == Chan_Type.I else Chan_Type.I if chan_t==Chan_Type.III else Chan_Type.INVALID,
+                                      isdebug=self.isdebug,
                                       is_anal=False,
-                                      split_time=self.g.stock_chan_type[stock][1])
-            if result:
+                                      split_time=self.g.stock_chan_type[stock][1],
+                                      check_bi=False)
+            if result and xd_result:
                 filter_stock_list.append(stock)
         if self.isdebug:
             print("Stocks ready: {0}".format(filter_stock_list))

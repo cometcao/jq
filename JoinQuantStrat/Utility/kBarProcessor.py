@@ -11,6 +11,7 @@ import pandas as pd
 import copy
 import talib
 from biaoLiStatus import * 
+from chan_common_include import GOLDEN_RATIO, MIN_PRICE_UNIT
 
 def synchOpenPrice(open, close, high, low):
     if open > close:
@@ -22,10 +23,7 @@ def synchClosePrice(open, close, high, low):
     if open < close:
         return high
     else:
-        return low    
-
-MIN_PRICE_UNIT=0.01
-GOLDEN_RATIO=0.618
+        return low
 
 class KBarProcessor(object):
     '''

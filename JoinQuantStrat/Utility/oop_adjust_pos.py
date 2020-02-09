@@ -14,7 +14,7 @@ from ta_analysis import *
 from oop_strategy_frame import *
 from position_control_analysis import *
 from rsrs_timing import *
-from centralRegion import Chan_Type
+from chan_common_include import Chan_Type
 from equilibrium import check_chan_indepth
 from biaoLiStatus import TopBotType
 import json
@@ -783,7 +783,7 @@ class Short_Chan(Sell_stocks):
                     print("reached target price: {0}".format(chan_p))
                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
             else:
-                result = check_stock_sub(stock,
+                result, xd_result = check_stock_sub(stock,
                                           end_time=context.current_dt, 
                                           periods=[self.period], 
                                           count=2000, 
@@ -792,8 +792,8 @@ class Short_Chan(Sell_stocks):
                                           isdebug=self.isdebug, 
                                           is_anal=False,
                                           split_time=position_time,
-                                          check_bi=False)
-                if result:
+                                          check_bi=True)
+                if result or xd_result:
                     print("exhausted at {0} level".format(self.period))
                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
 

@@ -11,11 +11,9 @@ except ImportError as ie:
 from jqdata import *
 import numpy as np
 import pandas as pd
-from centralRegion import Chan_Type
 from biaoLiStatus import TopBotType
 
-TYPE_III_NUM = 5
-TYPE_I_NUM = 10
+from chan_common_include import TYPE_III_NUM, TYPE_I_NUM, GOLDEN_RATIO, Chan_Type
 
 def filter_high_level_by_index(direction=TopBotType.top2bot, 
                                stock_index='000985.XSHG', 
@@ -24,7 +22,8 @@ def filter_high_level_by_index(direction=TopBotType.top2bot,
                                end_dt=pd.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                chan_types=[Chan_Type.I, Chan_Type.III]):
     all_stocks = get_index_stocks(stock_index)
-    result_stocks = set()
+    result_stocks_I = set()
+    result_stocks_III = set()
     for stock in all_stocks:
         for p in periods:
             stock_high = get_bars(stock, 
@@ -39,10 +38,15 @@ def filter_high_level_by_index(direction=TopBotType.top2bot,
                                                direction=direction, 
                                                df=df, 
                                                chan_type=ct):
-                    result_stocks.add(stock)
-    print("qualifying stocks:{0}".format(result_stocks))
+                    if ct == Chan_Type.I:
+                        result_stocks_I.add(stock)
+                    elif ct == Chan_Type.III:
+                        result_stocks_III.add(stock)
+    type_i = sorted(list(result_stocks_I))
+    type_iii = sorted(list(result_stocks_III))
+    print("qualifying type I stocks:{0} type III stocks: {1}".format(type_i, type_iii))
     
-    return sorted(list(result_stocks))
+    return type_i + type_iii
 
 class KBar(object):
     '''
@@ -109,7 +113,7 @@ class KBar(object):
         forth = kbar_list[-TYPE_III_NUM+3]
         fifth = kbar_list[-TYPE_III_NUM+4]
         result = False
-        if fifth.close < fifth.open or fifth.close < (fifth.high + fifth.low)/2.0:
+        if fifth.close < fifth.open or (fifth.close-fifth.low)/(fifth.high-fifth.low) <= 1-GOLDEN_RATIO:
             check_result, k_m, k_l = cls.contain_zhongshu(first, second, third, return_core_range=False)
             if check_result:
                 result = fifth.low > k_m if direction == TopBotType.top2bot else fifth.high < k_l
