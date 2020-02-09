@@ -521,8 +521,8 @@ class Equilibrium():
         
         a_s = zslx_a.get_tb_structure() 
         c_s =zslx_c.get_tb_structure()
-        if (int(zslx_a.get_magnitude() - zslx_c.get_magnitude()) != 0 and\
-            a_s != c_s) or len(a_s) > len(c_s):
+        if (zslx_c.get_magnitude()/zslx_a.get_magnitude() < GOLDEN_RATIO and\
+            (a_s != c_s or len(a_s)==1)):
             if self.isdebug:
                 print("Not matching magnitude")
             return exhaustion_result, False
