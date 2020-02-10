@@ -135,10 +135,8 @@ def check_stock_full(stock, end_time, periods=['5m', '1m'], count=2000, directio
                         initial_pe_prep=top_pe,
                         initial_split_time=None)
 
-    exhausted, xd_exhausted, chan_types, splitTime = ni.full_check_zoushi(top_pe, 
-                                                     direction, 
-                                                     check_end_tb=False, 
-                                                     check_tb_structure=False)
+    exhausted, xd_exhausted, chan_types, splitTime = ni.analyze_zoushi(direction, [Chan_Type.I, Chan_Type.III])
+    
     stock_profile = [chan_types[0]]
     
     if exhausted:
