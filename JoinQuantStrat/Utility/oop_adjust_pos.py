@@ -815,12 +815,33 @@ class Long_Chan(Buy_stocks_portion):
 
         self.to_buy = self.g.monitor_buy_list
         type_I_stocks = []
+        to_ignore = []
         for stock in self.to_buy:
-            # only check the top level in our case 5m level
-            if Chan_Type.I in self.g.stock_chan_type[stock][0][0]:
+            chan_t, chan_d, chan_p = self.g.stock_chan_type[stock][0][0]
+            latest_price = attribute_history(stock, 1, '1m', ['close'])
+            # check current price of the stock ignore the ones not suitable
+            # sort the stocks prioritize TYPE I stocks
+            if Chan_Type.I == chan_t:
                 type_I_stocks.append(stock)
                 self.to_buy.remove(stock)
+                
+                if latest_price >= chan_p:
+                    to_ignore.append(stock)
+                    
+            elif Chan_Type.III == chan_t:
+                if type(chan_p) is list:
+                    if latest_price >= chan_p[0]:
+                        to_ignore.append(stock)
+                else: # can only be actual price here
+                    if latest_price >= chan_p:
+                        to_ignore.append(stock)
+                
         self.to_buy = type_I_stocks + self.to_buy
+        
+        if to_ignore:
+            print("stocks: {0} ignored due to price over target value".format(to_ignore)) 
+        self.to_buy = [stock for stock in self.to_buy if stock not in to_ignore]
+        
         self.adjust(context, data, self.to_buy)
         
     def __str__(self):
