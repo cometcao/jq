@@ -912,16 +912,14 @@ class NestedInterval():
             crp_df = CentralRegionProcess(xd_df, isdebug=self.isdebug, use_xd=False)
             anal_zoushi_bi = crp_df.define_central_region()
             
-            split_anal_zoushi_bi = anal_zoushi_bi.split_by_time(split_time)
-            
-            if split_anal_zoushi_bi is None:
-                return False, False
+            split_anal_zoushi_bi_result = anal_zoushi_bi.split_by_time(split_time)
         else:
             xd_df, split_anal_zoushi_bi = self.df_zoushi_tuple_list[self.periods[0]]
             if split_anal_zoushi_bi is None:
                 return False, False
+            split_anal_zoushi_bi_result = split_anal_zoushi_bi.zslx_result
         
-        eq = Equilibrium(xd_df, split_anal_zoushi_bi, isdebug=self.isdebug, isDescription=self.isDescription)
+        eq = Equilibrium(xd_df, split_anal_zoushi_bi_result, isdebug=self.isdebug, isDescription=self.isDescription)
         bi_exhausted, check_xd_exhaustion = eq.define_equilibrium(direction, check_tb_structure=True)
         if (self.isdebug or self.isDescription) and (bi_exhausted or check_xd_exhaustion):
             print("BI level exhausted")
