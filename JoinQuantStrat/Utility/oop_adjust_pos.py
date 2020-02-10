@@ -772,13 +772,13 @@ class Short_Chan(Sell_stocks):
         for stock in to_check:
             position_time = context.portfolio.positions[stock].transact_time
             chan_t, chan_d, chan_p = self.g.stock_chan_type[stock][0][0]
+            stock_data = get_price(stock,
+                                   start_date=position_time, 
+                                   end_date=context.current_dt, 
+                                   frequency='1m', 
+                                   fields=('high'), 
+                                   skip_paused=True)
             if chan_t == Chan_Type.I: # for TYPE I we wait till target price
-                stock_data = get_price(stock,
-                                       start_date=position_time, 
-                                       end_date=context.current_dt, 
-                                       frequency='1m', 
-                                       fields=('high'), 
-                                       skip_paused=True)
                 if stock_data.loc[position_time:, 'high'].max() > chan_p:
                     print("reached target price: {0}".format(chan_p))
                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
@@ -793,8 +793,8 @@ class Short_Chan(Sell_stocks):
                                               is_anal=False,
                                               split_time=position_time,
                                               check_bi=True)
-                if result or xd_result:
-                    print("exhausted at {0} level".format(self.period))
+                if result or xd_result or stock_data.loc[position_time:, 'high'].max() > chan_p:
+                    print("exhausted at {0} level with price mark {1}".format(self.period, chan_p))
                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
 
             
