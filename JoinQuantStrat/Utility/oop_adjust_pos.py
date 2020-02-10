@@ -782,17 +782,17 @@ class Short_Chan(Sell_stocks):
                 if stock_data.loc[position_time:, 'high'].max() > chan_p:
                     print("reached target price: {0}".format(chan_p))
                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
-            else:
-                result, xd_result = check_stock_sub(stock,
-                                          end_time=context.current_dt, 
-                                          periods=[self.period], 
-                                          count=2000, 
-                                          direction=TopBotType.bot2top,
-                                          chan_type=Chan_Type.INVALID,
-                                          isdebug=self.isdebug, 
-                                          is_anal=False,
-                                          split_time=position_time,
-                                          check_bi=True)
+            elif chan_t == Chan_Type.III:
+                result, xd_result, chan_types = check_stock_sub(stock,
+                                              end_time=context.current_dt, 
+                                              periods=[self.period], 
+                                              count=2000, 
+                                              direction=TopBotType.bot2top,
+                                              chan_type=Chan_Type.INVALID,
+                                              isdebug=self.isdebug, 
+                                              is_anal=False,
+                                              split_time=position_time,
+                                              check_bi=True)
                 if result or xd_result:
                     print("exhausted at {0} level".format(self.period))
                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
