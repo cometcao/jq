@@ -47,7 +47,7 @@ import pandas as pd
 #         return False
 
 def check_chan_by_type_exhaustion(stock, end_time, periods, count, direction, chan_type, isdebug=False, is_anal=False):
-    print("check_chan_by_type_exhaustion working on stock: {0} at {1}".format(stock, periods))
+    print("check_chan_by_type_exhaustion working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
                         periods=periods, 
