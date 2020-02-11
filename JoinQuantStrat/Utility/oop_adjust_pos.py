@@ -818,7 +818,8 @@ class Long_Chan(Buy_stocks_portion):
         to_ignore = []
         for stock in self.to_buy:
             chan_t, chan_d, chan_p = self.g.stock_chan_type[stock][0][0]
-            latest_price = attribute_history(stock, 1, '1m', ['close'])
+            latest_data = attribute_history(stock, 1, '1m', ['close'], df=False)
+            latest_price = latest_data['close'][-1]
             # check current price of the stock ignore the ones not suitable
             # sort the stocks prioritize TYPE I stocks
             if Chan_Type.I == chan_t:
