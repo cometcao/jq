@@ -562,7 +562,7 @@ class Equilibrium():
             exhaustion_result = abs(zslx_macd) > abs(latest_macd)
             if self.isdebug:
                 print("{0} found by macd: {1}, {2}".format("exhaustion" if exhaustion_result else "exhaustion not", zslx_macd, latest_macd))
-            
+        
         # try to see if there is xd level zslx exhaustion
         check_xd_exhaustion = zslx_c.check_exhaustion() if not zslx_c.isSimple() else False
         if self.isdebug:
@@ -698,7 +698,7 @@ class Equilibrium():
                     if self.isdebug:
                         print("TYPE III trade point 2")
             
-            # a bit more complex type than standard two XD away and not back case, no new zs formed        
+            # a bit more complex type than standard two XD away and not back case, no new zs formed   
             if len(zslx.zoushi_nodes) > 3:
                 split_direction, split_nodes = zslx.get_reverse_split_zslx()
                 pure_zslx = ZouShiLeiXing(split_direction, self.original_df, split_nodes)
@@ -841,15 +841,16 @@ class NestedInterval():
             if xd_df.empty:
                 self.df_zoushi_tuple_list[pe]=(xd_df,None)
             else:
-            crp_df = CentralRegionProcess(xd_df, isdebug=self.isdebug, use_xd=self.use_xd)
-            anal_zoushi = crp_df.define_central_region(initial_direction=initial_direction)
-            self.df_zoushi_tuple_list[pe]=(xd_df,anal_zoushi)
+                crp_df = CentralRegionProcess(xd_df, isdebug=self.isdebug, use_xd=self.use_xd)
+                anal_zoushi = crp_df.define_central_region(initial_direction=initial_direction)
+                self.df_zoushi_tuple_list[pe]=(xd_df,anal_zoushi)
+            
     
     def analyze_zoushi(self, direction, chan_type = Chan_Type.INVALID):
         ''' THIS METHOD SHOULD ONLY BE USED FOR TOP LEVEL!!
         This is due to the fact that at high level we can't be very precise
         1. check high level chan type
-        return value:
+        return value: 
         a. high level exhaustion
         b. XD level exhaustion
         c. top level chan types
@@ -898,7 +899,7 @@ class NestedInterval():
         split_time = anal_zoushi.sub_zoushi_time(chan_t, chan_d, check_xd_exhaustion)
         if self.isdebug:
             print("split time at {0}".format(split_time))
-        
+
         return high_exhausted, check_xd_exhaustion, chan_types, split_time
     
     def indepth_analyze_zoushi(self, direction, split_time):
