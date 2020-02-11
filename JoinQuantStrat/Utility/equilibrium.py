@@ -139,7 +139,7 @@ def check_stock_full(stock, end_time, periods=['5m', '1m'], count=2000, directio
     
     if not chan_types:
         chan_types = [(Chan_Type.INVALID, TopBotType.noTopBot, 0)]
-    
+        
     stock_profile = [chan_types[0]]
     
     if exhausted:
@@ -244,7 +244,12 @@ class CentralRegionProcess(object):
             return None
         working_df = self.original_xd_df        
         
-        working_df = self.prepare_df_data(working_df)
+        try:
+            working_df = self.prepare_df_data(working_df)
+            if self.isdebug:
+                print("Invalid data frame, return define_central_region")
+        except:
+            return None
         
         init_idx, init_d = self.find_initial_direction(working_df, initial_direction)
         
