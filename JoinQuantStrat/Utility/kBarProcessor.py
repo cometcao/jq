@@ -25,6 +25,25 @@ def synchClosePrice(open, close, high, low):
     else:
         return low
 
+def get_previous_loc(loc, working_df):
+    i = loc - 1
+    while i >= 0:
+        if working_df.iloc[i].tb == TopBotType.top or working_df.iloc[i].tb == TopBotType.bot:
+            return i
+        else:
+            i = i - 1
+    return None
+
+def get_next_loc(loc, working_df):
+    i = loc + 1
+    while i < working_df.shape[0]:
+        if working_df.iloc[i].tb == TopBotType.top or working_df.iloc[i].tb == TopBotType.bot:
+            return i
+        else:
+            i = i + 1
+    return None
+
+
 class KBarProcessor(object):
     '''
     This lib takes financial instrument data, and process it according the Chan(Zen) theory
@@ -182,7 +201,6 @@ class KBarProcessor(object):
                 
         # This function assume we have done the standardization process (no inclusion)
         last_idx = 0
-        last_tb = TopBotType.noTopBot
         for idx in range(self.kDataFrame_standardized.shape[0]-2): #xrange
             currentElem = self.kDataFrame_standardized.iloc[idx]
             firstElem = self.kDataFrame_standardized.iloc[idx+1]
@@ -191,13 +209,18 @@ class KBarProcessor(object):
             if topBotType != TopBotType.noTopBot:
                 self.kDataFrame_standardized.ix[idx+1, 'tb'] = topBotType
                 last_idx = idx+1
-                last_tb = topBotType
                 
+        # mark the first kbar
+        first_loc = get_next_loc(0, self.kDataFrame_standardized)
+        if first_loc is not None:
+            first_tb = self.kDataFrame_standardized.iloc[first_loc].tb
+            self.kDataFrame_standardized.ix[0, 'tb'] = TopBotType.reverse(first_tb)
+        
         # mark the last kbar 
-        if last_idx + 4 < self.kDataFrame_standardized.shape[0]:
-            self.kDataFrame_standardized.ix[-1, 'tb'] = TopBotType.reverse(last_tb)
+        last_tb = self.kDataFrame_standardized.iloc[last_idx].tb
+        self.kDataFrame_standardized.ix[-1, 'tb'] = TopBotType.reverse(last_tb)
         if self.isdebug:
-            print("self.kDataFrame_standardized:{0}".format(self.kDataFrame_standardized.tail(20)))
+            print("self.kDataFrame_standardized[20]:{0}".format(self.kDataFrame_standardized.tail(20)))
 
     def trace_back_index(self, working_df, previous_index):
         # find the closest FenXing with top/bot backwards from previous_index
@@ -557,24 +580,6 @@ class KBarProcessor(object):
         ###################################    
         self.kDataFrame_marked = working_df[working_df['tb']!=TopBotType.noTopBot]
     
-    def get_previous_loc(self, loc, working_df):
-        i = loc - 1
-        while i >= 0:
-            if working_df.iloc[i].tb != TopBotType.noTopBot:
-                return i
-            else:
-                i = i - 1
-        return None
-    
-    def get_next_loc(self, loc, working_df):
-        i = loc + 1
-        while i < working_df.shape[0]:
-            if working_df.iloc[i].tb != TopBotType.noTopBot:
-                return i
-            else:
-                i = i + 1
-        return None
-
     def defineBi_chan(self):
         self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_index=[i for i in range(len(self.kDataFrame_standardized))])
         self.gap_exists() # work out gap in the original kline
@@ -590,8 +595,8 @@ class KBarProcessor(object):
             current = temp_loc_list[count_idx]
 
             # check not gap for XD TODO
-            previous = self.get_previous_loc(current, working_df)
-            next = self.get_next_loc(current, working_df)
+            previous = get_previous_loc(current, working_df)
+            next = get_next_loc(current, working_df)
             
             if previous is None:
                 count_idx = count_idx + 1
@@ -675,8 +680,8 @@ class KBarProcessor(object):
         temp_loc_list = [working_df.index.get_loc(idx) for idx in temp_index_list]
         for loc in temp_loc_list:
             
-            next_loc = self.get_next_loc(loc, working_df)
-            current_loc = self.get_previous_loc(next_loc, working_df)
+            next_loc = get_next_loc(loc, working_df)
+            current_loc = get_previous_loc(next_loc, working_df)
             
             current = working_df.iloc[current_loc]
             next = working_df.iloc[next_loc]
