@@ -393,14 +393,17 @@ class ZhongShu(ZouShiLeiXing):
         return ZhongShuLevel.current if len(self.extra_nodes) < 6 else ZhongShuLevel.next if 6 <= len(self.extra_nodes) < 24 else ZhongShuLevel.nextnext
 
     def take_last_xd_as_zslx(self):
-        exiting_nodes = [self.forth] + self.extra_nodes if self.extra_nodes else []
+        exiting_nodes = [self.third, self.forth] + self.extra_nodes
         if len(exiting_nodes) < 2:
             return ZouShiLeiXing(TopBotType.noTopBot, self.original_df, [])
         else:
             xd = XianDuan(exiting_nodes[-2], exiting_nodes[-1])
             return ZouShiLeiXing(xd.direction, self.original_df, exiting_nodes[-2:])
 
-    def take_first_xd_as_zslx(self, split_direction):
+    def take_first_xd_as_zslx(self):
+        return ZouShiLeiXing(TopBotType.reverse(self.direction), self.original_df, [self.first, self.second])
+
+    def take_split_xd_as_zslx(self, split_direction):
         remaining_nodes = self.get_split_zs(split_direction)
         if len(remaining_nodes) < 2:
             return ZouShiLeiXing(TopBotType.noTopBot, self.original_df, [])
@@ -412,6 +415,14 @@ class ZhongShu(ZouShiLeiXing):
         # if the ZhongShu contain more than 3 XD, it's a complex ZhongShu, in practice the direction of it can be interpreted differently
         return bool(self.extra_nodes)
     
+    def check_exhaustion(self):
+        last_xd = self.take_last_xd_as_zslx()
+        if self.is_complex_type():
+            first_xd = self.take_split_xd_as_zslx(last_xd.direction)
+        else:
+            first_xd = self.take_first_xd_as_zslx()
+        return abs(first_xd.work_out_slope()) > abs(last_xd.work_out_slope())
+
     def is_running_type(self):
         running_type = False
         if self.direction == TopBotType.bot2top:
@@ -469,12 +480,12 @@ class ZouShi(object):
             if type(self.zslx_result[-1]) is ZouShiLeiXing:
                 zs = self.zslx_result[-2]
                 zslx = self.zslx_result[-1]
-                sub_zslx = zs.take_first_xd_as_zslx(direction) 
+                sub_zslx = zs.take_split_xd_as_zslx(direction) 
                 pivot_tp = sub_zslx.get_time_region()[0] if not check_xd_exhaustion else zslx.take_last_xd_as_zslx().get_time_region()[0]
                 return self.get_previous_tb_timestamp(pivot_tp)
             elif type(self.zslx_result[-1]) is ZhongShu:
                 zs = self.zslx_result[-1]
-                sub_zslx = zs.take_first_xd_as_zslx(direction) if not check_xd_exhaustion else zs.take_last_xd_as_zslx()
+                sub_zslx = zs.take_split_xd_as_zslx(direction) if not check_xd_exhaustion else zs.take_last_xd_as_zslx()
                 pivot_tp = sub_zslx.get_time_region()[0]
                 return self.get_previous_tb_timestamp(pivot_tp)
         elif chan_type == Chan_Type.III or chan_type == Chan_Type.III_weak: # we need to split from past top / bot
@@ -494,7 +505,7 @@ class ZouShi(object):
                 return self.get_previous_tb_timestamp(pivot_tp)
             elif type(self.zslx_result[-1]) is ZhongShu:
                 zs = self.zslx_result[-1]
-                pivot_tp = zs.take_first_xd_as_zslx(direction).get_time_region()[0] if not check_xd_exhaustion else zs.take_last_xd_as_zslx().get_time_region()[0]
+                pivot_tp = zs.take_split_xd_as_zslx(direction).get_time_region()[0] if not check_xd_exhaustion else zs.take_last_xd_as_zslx().get_time_region()[0]
                 return self.get_previous_tb_timestamp(pivot_tp)
         else:
             return self.get_previous_tb_timestamp(self.zslx_result[-1].get_time_region()[0])

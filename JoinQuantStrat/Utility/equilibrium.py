@@ -341,13 +341,10 @@ class Equilibrium():
                 return (first_zslx, self.analytic_result[-1], last_xd) if last_xd.direction == direction else (None, None, None)
             elif type(self.analytic_result[-1]) is ZouShiLeiXing:
                 return (self.analytic_result[-3], self.analytic_result[-2], self.analytic_result[-1]) if self.analytic_result[-1].direction == direction else (None, None, None)
-            else:
-                print("Invalid Zou Shi type")
-                return None, None, None
-        else:
-            if type(self.analytic_result[-1]) is ZhongShu and\
-                self.analytic_result[-1].is_complex_type():
-                zs = self.analytic_result[-1]
+            
+        if type(self.analytic_result[-1]) is ZhongShu:
+            zs = self.analytic_result[-1]
+            if self.analytic_result[-1].is_complex_type():
                 last_xd = zs.take_last_xd_as_zslx()
                 if last_xd.direction != direction:
                     return None, None, None
@@ -370,56 +367,57 @@ class Equilibrium():
                         i = i - 2
                     if not marked or -(i-2) > len(self.analytic_result):
                         all_zs = [zs for zs in self.analytic_result if type(zs) is ZhongShu]
-                        all_first_xd = [zs.take_first_xd_as_zslx(direction) for zs in all_zs]
+                        all_first_xd = [zs.take_split_xd_as_zslx(direction) for zs in all_zs]
                         first_xd = sorted(all_first_xd, key=take_start_price, reverse=direction==TopBotType.top2bot)[0]
                         
                 elif len(self.analytic_result) < 2 or self.analytic_result[-2].direction != last_xd.direction:
-                    first_xd = zs.take_first_xd_as_zslx(direction)
+                    first_xd = zs.take_split_xd_as_zslx(direction)
                 else:
                     first_xd = self.analytic_result[-2]
                 return first_xd, zs, last_xd
-
-            elif type(self.analytic_result[-1]) is ZouShiLeiXing:
-                last_xd = self.analytic_result[-1]
-                zs = None
-                if last_xd.direction != direction:
-                    return None, None, None
-                
-                if len(self.analytic_result) >= 4 and\
-                    type(self.analytic_result[-2]) is ZhongShu and\
-                    type(self.analytic_result[-4]) is ZhongShu and\
-                    self.two_zslx_interact_original(self.analytic_result[-4], self.analytic_result[-2]):
-                    ## zhong shu combination
-                    i = -4
-                    marked = False
-                    while -(i-2) <= len(self.analytic_result):
-                        if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
-                            (not self.analytic_result[i-2].is_complex_type() and self.analytic_result[i-2].direction != self.analytic_result[i].direction):
-                            first_xd = self.analytic_result[i-1]
-                            zs = self.analytic_result[i:-1]
-                            marked = True
-                            break
-                        i = i - 2
-                    if not marked or -(i-2) > len(self.analytic_result):
-                        all_zs = [zs for zs in self.analytic_result if type(zs) is ZhongShu]
-                        all_first_xd = [zs.take_first_xd_as_zslx(direction) for zs in all_zs]
-                        first_xd = sorted(all_first_xd, key=take_start_price, reverse=direction==TopBotType.top2bot)[0]
-                        
-                elif len(self.analytic_result) < 3 or self.analytic_result[-3].direction != last_xd.direction:
-                    if len(self.analytic_result) > 1:
-                        zs = self.analytic_result[-2]
-                        first_xd = zs.take_first_xd_as_zslx(direction)
-                    else: # no ZhongShu found
-                        return None, None, None
-                else:
-                    zs = self.analytic_result[-2]
-                    first_xd = self.analytic_result[-3]
-                    
-                return first_xd, zs, last_xd
-                
             else:
-                print("Invalid Zou Shi type")
+                return None, zs, None
+
+        elif type(self.analytic_result[-1]) is ZouShiLeiXing:
+            last_xd = self.analytic_result[-1]
+            zs = None
+            if last_xd.direction != direction:
                 return None, None, None
+            
+            if len(self.analytic_result) >= 4 and\
+                type(self.analytic_result[-2]) is ZhongShu and\
+                type(self.analytic_result[-4]) is ZhongShu and\
+                self.two_zslx_interact_original(self.analytic_result[-4], self.analytic_result[-2]):
+                ## zhong shu combination
+                i = -4
+                marked = False
+                while -(i-2) <= len(self.analytic_result):
+                    if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
+                        (not self.analytic_result[i-2].is_complex_type() and self.analytic_result[i-2].direction != self.analytic_result[i].direction):
+                        first_xd = self.analytic_result[i-1]
+                        zs = self.analytic_result[i:-1]
+                        marked = True
+                        break
+                    i = i - 2
+                if not marked or -(i-2) > len(self.analytic_result):
+                    all_zs = [zs for zs in self.analytic_result if type(zs) is ZhongShu]
+                    all_first_xd = [zs.take_split_xd_as_zslx(direction) for zs in all_zs]
+                    first_xd = sorted(all_first_xd, key=take_start_price, reverse=direction==TopBotType.top2bot)[0]
+                    
+            elif len(self.analytic_result) < 3 or self.analytic_result[-3].direction != last_xd.direction:
+                if len(self.analytic_result) > 1:
+                    zs = self.analytic_result[-2]
+                    first_xd = zs.take_split_xd_as_zslx(direction)
+                else: # no ZhongShu found
+                    return None, None, None
+            else:
+                zs = self.analytic_result[-2]
+                first_xd = self.analytic_result[-3]
+            return first_xd, zs, last_xd
+            
+        else:
+            print("Invalid Zou Shi type")
+            return None, None, None
     
     def two_zhongshu_form_qvshi(self, zs1, zs2, zs_level=ZhongShuLevel.current):
         '''
@@ -514,18 +512,17 @@ class Equilibrium():
                 print("ZhongShu not yet formed, only check ZSLX exhaustion")
             return False, zslx.check_exhaustion() if not zslx.isSimple() else False
         
-        a, _, c = self.find_most_recent_zoushi(direction)
+        a, zs, c = self.find_most_recent_zoushi(direction)
         
-        return self.check_exhaustion(a, c, 
+        return self.check_exhaustion(a, c, zs,
                                      check_tb_structure=check_tb_structure)
         
-    def check_exhaustion(self, zslx_a, zslx_c, check_tb_structure=False):
+    def check_exhaustion(self, zslx_a, zslx_c, zs, check_tb_structure=False):
         exhaustion_result = False
         if zslx_a is None or zslx_c is None or zslx_a.isEmpty() or zslx_c.isEmpty():
             if self.isdebug:
                 print("Not enough DATA check_exhaustion")
-            return exhaustion_result, False
-        
+            return exhaustion_result, (zs.check_exhaustion() if (zs is not None and not zs.is_complex_type()) else False
         
         a_s = zslx_a.get_tb_structure() 
         c_s =zslx_c.get_tb_structure()
@@ -879,10 +876,9 @@ class NestedInterval():
         chan_type_check = (chan_t in chan_type) if (type(chan_type) is list) else (chan_t == chan_type)
         
         if chan_type_check: # there is no need to do current level check if it's type III
+            high_exhausted, check_xd_exhaustion = eq.define_equilibrium(direction, check_tb_structure=False)
             if chan_t == Chan_Type.III:
-                high_exhausted, check_xd_exhaustion = True, True
-            else:
-                high_exhausted, check_xd_exhaustion = eq.define_equilibrium(direction, check_tb_structure=False)
+                high_exhausted = True # force Truth at top level if type III
         else:
             high_exhausted, check_xd_exhaustion = False, False
                 
