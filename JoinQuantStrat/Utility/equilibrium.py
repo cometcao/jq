@@ -508,9 +508,9 @@ class Equilibrium():
         # in case of Zhong Shu not formed, 
         if len(self.analytic_result) < 2:
             if type(self.analytic_result[-1]) is ZouShiLeiXing: 
-            zslx = self.analytic_result[-1]
-            if self.isdebug:
-                print("ZhongShu not yet formed, only check ZSLX exhaustion")
+                zslx = self.analytic_result[-1]
+                if self.isdebug:
+                    print("ZhongShu not yet formed, only check ZSLX exhaustion")
                 return False, (zslx.check_exhaustion() if not zslx.isSimple() else False)
             elif type(self.analytic_result[-1]) is ZhongShu:
                 zs = self.analytic_result[-1]
