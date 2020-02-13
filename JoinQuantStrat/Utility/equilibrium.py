@@ -506,23 +506,29 @@ class Equilibrium():
         
     def define_equilibrium(self, direction, check_tb_structure=False):
         # in case of Zhong Shu not formed, 
-        if len(self.analytic_result) < 2 and type(self.analytic_result[-1]) is ZouShiLeiXing: 
+        if len(self.analytic_result) < 2:
+            if type(self.analytic_result[-1]) is ZouShiLeiXing: 
             zslx = self.analytic_result[-1]
             if self.isdebug:
                 print("ZhongShu not yet formed, only check ZSLX exhaustion")
-            return False, zslx.check_exhaustion() if not zslx.isSimple() else False
+                return False, (zslx.check_exhaustion() if not zslx.isSimple() else False)
+            elif type(self.analytic_result[-1]) is ZhongShu:
+                zs = self.analytic_result[-1]
+                if self.isdebug:
+                    print("only one zhongshu, check zhongshu exhaustion")
+                return False, (zs.check_exhaustion() if (not zs.is_complex_type()) else False)
         
-        a, zs, c = self.find_most_recent_zoushi(direction)
+        a, _, c = self.find_most_recent_zoushi(direction)
         
-        return self.check_exhaustion(a, c, zs,
+        return self.check_exhaustion(a, c,
                                      check_tb_structure=check_tb_structure)
         
-    def check_exhaustion(self, zslx_a, zslx_c, zs, check_tb_structure=False):
+    def check_exhaustion(self, zslx_a, zslx_c, check_tb_structure=False):
         exhaustion_result = False
         if zslx_a is None or zslx_c is None or zslx_a.isEmpty() or zslx_c.isEmpty():
             if self.isdebug:
                 print("Not enough DATA check_exhaustion")
-            return exhaustion_result, (zs.check_exhaustion() if (zs is not None and not zs.is_complex_type()) else False)
+            return exhaustion_result, False
         
         a_s = zslx_a.get_tb_structure() 
         c_s =zslx_c.get_tb_structure()
