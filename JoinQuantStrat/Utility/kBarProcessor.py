@@ -59,7 +59,8 @@ class KBarProcessor(object):
         self.kDataFrame_standardized = copy.deepcopy(kDf)
         self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_high=np.nan, 
                                                                            new_low=np.nan, 
-                                                                           trend_type=np.nan)
+                                                                           trend_type=np.nan, 
+                                                                           real_loc=[i for i in range(len(self.kDataFrame_standardized))])
         self.kDataFrame_marked = None
         self.kDataFrame_xd = None
         self.gap_XD = []
@@ -433,7 +434,6 @@ class KBarProcessor(object):
         self.kDataFrame_marked = working_df[working_df['tb']!=TopBotType.noTopBot]
 
     def defineBi_new(self):
-        self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_index=[i for i in range(len(self.kDataFrame_standardized))])
         self.gap_exists() # work out gap in the original kline
         working_df = self.kDataFrame_standardized[self.kDataFrame_standardized['tb']!=TopBotType.noTopBot]
         
@@ -581,7 +581,6 @@ class KBarProcessor(object):
         self.kDataFrame_marked = working_df[working_df['tb']!=TopBotType.noTopBot]
     
     def defineBi_chan(self):
-        self.kDataFrame_standardized = self.kDataFrame_standardized.assign(new_index=[i for i in range(len(self.kDataFrame_standardized))])
         self.gap_exists() # work out gap in the original kline
         working_df = self.kDataFrame_standardized[self.kDataFrame_standardized['tb']!=TopBotType.noTopBot]
         
@@ -794,7 +793,7 @@ class KBarProcessor(object):
         try:
             self.kDataFrame_marked['chan_price'] = self.kDataFrame_marked.apply(lambda row: row['high'] if row['tb'] == TopBotType.top else row['low'], axis=1)
             if self.isdebug:
-                print("self.kDataFrame_marked:{0}".format(self.kDataFrame_marked[['chan_price', 'tb','new_index']]))
+                print("self.kDataFrame_marked:{0}".format(self.kDataFrame_marked[['chan_price', 'tb','new_index', 'real_loc']]))
         except:
             print("empty dataframe")
             self.kDataFrame_marked['chan_price'] = None
@@ -808,7 +807,7 @@ class KBarProcessor(object):
         self.defineBi()
 #         self.defineBi_chan()
         self.getPureBi()
-        return self.kDataFrame_origin.join(self.kDataFrame_marked[['new_index', 'tb', 'chan_price']])
+        return self.kDataFrame_origin.join(self.kDataFrame_marked[['real_loc', 'tb', 'chan_price']])
     
     def getIntegradedXD(self, initial_state=TopBotType.noTopBot):
         temp_df = self.getIntegraded(initial_state)

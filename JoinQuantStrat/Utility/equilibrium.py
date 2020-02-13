@@ -522,7 +522,7 @@ class Equilibrium():
         if zslx_a is None or zslx_c is None or zslx_a.isEmpty() or zslx_c.isEmpty():
             if self.isdebug:
                 print("Not enough DATA check_exhaustion")
-            return exhaustion_result, (zs.check_exhaustion() if (zs is not None and not zs.is_complex_type()) else False
+            return exhaustion_result, (zs.check_exhaustion() if (zs is not None and not zs.is_complex_type()) else False)
         
         a_s = zslx_a.get_tb_structure() 
         c_s =zslx_c.get_tb_structure()

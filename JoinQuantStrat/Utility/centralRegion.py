@@ -18,8 +18,8 @@ class Chan_Node(object):
     def __init__(self, df_node):
         self.time = df_node.name
         self.chan_price = df_node.chan_price
-        self.loc = df_node.new_index
-        
+        self.loc = df_node.real_loc
+    
     def __repr__(self):
         return "price: {0} time: {1} loc: {2} ".format(self.chan_price, self.time, self.loc)
     
