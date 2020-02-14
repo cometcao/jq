@@ -842,9 +842,14 @@ class Long_Chan(Buy_stocks_portion):
                 if type(sub_chan_p) is list:
                     if latest_price >= sub_chan_p[0]:
                         to_ignore.append(stock)
+                    elif sub_chan_p[0] / top_chan_p > 1.1: # if the TYPE III is too far from previous ZhongShu, we shouldn't go
+                        to_ignore.append(stock)
                 else: # can only be actual price here
                     if latest_price >= sub_chan_p:
                         to_ignore.append(stock)
+                    elif sub_chan_p / top_chan_p > 1.1:
+                        to_ignore.append(stock)
+                
                 
         self.to_buy = type_I_stocks + self.to_buy
         
