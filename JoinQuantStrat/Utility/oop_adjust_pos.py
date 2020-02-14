@@ -784,7 +784,7 @@ class Short_Chan(Sell_stocks):
                     print("reached target price: {0}".format(top_chan_p))
                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
             elif top_chan_t == Chan_Type.III:
-                result, xd_result, _ = check_stock_sub(stock,
+                result, xd_result, _ , _= check_stock_sub(stock,
                                               end_time=context.current_dt, 
                                               periods=[self.period], 
                                               count=2000, 
