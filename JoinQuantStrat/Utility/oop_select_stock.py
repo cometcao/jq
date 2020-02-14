@@ -341,7 +341,7 @@ class Pick_Chan_Stocks(Create_stock_list):
                                                                           isdebug=self.is_debug, 
                                                                           is_anal=False)
             if result:
-                self.g.stock_chan_type[stock] = (chan_type, split_time)
+                self.g.stock_chan_type[stock] = [chan_type, [split_time]]
         if self.is_debug:
             print(str(self.g.stock_chan_type))
         return list(self.g.stock_chan_type.keys())
@@ -623,8 +623,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
             return filter_stock_list
         stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
         for stock in stock_list:
-            chan_t, chan_d, chan_p = self.g.stock_chan_type[stock][0][0]
-            result, xd_result, chan_types = check_stock_sub(stock,
+            top_chan_types = self.g.stock_chan_type[stock][0]
+            top_time = self.g.stock_chan_type[stock][1]
+            result, xd_result, chan_types, effective_time = check_stock_sub(stock,
                                                           end_time=context.current_dt,
                                                           periods=[self.period],
                                                           count=2000,
@@ -632,20 +633,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                           chan_type=Chan_Type.INVALID,
                                                           isdebug=self.isdebug,
                                                           is_anal=False,
-                                                          split_time=self.g.stock_chan_type[stock][1],
+                                                          split_time=top_time[0],
                                                           check_bi=False)
             
-            if chan_t == Chan_Type.III: # only in case of type III we need to update the price boundary
-                sub_chan_t, _, core_region = chan_types[0]
-                if type(core_region) is list:
-                    if chan_d == TopBotType.top2bot:
-                        chan_p = core_region[0]
-                    elif chan_d == TopBotType.bot2top:
-                        chan_p = core_region[1]
-                    if sub_chan_t == Chan_Type.I:
-                        chan_t=sub_chan_t
-                    print("override chan_type and chan_price: {0}, {1}".format(chan_t, chan_p))
-                    self.g.stock_chan_type[stock][0][0] = chan_t, chan_d, chan_p
+            self.g.stock_chan_type[stock][0] = top_chan_types + chan_types
+            top_time.append(effective_time)
+            self.g.stock_chan_type[stock][1] = top_time
                 
             if result:
                 filter_stock_list.append(stock)

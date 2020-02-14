@@ -771,19 +771,20 @@ class Short_Chan(Sell_stocks):
         to_check = [stock for stock in to_check if context.portfolio.positions[stock].closeable_amount > 0]
         for stock in to_check:
             position_time = context.portfolio.positions[stock].transact_time
-            chan_t, chan_d, chan_p = self.g.stock_chan_type[stock][0][0]
+            top_chan_t, _, top_chan_p = self.g.stock_chan_type[stock][0][0]
+            sub_chan_t, _, sub_chan_p = self.g.stock_chan_type[stock][0][1]
             stock_data = get_price(stock,
                                    start_date=position_time, 
                                    end_date=context.current_dt, 
                                    frequency='1m', 
                                    fields=('high'), 
                                    skip_paused=True)
-            if chan_t == Chan_Type.I: # for TYPE I we wait till target price
-                if stock_data.loc[position_time:, 'high'].max() > chan_p:
-                    print("reached target price: {0}".format(chan_p))
+            if top_chan_t == Chan_Type.I: # for TYPE I we wait till target price
+                if stock_data['high'].max() > top_chan_p:
+                    print("reached target price: {0}".format(top_chan_p))
                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
-            elif chan_t == Chan_Type.III:
-                result, xd_result, chan_types = check_stock_sub(stock,
+            elif top_chan_t == Chan_Type.III:
+                result, xd_result, _ = check_stock_sub(stock,
                                               end_time=context.current_dt, 
                                               periods=[self.period], 
                                               count=2000, 
@@ -793,8 +794,9 @@ class Short_Chan(Sell_stocks):
                                               is_anal=False,
                                               split_time=position_time,
                                               check_bi=True)
-                if result or xd_result or stock_data.loc[position_time:, 'high'].max() > chan_p:
-                    print("exhausted at {0} level with price mark {1}".format(self.period, chan_p))
+                mark_p = sub_chan_p[0] if type(sub_chan_p) is list else sub_chan_p
+                if result or xd_result or stock_data['high'].max() > mark_p:
+                    print("exhausted at {0} level with price mark {1}".format(self.period, mark_p))
                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
 
             
@@ -817,24 +819,31 @@ class Long_Chan(Buy_stocks_portion):
         type_I_stocks = []
         to_ignore = []
         for stock in self.to_buy:
-            chan_t, chan_d, chan_p = self.g.stock_chan_type[stock][0][0]
-            latest_data = attribute_history(stock, 1, '1m', ['close'], df=False)
-            latest_price = latest_data['close'][-1]
+            top_chan_t, _, top_chan_p = self.g.stock_chan_type[stock][0][0]
+            sub_chan_t, _, sub_chan_p = self.g.stock_chan_type[stock][0][1]
+            effective_time = self.g.stock_chan_type[stock][1][1]
+            latest_data = get_price(stock,
+                                   start_date=effective_time, 
+                                   end_date=context.current_dt, 
+                                   frequency='1m', 
+                                   fields=('high'), 
+                                   skip_paused=True)
+            latest_price = latest_data['high'].max()
             # check current price of the stock ignore the ones not suitable
             # sort the stocks prioritize TYPE I stocks
-            if Chan_Type.I == chan_t:
+            if Chan_Type.I == top_chan_t:
                 type_I_stocks.append(stock)
                 self.to_buy.remove(stock)
                 
-                if latest_price >= chan_p:
+                if latest_price >= top_chan_p:
                     to_ignore.append(stock)
                     
-            elif Chan_Type.III == chan_t:
-                if type(chan_p) is list:
-                    if latest_price >= chan_p[0]:
+            elif Chan_Type.III == top_chan_t:
+                if type(sub_chan_p) is list:
+                    if latest_price >= sub_chan_p[0]:
                         to_ignore.append(stock)
                 else: # can only be actual price here
-                    if latest_price >= chan_p:
+                    if latest_price >= sub_chan_p:
                         to_ignore.append(stock)
                 
         self.to_buy = type_I_stocks + self.to_buy
