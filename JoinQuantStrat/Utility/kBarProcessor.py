@@ -191,6 +191,8 @@ class KBarProcessor(object):
         
     def markTopBot(self, initial_state=TopBotType.noTopBot):
         self.kDataFrame_standardized = self.kDataFrame_standardized.assign(tb=TopBotType.noTopBot)
+        if self.kDataFrame_standardized.empty:
+            return
         if initial_state != TopBotType.noTopBot:
             felem = self.kDataFrame_standardized.iloc[0]
             selem = self.kDataFrame_standardized.iloc[1]
