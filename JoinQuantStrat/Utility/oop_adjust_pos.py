@@ -808,6 +808,7 @@ class Long_Chan(Buy_stocks_portion):
     def __init__(self, params):
         Buy_stocks_portion.__init__(self, params)
         self.buy_count = params.get('buy_count', 3)
+        self.type_III_threthold = params.get('threthold', 1.2)
         self.to_buy = []
         
     def handle_data(self, context, data):
@@ -842,12 +843,12 @@ class Long_Chan(Buy_stocks_portion):
                 if type(sub_chan_p) is list:
                     if latest_price >= sub_chan_p[0]:
                         to_ignore.append(stock)
-                    elif sub_chan_p[0] / top_chan_p > 1.1: # if the TYPE III is too far from previous ZhongShu, we shouldn't go
+                    elif sub_chan_p[0] / top_chan_p > self.type_III_threthold: # if the TYPE III is too far from previous ZhongShu, we shouldn't go
                         to_ignore.append(stock)
                 else: # can only be actual price here
                     if latest_price >= sub_chan_p:
                         to_ignore.append(stock)
-                    elif sub_chan_p / top_chan_p > 1.1:
+                    elif sub_chan_p / top_chan_p > self.type_III_threthold:
                         to_ignore.append(stock)
                 
                 

@@ -122,7 +122,7 @@ def check_stock_full(stock, end_time, periods=['5m', '1m'], count=2000, directio
             i = i + 1
             if i < len(periods):
                 ni.prepare_data(periods[i], splitTime, initial_direction=direction)
-        return (xd_exhausted or sub_exhausted) and sub_xd_exhausted, stock_profile
+        return (xd_exhausted and sub_exhausted), stock_profile
     else:
         return exhausted, stock_profile
 
@@ -810,7 +810,8 @@ class NestedInterval():
                                  skip_paused=False)
                 
             kb_df = KBarProcessor(stock_df, isdebug=self.isdebug)
-            xd_df = kb_df.getIntegradedXD()
+            iis = TopBotType.top if initial_direction == TopBotType.top2bot else TopBotType.bot if initial_direction == TopBotType.bot2top else TopBotType.noTopBot
+            xd_df = kb_df.getIntegradedXD(initial_state=iis)
             if xd_df.empty:
                 self.df_zoushi_tuple_list[pe]=(xd_df,None)
             else:

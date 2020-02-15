@@ -484,33 +484,33 @@ class ZouShi(object):
                 if mark_zslx.isEmpty():
                     mark_zslx = zslx
                 pivot_tp = mark_zslx.get_time_region()[0] if not check_xd_exhaustion else zslx.take_last_xd_as_zslx().get_time_region()[0]
-                return self.get_previous_tb_timestamp(pivot_tp)
+                return pivot_tp
             elif type(self.zslx_result[-1]) is ZhongShu:
                 zs = self.zslx_result[-1]
                 sub_zslx = zs.take_split_xd_as_zslx(direction) if not check_xd_exhaustion else zs.take_last_xd_as_zslx()
                 pivot_tp = sub_zslx.get_time_region()[0]
-                return self.get_previous_tb_timestamp(pivot_tp)
+                return pivot_tp
         elif chan_type == Chan_Type.III or chan_type == Chan_Type.III_weak: # we need to split from past top / bot
             if type(self.zslx_result[-1]) is ZouShiLeiXing:
                 [s, e] = self.zslx_result[-1].get_time_region()
                 temp_df = self.original_df.iloc[self.original_df.index.get_loc(s):,:]
                 pivot_tp = temp_df['high'].idxmax() if direction == TopBotType.top2bot else temp_df['low'].idxmin()
-                return self.get_previous_tb_timestamp(pivot_tp)
+                return pivot_tp
             elif type(self.zslx_result[-1]) is ZhongShu:
                 zs = self.zslx_result[-1]
                 pivot_tp = zs.get_time_region()[0] if not check_xd_exhaustion else zs.take_last_xd_as_zslx().get_time_region()[0]
-                return self.get_previous_tb_timestamp(pivot_tp)
+                return pivot_tp
         elif chan_type == Chan_Type.II or chan_type == Chan_Type.II_weak:
             if type(self.zslx_result[-1]) is ZouShiLeiXing:
                 zslx = self.zslx_result[-1]
                 pivot_tp = zslx.get_time_region()[0] if not check_xd_exhaustion else zslx.take_last_xd_as_zslx().get_time_region()[0]
-                return self.get_previous_tb_timestamp(pivot_tp)
+                return pivot_tp
             elif type(self.zslx_result[-1]) is ZhongShu:
                 zs = self.zslx_result[-1]
                 pivot_tp = zs.take_split_xd_as_zslx(direction).get_time_region()[0] if not check_xd_exhaustion else zs.take_last_xd_as_zslx().get_time_region()[0]
-                return self.get_previous_tb_timestamp(pivot_tp)
+                return pivot_tp
         else:
-            return self.get_previous_tb_timestamp(self.zslx_result[-1].get_time_region()[0])
+            return self.zslx_result[-1].get_time_region()[0]
 
     def analyze(self, initial_direction):
         i = 0

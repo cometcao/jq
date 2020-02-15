@@ -90,18 +90,7 @@ class KBarProcessor(object):
     def standardize(self, initial_state=TopBotType.noTopBot):
         # 1. We need to make sure we start with first two K-bars without inclusive relationship
         # drop the first if there is inclusion, and check again
-        if initial_state == TopBotType.noTopBot:
-            while self.kDataFrame_standardized.shape[0] > 2:
-                first_Elem = self.kDataFrame_standardized.iloc[0]
-                second_Elem = self.kDataFrame_standardized.iloc[1]
-                if self.checkInclusive(first_Elem, second_Elem) != InclusionType.noInclusion:
-                    self.kDataFrame_standardized.drop(self.kDataFrame_standardized.index[0], inplace=True)
-                    pass
-                else:
-                    self.kDataFrame_standardized.ix[0,'new_high'] = first_Elem.high
-                    self.kDataFrame_standardized.ix[0,'new_low'] = first_Elem.low
-                    break
-        else:
+        if initial_state == TopBotType.top or initial_state == TopBotType.bot:
             # given the initial state, make the first two bars non-inclusive, 
             # the first bar is confirmed as pivot, anything followed with inclusive relation 
             # will be merged into the first bar
@@ -120,6 +109,18 @@ class KBarProcessor(object):
                     self.kDataFrame_standardized.ix[0,'new_high'] = first_Elem.high
                     self.kDataFrame_standardized.ix[0,'new_low'] = first_Elem.low
                     break                    
+        else:
+            while self.kDataFrame_standardized.shape[0] > 2:
+                first_Elem = self.kDataFrame_standardized.iloc[0]
+                second_Elem = self.kDataFrame_standardized.iloc[1]
+                if self.checkInclusive(first_Elem, second_Elem) != InclusionType.noInclusion:
+                    self.kDataFrame_standardized.drop(self.kDataFrame_standardized.index[0], inplace=True)
+                    pass
+                else:
+                    self.kDataFrame_standardized.ix[0,'new_high'] = first_Elem.high
+                    self.kDataFrame_standardized.ix[0,'new_low'] = first_Elem.low
+                    break
+
 
         # 2. loop through the whole data set and process inclusive relationship
         pastElemIdx = 0
@@ -193,7 +194,7 @@ class KBarProcessor(object):
         self.kDataFrame_standardized = self.kDataFrame_standardized.assign(tb=TopBotType.noTopBot)
         if self.kDataFrame_standardized.empty:
             return
-        if initial_state != TopBotType.noTopBot:
+        if initial_state == TopBotType.top or initial_state == TopBotType.bot:
             felem = self.kDataFrame_standardized.iloc[0]
             selem = self.kDataFrame_standardized.iloc[1]
             if (initial_state == TopBotType.top and felem.high >= selem.high) or \
@@ -214,11 +215,13 @@ class KBarProcessor(object):
                 last_idx = idx+1
                 
         # mark the first kbar
-        first_loc = get_next_loc(0, self.kDataFrame_standardized)
-        if first_loc is not None:
-            first_tb = self.kDataFrame_standardized.iloc[first_loc].tb
-            self.kDataFrame_standardized.ix[0, 'tb'] = TopBotType.reverse(first_tb)
-        
+        if (self.kDataFrame_standardized.ix[0, 'tb'] != TopBotType.top and\
+            self.kDataFrame_standardized.ix[0, 'tb'] != TopBotType.bot):
+            first_loc = get_next_loc(0, self.kDataFrame_standardized)
+            if first_loc is not None:
+                first_tb = self.kDataFrame_standardized.iloc[first_loc].tb
+                self.kDataFrame_standardized.ix[0, 'tb'] = TopBotType.reverse(first_tb)
+            
         # mark the last kbar 
         last_tb = self.kDataFrame_standardized.iloc[last_idx].tb
         self.kDataFrame_standardized.ix[-1, 'tb'] = TopBotType.reverse(last_tb)
@@ -815,36 +818,50 @@ class KBarProcessor(object):
         temp_df = self.getIntegraded(initial_state)
         if temp_df.empty:
             return temp_df
-        self.defineXD()
+        self.defineXD(initial_state)
         
         return temp_df.join(self.kDataFrame_xd['xd_tb'])
             
 ################################################## XD defintion ##################################################            
             
-    def find_initial_direction(self, working_df):
-        # use simple solution to find initial direction
-        initial_loc = current_loc = 0
-        initial_direction = TopBotType.noTopBot
-        while current_loc + 3 < working_df.shape[0]:
-            first = working_df.iloc[current_loc]
-            second = working_df.iloc[current_loc+1]
-            third = working_df.iloc[current_loc+2]
-            forth = working_df.iloc[current_loc+3]
-            
-            if first.chan_price < second.chan_price:
-                found_direction = (first.chan_price<=third.chan_price and second.chan_price<forth.chan_price) or\
-                                    (first.chan_price>=third.chan_price and second.chan_price>forth.chan_price)
+    def find_initial_direction(self, working_df, initial_status=TopBotType.noTopBot):
+        if initial_status != TopBotType.noTopBot:
+            # first six elem, this can only be used when we are sure about the direction of the xd
+            if initial_status == TopBotType.top:
+                idx = working_df.iloc[:6,working_df.columns.get_loc('chan_price')].idxmax()
+            elif initial_status == TopBotType.bot:
+                idx = working_df.iloc[:6,working_df.columns.get_loc('chan_price')].idxmin()
             else:
-                found_direction = (first.chan_price<third.chan_price and second.chan_price<=forth.chan_price) or\
-                                    (first.chan_price>third.chan_price and second.chan_price>=forth.chan_price)
-                                
-            if found_direction:
-                initial_direction = TopBotType.bot2top if (first.chan_price<third.chan_price or second.chan_price<forth.chan_price) else TopBotType.top2bot
-                initial_loc = current_loc
-                break
-            else:
-                current_loc = current_loc + 1
+                idx = None
+                print("Invalid Initial TopBot type")
+            working_df.loc[idx, 'xd_tb'] = initial_status
+            if self.isdebug:
+                print("initial xd_tb:{0} located at {1}".format(initial_status, idx))
+            initial_loc = working_df.index.get_loc(idx) + 1
+            initial_direction = TopBotType.top2bot if initial_status == TopBotType.top else TopBotType.bot2top
+        else:
+            initial_loc = current_loc = 0
+            initial_direction = TopBotType.noTopBot
+            while current_loc + 3 < working_df.shape[0]:
+                first = working_df.iloc[current_loc]
+                second = working_df.iloc[current_loc+1]
+                third = working_df.iloc[current_loc+2]
+                forth = working_df.iloc[current_loc+3]
                 
+                if first.chan_price < second.chan_price:
+                    found_direction = (first.chan_price<=third.chan_price and second.chan_price<forth.chan_price) or\
+                                        (first.chan_price>=third.chan_price and second.chan_price>forth.chan_price)
+                else:
+                    found_direction = (first.chan_price<third.chan_price and second.chan_price<=forth.chan_price) or\
+                                        (first.chan_price>third.chan_price and second.chan_price>=forth.chan_price)
+                                    
+                if found_direction:
+                    initial_direction = TopBotType.bot2top if (first.chan_price<third.chan_price or second.chan_price<forth.chan_price) else TopBotType.top2bot
+                    initial_loc = current_loc
+                    break
+                else:
+                    current_loc = current_loc + 1
+            
         return initial_loc, initial_direction
     
     
@@ -1058,7 +1075,8 @@ class KBarProcessor(object):
         else:
             return TopBotType.noTopBot, with_gap, with_xd_gap
     
-    def defineXD(self):        working_df = self.kDataFrame_marked[['chan_price', 'tb','new_index']] # new index used for central region
+    def defineXD(self, initial_status=TopBotType.noTopBot):
+        working_df = self.kDataFrame_marked[['chan_price', 'tb','new_index']] # new index used for central region
 
         working_df.loc[:,'original_tb'] = working_df['tb']
         working_df = working_df.assign(xd_tb=TopBotType.noTopBot)
@@ -1068,7 +1086,7 @@ class KBarProcessor(object):
             return working_df
     
         # find initial direction
-        initial_i, initial_direction = self.find_initial_direction(working_df)
+        initial_i, initial_direction = self.find_initial_direction(working_df, initial_status)
         
         # loop through to find XD top bot
         working_df = self.find_XD(initial_i, initial_direction, working_df)
