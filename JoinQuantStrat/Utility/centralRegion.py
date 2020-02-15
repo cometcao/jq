@@ -480,8 +480,10 @@ class ZouShi(object):
             if type(self.zslx_result[-1]) is ZouShiLeiXing:
                 zs = self.zslx_result[-2]
                 zslx = self.zslx_result[-1]
-                sub_zslx = zs.take_split_xd_as_zslx(direction) 
-                pivot_tp = sub_zslx.get_time_region()[0] if not check_xd_exhaustion else zslx.take_last_xd_as_zslx().get_time_region()[0]
+                mark_zslx = zs.take_split_xd_as_zslx(direction) 
+                if mark_zslx.isEmpty():
+                    mark_zslx = zslx
+                pivot_tp = mark_zslx.get_time_region()[0] if not check_xd_exhaustion else zslx.take_last_xd_as_zslx().get_time_region()[0]
                 return self.get_previous_tb_timestamp(pivot_tp)
             elif type(self.zslx_result[-1]) is ZhongShu:
                 zs = self.zslx_result[-1]
