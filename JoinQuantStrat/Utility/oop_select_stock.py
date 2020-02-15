@@ -615,20 +615,24 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
     take data from preprocessed file based on chan rule
     '''
     def __init__(self, params):
-        Pick_stock_from_file_chan.__init__(self, params)
+        Pick_Chan_Stocks.__init__(self, params)
         self.filename = params.get('filename', None)
         
-    def filter(self, context, data, stock_list):   
-        if self.ml_predict_file_path: # model prediction happened outside
+    def before_trading_start(self, context):
+        chan_stock_list = []
+        if self.filename: # model prediction happened outside
             today_date = context.current_dt.date()
-            chan_dict = json.loads(read_file(self.ml_predict_file_path).decode())
+            chan_dict = json.loads(read_file(self.filename).decode())
             
             chan_list = chan_dict[str(today_date)]
+            print("data read from file: {0}".format(chan_list))
             for stock, c_type_value, c_direc_value, c_price, s_time in chan_list:
-                top_chan_type = (Chan_Type.value2type(c_type_value), 
+                chan_stock_list.append(stock)
+                top_chan_type = [(Chan_Type.value2type(c_type_value), 
                                  TopBotType.value2type(c_direc_value),
-                                 c_price)
-                self.g.stock_chan_type[stock] = [top_chan_type, [s_time]]
+                                 c_price)]
+                self.g.stock_chan_type[stock] = [top_chan_type, [pd.Timestamp(s_time)]]
+        return chan_stock_list
     
     def __str__(self):
         return "从文件中读取根据缠论已经写好的股票列表以及数据"
