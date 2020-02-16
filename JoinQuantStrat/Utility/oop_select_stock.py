@@ -626,12 +626,12 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
             
             chan_list = chan_dict[str(today_date)]
             print("data read from file: {0}".format(chan_list))
-            for stock, c_type_value, c_direc_value, c_price, s_time in chan_list:
+            for stock, c_type_value, c_direc_value, c_price, xd_result, s_time in chan_list:
                 chan_stock_list.append(stock)
                 top_chan_type = [(Chan_Type.value2type(c_type_value), 
                                  TopBotType.value2type(c_direc_value),
                                  c_price)]
-                self.g.stock_chan_type[stock] = [top_chan_type, [pd.Timestamp(s_time)]]
+                self.g.stock_chan_type[stock] = [top_chan_type, [pd.Timestamp(s_time)], xd_result]
         return chan_stock_list
     
     def __str__(self):
@@ -672,10 +672,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
             
             # TYPE I and TYPE III with different criterion
             top_xd_result = self.g.stock_chan_type[stock][2]
-            if top_chan_types[0] == TopBotType.I:
+            if top_chan_types[0][0] == Chan_Type.I:
                 if result:
                     filter_stock_list.append(stock)
-            elif top_chan_types[0] == TopBotType.III:
+            elif top_chan_types[0][0] == Chan_Type.III:
                 if (top_xd_result or result) and xd_result:
                     filter_stock_list.append(stock)
         if self.isdebug:
