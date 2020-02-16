@@ -319,6 +319,7 @@ class Pick_Chan_Stocks(Create_stock_list):
         self.chan_types = params.get('chan_types', [Chan_Type.I, Chan_Type.III])
         self.is_debug = params.get('isdebug', False)
         self.num_of_stocks = params.get('number_of_stock', 8)
+        self.num_of_data = params.get('number_of_data', 2000)
         
     def update_params(self, context, params):
         pass
@@ -336,7 +337,7 @@ class Pick_Chan_Stocks(Create_stock_list):
             result, xd_result, chan_type, split_time = check_chan_by_type_exhaustion(stock,
                                                                           end_time=context.current_dt, 
                                                                           periods=['5m'], 
-                                                                          count=2000, 
+                                                                          count=self.num_of_data, 
                                                                           direction=TopBotType.top2bot,
                                                                           chan_type=self.chan_types,
                                                                           isdebug=self.is_debug, 
