@@ -106,7 +106,7 @@ def check_stock_full(stock, end_time, periods=['5m', '1m'], count=2000, directio
     if not chan_types:
         chan_types = [(Chan_Type.INVALID, TopBotType.noTopBot, 0)]
         
-    stock_profile = [chan_types[0]]
+    stock_profile = [(chan_types[0], splitTime)]
     
     if exhausted:
         i = 1
@@ -122,7 +122,12 @@ def check_stock_full(stock, end_time, periods=['5m', '1m'], count=2000, directio
             i = i + 1
             if i < len(periods):
                 ni.prepare_data(periods[i], splitTime, initial_direction=direction)
-        return (xd_exhausted and sub_exhausted), stock_profile
+        if chan_types[0][0] == Chan_Type.I:
+            return exhausted and sub_exhausted, stock_profile
+        elif chan_types[0][0] == Chan_Type.III:
+            return exhausted and (xd_exhausted or sub_exhausted) and sub_xd_exhausted, stock_profile
+        else:
+            return exhausted and xd_exhausted, stock_profile
     else:
         return exhausted, stock_profile
 
@@ -503,11 +508,13 @@ class Equilibrium():
         a_s = zslx_a.get_tb_structure() 
         c_s =zslx_c.get_tb_structure()
         if (zslx_c.get_magnitude()/zslx_a.get_magnitude() < (1-(1-GOLDEN_RATIO)/2) and\
-            (a_s != c_s or zslx_c.isSimple())):
+            (zslx_c.isSimple() and zslx_a.isSimple())):
             if self.isdebug:
                 print("Not matching magnitude")
             return exhaustion_result, False
-        
+
+        a_s = zslx_a.get_tb_structure() 
+        c_s =zslx_c.get_tb_structure()
         if check_tb_structure:
             if a_s[0] != c_s[0] or a_s[-1] != c_s[-1]:
                 if self.isdebug:

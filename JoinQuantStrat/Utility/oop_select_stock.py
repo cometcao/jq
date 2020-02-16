@@ -333,7 +333,7 @@ class Pick_Chan_Stocks(Create_stock_list):
         stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
         stock_list = stock_list[:self.num_of_stocks]
         for stock in stock_list:
-            result, _, chan_type, split_time = check_chan_by_type_exhaustion(stock,
+            result, xd_result, chan_type, split_time = check_chan_by_type_exhaustion(stock,
                                                                           end_time=context.current_dt, 
                                                                           periods=['5m'], 
                                                                           count=2000, 
@@ -342,7 +342,7 @@ class Pick_Chan_Stocks(Create_stock_list):
                                                                           isdebug=self.is_debug, 
                                                                           is_anal=False)
             if result:
-                self.g.stock_chan_type[stock] = [chan_type, [split_time]]
+                self.g.stock_chan_type[stock] = [chan_type, [split_time], xd_result]
         if self.is_debug:
             print(str(self.g.stock_chan_type))
         return list(self.g.stock_chan_type.keys())
@@ -665,12 +665,19 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                           split_time=top_time[0],
                                                           check_bi=False)
             
+            # update sub level information
             self.g.stock_chan_type[stock][0] = top_chan_types + chan_types
             top_time.append(effective_time)
             self.g.stock_chan_type[stock][1] = top_time
-                
-            if result:
-                filter_stock_list.append(stock)
+            
+            # TYPE I and TYPE III with different criterion
+            top_xd_result = self.g.stock_chan_type[stock][2]
+            if top_chan_types[0] == TopBotType.I:
+                if result:
+                    filter_stock_list.append(stock)
+            elif top_chan_types[0] == TopBotType.III:
+                if (top_xd_result or result) and xd_result:
+                    filter_stock_list.append(stock)
         if self.isdebug:
             print("Stocks ready: {0}".format(filter_stock_list))
         return filter_stock_list
