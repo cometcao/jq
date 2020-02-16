@@ -628,6 +628,9 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
             chan_list = chan_dict[str(today_date)]
             print("data read from file: {0}".format(chan_list))
             for stock, c_type_value, c_direc_value, c_price, xd_result, s_time in chan_list:
+                if stock in context.portfolio.positions.keys():
+                    print("{0} already in position".format(stock))
+                    continue
                 chan_stock_list.append(stock)
                 top_chan_type = [(Chan_Type.value2type(c_type_value), 
                                  TopBotType.value2type(c_direc_value),
@@ -655,6 +658,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         for stock in stock_list:
             top_chan_types = self.g.stock_chan_type[stock][0]
             top_time = self.g.stock_chan_type[stock][1]
+            top_xd_result = self.g.stock_chan_type[stock][2]
             result, xd_result, chan_types, effective_time = check_stock_sub(stock,
                                                           end_time=context.current_dt,
                                                           periods=[self.period],
@@ -666,19 +670,19 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                           split_time=top_time[0],
                                                           check_bi=False)
             
-            # update sub level information
-            self.g.stock_chan_type[stock][0] = top_chan_types + chan_types
-            top_time.append(effective_time)
-            self.g.stock_chan_type[stock][1] = top_time
-            
             # TYPE I and TYPE III with different criterion
-            top_xd_result = self.g.stock_chan_type[stock][2]
             if top_chan_types[0][0] == Chan_Type.I:
                 if result:
                     filter_stock_list.append(stock)
             elif top_chan_types[0][0] == Chan_Type.III:
-                if (top_xd_result or result) and xd_result:
+                if top_xd_result or result:
                     filter_stock_list.append(stock)
+            
+            if stock in filter_stock_list:
+                # update sub level information
+                top_time.append(effective_time)
+                self.g.stock_chan_type[stock] = [top_chan_types + chan_types, top_time, top_xd_result]
+                
         if self.isdebug:
             print("Stocks ready: {0}".format(filter_stock_list))
         return filter_stock_list
