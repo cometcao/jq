@@ -236,12 +236,14 @@ class ZouShiLeiXing(object):
     def check_exhaustion(self):
         '''
         check most recent two XD or BI at current direction on slopes
+        check if current ZSLX or series of ZSLX are exhausted.
+        return bool value, and the split timestamp
         '''
         i = 0
         all_double_nodes = []
         # if No. of nodes less than two we pass
         if len(self.zoushi_nodes) <= 2:
-            return True
+            return True, self.zoushi_nodes[0].time
         
         while i < len(self.zoushi_nodes)-1:
             current_node = self.zoushi_nodes[i]
@@ -255,9 +257,9 @@ class ZouShiLeiXing(object):
         while i < -1:
             # make sure the slope goes flatten, if not it's NOT exhausted
             if abs(same_direction_nodes[i+1].work_out_slope()) >= abs(same_direction_nodes[i].work_out_slope()):
-                return False
+                return False,  same_direction_nodes[i].start.time
             i = i + 1
-        return True
+        return True, same_direction_nodes[i].start.time
         
 
 class ZhongShu(ZouShiLeiXing):

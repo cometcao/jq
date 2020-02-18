@@ -618,6 +618,7 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
     def __init__(self, params):
         Pick_Chan_Stocks.__init__(self, params)
         self.filename = params.get('filename', None)
+        self.chan_types = params.get('chan_types', [Chan_Type.I, Chan_Type.III])
         
     def before_trading_start(self, context):
         chan_stock_list = []
@@ -630,6 +631,8 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
             for stock, c_type_value, c_direc_value, c_price, xd_result, s_time in chan_list:
                 if stock in context.portfolio.positions.keys():
                     print("{0} already in position".format(stock))
+                    continue
+                if self.chan_types and (Chan_Type.value2type(c_type_value) not in self.chan_types):
                     continue
                 chan_stock_list.append(stock)
                 top_chan_type = [(Chan_Type.value2type(c_type_value), 

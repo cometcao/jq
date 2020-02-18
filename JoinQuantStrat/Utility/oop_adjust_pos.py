@@ -809,6 +809,7 @@ class Long_Chan(Buy_stocks_portion):
         Buy_stocks_portion.__init__(self, params)
         self.buy_count = params.get('buy_count', 3)
         self.type_III_threthold = params.get('threthold', 1.2)
+        self.force_chan_type = params.get('force_chan_type', [Chan_Type.I])
         self.to_buy = []
         
     def handle_data(self, context, data):
@@ -822,6 +823,11 @@ class Long_Chan(Buy_stocks_portion):
         for stock in self.to_buy:
             top_chan_t, _, top_chan_p = self.g.stock_chan_type[stock][0][0]
             sub_chan_t, _, sub_chan_p = self.g.stock_chan_type[stock][0][1]
+            
+            if self.force_chan_type and (top_chan_t not in self.force_chan_type) and (sub_chan_t not in self.force_chan_type):
+                print("stock {0} ignored due to force {1}".format(stock, self.force_chan_type))
+                continue
+            
             effective_time = self.g.stock_chan_type[stock][1][1]
             latest_data = get_price(stock,
                                    start_date=effective_time, 
