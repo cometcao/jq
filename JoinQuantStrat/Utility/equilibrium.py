@@ -484,12 +484,14 @@ class Equilibrium():
                 zslx = self.analytic_result[-1]
                 if self.isdebug:
                     print("ZhongShu not yet formed, only check ZSLX exhaustion")
-                return False, zslx.check_exhaustion() 
+                xd_exhaustion, ts = zslx.check_exhaustion() 
+                return False, xd_exhaustion, ts
             elif type(self.analytic_result[-1]) is ZhongShu:
                 zs = self.analytic_result[-1]
                 if self.isdebug:
                     print("only one zhongshu, check zhongshu exhaustion")
-                return False, zs.check_exhaustion()
+                xd_exhaustion, ts = zs.check_exhaustion()
+                return False, xd_exhaustion, ts
         
         a, _, c = self.find_most_recent_zoushi(direction)
         
