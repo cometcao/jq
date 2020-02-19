@@ -353,6 +353,7 @@ class Pick_Chan_Stocks(Create_stock_list):
         stored_stocks = list(self.g.stock_chan_type.keys())
         to_be_removed = [stock for stock in stored_stocks if stock not in holding_pos]
         [self.g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
+        print("position chan info: {0}".format(self.g.stock_chan_type))
     
     def __str__(self):
         return "Chan Selection Params: {0}, {1}, {2}".format(self.index, self.periods, self.chan_types)
