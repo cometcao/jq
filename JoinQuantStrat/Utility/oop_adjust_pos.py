@@ -810,6 +810,7 @@ class Long_Chan(Buy_stocks_portion):
         self.buy_count = params.get('buy_count', 3)
         self.type_III_threthold = params.get('threthold', 1.2)
         self.force_chan_type = params.get('force_chan_type', [Chan_Type.I])
+        self.force_price_check = params.get('force_price_check', True)
         self.to_buy = []
         
     def handle_data(self, context, data):
@@ -842,10 +843,10 @@ class Long_Chan(Buy_stocks_portion):
                 type_I_stocks.append(stock)
                 self.to_buy.remove(stock)
                 
-                if latest_price >= top_chan_p:
+                if latest_price >= top_chan_p and self.force_price_check:
                     to_ignore.append(stock)
                     
-            elif Chan_Type.III == top_chan_t:
+            elif Chan_Type.III == top_chan_t and self.force_price_check:
                 if type(sub_chan_p) is list:
                     if latest_price >= sub_chan_p[0]:
                         to_ignore.append(stock)
