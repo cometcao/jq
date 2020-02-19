@@ -81,11 +81,11 @@ def check_stock_sub(stock,
             ni.use_xd=False
             ni.prepare_data(periods[i], split_time, initial_direction=direction)
             bi_exhausted, bi_xd_exhausted, bi_split_time = ni.indepth_analyze_zoushi(direction, None, pe)
-            
+            return exhausted, xd_exhausted or bi_exhausted, chan_types, effective_time
         i = i + 1
         if i < len(periods):
             ni.prepare_data(periods[i], split_time, initial_direction=direction)
-    return exhausted, xd_exhausted or bi_exhausted, chan_types, effective_time
+    return exhausted, xd_exhausted, chan_types, effective_time
     
 
 def check_stock_full(stock, end_time, periods=['5m', '1m'], count=2000, direction=TopBotType.top2bot, isdebug=False, is_anal=False):

@@ -826,7 +826,7 @@ class Long_Chan(Buy_stocks_portion):
             
             if self.force_chan_type and (top_chan_t not in self.force_chan_type) and (sub_chan_t not in self.force_chan_type):
                 print("stock {0} ignored due to force {1}".format(stock, self.force_chan_type))
-                continue
+                to_ignore.append(stock)
             
             effective_time = self.g.stock_chan_type[stock][1][1]
             latest_data = get_price(stock,
