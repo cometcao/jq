@@ -786,9 +786,9 @@ class Short_Chan(Sell_stocks):
                 if stock_data['high'].max() > top_chan_p:
                     print("reached target price: {0}".format(top_chan_p))
                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
-#                 if (1-stock_data['low'].min() / avg_cost) >= self.stop_loss:
-#                     print("reached stop loss: {0}".format(avg_cost))
-#                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+                if (1-stock_data['low'].min() / avg_cost) >= self.stop_loss:
+                    print("reached stop loss: {0}".format(avg_cost))
+                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
                 if (stock_data['high'].max() / avg_cost - 1) >= self.stop_profit:
                     print("reached stop profit: {0}".format(avg_cost))
                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
