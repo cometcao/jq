@@ -765,24 +765,34 @@ class Short_Chan(Sell_stocks):
         Sell_stocks.__init__(self, params)
         self.period = params.get('period', '1m')
         self.isdebug = params.get('isdebug', False)
+        self.stop_loss = params.get('stop_loss', 0.02)
+        self.stop_profit = params.get('stop_profit', 0.03)
     
     def handle_data(self, context, data):
         to_check = context.portfolio.positions.keys()
         to_check = [stock for stock in to_check if context.portfolio.positions[stock].closeable_amount > 0]
         for stock in to_check:
             position_time = context.portfolio.positions[stock].transact_time
+            avg_cost = context.portfolio.positions[stock].avg_cost 
             top_chan_t, _, top_chan_p = self.g.stock_chan_type[stock][0][0]
             sub_chan_t, _, sub_chan_p = self.g.stock_chan_type[stock][0][1]
             stock_data = get_price(stock,
                                    start_date=position_time, 
                                    end_date=context.current_dt, 
                                    frequency='1m', 
-                                   fields=('high'), 
+                                   fields=('high', 'low'), 
                                    skip_paused=True)
             if top_chan_t == Chan_Type.I: # for TYPE I we wait till target price
                 if stock_data['high'].max() > top_chan_p:
                     print("reached target price: {0}".format(top_chan_p))
                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+                if (1-stock_data['low'].min() / avg_cost) >= self.stop_loss:
+                    print("reached stop loss: {0}".format(avg_cost))
+                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+                if (stock_data['high'].max() / avg_cost - 1) >= self.stop_profit:
+                    print("reached stop profit: {0}".format(avg_cost))
+                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+                    
             elif top_chan_t == Chan_Type.III:
                 result, xd_result, _ , _= check_stock_sub(stock,
                                               end_time=context.current_dt, 
@@ -798,7 +808,12 @@ class Short_Chan(Sell_stocks):
                 if result or xd_result or stock_data['high'].max() > mark_p:
                     print("exhausted at {0} level with price mark {1}".format(self.period, mark_p))
                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
-
+                if (stock_data['high'].max() / avg_cost - 1) >= self.stop_profit:
+                    print("reached stop profit: {0}".format(avg_cost))
+                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+                if (1-stock_data['low'].min() / avg_cost) >= self.stop_loss:
+                    print("reached stop loss: {0}".format(avg_cost))
+                    self.g.close_position(self, context.portfolio.positions[stock], True, 0)
             
     def __str__(self):
         return '缠论调仓卖出规则'
