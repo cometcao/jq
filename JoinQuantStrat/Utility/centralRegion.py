@@ -257,6 +257,9 @@ class ZouShiLeiXing(object):
         while i < -1:
             # make sure the slope goes flatten, if not it's NOT exhausted
             if abs(same_direction_nodes[i+1].work_out_slope()) >= abs(same_direction_nodes[i].work_out_slope()):
+                if len(same_direction_nodes) < 3 or\
+                    i < -2 or\
+                    (same_direction_nodes[i+1].end.macd_acc>=same_direction_nodes[i].end.macd_acc): # we can use macd for the last two
                 return False,  same_direction_nodes[i].start.time
             i = i + 1
         return True, same_direction_nodes[i].start.time
@@ -364,7 +367,7 @@ class ZhongShu(ZouShiLeiXing):
             self.amplitude_region_origin = [region_price_series['low'].min(), region_price_series['high'].max()]
         return self.amplitude_region_origin
         
-    def get_split_zs(self, split_direction):
+    def get_split_zs(self, split_direction, contain_zs=True):
         '''
         higher level Zhong Shu can be split into lower level ones, we can do it at the top or bot nodes
         depends on the given direction of Zous Shi,
@@ -374,12 +377,16 @@ class ZhongShu(ZouShiLeiXing):
         '''
         node_tb, method = (TopBotType.bot, np.min) if split_direction == TopBotType.bot2top else (TopBotType.top, np.max)
         if self.is_complex_type() or self.get_level().value >= ZhongShuLevel.current.value:
-            all_nodes = [self.first, self.second, self.third, self.forth] + self.extra_nodes
+            all_nodes = [self.first, self.second, self.third, self.forth] if contain_zs else [] + self.extra_nodes
             all_price = [n.chan_price for n in all_nodes]
             ex_price = method(all_price)
             return all_nodes[all_price.index(ex_price):]
         else:
             return []
+        
+    def get_ending_nodes(self, N=5):
+        all_nodes = [self.first, self.second, self.third, self.forth] + self.extra_nodes
+        return all_nodes[-N:]
 
     def get_time_region(self, re_evaluate=False):    
         if not self.time_region or re_evaluate: # assume node stored in time order
@@ -406,7 +413,8 @@ class ZhongShu(ZouShiLeiXing):
         return ZouShiLeiXing(TopBotType.reverse(self.direction), self.original_df, [self.first, self.second])
 
     def take_split_xd_as_zslx(self, split_direction):
-        remaining_nodes = self.get_split_zs(split_direction)
+        # as we are trying to find a max/min point for the zhongshu we need to take the all nodes
+        remaining_nodes = self.get_split_zs(split_direction, contain_zs=True)
         if len(remaining_nodes) < 2:
             return ZouShiLeiXing(TopBotType.noTopBot, self.original_df, [])
         else:
