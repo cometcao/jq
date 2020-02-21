@@ -292,7 +292,7 @@ class KBarProcessor(object):
                 secondIdx=get_next_loc(firstIdx, working_df)
                 thirdIdx=get_next_loc(secondIdx, working_df)
                 continue
-            elif firstFenXing.tb == secondFenXing.tb == TopBotType.top and firstFenXing.high > secondFenXing.high:
+            elif firstFenXing.tb == secondFenXing.tb == TopBotType.top and firstFenXing.high >= secondFenXing.high:
                 working_df.ix[secondIdx,'tb'] = TopBotType.noTopBot 
                 secondIdx = get_next_loc(secondIdx, working_df)
                 thirdIdx=get_next_loc(secondIdx, working_df)
@@ -303,7 +303,7 @@ class KBarProcessor(object):
                 secondIdx=get_next_loc(firstIdx, working_df)
                 thirdIdx=get_next_loc(secondIdx, working_df)
                 continue
-            elif firstFenXing.tb == secondFenXing.tb == TopBotType.bot and firstFenXing.low < secondFenXing.low:
+            elif firstFenXing.tb == secondFenXing.tb == TopBotType.bot and firstFenXing.low <= secondFenXing.low:
                 working_df.ix[secondIdx,'tb'] = TopBotType.noTopBot
                 secondIdx = get_next_loc(secondIdx, working_df)
                 thirdIdx=get_next_loc(secondIdx, working_df)
@@ -315,7 +315,7 @@ class KBarProcessor(object):
                     secondIdx=get_next_loc(firstIdx, working_df)
                     thirdIdx=get_next_loc(secondIdx, working_df)
                     continue
-                elif firstFenXing.tb == thirdFenXing.tb == TopBotType.top and firstFenXing.high > thirdFenXing.high:
+                elif firstFenXing.tb == thirdFenXing.tb == TopBotType.top and firstFenXing.high >= thirdFenXing.high:
                     working_df.ix[secondIdx,'tb'] = TopBotType.noTopBot
                     secondIdx=get_next_loc(secondIdx, working_df)
                     thirdIdx=get_next_loc(secondIdx, working_df)
@@ -326,7 +326,7 @@ class KBarProcessor(object):
                     secondIdx=get_next_loc(firstIdx, working_df)
                     thirdIdx=get_next_loc(secondIdx, working_df)
                     continue
-                elif firstFenXing.tb == thirdFenXing.tb == TopBotType.bot and firstFenXing.low < thirdFenXing.low:
+                elif firstFenXing.tb == thirdFenXing.tb == TopBotType.bot and firstFenXing.low <= thirdFenXing.low:
                     working_df.ix[secondIdx,'tb'] = TopBotType.noTopBot
                     secondIdx=get_next_loc(secondIdx, working_df)
                     thirdIdx=get_next_loc(secondIdx, working_df)
