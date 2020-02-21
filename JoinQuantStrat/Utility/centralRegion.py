@@ -253,16 +253,12 @@ class ZouShiLeiXing(object):
             i = i + 1
         
         same_direction_nodes = [n for n in all_double_nodes if n.direction == self.direction]
-        i = -len(same_direction_nodes)
-        while i < -1:
-            # make sure the slope goes flatten, if not it's NOT exhausted
-            if abs(same_direction_nodes[i+1].work_out_slope()) >= abs(same_direction_nodes[i].work_out_slope()):
-                if len(same_direction_nodes) < 3 or\
-                    i < -2 or\
-                    (same_direction_nodes[i+1].end.macd_acc>=same_direction_nodes[i].end.macd_acc): # we can use macd for the last two
-                return False,  same_direction_nodes[i].start.time
-            i = i + 1
-        return True, same_direction_nodes[i].start.time
+        # make sure the last two slope goes flatten, if not it's NOT exhausted
+        if abs(same_direction_nodes[-1].work_out_slope()) >= abs(same_direction_nodes[-2].work_out_slope()):
+            if len(same_direction_nodes) < 3 or\
+                (same_direction_nodes[-1].end.macd_acc>=same_direction_nodes[-2].end.macd_acc): # we can use macd for the last two
+                    return False, same_direction_nodes[0].start.time
+        return True, same_direction_nodes[-1].start.time
         
 
 class ZhongShu(ZouShiLeiXing):
@@ -374,6 +370,7 @@ class ZhongShu(ZouShiLeiXing):
         We could split if current Zhong Shu is higher than current level, meaning we are splitting
         at extra_nodes
         Order we can just split on complex ZhongShu
+        By default we take all zhongshu nodes
         '''
         node_tb, method = (TopBotType.bot, np.min) if split_direction == TopBotType.bot2top else (TopBotType.top, np.max)
         if self.is_complex_type() or self.get_level().value >= ZhongShuLevel.current.value:
