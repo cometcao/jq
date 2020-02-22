@@ -343,7 +343,7 @@ class Pick_Chan_Stocks(Create_stock_list):
                                                                           isdebug=self.is_debug, 
                                                                           is_anal=False)
             if result:
-                self.g.stock_chan_type[stock] = [chan_type, [split_time], xd_result]
+                self.g.stock_chan_type[stock] = [(chan_type[0], chan_type[1], chan_type[2], 0, 0, split_time, None)]
         if self.is_debug:
             print(str(self.g.stock_chan_type))
         return list(self.g.stock_chan_type.keys())
@@ -649,43 +649,51 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
 class Filter_Chan_Stocks(Filter_stock_list):
     def __init__(self, params):
         Filter_stock_list.__init__(self, params)
-        self.period = params.get('period', '1m')
         self.isdebug = params.get('isdebug', False)
         self.long_stock_num = params.get('long_stock_num', 0)
+        self.sub_chan_type = params.get('sub_chan_type', [Chan_Type.INVALID, Chan_Type.I])
     
-    #Chan_Type.INVALID if chan_t == Chan_Type.I else Chan_Type.I if chan_t==Chan_Type.III else Chan_Type.INVALID,
     def filter(self, context, data, stock_list):
         filter_stock_list = []
         if len(context.portfolio.positions) == self.long_stock_num != 0:
             return filter_stock_list
         stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
         for stock in stock_list:
-            top_chan_types = self.g.stock_chan_type[stock][0]
-            top_time = self.g.stock_chan_type[stock][1]
-            top_xd_result = self.g.stock_chan_type[stock][2]
-            result, xd_result, chan_types, effective_time = check_stock_sub(stock,
-                                                          end_time=context.current_dt,
-                                                          periods=[self.period],
-                                                          count=2000,
-                                                          direction=TopBotType.top2bot,
-                                                          chan_type=Chan_Type.INVALID,
-                                                          isdebug=self.isdebug,
-                                                          is_anal=False,
-                                                          split_time=top_time[0],
-                                                          check_bi=False)
+            top_profile = self.g.stock_chan_type[stock]
+            chan_t = top_profile[0][0]
+            chan_d = top_profile[0][1]
+            chan_p = top_profile[0][2]
+            splitTime = top_profile[0][5]
+            
+            if chan_t == Chan_Type.I:
+                result, sub_profile = check_top_chan(stock,
+                                                      end_time=context.current_dt,
+                                                      periods=['5m'],
+                                                      count=4800,
+                                                      direction=TopBotType.top2bot,
+                                                      chan_type=self.sub_chan_type,
+                                                      isdebug=self.isdebug,
+                                                      is_anal=False,
+                                                      split_time=splitTime)
+            elif chan_t == Chan_Type.III:
+                result, sub_profile = check_sub_chan(stock,
+                                                      end_time=context.current_dt,
+                                                      periods=['1m'],
+                                                      count=4800,
+                                                      direction=TopBotType.top2bot,
+                                                      chan_type=self.sub_chan_type,
+                                                      isdebug=self.isdebug,
+                                                      is_anal=False,
+                                                      split_time=splitTime)
             
             # TYPE I and TYPE III with different criterion
-            if top_chan_types[0][0] == Chan_Type.I:
-                if result:
-                    filter_stock_list.append(stock)
-            elif top_chan_types[0][0] == Chan_Type.III:
-                if top_xd_result or result:
-                    filter_stock_list.append(stock)
+            if result:
+                filter_stock_list.append(stock)
             
             if stock in filter_stock_list:
                 # update sub level information
-                top_time.append(effective_time)
-                self.g.stock_chan_type[stock] = [top_chan_types + chan_types, top_time, top_xd_result]
+                top_profile = top_profile + sub_profile
+                self.g.stock_chan_type[stock] = top_profile
                 
         if self.isdebug:
             print("Stocks ready: {0}".format(filter_stock_list))
