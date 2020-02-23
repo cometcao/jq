@@ -83,7 +83,9 @@ class KBarProcessor(object):
     def isBullType(self, first, second): 
         # this is assuming first second aren't inclusive
         isBull = False
-        if first.high < second.high:
+        f_high = first.high if np.isnan(first.new_high) else first.new_high
+        s_high = second.high if np.isnan(second.new_high) else second.new_high
+        if f_high < s_high:
             isBull = True
         return isBull
         

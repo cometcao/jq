@@ -987,7 +987,7 @@ class NestedInterval():
         if chan_type_check: # there is no need to do current level check if it's type III
             high_exhausted, check_xd_exhaustion, last_zs_time, sub_split_time, high_slope, high_macd = eq.define_equilibrium(direction, check_tb_structure=check_tb_structure)
         else:
-            high_exhausted, check_xd_exhaustion = False, False
+            return False, [(chan_t, chan_d, chan_p, 0, 0, None, None)]
 
         if chan_t == Chan_Type.I:
             if not high_exhausted or not check_xd_exhaustion:
