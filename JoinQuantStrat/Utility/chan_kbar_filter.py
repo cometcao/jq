@@ -44,7 +44,7 @@ def filter_high_level_by_index(direction=TopBotType.top2bot,
                         result_stocks_III.add(stock)
     type_i = sorted(list(result_stocks_I))
     type_iii = sorted(list(result_stocks_III))
-    print("qualifying type I stocks:{0} type III stocks: {1}".format(type_i, type_iii))
+    print("qualifying type I stocks:{0} \ntype III stocks: {1}".format(type_i, type_iii))
     
     return type_i + type_iii
 
