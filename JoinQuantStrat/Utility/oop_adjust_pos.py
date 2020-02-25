@@ -857,6 +857,7 @@ class Short_Chan(Sell_stocks):
         top_chan_p = top_profile[2]
         sub_chan_t = sub_profile[0]
         sub_chan_p = sub_profile[2]
+        zoushi_start_time = sub_profile[5]
         
         if top_chan_t == Chan_Type.I:
             data_start_time = zoushi_start_time - pd.Timedelta(minutes=100)
