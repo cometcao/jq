@@ -849,7 +849,7 @@ class Short_Chan(Sell_stocks):
 #                     print("reached stop profit: {0}".format(avg_cost))
 #                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
     
-    def check_stop_profit(self, stock, stock_data, position_time):
+    def check_stop_profit(self, stock, position_time):
         top_profile = self.g.stock_chan_type[stock][0]
         sub_profile = self.g.stock_chan_type[stock][1]
         top_chan_t = top_profile[0]
@@ -911,10 +911,10 @@ class Short_Chan(Sell_stocks):
             position_time = context.portfolio.positions[stock].transact_time
             avg_cost = context.portfolio.positions[stock].avg_cost 
             
-            if self.check_stop_loss(stock, stock_data, avg_cost):
+            if self.check_stop_loss(stock, avg_cost):
                 self.g.close_position(self, context.portfolio.positions[stock], True, 0)
             
-            if self.check_stop_profit(stock, stock_data, position_time):
+            if self.check_stop_profit(stock, position_time):
                 self.g.close_position(self, context.portfolio.positions[stock], True, 0)
             
     def __str__(self):
