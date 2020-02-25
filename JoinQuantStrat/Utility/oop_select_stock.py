@@ -700,7 +700,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return filter_stock_list
 
     def __str__(self):
-        return "Chan Filter Params: {0}".format( self.period)
+        return "Chan Filter Params: {0} \n{1}".format(self.long_stock_num, self.sub_chan_type)
 
 class Filter_Pair_Trading(Filter_stock_list):
     def __init__(self, params):
