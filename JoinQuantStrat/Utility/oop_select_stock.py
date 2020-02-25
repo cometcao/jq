@@ -678,7 +678,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                       direction=TopBotType.top2bot,
                                                       chan_type=self.sub_chan_type,
                                                       isdebug=self.isdebug,
-                                                      is_anal=False)
+                                                      is_anal=False,
+                                                      check_structure=True)
             elif chan_t == Chan_Type.III:
                 result, sub_profile = check_sub_chan(stock,
                                                       end_time=context.current_dt,

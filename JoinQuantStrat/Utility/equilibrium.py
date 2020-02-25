@@ -11,7 +11,15 @@ from chan_common_include import *
 import numpy as np
 import pandas as pd
 
-def check_top_chan(stock, end_time, periods, count, direction, chan_type, isdebug=False, is_anal=False):
+def check_top_chan(stock, 
+                   end_time, 
+                   periods, 
+                   count, 
+                   direction, 
+                   chan_type, 
+                   isdebug=False, 
+                   is_anal=False,
+                   check_structure=False):
     print("check_top_chan working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
@@ -23,9 +31,9 @@ def check_top_chan(stock, end_time, periods, count, direction, chan_type, isdebu
     
     return ni.One_period_full_check(direction, 
                                     chan_type,
-                                    check_end_tb=False, 
-                                    check_tb_structure=False)
-
+                                    check_end_tb=check_structure, 
+                                    check_tb_structure=check_structure)
+    
 def check_sub_chan(stock, 
                     end_time, 
                     periods, 
@@ -62,7 +70,8 @@ def check_full_chan(stock, end_time, periods=['5m', '1m'], count=2000, direction
                                               direction=direction, 
                                               chan_type=[Chan_Type.I, Chan_Type.III], 
                                               isdebug=isdebug, 
-                                              is_anal=is_anal)
+                                              is_anal=is_anal,
+                                              check_structure=True)
     if not chan_profile:
         chan_profile = [(Chan_Type.INVALID, TopBotType.noTopBot, 0, 0, 0, None, None)]
     
