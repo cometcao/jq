@@ -656,6 +656,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.isdebug = params.get('isdebug', False)
         self.long_stock_num = params.get('long_stock_num', 0)
         self.sub_chan_type = params.get('sub_chan_type', [Chan_Type.INVALID, Chan_Type.I])
+        self.num_of_data = params.get('num_of_data', 2500)
     
     def filter(self, context, data, stock_list):
         filter_stock_list = []
@@ -673,7 +674,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 result, sub_profile = check_top_chan(stock,
                                                       end_time=context.current_dt,
                                                       periods=['5m'],
-                                                      count=4800,
+                                                      count=self.num_of_data,
                                                       direction=TopBotType.top2bot,
                                                       chan_type=self.sub_chan_type,
                                                       isdebug=self.isdebug,
@@ -682,7 +683,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 result, sub_profile = check_sub_chan(stock,
                                                       end_time=context.current_dt,
                                                       periods=['1m'],
-                                                      count=4800,
+                                                      count=self.num_of_data,
                                                       direction=TopBotType.top2bot,
                                                       chan_type=self.sub_chan_type,
                                                       isdebug=self.isdebug,
