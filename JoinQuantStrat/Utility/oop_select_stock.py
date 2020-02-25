@@ -636,10 +636,14 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                 if self.chan_types and (Chan_Type.value2type(c_type_value) not in self.chan_types):
                     continue
                 chan_stock_list.append(stock)
-                top_chan_type = [(Chan_Type.value2type(c_type_value), 
-                                 TopBotType.value2type(c_direc_value),
-                                 c_price)]
-                self.g.stock_chan_type[stock] = [top_chan_type, [pd.Timestamp(s_time)], xd_result]
+                
+                self.g.stock_chan_type[stock] = [(Chan_Type.value2type(c_type_value), 
+                                                  TopBotType.value2type(c_direc_value),
+                                                  c_price, 
+                                                  0,
+                                                  0,
+                                                  pd.Timestamp(s_time),
+                                                  None)]
         return chan_stock_list
     
     def __str__(self):
