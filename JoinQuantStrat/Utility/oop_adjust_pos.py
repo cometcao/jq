@@ -797,14 +797,15 @@ class Short_Chan(Sell_stocks):
             min_loc = stock_data.index.get_loc(stock_data.loc[zoushi_start_time:, 'low'].idxmin())
             latest_slope = (max_price-min_price)/(max_loc-min_loc)
             
-            # check macd
-            stock_data_macd = stock_data.loc[zoushi_start_time:, :]
-            latest_macd = stock_data_macd[stock_data_macd['macd'] < 0]['macd'].sum()
-            if stock_data.iloc[-1, 'close'] < avg_cost:
+            if stock_data.iloc[-1].close < avg_cost:
                 if latest_slope < 0 and abs(latest_slope) >= sub_chan_slope:
                     print("slope gets deeper! STOPLOSS")
                     return True
-                elif latest_macd < 0 and abs(latest_macd) > abs(sub_chan_macd):
+                
+                # check macd
+                stock_data_macd = stock_data.loc[zoushi_start_time:, :]
+                latest_macd = stock_data_macd[stock_data_macd['macd'] < 0]['macd'].sum()
+                if latest_macd < 0 and abs(latest_macd) > abs(sub_chan_macd):
                     print("macd gets deeper! STOPLOSS")
                     return True
             return False
@@ -824,7 +825,7 @@ class Short_Chan(Sell_stocks):
             min_loc = stock_data.index.get_loc(stock_data.loc[zoushi_start_time:, 'low'].idxmin())
             latest_slope = (max_price-min_price)/(max_loc-min_loc)
 
-            if stock_data.iloc[-1, 'close'] < avg_cost: 
+            if stock_data.iloc[-1].close < avg_cost: 
                 if latest_slope < 0 and abs(latest_slope) >= sub_chan_slope:
                     print("slope gets deeper! STOPLOSS")
                     return True
