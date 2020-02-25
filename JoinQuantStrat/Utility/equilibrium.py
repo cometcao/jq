@@ -67,12 +67,12 @@ def check_full_chan(stock, end_time, periods=['5m', '1m'], count=2000, direction
         chan_profile = [(Chan_Type.INVALID, TopBotType.noTopBot, 0, 0, 0, None, None)]
     
     stock_profile = chan_profile
-    splitTime = chan_profile[0][5]
-    
+
     if exhausted:
         if chan_profile[0][0] == Chan_Type.I:
             return exhausted, stock_profile
         elif chan_profile[0][0] == Chan_Type.III:
+            splitTime = chan_profile[0][5]
             exhausted, sub_chan_types = check_sub_chan(stock=stock, 
                                                         end_time=end_time, 
                                                         periods=[sub_pe], 
@@ -82,7 +82,7 @@ def check_full_chan(stock, end_time, periods=['5m', '1m'], count=2000, direction
                                                         isdebug=isdebug, 
                                                         is_anal=is_anal, 
                                                         split_time=splitTime)
-            stock_profile.append(sub_chan_types[0])
+            stock_profile = stock_profile + sub_chan_types
             return exhausted, stock_profile
     else:
         return exhausted, stock_profile
