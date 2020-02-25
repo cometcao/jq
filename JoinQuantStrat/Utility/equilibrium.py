@@ -633,6 +633,7 @@ class Equilibrium():
                 zslx = self.analytic_result[-1]
                 zs = self.analytic_result[-2]
                 zslx2= self.analytic_result[-3]
+                [l, u] = zs.get_amplitude_region_original()
                 [lc, uc] = zs.get_core_region()
                 if zslx.direction == zslx2.direction:
                     if zslx.direction == TopBotType.top2bot and\
@@ -640,17 +641,17 @@ class Equilibrium():
                         zslx.zoushi_nodes[-1].chan_price < lc:
                             if self.isdebug:
                                 print("TYPE I trade point 1")
-                            all_types.append((Chan_Type.I, TopBotType.top2bot, lc))
+                            all_types.append((Chan_Type.I, TopBotType.top2bot, l))
                     elif zslx.direction == TopBotType.bot2top and\
                         (not check_end_tb or zslx.zoushi_nodes[-1].tb == TopBotType.top) and\
                         zslx.zoushi_nodes[-1].chan_price > uc:
                             if self.isdebug:
                                 print("TYPE I trade point 2")
-                            all_types.append((Chan_Type.I, TopBotType.bot2top, uc))
+                            all_types.append((Chan_Type.I, TopBotType.bot2top, u))
             
             if type(self.analytic_result[-1]) is ZhongShu: # last XD in zhong shu must make top or bot
                 zs = self.analytic_result[-1]
-#                 [l,u] = zs.get_amplitude_region_original()
+                [l,u] = zs.get_amplitude_region_original()
                 [lc, uc] = zs.get_core_region()
                 if zs.is_complex_type() and len(zs.extra_nodes) >= 1:
                     if zs.direction == TopBotType.top2bot and\
@@ -658,11 +659,11 @@ class Equilibrium():
                         zs.extra_nodes[-1].chan_price < lc:
                         if self.isdebug:
                             print("TYPE I trade point 3")
-                        all_types.append((Chan_Type.I, TopBotType.top2bot, lc))
+                        all_types.append((Chan_Type.I, TopBotType.top2bot, l))
                     elif zs.direction == TopBotType.bot2top and\
                         (not check_end_tb or zs.extra_nodes[-1].tb == TopBotType.top) and\
                         zs.extra_nodes[-1].chan_price > uc:
-                        all_types.append((Chan_Type.I, TopBotType.bot2top, uc))
+                        all_types.append((Chan_Type.I, TopBotType.bot2top, u))
                         if self.isdebug:
                             print("TYPE I trade point 4")
 
