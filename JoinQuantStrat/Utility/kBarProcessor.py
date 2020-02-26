@@ -284,7 +284,7 @@ class KBarProcessor(object):
         firstIdx = 0
         secondIdx= firstIdx+1
         thirdIdx = secondIdx+1
-        while firstIdx < working_df.shape[0]-2:
+        while thirdIdx is not None and thirdIdx < working_df.shape[0]:
             firstFenXing = working_df.iloc[firstIdx]
             secondFenXing = working_df.iloc[secondIdx]
             thirdFenXing = working_df.iloc[thirdIdx]
