@@ -526,14 +526,12 @@ class Equilibrium():
             self.isQvShi = False
             if self.isdebug:
                 print("less than two zhong shu")
-            return
+            return self.isQvShi
         
         # STARDARD CASE: 
         self.isQvShi = self.two_zhongshu_form_qvshi(recent_zhongshu[-2], recent_zhongshu[-1]) 
-        if self.isQvShi:
-            if self.isdebug:
-                print("QU SHI 1")
-            return self.isQvShi
+        if self.isQvShi and self.isdebug:
+            print("QU SHI 1")
         
 #         # TWO ZHONG SHU followed by ZHONGYIN ZHONGSHU
 #         # first two zhong shu no interaction
