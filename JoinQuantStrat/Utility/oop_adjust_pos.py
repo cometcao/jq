@@ -805,7 +805,7 @@ class Short_Chan(Sell_stocks):
                 # check macd
                 stock_data_macd = stock_data.loc[zoushi_start_time:, :]
                 latest_macd = stock_data_macd[stock_data_macd['macd'] < 0]['macd'].sum()
-                if latest_macd < 0 and abs(latest_macd) > abs(sub_chan_macd):
+                if sub_chan_macd != 0 and latest_macd < 0 and abs(latest_macd) > abs(sub_chan_macd):
                     print("macd gets deeper! STOPLOSS {0},{1}".format(sub_chan_macd, latest_macd))
                     return True
             return False
@@ -830,7 +830,7 @@ class Short_Chan(Sell_stocks):
                     print("slope gets deeper! STOPLOSS {0},{1}".format(sub_chan_slope, latest_slope))
                     return True
 
-                if sub_chan_t == Chan_Type.I:
+                if sub_chan_t == Chan_Type.I and sub_chan_macd != 0:
                     # check macd
                     _, _, stock_data.loc[:,'macd'] = talib.MACD(stock_data['close'].values)
                     stock_data_macd = stock_data.loc[zoushi_start_time:, :]
