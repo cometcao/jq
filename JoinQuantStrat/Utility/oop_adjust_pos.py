@@ -797,8 +797,8 @@ class Short_Chan(Sell_stocks):
             min_loc = stock_data.index.get_loc(stock_data.loc[zoushi_start_time:, 'low'].idxmin())
             latest_slope = (max_price-min_price)/(max_loc-min_loc)
             
-            if stock_data.iloc[-1].close < avg_cost:
-                if latest_slope < 0 and abs(latest_slope) >= sub_chan_slope:
+            if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
+                if latest_slope < 0 and abs(latest_slope) >= abs(sub_chan_slope):
                     print("slope gets deeper! STOPLOSS")
                     return True
                 
@@ -825,8 +825,8 @@ class Short_Chan(Sell_stocks):
             min_loc = stock_data.index.get_loc(stock_data.loc[zoushi_start_time:, 'low'].idxmin())
             latest_slope = (max_price-min_price)/(max_loc-min_loc)
 
-            if stock_data.iloc[-1].close < avg_cost: 
-                if latest_slope < 0 and abs(latest_slope) >= sub_chan_slope:
+            if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss: 
+                if latest_slope < 0 and abs(latest_slope) >= abs(sub_chan_slope):
                     print("slope gets deeper! STOPLOSS")
                     return True
 
@@ -840,12 +840,6 @@ class Short_Chan(Sell_stocks):
                         return True
             return False
 
-#                 if stock_data['high'].max() > top_chan_p:
-#                     print("{0} reached target price: {1}".format(stock, top_chan_p))
-#                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
-#                 if (1-stock_data['low'].min() / avg_cost) >= self.stop_loss:
-#                     print("reached stop loss: {0}".format(avg_cost))
-#                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
 #                 if (stock_data['high'].max() / avg_cost - 1) >= self.stop_profit:
 #                     print("reached stop profit: {0}".format(avg_cost))
 #                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
