@@ -546,9 +546,6 @@ class Equilibrium():
 #                 print("QU SHI 2")
 #         else:
 #             self.isQvShi = False
-            
-        if self.isQvShi and self.isDescription:
-            print("QU SHI FOUND")
         return self.isQvShi
 
 
@@ -642,7 +639,7 @@ class Equilibrium():
                 zslx = self.analytic_result[-1]
                 zs = self.analytic_result[-2]
                 zslx2= self.analytic_result[-3]
-                [lc, uc] = zs.get_core_region()
+                [lc, uc] = zs.get_amplitude_region_original()
                 if zslx.direction == zslx2.direction:
                     if zslx.direction == TopBotType.top2bot and\
                         (not check_end_tb or zslx.zoushi_nodes[-1].tb == TopBotType.bot) and\
@@ -659,8 +656,7 @@ class Equilibrium():
             
             if type(self.analytic_result[-1]) is ZhongShu: # last XD in zhong shu must make top or bot
                 zs = self.analytic_result[-1]
-#                 [l,u] = zs.get_amplitude_region_original()
-                [lc, uc] = zs.get_core_region()
+                [lc, uc] = zs.get_amplitude_region_original_without_last_xd()
                 if zs.is_complex_type() and len(zs.extra_nodes) >= 1:
                     if zs.direction == TopBotType.top2bot and\
                         (not check_end_tb or zs.extra_nodes[-1].tb == TopBotType.bot) and\

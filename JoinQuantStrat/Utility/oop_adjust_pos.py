@@ -799,14 +799,14 @@ class Short_Chan(Sell_stocks):
             
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
                 if latest_slope < 0 and abs(latest_slope) >= abs(sub_chan_slope):
-                    print("slope gets deeper! STOPLOSS")
+                    print("slope gets deeper! STOPLOSS {0},{1}".format(sub_chan_slope, latest_slope))
                     return True
                 
                 # check macd
                 stock_data_macd = stock_data.loc[zoushi_start_time:, :]
                 latest_macd = stock_data_macd[stock_data_macd['macd'] < 0]['macd'].sum()
                 if latest_macd < 0 and abs(latest_macd) > abs(sub_chan_macd):
-                    print("macd gets deeper! STOPLOSS")
+                    print("macd gets deeper! STOPLOSS {0},{1}".format(sub_chan_macd, latest_macd))
                     return True
             return False
         elif top_chan_t == Chan_Type.III:
@@ -827,7 +827,7 @@ class Short_Chan(Sell_stocks):
 
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss: 
                 if latest_slope < 0 and abs(latest_slope) >= abs(sub_chan_slope):
-                    print("slope gets deeper! STOPLOSS")
+                    print("slope gets deeper! STOPLOSS {0},{1}".format(sub_chan_slope, latest_slope))
                     return True
 
                 if sub_chan_t == Chan_Type.I:
@@ -836,7 +836,7 @@ class Short_Chan(Sell_stocks):
                     stock_data_macd = stock_data.loc[zoushi_start_time:, :]
                     latest_macd = stock_data_macd[stock_data_macd['macd'] < 0]['macd'].sum()
                     if latest_macd < 0 and abs(latest_macd) > abs(sub_chan_macd):
-                        print("macd gets deeper! STOPLOSS")
+                        print("macd gets deeper! STOPLOSS {0},{1}".format(sub_chan_macd, latest_macd))
                         return True
             return False
 
@@ -896,7 +896,11 @@ class Short_Chan(Sell_stocks):
                                                           check_bi=True)
                 mark_p = sub_chan_p[0] if type(sub_chan_p) is list else sub_chan_p
                 if result or xd_result or stock_data.loc[position_time:, 'high'].max() > mark_p:
-                    print("STOP PROFIT {0} exhausted".format(stock))
+                    print("STOP PROFIT {0} exhausted: {1}, {2}, {3} > {4}".format(stock,
+                                                                                   result,
+                                                                                   xd_result,
+                                                                                   stock_data.loc[position_time:, 'high'].max(),
+                                                                                   mark_p))
                     return True
             return False
     

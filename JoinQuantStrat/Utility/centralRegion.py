@@ -363,6 +363,16 @@ class ZhongShu(ZouShiLeiXing):
             self.amplitude_region_origin = [region_price_series['low'].min(), region_price_series['high'].max()]
         return self.amplitude_region_origin
         
+    def get_amplitude_region_original_without_last_xd(self):
+        # used for TYPE I when ZhongShu is the last zoushi
+        if self.is_complex_type():
+            start_time = self.first.time
+            end_time = self.forth.time if len(self.extra_nodes) == 1 else self.extra_nodes[-2].time
+            region_price_series = self.original_df.loc[start_time:end_time, ['high','low']]
+            return [region_price_series['low'].min(), region_price_series['high'].max()]
+        else:
+            return self.get_amplitude_region_original(re_evaluate=False)
+    
     def get_split_zs(self, split_direction, contain_zs=True):
         '''
         higher level Zhong Shu can be split into lower level ones, we can do it at the top or bot nodes
