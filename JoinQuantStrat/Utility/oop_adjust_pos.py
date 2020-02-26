@@ -869,7 +869,7 @@ class Short_Chan(Sell_stocks):
                                    skip_paused=False)
             stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
         
-            if stock_data.loc[position_time:, 'high'] >= sub_chan_p: # reached target price
+            if stock_data.loc[position_time:, 'high'].max() >= sub_chan_p: # reached target price
                 if stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
                     print("STOP PROFIT {0} reached target price: {1} and below ma13: {2}".format(stock, sub_chan_p, stock_data.iloc[-1].ma13))
                     return True
@@ -885,7 +885,7 @@ class Short_Chan(Sell_stocks):
             
             if sub_chan_t == Chan_Type.I:
                 stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
-                if stock_data.loc[position_time:, 'high'] >= sub_chan_p: # reached target price
+                if stock_data.loc[position_time:, 'high'].max() >= sub_chan_p: # reached target price
                     if stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
                         print("STOP PROFIT {0} reached target price: {1} and below ma13: {2}".format(stock, sub_chan_p, stock_data.iloc[-1].ma13))
                         return True

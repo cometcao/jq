@@ -613,7 +613,8 @@ class Equilibrium():
             exhaustion_result = True
 
         zslx_macd = 0
-        if not exhaustion_result and self.isQvShi: # if QV SHI => at least two Zhong Shu, We could also use macd for help
+         # if QV SHI => at least two Zhong Shu, We could also use macd, and we need to make sure they structurally match
+        if not exhaustion_result and self.isQvShi and a_s == c_s:
             zslx_macd = zslx_a.get_macd_acc()
             latest_macd = zslx_c.get_macd_acc()
             exhaustion_result = abs(zslx_macd) > abs(latest_macd)
