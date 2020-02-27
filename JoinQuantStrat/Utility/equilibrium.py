@@ -129,7 +129,7 @@ def check_chan_indepth(stock,
                         use_xd=False,
                         initial_pe_prep=period,
                         initial_split_time=split_time)
-    return ni.indepth_analyze_zoushi(direction, split_time, period)
+    return ni.indepth_analyze_zoushi(direction, split_time, period, force_zhongshu=True)
 
 def check_stock_sub(stock, 
                     end_time, 
@@ -550,10 +550,15 @@ class Equilibrium():
 
 
         
-    def define_equilibrium(self, direction, check_tb_structure=False):
+    def define_equilibrium(self, direction, check_tb_structure=False, force_zhongshu=False):
         # if we only have one zhongshu / ZSLX we can only rely on the xd level check
         if len(self.analytic_result) < 2:
             if type(self.analytic_result[-1]) is ZouShiLeiXing: 
+                if force_zhongshu:
+                    if self.isdebug:
+                        print("ZhongShu not yet formed, force zhongshu return False")
+                    return False, xd_exhaustion, zslx.zoushi_nodes[0].time, ts, 0, 0
+                
                 zslx = self.analytic_result[-1]
                 if self.isdebug:
                     print("ZhongShu not yet formed, only check ZSLX exhaustion")
@@ -1020,11 +1025,12 @@ class NestedInterval():
             return high_exhausted and check_xd_exhaustion and bi_exhaustion and bi_exhaustion,\
                 [(chan_t, chan_d, chan_p, high_slope, high_macd, last_zs_time, effective_time)]
     
-    def indepth_analyze_zoushi(self, direction, split_time, period, return_effective_time=False):
+    def indepth_analyze_zoushi(self, direction, split_time, period, return_effective_time=False, force_zhongshu=False):
         '''
         specifically used to gauge the smallest level of precision, check at BI level
         split_time param once provided meaning we need to split zoushi otherwise split done at data level
         this split_by_time method should only be used HERE
+        force_zhongshu make sure underlining zoushi contain at least one ZhongShu
         '''
         if self.use_xd:
             xd_df, anal_zoushi_xd = self.df_zoushi_tuple_list[period]
@@ -1046,7 +1052,9 @@ class NestedInterval():
             split_anal_zoushi_bi_result = split_anal_zoushi_bi.zslx_result
         
         eq = Equilibrium(xd_df, split_anal_zoushi_bi_result, isdebug=self.isdebug, isDescription=self.isDescription)
-        bi_exhausted, bi_check_exhaustion, _,bi_split_time, _, _ = eq.define_equilibrium(direction, check_tb_structure=True)
+        bi_exhausted, bi_check_exhaustion, _,bi_split_time, _, _ = eq.define_equilibrium(direction, 
+                                                                                         check_tb_structure=True,
+                                                                                         force_zhongshu=True)
         if (self.isdebug):
             print("BI level {0}, {1}".format(bi_exhausted, bi_check_exhaustion))
         

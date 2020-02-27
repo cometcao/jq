@@ -15,7 +15,7 @@ from oop_strategy_frame import *
 from position_control_analysis import *
 from rsrs_timing import *
 from chan_common_include import Chan_Type
-from equilibrium import check_stock_sub
+from equilibrium import check_chan_indepth
 from biaoLiStatus import TopBotType
 import json
 
@@ -868,9 +868,9 @@ class Short_Chan(Sell_stocks):
                                    skip_paused=False)
             stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
         
-            if stock_data.loc[position_time:, 'high'].max() >= sub_chan_p: # reached target price
+            if stock_data.loc[position_time:, 'high'].max() >= top_chan_p: # reached target price
                 if stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
-                    print("STOP PROFIT {0} reached target price: {1} and below ma13: {2}".format(stock, sub_chan_p, stock_data.iloc[-1].ma13))
+                    print("STOP PROFIT {0} reached target price: {1} and below ma13: {2}".format(stock, top_chan_p, stock_data.iloc[-1].ma13))
                     return True
         elif top_chan_t == Chan_Type.III:
             
@@ -881,31 +881,27 @@ class Short_Chan(Sell_stocks):
                                    frequency='1m', 
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
-            
+            stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
             if sub_chan_t == Chan_Type.I:
-                stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
                 if stock_data.loc[position_time:, 'high'].max() >= sub_chan_p: # reached target price
                     if stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
                         print("STOP PROFIT {0} reached target price: {1} and below ma13: {2}".format(stock, sub_chan_p, stock_data.iloc[-1].ma13))
                         return True
             else:
-                result, xd_result, _ , _= check_stock_sub(stock,
+                bi_exhausted, bi_xd_exhausted, _= check_chan_indepth(stock,
                                                           end_time=context.current_dt, 
-                                                          periods=['1m'], 
+                                                          period='1m', 
                                                           count=2000, 
                                                           direction=TopBotType.bot2top,
-                                                          chan_type=Chan_Type.INVALID,
                                                           isdebug=self.isdebug, 
                                                           is_anal=False,
-                                                          split_time=position_time,
-                                                          check_bi=True)
-                mark_p = sub_chan_p[0] if type(sub_chan_p) is list else sub_chan_p
-                if result or xd_result or stock_data.loc[position_time:, 'high'].max() > mark_p:
-                    print("STOP PROFIT {0} exhausted: {1}, {2}, {3} > {4}".format(stock,
+                                                          split_time=position_time)
+                if bi_exhausted or bi_xd_exhausted or stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
+                    print("STOP PROFIT {0} exhausted: {1}, {2}, {3}, {4}".format(stock,
                                                                                    result,
                                                                                    xd_result,
-                                                                                   stock_data.loc[position_time:, 'high'].max(),
-                                                                                   mark_p))
+                                                                                   stock_data.iloc[-1].close,
+                                                                                   stock_data.iloc[-1].ma13))
                     return True
             return False
     
