@@ -1070,7 +1070,7 @@ class NestedInterval():
             print("looking for {0} at top level {1}".format("long" if direction == TopBotType.top2bot else "short",
                                                             period))
         xd_df, anal_zoushi = self.df_zoushi_tuple_list[period]
-        chan_types = [(Chan_Type.INVALID, TopBotType.noTopBot, 0, 0, 0)]# default value
+        chan_types = [(Chan_Type.INVALID, TopBotType.noTopBot, 0)]# default value
         if anal_zoushi is None:
             return False, False, chan_types, None, None
         
