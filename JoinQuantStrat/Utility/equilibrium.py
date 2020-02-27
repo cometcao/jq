@@ -557,7 +557,7 @@ class Equilibrium():
                 if force_zhongshu:
                     if self.isdebug:
                         print("ZhongShu not yet formed, force zhongshu return False")
-                    return False, xd_exhaustion, zslx.zoushi_nodes[0].time, ts, 0, 0
+                    return False, False, zslx.zoushi_nodes[0].time, ts, 0, 0
                 
                 zslx = self.analytic_result[-1]
                 if self.isdebug:
