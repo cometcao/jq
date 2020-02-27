@@ -858,6 +858,9 @@ class Short_Chan(Sell_stocks):
         sub_chan_p = sub_profile[2]
         zoushi_start_time = sub_profile[5]
         
+        if context.portfolio.positions[stock].price / context.portfolio.positions[stock].avg_cost - 1 <= self.stop_profit:
+            return False
+        
         if top_chan_t == Chan_Type.I:
             data_start_time = zoushi_start_time - pd.Timedelta(minutes=100)
             stock_data = get_price(stock,
