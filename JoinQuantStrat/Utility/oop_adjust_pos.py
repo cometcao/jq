@@ -959,7 +959,7 @@ class Long_Chan(Buy_stocks_portion):
                                    start_date=effective_time, 
                                    end_date=context.current_dt, 
                                    frequency='1m', 
-                                   fields=('high'), 
+                                   fields=('high', 'low'), 
                                    skip_paused=True)
             latest_high_price = latest_data['high'].max()
             latest_min_price = latest_data['low'].min()
