@@ -898,8 +898,8 @@ class Short_Chan(Sell_stocks):
                                                           split_time=position_time)
                 if bi_exhausted or bi_xd_exhausted or stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
                     print("STOP PROFIT {0} exhausted: {1}, {2}, {3}, {4}".format(stock,
-                                                                                   result,
-                                                                                   xd_result,
+                                                                                   bi_exhausted,
+                                                                                   bi_xd_exhausted,
                                                                                    stock_data.iloc[-1].close,
                                                                                    stock_data.iloc[-1].ma13))
                     return True
