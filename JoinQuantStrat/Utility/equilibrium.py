@@ -551,13 +551,23 @@ class Equilibrium():
 
         
     def define_equilibrium(self, direction, check_tb_structure=False, force_zhongshu=False):
+        '''
+        return:
+        exhaustion
+        xd_exhaustion
+        zoushi start time
+        sub split time
+        slope
+        macd
+        '''
+        
         # if we only have one zhongshu / ZSLX we can only rely on the xd level check
         if len(self.analytic_result) < 2:
             if type(self.analytic_result[-1]) is ZouShiLeiXing: 
                 if force_zhongshu:
                     if self.isdebug:
                         print("ZhongShu not yet formed, force zhongshu return False")
-                    return False, False, zslx.zoushi_nodes[0].time, ts, 0, 0
+                    return False, False, None, None, 0, 0
                 
                 zslx = self.analytic_result[-1]
                 if self.isdebug:
