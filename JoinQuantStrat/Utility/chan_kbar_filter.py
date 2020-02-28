@@ -103,7 +103,7 @@ class KBar(object):
         max 7 high level KBars
         '''
         # early check
-         if (max(kbar_list[0].high, kbar_list[1].high, kbar_list[2].high) < kbar_list[-1].low and kbar_list[-1].close < max(kbar_list[-2].high, kbar_list[-3].high) and direction == TopBotType.top2bot) or\
+        if (max(kbar_list[0].high, kbar_list[1].high, kbar_list[2].high) < kbar_list[-1].low and kbar_list[-1].close < max(kbar_list[-2].high, kbar_list[-3].high) and direction == TopBotType.top2bot) or\
             (min(kbar_list[0].low, kbar_list[1].low, kbar_list[2].low) > kbar_list[-1].low and kbar_list[-1].close > min(kbar_list[-2].low, kbar_list[-3].low) and direction == TopBotType.bot2top):
            return False
         
