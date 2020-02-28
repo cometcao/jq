@@ -342,7 +342,7 @@ class Pick_Chan_Stocks(Create_stock_list):
                                                                           chan_type=self.chan_types,
                                                                           isdebug=self.is_debug, 
                                                                           is_anal=False)
-            if result:
+            if result and xd_result:
                 self.g.stock_chan_type[stock] = [(chan_type[0], chan_type[1], chan_type[2], 0, 0, split_time, None)]
         if self.is_debug:
             print(str(self.g.stock_chan_type))
@@ -633,7 +633,9 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                 if stock in context.portfolio.positions.keys():
                     print("{0} already in position".format(stock))
                     continue
-                if self.chan_types and (Chan_Type.value2type(c_type_value) not in self.chan_types):
+                if self.chan_types and\
+                    (Chan_Type.value2type(c_type_value) not in self.chan_types) and\
+                    not xd_result:
                     continue
                 chan_stock_list.append(stock)
                 
