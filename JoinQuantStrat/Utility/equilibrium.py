@@ -563,7 +563,7 @@ class Equilibrium():
         '''
         if type_III:
             last_zoushi = self.analytic_result[-1]
-            if last_zoushi is ZouShiLeiXing:
+            if type(last_zoushi) is ZouShiLeiXing:
                 split_direction, split_nodes = last_zoushi.get_reverse_split_zslx()
                 pure_zslx = ZouShiLeiXing(split_direction, last_zoushi.original_df, split_nodes)
                 
