@@ -885,7 +885,7 @@ class Short_Chan(Sell_stocks):
                                                       isdebug=self.isdebug, 
                                                       is_anal=False,
                                                       split_time=position_time)
-            if bi_exhausted or bi_xd_exhausted:
+            if bi_exhausted and bi_xd_exhausted:
                 print("STOP PROFIT {0} exhausted: {1}, {2}".format(stock,
                                                                    bi_exhausted,
                                                                    bi_xd_exhausted))
@@ -919,7 +919,7 @@ class Short_Chan(Sell_stocks):
                                                       isdebug=self.isdebug, 
                                                       is_anal=False,
                                                       split_time=position_time)
-            if bi_exhausted or bi_xd_exhausted:
+            if bi_exhausted and bi_xd_exhausted:
                 print("STOP PROFIT {0} exhausted: {1}, {2}".format(stock,
                                                                    bi_exhausted,
                                                                    bi_xd_exhausted))
