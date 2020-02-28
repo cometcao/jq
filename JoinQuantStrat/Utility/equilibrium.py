@@ -570,7 +570,7 @@ class Equilibrium():
                 xd_exhaustion, ts = pure_zslx.check_exhaustion() 
                 return True, xd_exhaustion, pure_zslx.zoushi_nodes[0].time, ts, 0, 0
             else: # ZhongShu case 
-                xd_exhaustion, ts = last_zoushi.check_exhaustion
+                xd_exhaustion, ts = last_zoushi.check_exhaustion()
                 return True, xd_exhaustion, last_zoushi.first.time, ts, 0, 0
         
         # if we only have one zhongshu / ZSLX we can only rely on the xd level check
