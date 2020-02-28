@@ -633,8 +633,8 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                 if stock in context.portfolio.positions.keys():
                     print("{0} already in position".format(stock))
                     continue
-                if self.chan_types and\
-                    (Chan_Type.value2type(c_type_value) not in self.chan_types) and\
+                if (self.chan_types and\
+                    (Chan_Type.value2type(c_type_value) not in self.chan_types)) or\
                     not xd_result:
                     continue
                 chan_stock_list.append(stock)
