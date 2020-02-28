@@ -767,6 +767,7 @@ class Short_Chan(Sell_stocks):
         self.isdebug = params.get('isdebug', False)
         self.stop_loss = params.get('stop_loss', 0.02)
         self.stop_profit = params.get('stop_profit', 0.03)
+        self.use_ma13 = params.get('use_ma13', False)
     
     def check_stop_loss(self, stock, avg_cost, context):
         top_profile = self.g.stock_chan_type[stock][0]
@@ -844,10 +845,6 @@ class Short_Chan(Sell_stocks):
                 return True
             
             return False
-
-#                 if (stock_data['high'].max() / avg_cost - 1) >= self.stop_profit:
-#                     print("reached stop profit: {0}".format(avg_cost))
-#                     self.g.close_position(self, context.portfolio.positions[stock], True, 0)
     
     def check_stop_profit(self, stock, position_time, context):
         top_profile = self.g.stock_chan_type[stock][0]
@@ -871,10 +868,29 @@ class Short_Chan(Sell_stocks):
                                    skip_paused=False)
             stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
         
-            if stock_data.loc[position_time:, 'high'].max() >= top_chan_p: # reached target price
-                if stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
-                    print("STOP PROFIT {0} reached target price: {1} and below ma13: {2}".format(stock, top_chan_p, stock_data.iloc[-1].ma13))
-                    return True
+            if stock_data.loc[position_time:, 'high'].max() < top_chan_p: # reached target price
+                return False
+            else:
+                print("STOP PROFIT {0} reached target price: {1}".format(stock, top_chan_p))
+                
+            if self.use_ma13 and stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
+                print("STOP PROFIT {0} below ma13: {1}".format(stock, stock_data.iloc[-1].ma13))
+                return True
+            
+            bi_exhausted, bi_xd_exhausted, _= check_chan_indepth(stock,
+                                                      end_time=context.current_dt, 
+                                                      period='5m', 
+                                                      count=2000, 
+                                                      direction=TopBotType.bot2top,
+                                                      isdebug=self.isdebug, 
+                                                      is_anal=False,
+                                                      split_time=position_time)
+            if bi_exhausted or bi_xd_exhausted:
+                print("STOP PROFIT {0} exhausted: {1}, {2}".format(stock,
+                                                                   bi_exhausted,
+                                                                   bi_xd_exhausted))
+                return True
+            
         elif top_chan_t == Chan_Type.III:
             
             data_start_time = zoushi_start_time - pd.Timedelta(minutes=20)
@@ -886,26 +902,29 @@ class Short_Chan(Sell_stocks):
                                    skip_paused=False)
             stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
             if sub_chan_t == Chan_Type.I:
-                if stock_data.loc[position_time:, 'high'].max() >= sub_chan_p: # reached target price
-                    if stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
-                        print("STOP PROFIT {0} reached target price: {1} and below ma13: {2}".format(stock, sub_chan_p, stock_data.iloc[-1].ma13))
-                        return True
-            else:
-                bi_exhausted, bi_xd_exhausted, _= check_chan_indepth(stock,
-                                                          end_time=context.current_dt, 
-                                                          period='1m', 
-                                                          count=2000, 
-                                                          direction=TopBotType.bot2top,
-                                                          isdebug=self.isdebug, 
-                                                          is_anal=False,
-                                                          split_time=position_time)
-                if bi_exhausted or bi_xd_exhausted or stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
-                    print("STOP PROFIT {0} exhausted: {1}, {2}, {3}, {4}".format(stock,
-                                                                                   bi_exhausted,
-                                                                                   bi_xd_exhausted,
-                                                                                   stock_data.iloc[-1].close,
-                                                                                   stock_data.iloc[-1].ma13))
-                    return True
+                if stock_data.loc[position_time:, 'high'].max() < sub_chan_p: # didn't reached target price
+                    return False
+                else:
+                    print("Stock {0} reached target price {1}".format(stock, sub_chan_p))
+
+            if self.use_ma13 and stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
+                print("STOP PROFIT MA13 {0} {1}".format(stock_data.iloc[-1].close, stock_data.iloc[-1].ma13))
+                return True
+            
+            bi_exhausted, bi_xd_exhausted, _= check_chan_indepth(stock,
+                                                      end_time=context.current_dt, 
+                                                      period='1m', 
+                                                      count=2000, 
+                                                      direction=TopBotType.bot2top,
+                                                      isdebug=self.isdebug, 
+                                                      is_anal=False,
+                                                      split_time=position_time)
+            if bi_exhausted or bi_xd_exhausted:
+                print("STOP PROFIT {0} exhausted: {1}, {2}".format(stock,
+                                                                   bi_exhausted,
+                                                                   bi_xd_exhausted))
+                return True
+            
             return False
     
     def handle_data(self, context, data):
