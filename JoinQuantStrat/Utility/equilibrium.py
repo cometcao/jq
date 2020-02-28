@@ -550,8 +550,9 @@ class Equilibrium():
 
 
         
-    def define_equilibrium(self, direction, check_tb_structure=False, force_zhongshu=False):
+    def define_equilibrium(self, direction, check_tb_structure=False, force_zhongshu=False, type_III=False):
         '''
+        We are dealing type III differently at top level
         return:
         exhaustion
         xd_exhaustion
@@ -560,6 +561,16 @@ class Equilibrium():
         slope
         macd
         '''
+        if type_III:
+            last_zoushi = self.analytic_result[-1]
+            if last_zoushi is ZouShiLeiXing:
+                split_direction, split_nodes = last_zoushi.get_reverse_split_zslx()
+                pure_zslx = ZouShiLeiXing(split_direction, last_zoushi.original_df, split_nodes)
+                
+                xd_exhaustion, ts = pure_zslx.check_exhaustion() 
+                return True, xd_exhaustion, pure_zslx.zoushi_nodes[0].time, ts, 0, 0
+            else: # ZhongShu case 
+                return True, True, None, None, 0, 0
         
         # if we only have one zhongshu / ZSLX we can only rely on the xd level check
         if len(self.analytic_result) < 2:
@@ -948,12 +959,11 @@ class NestedInterval():
         chan_type_check = (chan_t in chan_type) if (type(chan_type) is list) else (chan_t == chan_type)
         
         if chan_type_check: # there is no need to do current level check if it's type III
-            high_exhausted, check_xd_exhaustion, _, sub_split_time, _, _ = eq.define_equilibrium(direction, check_tb_structure=False)
-            if chan_t == Chan_Type.III:
-                high_exhausted = True # force Truth at top level if type III
+            high_exhausted, check_xd_exhaustion, _, _, _, _ = eq.define_equilibrium(direction, 
+                                                                                    check_tb_structure=False, 
+                                                                                    type_III=(chan_t == Chan_Type.III))
         else:
             high_exhausted, check_xd_exhaustion = False, False
-                
         if self.isDescription or self.isdebug:
             print("Top level {0} {1} {2} {3} {4} with price level: {5}".format(self.periods[0], 
                                                                        chan_d, 
@@ -1004,7 +1014,9 @@ class NestedInterval():
         chan_type_check = (chan_t in chan_type) if (type(chan_type) is list) else (chan_t == chan_type)
         
         if chan_type_check: # there is no need to do current level check if it's type III
-            high_exhausted, check_xd_exhaustion, last_zs_time, sub_split_time, high_slope, high_macd = eq.define_equilibrium(direction, check_tb_structure=check_tb_structure)
+            high_exhausted, check_xd_exhaustion, last_zs_time, sub_split_time, high_slope, high_macd = eq.define_equilibrium(direction, 
+                                                                                                                             check_tb_structure=check_tb_structure,
+                                                                                                                             type_III=(chan_t==Chan_Type.III))
         else:
             return False, [(chan_t, chan_d, chan_p, 0, 0, None, None)]
 
@@ -1029,7 +1041,7 @@ class NestedInterval():
                 
         elif chan_t == Chan_Type.III:
             split_time = anal_zoushi.sub_zoushi_time(chan_t, chan_d, False)
-            return True, [(chan_t, chan_d, chan_p, high_slope, high_macd, split_time, None)]
+            return high_exhausted and check_xd_exhaustion, [(chan_t, chan_d, chan_p, high_slope, high_macd, split_time, None)]
         else:
             bi_exhaustion, bi_check_exhaustion, effective_time = self.indepth_analyze_zoushi(direction, last_zs_time, self.periods[0], return_effective_time=True)
             return high_exhausted and check_xd_exhaustion and bi_exhaustion and bi_exhaustion,\
