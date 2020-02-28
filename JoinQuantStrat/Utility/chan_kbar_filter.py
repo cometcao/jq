@@ -100,12 +100,12 @@ class KBar(object):
     @classmethod
     def chan_type_III_check(cls, kbar_list, direction):
         '''
-        max 5 high level KBars
+        max 7 high level KBars
         '''
         # early check
-        if (kbar_list[-1].close < max(kbar_list[-2].high, kbar_list[-3].high, kbar_list[-4].high) and direction == TopBotType.top2bot) or\
-            (kbar_list[-1].close > min(kbar_list[-2].low, kbar_list[-3].low, kbar_list[-4].low) and direction == TopBotType.bot2top):
-            return False
+         if (max(kbar_list[0].high, kbar_list[1].high, kbar_list[2].high) < kbar_list[-1].low and kbar_list[-1].close < max(kbar_list[-2].high, kbar_list[-3].high) and direction == TopBotType.top2bot) or\
+            (min(kbar_list[0].low, kbar_list[1].low, kbar_list[2].low) > kbar_list[-1].low and kbar_list[-1].close > min(kbar_list[-2].low, kbar_list[-3].low) and direction == TopBotType.bot2top):
+           return False
         
         first = kbar_list[-TYPE_III_NUM]
         second = kbar_list[-TYPE_III_NUM+1] 
@@ -116,11 +116,17 @@ class KBar(object):
         if (fifth.close < fifth.open) or ((fifth.close-fifth.low)/(fifth.high-fifth.low) <= (1-GOLDEN_RATIO)):
             check_result, k_m, k_l = cls.contain_zhongshu(first, second, third, return_core_range=False)
             if check_result:
-                result = fifth.low > k_m if direction == TopBotType.top2bot else fifth.high < k_l
+                result = (fifth.low > k_m if direction == TopBotType.top2bot else fifth.high < k_l) \
+                            if (fifth.close < fifth.open) else \
+                        (fifth.close > k_m if direction == TopBotType.top2bot else fifth.close < k_l)
             if not result:
                 check_result, k_m, k_l = cls.contain_zhongshu(second, third, forth, return_core_range=False)
                 # last kbar contains out-going and returning zoushi
-                result = check_result and fifth.close > k_m if direction == TopBotType.top2bot else fifth.close < k_l 
+                result = check_result and (
+                                           (fifth.low > k_m if direction == TopBotType.top2bot else fifth.high < k_l)
+                                           if (fifth.close < fifth.open) else
+                                           (fifth.close > k_m if direction == TopBotType.top2bot else fifth.close < k_l)
+                                           )
         return result
     
     @classmethod

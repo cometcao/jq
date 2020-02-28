@@ -9,7 +9,7 @@ from enum import Enum
 
 
 ######################## chan_kbar_filter ##########################
-TYPE_III_NUM = 5
+TYPE_III_NUM = 7
 TYPE_I_NUM = 10
 
 ######################## kBarprocessor #############################
