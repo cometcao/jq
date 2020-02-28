@@ -657,6 +657,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.long_stock_num = params.get('long_stock_num', 0)
         self.sub_chan_type = params.get('sub_chan_type', [Chan_Type.INVALID, Chan_Type.I])
         self.num_of_data = params.get('num_of_data', 2500)
+        self.bi_level_precision = params.get('bi_level_precision', True)
     
     def filter(self, context, data, stock_list):
         filter_stock_list = []
@@ -679,7 +680,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                       chan_type=self.sub_chan_type,
                                                       isdebug=self.isdebug,
                                                       is_anal=False,
-                                                      check_structure=True)
+                                                      check_structure=True, 
+                                                      not_check_bi_exhaustion=not self.bi_level_precision)
             elif chan_t == Chan_Type.III:
                 result, sub_profile = check_sub_chan(stock,
                                                       end_time=context.current_dt,
@@ -689,7 +691,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                       chan_type=self.sub_chan_type,
                                                       isdebug=self.isdebug,
                                                       is_anal=False,
-                                                      split_time=splitTime)
+                                                      split_time=splitTime, 
+                                                      not_check_bi_exhaustion=not self.bi_level_precision)
             
             # TYPE I and TYPE III with different criterion
             if result:
