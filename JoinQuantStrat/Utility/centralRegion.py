@@ -438,7 +438,8 @@ class ZhongShu(ZouShiLeiXing):
             first_xd = self.take_split_xd_as_zslx(last_xd.direction)
         else:
             first_xd = self.take_first_xd_as_zslx()
-        return abs(first_xd.work_out_slope()) > abs(last_xd.work_out_slope())
+        exhausted = abs(first_xd.work_out_slope()) > abs(last_xd.work_out_slope())
+        return exhausted, last_xd.zoushi_nodes[0].time if exhausted else first_xd.zoushi_nodes[0].time
 
     def is_running_type(self):
         running_type = False
