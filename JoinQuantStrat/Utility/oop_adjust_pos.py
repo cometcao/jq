@@ -896,7 +896,7 @@ class Short_Chan(Sell_stocks):
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
         
-            if context.portfolio.positions[stock].price / context.portfolio.positions[stock].avg_cost - 1 >= self.stop_profit:
+            if stock_data.loc[position_time:, 'high'].max() / context.portfolio.positions[stock].avg_cost - 1 >= self.stop_profit:
                 stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
                 if self.use_ma13 and stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
                     print("STOP PROFIT {0} below ma13: {1}".format(stock, stock_data.iloc[-1].ma13))
@@ -912,7 +912,7 @@ class Short_Chan(Sell_stocks):
                                                           isdebug=self.isdebug, 
                                                           is_anal=False,
                                                           split_time=effective_time)
-                if bi_exhausted and bi_xd_exhausted:
+                if bi_exhausted or bi_xd_exhausted:
                     print("STOP PROFIT {0} exhausted: {1}, {2}".format(stock,
                                                                        bi_exhausted,
                                                                        bi_xd_exhausted))
@@ -928,7 +928,7 @@ class Short_Chan(Sell_stocks):
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
 
-            if context.portfolio.positions[stock].price / context.portfolio.positions[stock].avg_cost - 1 >= self.stop_profit:
+            if stock_data.loc[position_time:, 'high'].max() / context.portfolio.positions[stock].avg_cost - 1 >= self.stop_profit:
                 stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
                 if self.use_ma13 and stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
                     print("STOP PROFIT MA13 {0} {1}".format(stock_data.iloc[-1].close, stock_data.iloc[-1].ma13))
@@ -944,7 +944,7 @@ class Short_Chan(Sell_stocks):
                                                           isdebug=self.isdebug, 
                                                           is_anal=False,
                                                           split_time=effective_time)
-                if bi_exhausted and bi_xd_exhausted:
+                if bi_exhausted or bi_xd_exhausted:
                     print("STOP PROFIT {0} exhausted: {1}, {2}".format(stock,
                                                                        bi_exhausted,
                                                                        bi_xd_exhausted))
