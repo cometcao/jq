@@ -961,6 +961,7 @@ class Short_Chan(Sell_stocks):
             
             if self.check_stop_loss(stock, avg_cost, context):
                 self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+                continue
             
             if self.check_stop_profit(stock, position_time, context):
                 self.g.close_position(self, context.portfolio.positions[stock], True, 0)
