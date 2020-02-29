@@ -815,7 +815,7 @@ class Short_Chan(Sell_stocks):
                 result, sub_profile = check_top_chan(stock,
                                                       end_time=context.current_dt,
                                                       periods=['5m'],
-                                                      count=2500,
+                                                      count=4800,
                                                       direction=TopBotType.top2bot,
                                                       chan_type=[Chan_Type.I],
                                                       isdebug=self.isdebug,
