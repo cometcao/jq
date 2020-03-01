@@ -1015,17 +1015,17 @@ class Long_Chan(Buy_stocks_portion):
                 type_I_stocks.append(stock)
                 self.to_buy.remove(stock)
                 
-                if self.force_price_check and latest_high_price >= top_chan_p and top_chan_p/latest_price - 1 < self.expected_profit:
+                if self.force_price_check and (latest_high_price >= top_chan_p or top_chan_p/latest_price - 1 < self.expected_profit):
                     to_ignore.append(stock)
                     
             elif self.force_price_check and Chan_Type.III == top_chan_t:
                 if type(sub_chan_p) is list:
-                    if latest_high_price >= sub_chan_p[0] and sub_chan_p[0]/latest_price - 1 < self.expected_profit:
+                    if latest_high_price >= sub_chan_p[0] or sub_chan_p[0]/latest_price - 1 < self.expected_profit:
                         to_ignore.append(stock)
                     elif sub_chan_p[0] / top_chan_p > self.type_III_threthold: # if the TYPE III is too far from previous ZhongShu, we shouldn't go
                         to_ignore.append(stock)
                 else: # can only be actual price here
-                    if latest_high_price >= sub_chan_p and sub_chan_p/latest_price - 1 < self.expected_profit:
+                    if latest_high_price >= sub_chan_p or sub_chan_p/latest_price - 1 < self.expected_profit:
                         to_ignore.append(stock)
                     elif sub_chan_p / top_chan_p > self.type_III_threthold:
                         to_ignore.append(stock)
