@@ -977,6 +977,7 @@ class Long_Chan(Buy_stocks_portion):
         self.type_III_threthold = params.get('threthold', 1.2)
         self.force_chan_type = params.get('force_chan_type', [Chan_Type.I])
         self.force_price_check = params.get('force_price_check', True)
+        self.expected_profit = params.get('expected_profit', 0.03)
         self.to_buy = []
         
     def handle_data(self, context, data):
@@ -1003,27 +1004,28 @@ class Long_Chan(Buy_stocks_portion):
                                    start_date=effective_time, 
                                    end_date=context.current_dt, 
                                    frequency='1m', 
-                                   fields=('high', 'low'), 
+                                   fields=('high', 'low', 'close'), 
                                    skip_paused=True)
             latest_high_price = latest_data['high'].max()
             latest_min_price = latest_data['low'].min()
+            latest_price = latest_data.iloc[-1].close
             # check current price of the stock ignore the ones not suitable
             # sort the stocks prioritize TYPE I stocks
             if Chan_Type.I == top_chan_t:
                 type_I_stocks.append(stock)
                 self.to_buy.remove(stock)
                 
-                if latest_high_price >= top_chan_p and self.force_price_check:
+                if self.force_price_check and latest_high_price >= top_chan_p and top_chan_p/latest_price - 1 >= self.expected_profit:
                     to_ignore.append(stock)
                     
-            elif Chan_Type.III == top_chan_t and self.force_price_check:
+            elif self.force_price_check and Chan_Type.III == top_chan_t:
                 if type(sub_chan_p) is list:
-                    if latest_high_price >= sub_chan_p[0]:
+                    if latest_high_price >= sub_chan_p[0] and sub_chan_p[0]/latest_price - 1 >= self.expected_profit:
                         to_ignore.append(stock)
                     elif sub_chan_p[0] / top_chan_p > self.type_III_threthold: # if the TYPE III is too far from previous ZhongShu, we shouldn't go
                         to_ignore.append(stock)
                 else: # can only be actual price here
-                    if latest_high_price >= sub_chan_p:
+                    if latest_high_price >= sub_chan_p and sub_chan_p/latest_price - 1 >= self.expected_profit:
                         to_ignore.append(stock)
                     elif sub_chan_p / top_chan_p > self.type_III_threthold:
                         to_ignore.append(stock)
