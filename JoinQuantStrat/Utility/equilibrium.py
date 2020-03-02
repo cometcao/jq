@@ -45,7 +45,8 @@ def check_sub_chan(stock,
                     isdebug=False, 
                     is_anal=False, 
                     split_time=None,
-                    not_check_bi_exhaustion=False):
+                    not_check_bi_exhaustion=False,
+                    force_zhongshu=False):
     print("check_sub_chan working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
@@ -61,7 +62,8 @@ def check_sub_chan(stock,
                                      chan_type=chan_type,
                                      check_end_tb=True, 
                                      check_tb_structure=True,
-                                     not_check_bi_exhaustion=not_check_bi_exhaustion) # data split at retrieval time
+                                     not_check_bi_exhaustion=not_check_bi_exhaustion,
+                                     force_zhongshu=force_zhongshu) # data split at retrieval time
 
 def check_full_chan(stock, 
                     end_time, 
@@ -1000,7 +1002,8 @@ class NestedInterval():
                               chan_type = Chan_Type.INVALID, 
                               check_end_tb=False, 
                               check_tb_structure=False, 
-                              not_check_bi_exhaustion=False):
+                              not_check_bi_exhaustion=False, 
+                              force_zhongshu=False):
         ''' THIS METHOD SHOULD ONLY BE USED FOR ANALYZING LEVEL!!
         We only check one period with the following stages: current level => xd => bi
         This check should only be used for TYPE I, 
@@ -1031,7 +1034,8 @@ class NestedInterval():
         if chan_type_check: # there is no need to do current level check if it's type III
             high_exhausted, check_xd_exhaustion, last_zs_time, sub_split_time, high_slope, high_macd = eq.define_equilibrium(direction, 
                                                                                                                              check_tb_structure=check_tb_structure,
-                                                                                                                             type_III=(chan_t==Chan_Type.III))
+                                                                                                                             type_III=(chan_t==Chan_Type.III),
+                                                                                                                             force_zhongshu=force_zhongshu)
         else:
             return False, [(chan_t, chan_d, chan_p, 0, 0, None, None)]
 

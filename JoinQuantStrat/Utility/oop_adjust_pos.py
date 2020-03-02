@@ -904,14 +904,16 @@ class Short_Chan(Sell_stocks):
             
             if stock_data.loc[position_time:, 'high'].max() >= top_chan_p: # reached target price
                 print("STOP PROFIT {0} reached target price: {1}".format(stock, top_chan_p))
-                bi_exhausted, bi_xd_exhausted, _= check_chan_indepth(stock,
+                bi_exhausted, bi_xd_exhausted, _= check_sub_chan(stock,
                                                           end_time=context.current_dt, 
-                                                          period='5m', 
-                                                          count=2000, 
+                                                          period='1m', 
                                                           direction=TopBotType.bot2top,
                                                           isdebug=self.isdebug, 
                                                           is_anal=False,
-                                                          split_time=effective_time)
+                                                          split_time=effective_time,
+                                                          not_check_bi_exhaustion=True,
+                                                          force_zhongshu=True
+                                                          )
                 if bi_exhausted or bi_xd_exhausted:
                     print("STOP PROFIT {0} exhausted: {1}, {2}".format(stock,
                                                                        bi_exhausted,
