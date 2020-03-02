@@ -798,18 +798,7 @@ class Short_Chan(Sell_stocks):
             max_loc = stock_data.index.get_loc(stock_data.loc[zoushi_start_time:, 'high'].idxmax())
             min_loc = stock_data.index.get_loc(stock_data.loc[zoushi_start_time:, 'low'].idxmin())
             latest_slope = (max_price-min_price)/(max_loc-min_loc)
-            
-            if (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
-                if latest_slope < 0 and abs(latest_slope) >= abs(sub_chan_slope):
-                    print("slope gets deeper! STOPLOSS {0},{1}".format(sub_chan_slope, latest_slope))
-                    return True
-                
-                # check macd
-                stock_data_macd = stock_data.loc[zoushi_start_time:, :]
-                latest_macd = stock_data_macd[stock_data_macd['macd'] < 0]['macd'].sum()
-                if sub_chan_macd != 0 and latest_macd < 0 and abs(latest_macd) > abs(sub_chan_macd):
-                    print("macd gets deeper! STOPLOSS {0},{1}".format(sub_chan_macd, latest_macd))
-                    return True
+
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
                 # check if original long point still holds
                 result, sub_profile = check_top_chan(stock,
@@ -824,6 +813,17 @@ class Short_Chan(Sell_stocks):
                                                       not_check_bi_exhaustion=True)
                 if not result:
                     print("TYPE I long point broken")
+                    return True
+            elif (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
+                if latest_slope < 0 and abs(latest_slope) >= abs(sub_chan_slope):
+                    print("slope gets deeper! STOPLOSS {0},{1}".format(sub_chan_slope, latest_slope))
+                    return True
+                
+                # check macd
+                stock_data_macd = stock_data.loc[zoushi_start_time:, :]
+                latest_macd = stock_data_macd[stock_data_macd['macd'] < 0]['macd'].sum()
+                if sub_chan_macd != 0 and latest_macd < 0 and abs(latest_macd) > abs(sub_chan_macd):
+                    print("macd gets deeper! STOPLOSS {0},{1}".format(sub_chan_macd, latest_macd))
                     return True
             return False
         elif top_chan_t == Chan_Type.III:
@@ -842,20 +842,6 @@ class Short_Chan(Sell_stocks):
             min_loc = stock_data.index.get_loc(stock_data.loc[zoushi_start_time:, 'low'].idxmin())
             latest_slope = (max_price-min_price)/(max_loc-min_loc)
 
-            if (1 - stock_data.iloc[-1].close / avg_cost) >= 0: # negative return
-                if latest_slope < 0 and abs(latest_slope) >= abs(sub_chan_slope):
-                    print("slope gets deeper! STOPLOSS {0},{1}".format(sub_chan_slope, latest_slope))
-                    return True
-
-                if sub_chan_t == Chan_Type.I and sub_chan_macd != 0:
-                    # check macd
-                    _, _, stock_data.loc[:,'macd'] = talib.MACD(stock_data['close'].values)
-                    stock_data_macd = stock_data.loc[zoushi_start_time:, :]
-                    latest_macd = stock_data_macd[stock_data_macd['macd'] < 0]['macd'].sum()
-                    if latest_macd < 0 and abs(latest_macd) > abs(sub_chan_macd):
-                        print("macd gets deeper! STOPLOSS {0},{1}".format(sub_chan_macd, latest_macd))
-                        return True
-            
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss: # reached stop loss mark
                 result, sub_profile = check_sub_chan(stock,
                                                       end_time=context.current_dt,
@@ -870,6 +856,19 @@ class Short_Chan(Sell_stocks):
                 if not result:
                     print("sub long point broken")
                     return True
+            elif (1 - stock_data.iloc[-1].close / avg_cost) >= 0: # negative return
+                if latest_slope < 0 and abs(latest_slope) >= abs(sub_chan_slope):
+                    print("slope gets deeper! STOPLOSS {0},{1}".format(sub_chan_slope, latest_slope))
+                    return True
+
+                if sub_chan_t == Chan_Type.I and sub_chan_macd != 0:
+                    # check macd
+                    _, _, stock_data.loc[:,'macd'] = talib.MACD(stock_data['close'].values)
+                    stock_data_macd = stock_data.loc[zoushi_start_time:, :]
+                    latest_macd = stock_data_macd[stock_data_macd['macd'] < 0]['macd'].sum()
+                    if latest_macd < 0 and abs(latest_macd) > abs(sub_chan_macd):
+                        print("macd gets deeper! STOPLOSS {0},{1}".format(sub_chan_macd, latest_macd))
+                        return True
                     
             if stock_data.loc[effective_time:,'low'].min() <= top_chan_p:
                 print("TYPE III invalidated {0}, {1}".format(stock_data.loc[effective_time:,'low'].min(), top_chan_p))
