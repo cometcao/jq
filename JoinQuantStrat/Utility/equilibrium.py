@@ -497,20 +497,23 @@ class Equilibrium():
                     print("1 current Zou Shi is QV SHI \n{0} \n{1}".format(zs1, zs2))
                 result = True        
         
-        # if the first ZhongShu is complex and can be split to form QvShi with second ZhongShu
-        if not result and zs1.get_level().value > zs2.get_level().value == zs_level.value and\
-            (zs1.direction == zs2.direction or zs1.is_complex_type()):
-            split_nodes = zs1.get_ending_nodes(N=5)
-            if len(split_nodes) >= 5:
-                new_zs = ZhongShu(split_nodes[1], split_nodes[2], split_nodes[3], split_nodes[4], zs2.direction, zs2.original_df)
-                new_zs.add_new_nodes(split_nodes[5:])
-    
-                [l1, u1] = new_zs.get_amplitude_region_original()
-                [l2, u2] = zs2.get_amplitude_region_original()
-                if l1 > u2 or l2 > u1: # two Zhong Shu without intersection
-                    if self.isdebug:
-                        print("2 current Zou Shi is QV SHI \n{0} \n{1}".format(zs1, zs2))
-                    result = True
+        # LETS IGNORE COMPLEX CASES
+#         # if the first ZhongShu is complex and can be split to form QvShi with second ZhongShu
+#         if not result and zs1.get_level().value > zs2.get_level().value == zs_level.value and\
+#             (zs1.direction == zs2.direction or zs1.is_complex_type()):
+#             split_nodes = zs1.get_ending_nodes(N=5)
+#             if len(split_nodes) >= 5:
+#                 new_zs = ZhongShu(split_nodes[1], split_nodes[2], split_nodes[3], split_nodes[4], zs2.direction, zs2.original_df)
+#                 new_zs.add_new_nodes(split_nodes[5:])
+#     
+#                 [l1, u1] = new_zs.get_amplitude_region_original()
+#                 [l2, u2] = zs2.get_amplitude_region_original()
+#                 if l1 > u2 or l2 > u1: # two Zhong Shu without intersection
+#                     if self.isdebug:
+#                         print("2 current Zou Shi is QV SHI \n{0} \n{1}".format(zs1, zs2))
+#                     result = True
+
+
         return result
     
     def two_zslx_interact(self, zs1, zs2):
@@ -565,7 +568,7 @@ class Equilibrium():
 
 
         
-    def define_equilibrium(self, direction, check_tb_structure=False, force_zhongshu=False, type_III=False):
+    def define_equilibrium(self, direction, guide_price=0, check_tb_structure=False, force_zhongshu=False, type_III=False):
         '''
         We are dealing type III differently at top level
         return:
@@ -610,10 +613,19 @@ class Equilibrium():
         
         a, _, c = self.find_most_recent_zoushi(direction)
         
-        return self.check_exhaustion(a, c, check_tb_structure=check_tb_structure)
+        new_high_low = self.reached_new_high_low(guide_price, direction, c)
         
+        return self.check_exhaustion(a, c, new_high_low, check_tb_structure=check_tb_structure)
         
-    def check_exhaustion(self, zslx_a, zslx_c, check_tb_structure=False):
+    def reached_new_high_low(self, guide_price, direction, zslx):
+        if guide_price == 0:
+            return False
+        
+        zslx_range = zslx.get_amplitude_region_original()
+        
+        return zslx_range[0] < guide_price if direction == TopBotType.top2bot else zslx_range[1] > guide_price
+    
+    def check_exhaustion(self, zslx_a, zslx_c, new_high_low, check_tb_structure=False):
         exhaustion_result = False
         if zslx_a is None or zslx_c is None or zslx_a.isEmpty() or zslx_c.isEmpty():
             if self.isdebug:
@@ -625,8 +637,14 @@ class Equilibrium():
         if check_tb_structure:
             if a_s[0] != c_s[0] or a_s[-1] != c_s[-1]:
                 if self.isdebug:
-                    print("Not matching structure")
+                    print("Not matching tb structure")
                 return exhaustion_result, False, None, None, 0, 0
+        
+        # we need to make sure they structurally match
+        if abs(len(a_s) - len(c_s)) > 2: # or make sure they have to be equal to 1
+            if self.isdebug:
+                print("Not matching XD structure")
+            return exhaustion_result, False, None, None, 0, 0
         
         if not self.isQvShi and\
             (zslx_c.get_magnitude()/zslx_a.get_magnitude() < (1-(1-GOLDEN_RATIO)/2) or\
@@ -650,8 +668,8 @@ class Equilibrium():
             exhaustion_result = True
 
         zslx_macd = 0
-         # if QV SHI => at least two Zhong Shu, We could also use macd, and we need to make sure they structurally match
-        if not exhaustion_result and self.isQvShi and a_s == c_s:
+        # if QV SHI => at least two Zhong Shu, We could also use macd, but they must be new low/high
+        if not exhaustion_result and new_high_low:
             zslx_macd = zslx_a.get_macd_acc()
             latest_macd = zslx_c.get_macd_acc()
             exhaustion_result = abs(zslx_macd) > abs(latest_macd)
@@ -974,8 +992,11 @@ class NestedInterval():
         chan_t, chan_d, chan_p = chan_types[0]
         chan_type_check = (chan_t in chan_type) if (type(chan_type) is list) else (chan_t == chan_type)
         
+        guide_price = (chan_p[0] if chan_t == TopBotType.top2bot else chan_p[1]) if type(chan_p) is list else chan_p
+        
         if chan_type_check: # there is no need to do current level check if it's type III
             high_exhausted, check_xd_exhaustion, _, _, _, _ = eq.define_equilibrium(direction, 
+                                                                                    guide_price,
                                                                                     check_tb_structure=False, 
                                                                                     type_III=(chan_t == Chan_Type.III))
         else:
@@ -1031,8 +1052,10 @@ class NestedInterval():
         chan_t, chan_d, chan_p = chan_types[0]
         chan_type_check = (chan_t in chan_type) if (type(chan_type) is list) else (chan_t == chan_type)
         
+        guide_price = (chan_p[0] if chan_t == TopBotType.top2bot else chan_p[1]) if type(chan_p) is list else chan_p
         if chan_type_check: # there is no need to do current level check if it's type III
             high_exhausted, check_xd_exhaustion, last_zs_time, sub_split_time, high_slope, high_macd = eq.define_equilibrium(direction, 
+                                                                                                                             guide_price,
                                                                                                                              check_tb_structure=check_tb_structure,
                                                                                                                              type_III=(chan_t==Chan_Type.III),
                                                                                                                              force_zhongshu=force_zhongshu)
@@ -1149,6 +1172,7 @@ class NestedInterval():
         # only type II and III can coexist, only need to check the first one
         # reverse direction case are dealt above
         chan_t, chan_d, chan_p = chan_types[0] 
+        guide_price = (chan_p[0] if chan_t == TopBotType.top2bot else chan_p[1]) if type(chan_p) is list else chan_p
         exhausted, check_xd_exhaustion, _, sub_split_time, a_slope, a_macd = eq.define_equilibrium(direction, check_tb_structure=check_tb_structure)
         if self.isDescription or self.isdebug:
             print("current level {0} {1} {2} {3} {4} with price:{5}".format(period, 
