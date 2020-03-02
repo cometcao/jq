@@ -604,7 +604,7 @@ class Equilibrium():
                 if self.isdebug:
                     print("only one zhongshu, check zhongshu exhaustion")
                 xd_exhaustion, ts = zs.check_exhaustion()
-                return True, xd_exhaustion, zslx.zoushi_nodes[0].time, ts, 0, 0
+                return True, xd_exhaustion, zs.first.time, ts, 0, 0
         
         a, _, c = self.find_most_recent_zoushi(direction)
         
