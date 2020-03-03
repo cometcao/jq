@@ -618,7 +618,7 @@ class Equilibrium():
         return self.check_exhaustion(a, c, new_high_low, check_tb_structure=check_tb_structure)
         
     def reached_new_high_low(self, guide_price, direction, zslx):
-        if guide_price == 0:
+        if guide_price == 0 or zslx is None or zslx.isEmpty():
             return False
         
         zslx_range = zslx.get_amplitude_region_original()
