@@ -255,7 +255,8 @@ class ZouShiLeiXing(object):
         same_direction_nodes = [n for n in all_double_nodes if n.direction == self.direction]
         # make sure the last two slope goes flatten, if not it's NOT exhausted
         if len(same_direction_nodes) >= 2 and abs(same_direction_nodes[-1].work_out_slope()) >= abs(same_direction_nodes[-2].work_out_slope()):
-            if len(same_direction_nodes) < 3 or\
+            if (same_direction_nodes[-1].direction == TopBotType.top2bot and same_direction_nodes[-2].end.chan_price <= same_direction_nodes[-1].end.chan_price) or\
+                (same_direction_nodes[-1].direction == TopBotType.bot2top and same_direction_nodes[-2].end.chan_price >= same_direction_nodes[-1].end.chan_price) or\
                 (same_direction_nodes[-1].end.macd_acc>=same_direction_nodes[-2].end.macd_acc): # we can use macd for the last two
                     return False, same_direction_nodes[0].start.time
         return True, same_direction_nodes[-1].start.time
