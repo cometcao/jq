@@ -4,6 +4,7 @@ Created on 4 Dec 2017
 
 @author: MetalInvest
 '''
+from jqdatasdk.utils import today
 try:
     from kuanke.user_space_api import *
 except:
@@ -629,7 +630,7 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
             
             if str(today_date) not in chan_dict:
                 print("{0} not in chan file".format(today_date))
-                continue
+                return []
             
             chan_list = chan_dict[str(today_date)]
             print("data read from file: {0}".format(chan_list))
