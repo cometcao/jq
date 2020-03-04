@@ -627,6 +627,10 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
             today_date = context.current_dt.date()
             chan_dict = json.loads(read_file(self.filename).decode())
             
+            if str(today_date) not in chan_dict:
+                print("{0} not in chan file".format(today_date))
+                continue
+            
             chan_list = chan_dict[str(today_date)]
             print("data read from file: {0}".format(chan_list))
             for stock, c_type_value, c_direc_value, c_price, xd_result, s_time in chan_list:
