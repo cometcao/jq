@@ -801,17 +801,16 @@ class Short_Chan(Sell_stocks):
 
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
                 # check if original long point still holds
-                result, sub_profile = check_top_chan(stock,
-                                                      end_time=context.current_dt,
-                                                      periods=['5m'],
-                                                      count=4800,
-                                                      direction=TopBotType.top2bot,
-                                                      chan_type=[Chan_Type.I],
-                                                      isdebug=self.isdebug,
-                                                      is_anal=False,
-                                                      check_structure=True, 
-                                                      not_check_bi_exhaustion=True)
-                if not result:
+                result, xd_result, _, _ = check_chan_by_type_exhaustion(stock,
+                                                                      end_time=context.current_dt,
+                                                                      periods=['5m'],
+                                                                      count=4800,
+                                                                      direction=TopBotType.top2bot,
+                                                                      chan_type=[Chan_Type.I],
+                                                                      isdebug=self.isdebug,
+                                                                      is_anal=False,
+                                                                      check_structure=True)
+                if not result or not xd_result:
                     print("TYPE I long point broken")
                     return True
             elif (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
@@ -843,7 +842,7 @@ class Short_Chan(Sell_stocks):
             latest_slope = (max_price-min_price)/(max_loc-min_loc)
 
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss: # reached stop loss mark
-                result, sub_profile = check_sub_chan(stock,
+                exhausted, xd_exhausted, _, _ = check_stock_sub(stock,
                                                       end_time=context.current_dt,
                                                       periods=['1m'],
                                                       count=2500,
@@ -852,8 +851,8 @@ class Short_Chan(Sell_stocks):
                                                       isdebug=self.isdebug,
                                                       is_anal=False,
                                                       split_time=splitTime,
-                                                      not_check_bi_exhaustion=True)
-                if not result:
+                                                      check_bi=False)
+                if not exhausted or not xd_exhausted:
                     print("sub long point broken")
                     return True
             elif (1 - stock_data.iloc[-1].close / avg_cost) >= 0: # negative return
@@ -894,31 +893,36 @@ class Short_Chan(Sell_stocks):
                                    frequency='5m', 
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
-        
-#             if stock_data.loc[position_time:, 'high'].max() / context.portfolio.positions[stock].avg_cost - 1 >= self.stop_profit:
+            
+            do_stop_profit = False
+#             if stock_data.loc[position_time:, 'high'].max()/context.portfolio.positions[stock].avg_cost-1 >= self.stop_profit:
+#                 print("STOP PROFIT reached return {0} {1}".format(context.portfolio.positions[stock].avg_cost, stock_data.loc[position_time:, 'high'].max()))
+#                 do_stop_profit = True
             if stock_data.loc[position_time:, 'high'].max() >= top_chan_p: # reached target price
                 print("STOP PROFIT {0} reached target price: {1}".format(stock, top_chan_p))
-                stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
-                if self.use_ma13 and stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
-                    print("STOP PROFIT {0} below ma13: {1}".format(stock, stock_data.iloc[-1].ma13))
-                    return True
-
-            check_exhausted, check_profile = check_sub_chan(stock,
-                                                              end_time=context.current_dt, 
-                                                              periods=['1m'], 
-                                                              direction=TopBotType.bot2top,
-                                                              chan_type=[Chan_Type.INVALID, Chan_Type.I],
-                                                              isdebug=self.isdebug, 
-                                                              is_anal=False,
-                                                              split_time=effective_time,
-                                                              not_check_bi_exhaustion=True,
-                                                              force_zhongshu=True
-                                                              )
-            if check_exhausted:
-                print("STOP PROFIT {0} exhausted: {1}, {2}".format(stock,
-                                                                   check_exhausted,
-                                                                   check_profile))
+                do_stop_profit = True
+                
+            stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
+            if do_stop_profit and self.use_ma13 and stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
+                print("STOP PROFIT {0} below ma13: {1}".format(stock, stock_data.iloc[-1].ma13))
                 return True
+
+#             check_exhausted, check_profile = check_sub_chan(stock,
+#                                                               end_time=context.current_dt, 
+#                                                               periods=['1m'], 
+#                                                               direction=TopBotType.bot2top,
+#                                                               chan_type=[Chan_Type.INVALID, Chan_Type.I],
+#                                                               isdebug=self.isdebug, 
+#                                                               is_anal=False,
+#                                                               split_time=effective_time,
+#                                                               not_check_bi_exhaustion=True,
+#                                                               force_zhongshu=True
+#                                                               )
+#             if check_exhausted:
+#                 print("STOP PROFIT {0} exhausted: {1}, {2}".format(stock,
+#                                                                    check_exhausted,
+#                                                                    check_profile))
+#                 return True
             
         elif top_chan_t == Chan_Type.III:
             
