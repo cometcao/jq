@@ -677,34 +677,22 @@ class Filter_Chan_Stocks(Filter_stock_list):
             chan_p = top_profile[0][2]
             splitTime = top_profile[0][5]
             
-            if chan_t == Chan_Type.I:
-                result, sub_profile = check_top_chan(stock,
-                                                      end_time=context.current_dt,
-                                                      periods=['5m'],
-                                                      count=self.num_of_data,
-                                                      direction=TopBotType.top2bot,
-                                                      chan_type=self.sub_chan_type,
-                                                      isdebug=self.isdebug,
-                                                      is_anal=False,
-                                                      check_structure=True, 
-                                                      not_check_bi_exhaustion=not self.bi_level_precision)
-            elif chan_t == Chan_Type.III:
-                result, sub_profile = check_sub_chan(stock,
-                                                      end_time=context.current_dt,
-                                                      periods=['1m'],
-                                                      count=self.num_of_data,
-                                                      direction=TopBotType.top2bot,
-                                                      chan_type=self.sub_chan_type,
-                                                      isdebug=self.isdebug,
-                                                      is_anal=False,
-                                                      split_time=splitTime, 
-                                                      not_check_bi_exhaustion=not self.bi_level_precision)
-            
-            # TYPE I and TYPE III with different criterion
-            if result:
+            sub_exhausted, sub_xd_exhausted, sub_chan_types, effective_time = check_stock_sub(stock,
+                                                                      end_time=context.current_dt,
+                                                                      periods=['1m'],
+                                                                      count=self.num_of_data,
+                                                                      direction=TopBotType.top2bot,
+                                                                      chan_types=self.sub_chan_type,
+                                                                      isdebug=self.isdebug,
+                                                                      is_anal=False,
+                                                                      split_time=splitTime, 
+                                                                      check_bi=False)
+            if sub_exhausted and sub_xd_exhausted:
                 filter_stock_list.append(stock)
             
             if stock in filter_stock_list:
+                chan_t, chan_d, chan_p, a_slope, a_macd = sub_chan_types[0]
+                sub_profile = [(chan_t, chan_d, chan_p, a_slope, a_macd, None, effective_time)]
                 # update sub level information
                 top_profile = top_profile + sub_profile
                 self.g.stock_chan_type[stock] = top_profile

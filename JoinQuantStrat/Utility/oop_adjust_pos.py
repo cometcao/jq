@@ -15,7 +15,7 @@ from oop_strategy_frame import *
 from position_control_analysis import *
 from rsrs_timing import *
 from chan_common_include import Chan_Type
-from equilibrium import check_chan_indepth, check_top_chan, check_sub_chan
+from equilibrium import check_chan_indepth, check_top_chan, check_sub_chan, check_chan_by_type_exhaustion
 from biaoLiStatus import TopBotType
 import json
 
@@ -847,7 +847,7 @@ class Short_Chan(Sell_stocks):
                                                       periods=['1m'],
                                                       count=2500,
                                                       direction=TopBotType.top2bot,
-                                                      chan_type=[Chan_Type.I, Chan_Type.INVALID],
+                                                      chan_types=[Chan_Type.I, Chan_Type.INVALID],
                                                       isdebug=self.isdebug,
                                                       is_anal=False,
                                                       split_time=splitTime,
