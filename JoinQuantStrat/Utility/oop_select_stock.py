@@ -334,7 +334,7 @@ class Pick_Chan_Stocks(Create_stock_list):
         stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
         stock_list = stock_list[:self.num_of_stocks]
         for stock in stock_list:
-            result, xd_result, chan_type, split_time = check_chan_by_type_exhaustion(stock,
+            result, xd_result, chan_profile = check_chan_by_type_exhaustion(stock,
                                                                           end_time=context.current_dt, 
                                                                           periods=['5m'], 
                                                                           count=self.num_of_data, 
@@ -343,7 +343,7 @@ class Pick_Chan_Stocks(Create_stock_list):
                                                                           isdebug=self.is_debug, 
                                                                           is_anal=False)
             if result and xd_result:
-                self.g.stock_chan_type[stock] = [(chan_type[0], chan_type[1], chan_type[2], 0, 0, split_time, None)]
+                self.g.stock_chan_type[stock] = chan_profile
         if self.is_debug:
             print(str(self.g.stock_chan_type))
         return list(self.g.stock_chan_type.keys())
@@ -672,12 +672,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
         stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
         for stock in stock_list:
             top_profile = self.g.stock_chan_type[stock]
-            chan_t = top_profile[0][0]
-            chan_d = top_profile[0][1]
-            chan_p = top_profile[0][2]
             splitTime = top_profile[0][5]
             
-            sub_exhausted, sub_xd_exhausted, sub_chan_types, effective_time = check_stock_sub(stock,
+            sub_exhausted, sub_xd_exhausted, sub_profile = check_stock_sub(stock,
                                                                       end_time=context.current_dt,
                                                                       periods=['1m'],
                                                                       count=self.num_of_data,
@@ -691,8 +688,6 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 filter_stock_list.append(stock)
             
             if stock in filter_stock_list:
-                chan_t, chan_d, chan_p, a_slope, a_macd = sub_chan_types[0]
-                sub_profile = [(chan_t, chan_d, chan_p, a_slope, a_macd, None, effective_time)]
                 # update sub level information
                 top_profile = top_profile + sub_profile
                 self.g.stock_chan_type[stock] = top_profile
