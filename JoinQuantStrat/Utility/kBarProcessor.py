@@ -203,7 +203,8 @@ class KBarProcessor(object):
                 (initial_state == TopBotType.bot and felem.low <= selem.low):
                 self.kDataFrame_standardized.ix[0, 'tb'] = initial_state
             else:
-                print("Incorrect initial state given!!!")
+                if self.isdebug:
+                    print("Incorrect initial state given!!!")
                 
         # This function assume we have done the standardization process (no inclusion)
         last_idx = 0
