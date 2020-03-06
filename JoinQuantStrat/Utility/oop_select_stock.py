@@ -683,7 +683,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                       isdebug=self.isdebug,
                                                                       is_anal=False,
                                                                       split_time=splitTime, 
-                                                                      check_bi=False)
+                                                                      check_bi=False, 
+                                                                      force_zhongshu=True)
             if sub_exhausted and sub_xd_exhausted:
                 filter_stock_list.append(stock)
             

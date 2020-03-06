@@ -113,7 +113,15 @@ def check_full_chan(stock,
 
 ##############################################################################################################################
 
-def check_chan_by_type_exhaustion(stock, end_time, periods, count, direction, chan_type, isdebug=False, is_anal=False, check_structure=False):
+def check_chan_by_type_exhaustion(stock, 
+                                  end_time, 
+                                  periods, 
+                                  count, 
+                                  direction, 
+                                  chan_type, 
+                                  isdebug=False, 
+                                  is_anal=False, 
+                                  check_structure=False):
     print("check_chan_by_type_exhaustion working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
@@ -155,7 +163,8 @@ def check_stock_sub(stock,
                     isdebug=False, 
                     is_anal=False, 
                     split_time=None,
-                    check_bi=False):
+                    check_bi=False,
+                    force_zhongshu=True):
     print("check_stock_sub working on stock: {0} at {1}".format(stock, periods))
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
@@ -174,7 +183,8 @@ def check_stock_sub(stock,
                                                                  direction, 
                                                                  chan_types=chan_types,
                                                                  check_end_tb=True, 
-                                                                 check_tb_structure=True) # data split at retrieval time
+                                                                 check_tb_structure=True,
+                                                                 force_zhongshu=force_zhongshu) # data split at retrieval time
     if check_bi:
         bi_exhausted, bi_xd_exhausted, bi_split_time = ni.indepth_analyze_zoushi(direction, split_time, pe, force_zhongshu=False)
         print("BI level {0}, {1}".format(bi_exhausted, bi_xd_exhausted))
@@ -209,7 +219,8 @@ def check_stock_full(stock, end_time, periods=['5m', '1m'], count=2000, directio
                                                                                 isdebug=isdebug, 
                                                                                 is_anal=is_anal, 
                                                                                 split_time=splitTime,
-                                                                                check_bi=False)
+                                                                                check_bi=False,
+                                                                                check_stock_sub=True)
         chan_profile = chan_profile + sub_profile
         return exhausted and xd_exhausted and sub_exhausted and sub_xd_exhausted, chan_profile
     else:
