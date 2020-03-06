@@ -1147,7 +1147,8 @@ class NestedInterval():
     def full_check_zoushi(self, period, direction, 
                           chan_types=[Chan_Type.INVALID, Chan_Type.I],
                           check_end_tb=False, 
-                          check_tb_structure=False):
+                          check_tb_structure=False,
+                          force_zhongshu=False):
         '''
         split done at data level
         
@@ -1193,7 +1194,7 @@ class NestedInterval():
         # reverse direction case are dealt above
         chan_t, chan_d, chan_p = chan_type_result[0]
         guide_price = (chan_p[0] if direction == TopBotType.top2bot else chan_p[1]) if type(chan_p) is list else chan_p
-        exhausted, check_xd_exhaustion, _, sub_split_time, a_slope, a_macd = eq.define_equilibrium(direction, guide_price, check_tb_structure=check_tb_structure)
+        exhausted, check_xd_exhaustion, _, sub_split_time, a_slope, a_macd = eq.define_equilibrium(direction, guide_price, force_zhongshu=force_zhongshu, check_tb_structure=check_tb_structure)
         if self.isDescription or self.isdebug:
             print("current level {0} {1} {2} {3} {4} with price:{5}".format(period, 
                                                                         chan_d, 
