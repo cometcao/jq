@@ -206,10 +206,10 @@ def check_stock_full(stock, end_time, periods=['5m', '1m'], count=2000, directio
                                                                       is_anal=is_anal)    
     if not chan_profile:
         chan_profile = [(Chan_Type.INVALID, TopBotType.noTopBot, 0, 0, 0, None, None)]
-        
+
     splitTime = chan_profile[0][6]
     
-    if exhausted:
+    if exhausted and sanity_check(stock, chan_profile, end_time, top_pe):
         sub_exhausted, sub_xd_exhausted, sub_profile = check_stock_sub(stock=stock, 
                                                                                 end_time=end_time, 
                                                                                 periods=[sub_pe], 
@@ -226,6 +226,27 @@ def check_stock_full(stock, end_time, periods=['5m', '1m'], count=2000, directio
     else:
         return exhausted, chan_profile
 
+def sanity_check(stock, profile, end_time, pe):
+    # This method is used in case we provide the sub level check with initial direction while actual zoushi goes opposite
+    # This will end up with invalid XD analysis in sub level
+    # case: stock = '300760.XSHE' end_dt = '2019-07-01 14:30:00' period = ['5m', '1m']
+    splitTime = profile[0][6]
+    direction = profile[0][1]
+    result = False
+    stock_data = JqDataRetriever.get_research_data(stock,
+                                                  start_date=splitTime,
+                                                  end_date=end_time, 
+                                                  period=pe,
+                                                  fields= ['close'],
+                                                  skip_suspended=False)
+    if direction == TopBotType.top2bot:
+        result = stock_data.iloc[0].close > stock_data.iloc[-1].close
+    elif direction == TopBotType.bot2top:
+        result = stock_data.iloc[0].close < stock_data.iloc[-1].close
+    if not result:
+        print("{0} failed sanity check".format(stock))
+    return result
+        
 class CentralRegionProcess(object):
     '''
     This lib takes XD data, and the dataframe must contain chan_price, new_index, xd_tb, macd columns
