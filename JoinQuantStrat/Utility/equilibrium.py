@@ -458,6 +458,7 @@ class Equilibrium():
                     all_zs = [zs for zs in self.analytic_result if type(zs) is ZhongShu]
                     all_first_xd = [zs.take_split_xd_as_zslx(direction) for zs in all_zs]
                     first_xd = sorted(all_first_xd, key=take_start_price, reverse=direction==TopBotType.top2bot)[0]
+                    zs = all_zs[-1]
                     
             elif len(self.analytic_result) < 3 or self.analytic_result[-3].direction != last_xd.direction:
                 if len(self.analytic_result) > 1:
@@ -616,7 +617,8 @@ class Equilibrium():
         if zslx is None or zslx.isEmpty():
             return False
         
-        if guide_price == 0:
+        if guide_price == 0: # This shouldn't happen
+            print("guide price ZERO")
             if type(central_zs) is list:
                 central_zs = central_zs[-1]
             
@@ -995,7 +997,7 @@ class NestedInterval():
         chan_t, chan_d, chan_p = chan_types[0]
         chan_type_check = (chan_t in chan_type) if (type(chan_type) is list) else (chan_t == chan_type)
         
-        guide_price = (chan_p[0] if chan_t == TopBotType.top2bot else chan_p[1]) if type(chan_p) is list else chan_p
+        guide_price = (chan_p[0] if direction == TopBotType.top2bot else chan_p[1]) if type(chan_p) is list else chan_p
         
         if chan_type_check: # there is no need to do current level check if it's type III
             high_exhausted, check_xd_exhaustion, last_zs_time, sub_split_time, high_slope, high_macd = eq.define_equilibrium(direction, 
@@ -1055,7 +1057,7 @@ class NestedInterval():
         chan_t, chan_d, chan_p = chan_types[0]
         chan_type_check = (chan_t in chan_type) if (type(chan_type) is list) else (chan_t == chan_type)
         
-        guide_price = (chan_p[0] if chan_t == TopBotType.top2bot else chan_p[1]) if type(chan_p) is list else chan_p
+        guide_price = (chan_p[0] if direction == TopBotType.top2bot else chan_p[1]) if type(chan_p) is list else chan_p
         if chan_type_check: # there is no need to do current level check if it's type III
             high_exhausted, check_xd_exhaustion, last_zs_time, sub_split_time, high_slope, high_macd = eq.define_equilibrium(direction, 
                                                                                                                              guide_price,
@@ -1179,8 +1181,8 @@ class NestedInterval():
         # only type II and III can coexist, only need to check the first one
         # reverse direction case are dealt above
         chan_t, chan_d, chan_p = chan_type_result[0]
-        guide_price = (chan_p[0] if chan_t == TopBotType.top2bot else chan_p[1]) if type(chan_p) is list else chan_p
-        exhausted, check_xd_exhaustion, _, sub_split_time, a_slope, a_macd = eq.define_equilibrium(direction, check_tb_structure=check_tb_structure)
+        guide_price = (chan_p[0] if direction == TopBotType.top2bot else chan_p[1]) if type(chan_p) is list else chan_p
+        exhausted, check_xd_exhaustion, _, sub_split_time, a_slope, a_macd = eq.define_equilibrium(direction, guide_price, check_tb_structure=check_tb_structure)
         if self.isDescription or self.isdebug:
             print("current level {0} {1} {2} {3} {4} with price:{5}".format(period, 
                                                                         chan_d, 
