@@ -852,8 +852,8 @@ class Short_Chan(Sell_stocks):
                                                       is_anal=False,
                                                       split_time=splitTime,
                                                       check_bi=False,
-                                                      force_zhongshu=True) # synch with selection
-                if not exhausted or not xd_exhausted:
+                                                      force_zhongshu=False) # synch with selection
+                if not exhausted: # or not xd_exhausted
                     print("sub long point broken")
                     return True
             elif (1 - stock_data.iloc[-1].close / avg_cost) >= 0: # negative return
