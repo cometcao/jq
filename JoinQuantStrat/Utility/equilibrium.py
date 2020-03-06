@@ -209,7 +209,7 @@ def check_stock_full(stock, end_time, periods=['5m', '1m'], count=2000, directio
 
     splitTime = chan_profile[0][6]
     
-    if exhausted and sanity_check(stock, chan_profile, end_time, top_pe):
+    if exhausted and xd_exhausted and sanity_check(stock, chan_profile, end_time, top_pe):
         sub_exhausted, sub_xd_exhausted, sub_profile = check_stock_sub(stock=stock, 
                                                                                 end_time=end_time, 
                                                                                 periods=[sub_pe], 
@@ -233,12 +233,12 @@ def sanity_check(stock, profile, end_time, pe):
     splitTime = profile[0][6]
     direction = profile[0][1]
     result = False
-    stock_data = JqDataRetriever.get_research_data(stock,
-                                                  start_date=splitTime,
-                                                  end_date=end_time, 
-                                                  period=pe,
-                                                  fields= ['close'],
-                                                  skip_suspended=False)
+    stock_data = get_price(stock,
+                          start_date=splitTime,
+                          end_date=end_time, 
+                          frequency=pe,
+                          fields= ['close'],
+                          skip_paused=False)
     if direction == TopBotType.top2bot:
         result = stock_data.iloc[0].close > stock_data.iloc[-1].close
     elif direction == TopBotType.bot2top:
