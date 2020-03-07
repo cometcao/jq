@@ -26,27 +26,40 @@ def filter_high_level_by_index(direction=TopBotType.top2bot,
     result_stocks_III = set()
     for stock in all_stocks:
         for p in periods:
-            stock_high = get_bars(stock, 
-                                    count=max(TYPE_I_NUM, TYPE_III_NUM), 
-                                    end_dt=end_dt, 
-                                    unit=p,
-                                    fields= ['open',  'high', 'low','close'], 
-                                    df = df,
-                                    include_now=True)
-            for ct in chan_types:
-                if KBar.filter_high_level_kbar(stock_high, 
-                                               direction=direction, 
-                                               df=df, 
-                                               chan_type=ct):
-                    if ct == Chan_Type.I:
-                        result_stocks_I.add(stock)
-                    elif ct == Chan_Type.III:
-                        result_stocks_III.add(stock)
+            result_stocks_I, result_stocks_III = filter_high_level_by_stock(stock, 
+                                                                            p, 
+                                                                            end_dt, 
+                                                                            df, 
+                                                                            chan_types,
+                                                                            direction,
+                                                                            result_stocks_I, 
+                                                                            result_stocks_III)
     type_i = sorted(list(result_stocks_I))
     type_iii = sorted(list(result_stocks_III))
     print("qualifying type I stocks:{0} \ntype III stocks: {1}".format(type_i, type_iii))
     
     return type_i + type_iii
+
+
+def filter_high_level_by_stock(stock, period, end_dt, df, chan_types, direction,result_stocks_I, result_stocks_III):
+    stock_high = get_bars(stock, 
+                                           count=max(TYPE_I_NUM, TYPE_III_NUM), 
+                                           end_dt=end_dt, 
+                                           unit=period,
+                                           fields= ['open',  'high', 'low','close'], 
+                                           df = df,
+                                           include_now=True)
+    for ct in chan_types:
+        if KBar.filter_high_level_kbar(stock_high, 
+                                       direction=direction, 
+                                       df=df, 
+                                       chan_type=ct):
+            if ct == Chan_Type.I:
+                result_stocks_I.add(stock)
+            elif ct == Chan_Type.III:
+                result_stocks_III.add(stock)
+    
+    return result_stocks_I, result_stocks_III
 
 class KBar(object):
     '''
@@ -100,33 +113,48 @@ class KBar(object):
     @classmethod
     def chan_type_III_check(cls, kbar_list, direction):
         '''
-        max 7 high level KBars
+        incase of 7 high level KBars
+        assume we are given the data necessary, we need at least the last KBar to step back,
+        so that means we have 4 steps for remaining 6 kbars to check zhongshu of 3 kbars
         '''
         # early check
-        if (max(kbar_list[0].high, kbar_list[1].high, kbar_list[2].high) < kbar_list[-1].low and kbar_list[-1].close < max(kbar_list[-2].high, kbar_list[-3].high) and direction == TopBotType.top2bot) or\
-            (min(kbar_list[0].low, kbar_list[1].low, kbar_list[2].low) > kbar_list[-1].low and kbar_list[-1].close > min(kbar_list[-2].low, kbar_list[-3].low) and direction == TopBotType.bot2top):
-           return False
+        if (direction == TopBotType.top2bot and\
+                (
+                    max(kbar_list[0].high, kbar_list[1].high, kbar_list[2].high) >= kbar_list[-1].low or\
+                    kbar_list[-1].close >= max(kbar_list[-2].high, kbar_list[-3].high)
+                )
+            ) or\
+            (direction == TopBotType.bot2top and\
+                (
+                    min(kbar_list[0].low, kbar_list[1].low, kbar_list[2].low) <= kbar_list[-1].low or\
+                    kbar_list[-1].close <= min(kbar_list[-2].low, kbar_list[-3].low)
+                )
+            ):
+            return False
         
-        first = kbar_list[-TYPE_III_NUM]
-        second = kbar_list[-TYPE_III_NUM+1] 
-        third = kbar_list[-TYPE_III_NUM+2]
-        forth = kbar_list[-TYPE_III_NUM+3]
-        fifth = kbar_list[-TYPE_III_NUM+4]
+        start_idx = 0
+        steps = 4
+        first = kbar_list[start_idx]
+        second = kbar_list[start_idx+1] 
+        third = kbar_list[start_idx+2]
+        last = kbar_list[-1]
         result = False
-        if (fifth.close < fifth.open) or ((fifth.close-fifth.low)/(fifth.high-fifth.low) <= (1-GOLDEN_RATIO)):
-            check_result, k_m, k_l = cls.contain_zhongshu(first, second, third, return_core_range=False)
-            if check_result:
-                result = (fifth.low > k_m if direction == TopBotType.top2bot else fifth.high < k_l) \
-                            if (fifth.close < fifth.open) else \
-                        (fifth.close > k_m if direction == TopBotType.top2bot else fifth.close < k_l)
-            if not result:
-                check_result, k_m, k_l = cls.contain_zhongshu(second, third, forth, return_core_range=False)
-                # last kbar contains out-going and returning zoushi
-                result = check_result and (
-                                           (fifth.low > k_m if direction == TopBotType.top2bot else fifth.high < k_l)
-                                           if (fifth.close < fifth.open) else
-                                           (fifth.close > k_m if direction == TopBotType.top2bot else fifth.close < k_l)
-                                           )
+        if (last.close < last.open) or ((last.close-last.low)/(last.high-last.low) <= (1-GOLDEN_RATIO)):
+            
+            while start_idx < steps:
+                check_result, k_m, k_l = cls.contain_zhongshu(first, second, third, return_core_range=False)
+                
+                if check_result:
+                    result = (last.low > k_m if direction == TopBotType.top2bot else last.high < k_l) \
+                                if (last.close < last.open) else \
+                            (last.close > k_m if direction == TopBotType.top2bot else last.close < k_l)
+                if result:
+                    return result
+                else:
+                    start_idx = start_idx + 1
+                    first = kbar_list[start_idx]
+                    second = kbar_list[start_idx+1] 
+                    third = kbar_list[start_idx+2]
         return result
     
     @classmethod
