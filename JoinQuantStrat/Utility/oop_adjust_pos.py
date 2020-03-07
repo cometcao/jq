@@ -774,17 +774,20 @@ class Short_Chan(Sell_stocks):
         sub_profile = self.g.stock_chan_type[stock][1]
         top_chan_t = top_profile[0]
         top_chan_p = top_profile[2]
-        splitTime = top_profile[5]
+        top_chan_slope = sub_profile[3]
+        top_chan_macd = sub_profile[4]
+        top_zoushi_start_time = top_profile[5]
+        splitTime = top_profile[6]
         sub_chan_t = sub_profile[0]
         sub_chan_p = sub_profile[2]
         sub_chan_slope = sub_profile[3]
         sub_chan_macd = sub_profile[4]
-        zoushi_start_time = sub_profile[5]
+        sub_zoushi_start_time = sub_profile[5]
         effective_time = sub_profile[6]
         
         if top_chan_t == Chan_Type.I:
             # This is to make sure we have enough data for MACD and MA
-            data_start_time = zoushi_start_time - pd.Timedelta(minutes=150)
+            data_start_time = top_zoushi_start_time - pd.Timedelta(minutes=150)
             stock_data = get_price(stock,
                                    start_date=data_start_time, 
                                    end_date=context.current_dt, 
@@ -808,26 +811,26 @@ class Short_Chan(Sell_stocks):
                     return True
             elif (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
                 # check slope
-                max_price = stock_data.loc[zoushi_start_time:, 'high'].max()
-                min_price = stock_data.loc[zoushi_start_time:, 'low'].min()
-                max_loc = stock_data.index.get_loc(stock_data.loc[zoushi_start_time:, 'high'].idxmax())
-                min_loc = stock_data.index.get_loc(stock_data.loc[zoushi_start_time:, 'low'].idxmin())
+                max_price = stock_data.loc[top_zoushi_start_time:, 'high'].max()
+                min_price = stock_data.loc[top_zoushi_start_time:, 'low'].min()
+                max_loc = stock_data.index.get_loc(stock_data.loc[top_zoushi_start_time:, 'high'].idxmax())
+                min_loc = stock_data.index.get_loc(stock_data.loc[top_zoushi_start_time:, 'low'].idxmin())
                 latest_slope = (max_price-min_price)/(max_loc-min_loc)
-                if latest_slope < 0 and abs(latest_slope) >= abs(sub_chan_slope):
-                    print("slope gets deeper! STOPLOSS {0},{1}".format(sub_chan_slope, latest_slope))
+                if latest_slope < 0 and abs(latest_slope) >= abs(top_chan_slope):
+                    print("slope gets deeper! STOPLOSS {0},{1}".format(top_chan_slope, latest_slope))
                     return True
                  
                 # check macd
                 _, _, stock_data.loc[:,'macd'] = talib.MACD(stock_data['close'].values)
-                stock_data_macd = stock_data.loc[zoushi_start_time:, :]
+                stock_data_macd = stock_data.loc[top_zoushi_start_time:, :]
                 latest_macd = stock_data_macd[stock_data_macd['macd'] < 0]['macd'].sum()
-                if sub_chan_macd != 0 and latest_macd < 0 and abs(latest_macd) > abs(sub_chan_macd):
-                    print("macd gets deeper! STOPLOSS {0},{1}".format(sub_chan_macd, latest_macd))
+                if top_chan_macd != 0 and latest_macd < 0 and abs(latest_macd) > abs(top_chan_macd):
+                    print("macd gets deeper! STOPLOSS {0},{1}".format(top_chan_macd, latest_macd))
                     return True
             return False
         elif top_chan_t == Chan_Type.III:
             # This is to make sure we have enough data for MACD and MA
-            data_start_time = zoushi_start_time - pd.Timedelta(minutes=30)
+            data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=30)
             stock_data = get_price(stock,
                                    start_date=data_start_time, 
                                    end_date=context.current_dt, 
@@ -835,10 +838,10 @@ class Short_Chan(Sell_stocks):
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
             # check slope
-            max_price = stock_data.loc[zoushi_start_time:, 'high'].max()
-            min_price = stock_data.loc[zoushi_start_time:, 'low'].min()
-            max_loc = stock_data.index.get_loc(stock_data.loc[zoushi_start_time:, 'high'].idxmax())
-            min_loc = stock_data.index.get_loc(stock_data.loc[zoushi_start_time:, 'low'].idxmin())
+            max_price = stock_data.loc[sub_zoushi_start_time:, 'high'].max()
+            min_price = stock_data.loc[sub_zoushi_start_time:, 'low'].min()
+            max_loc = stock_data.index.get_loc(stock_data.loc[sub_zoushi_start_time:, 'high'].idxmax())
+            min_loc = stock_data.index.get_loc(stock_data.loc[sub_zoushi_start_time:, 'low'].idxmin())
             latest_slope = (max_price-min_price)/(max_loc-min_loc)
 
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss: # reached stop loss mark
@@ -864,7 +867,7 @@ class Short_Chan(Sell_stocks):
                 if sub_chan_t == Chan_Type.I and sub_chan_macd != 0:
                     # check macd
                     _, _, stock_data.loc[:,'macd'] = talib.MACD(stock_data['close'].values)
-                    stock_data_macd = stock_data.loc[zoushi_start_time:, :]
+                    stock_data_macd = stock_data.loc[sub_zoushi_start_time:, :]
                     latest_macd = stock_data_macd[stock_data_macd['macd'] < 0]['macd'].sum()
                     if latest_macd < 0 and abs(latest_macd) > abs(sub_chan_macd):
                         print("macd gets deeper! STOPLOSS {0},{1}".format(sub_chan_macd, latest_macd))
@@ -881,13 +884,14 @@ class Short_Chan(Sell_stocks):
         sub_profile = self.g.stock_chan_type[stock][1]
         top_chan_t = top_profile[0]
         top_chan_p = top_profile[2]
+        top_zoushi_start_time = top_profile[5]
         sub_chan_t = sub_profile[0]
         sub_chan_p = sub_profile[2]
-        zoushi_start_time = sub_profile[5]
+        sub_zoushi_start_time = sub_profile[5]
         effective_time = sub_profile[6]
         
         if top_chan_t == Chan_Type.I:
-            data_start_time = zoushi_start_time - pd.Timedelta(minutes=100)
+            data_start_time = top_zoushi_start_time - pd.Timedelta(minutes=100)
             stock_data = get_price(stock,
                                    start_date=data_start_time, 
                                    end_date=context.current_dt, 
@@ -927,7 +931,7 @@ class Short_Chan(Sell_stocks):
             
         elif top_chan_t == Chan_Type.III:
             
-            data_start_time = zoushi_start_time - pd.Timedelta(minutes=20)
+            data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=20)
             stock_data = get_price(stock,
                                    start_date=data_start_time, 
                                    end_date=context.current_dt, 

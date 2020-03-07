@@ -633,7 +633,7 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
             
             chan_list = chan_dict[str(today_date)]
             print("data read from file: {0}".format(chan_list))
-            for stock, c_type_value, c_direc_value, c_price, xd_result, s_time in chan_list:
+            for stock, c_type_value, c_direc_value, c_price, c_slope, c_macd, z_time, s_time in chan_list:
                 if stock in context.portfolio.positions.keys():
                     print("{0} already in position".format(stock))
                     continue
@@ -646,10 +646,10 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                 self.g.stock_chan_type[stock] = [(Chan_Type.value2type(c_type_value), 
                                                   TopBotType.value2type(c_direc_value),
                                                   c_price, 
-                                                  0,
-                                                  0,
-                                                  pd.Timestamp(s_time),
-                                                  None)]
+                                                  c_slope,
+                                                  c_macd,
+                                                  pd.Timestamp(z_time),
+                                                  pd.Timestamp(s_time))]
         return chan_stock_list
     
     def __str__(self):
@@ -672,7 +672,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
         for stock in stock_list:
             top_profile = self.g.stock_chan_type[stock]
-            splitTime = top_profile[0][5]
+            splitTime = top_profile[0][6]
             
             sub_exhausted, sub_xd_exhausted, sub_profile = check_stock_sub(stock,
                                                                       end_time=context.current_dt,
