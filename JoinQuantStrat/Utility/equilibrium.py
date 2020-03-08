@@ -186,12 +186,19 @@ def check_stock_sub(stock,
                                                                  check_tb_structure=True,
                                                                  force_zhongshu=force_zhongshu) # data split at retrieval time
     if check_bi:
-        bi_exhausted, bi_xd_exhausted, bi_split_time = ni.indepth_analyze_zoushi(direction, split_time, pe, force_zhongshu=False)
+        bi_exhausted, _, _ = ni.indepth_analyze_zoushi(direction, split_time, pe, force_zhongshu=False)
         print("BI level {0}, {1}".format(bi_exhausted, bi_xd_exhausted))
-        return exhausted, xd_exhausted and bi_exhausted and bi_xd_exhausted, sub_profile
+        return exhausted, xd_exhausted and bi_exhausted, sub_profile
     return exhausted, xd_exhausted, sub_profile
 
-def check_stock_full(stock, end_time, periods=['5m', '1m'], count=2000, direction=TopBotType.top2bot, isdebug=False, is_anal=False):
+def check_stock_full(stock, 
+                     end_time, 
+                     periods=['5m', '1m'], 
+                     count=2000, 
+                     direction=TopBotType.top2bot, 
+                     isdebug=False, 
+                     is_anal=False,
+                     sub_check_bi=False):
     print("check_stock_full working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
     top_pe = periods[0]
     sub_pe = periods[1]
@@ -202,7 +209,7 @@ def check_stock_full(stock, end_time, periods=['5m', '1m'], count=2000, directio
                                                                       direction=direction, 
                                                                       chan_type=[Chan_Type.I, Chan_Type.III], 
                                                                       isdebug=isdebug, 
-                                                                      check_structure=True,
+                                                                      check_structure=False,
                                                                       is_anal=is_anal)    
     if not chan_profile:
         chan_profile = [(Chan_Type.INVALID, TopBotType.noTopBot, 0, 0, 0, None, None)]
@@ -219,8 +226,8 @@ def check_stock_full(stock, end_time, periods=['5m', '1m'], count=2000, directio
                                                                                 isdebug=isdebug, 
                                                                                 is_anal=is_anal, 
                                                                                 split_time=splitTime,
-                                                                                check_bi=False,
-                                                                                check_stock_sub=True)
+                                                                                check_bi=sub_check_bi,
+                                                                                force_zhongshu=True)
         chan_profile = chan_profile + sub_profile
         return exhausted and xd_exhausted and sub_exhausted and sub_xd_exhausted, chan_profile
     else:
@@ -441,21 +448,23 @@ class Equilibrium():
                     type(self.analytic_result[-1]) is ZhongShu and\
                     type(self.analytic_result[-3]) is ZhongShu and\
                     self.two_zslx_interact_original(self.analytic_result[-1], self.analytic_result[-3]):
-                    ## zhong shu combination
-                    i = -3
-                    marked = False
-                    while -(i-2) <= len(self.analytic_result):
-                        if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
-                            (not self.analytic_result[i-2].is_complex_type() and self.analytic_result[i-2].direction != self.analytic_result[i].direction):
-                            first_xd = self.analytic_result[i-1]
-                            zs = self.analytic_result[i:-1]
-                            marked = True
-                            break
-                        i = i - 2
-                    if not marked or -(i-2) > len(self.analytic_result):
-                        all_zs = [zs for zs in self.analytic_result if type(zs) is ZhongShu]
-                        all_first_xd = [zs.take_split_xd_as_zslx(direction) for zs in all_zs]
-                        first_xd = sorted(all_first_xd, key=take_start_price, reverse=direction==TopBotType.top2bot)[0]
+                    return None, None, None
+# IGNORE THIS CASE###############################
+#                     ## zhong shu combination
+#                     i = -3
+#                     marked = False
+#                     while -(i-2) <= len(self.analytic_result):
+#                         if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
+#                             (not self.analytic_result[i-2].is_complex_type() and self.analytic_result[i-2].direction != self.analytic_result[i].direction):
+#                             first_xd = self.analytic_result[i-1]
+#                             zs = self.analytic_result[i:-1]
+#                             marked = True
+#                             break
+#                         i = i - 2
+#                     if not marked or -(i-2) > len(self.analytic_result):
+#                         all_zs = [zs for zs in self.analytic_result if type(zs) is ZhongShu]
+#                         all_first_xd = [zs.take_split_xd_as_zslx(direction) for zs in all_zs]
+#                         first_xd = sorted(all_first_xd, key=take_start_price, reverse=direction==TopBotType.top2bot)[0]
                         
                 elif len(self.analytic_result) < 2 or self.analytic_result[-2].direction != last_xd.direction:
                     first_xd = zs.take_split_xd_as_zslx(direction)
