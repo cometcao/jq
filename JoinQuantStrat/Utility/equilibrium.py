@@ -185,7 +185,7 @@ def check_stock_sub(stock,
                                                                  check_end_tb=True, 
                                                                  check_tb_structure=True,
                                                                  force_zhongshu=force_zhongshu) # data split at retrieval time
-    if check_bi:
+    if exhausted and xd_exhausted and check_bi:
         bi_exhausted, bi_xd_exhausted, _ = ni.indepth_analyze_zoushi(direction, split_time, pe, force_zhongshu=False)
         print("BI level {0}, {1}".format(bi_exhausted, bi_xd_exhausted))
         return exhausted, xd_exhausted and bi_exhausted, sub_profile
