@@ -691,7 +691,7 @@ class Equilibrium():
                 print("Not matching XD structure")
             return exhaustion_result, False, None, None, 0, 0
         
-        if not self.isQvShi and\
+        if not new_high_low and\
             (zslx_c.get_magnitude()/zslx_a.get_magnitude() < (1-(1-GOLDEN_RATIO)/2) or\
             (zslx_c.get_magnitude()/zslx_a.get_magnitude() > (1+(1-GOLDEN_RATIO)/2))):
             if self.isdebug:
