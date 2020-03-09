@@ -898,36 +898,33 @@ class Short_Chan(Sell_stocks):
                                    frequency='5m', 
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
-            
-            do_stop_profit = False
-            if stock_data.loc[position_time:, 'high'].max()/context.portfolio.positions[stock].avg_cost-1 >= self.stop_profit:
-                print("STOP PROFIT reached return {0} {1}".format(context.portfolio.positions[stock].avg_cost, stock_data.loc[position_time:, 'high'].max()))
-                do_stop_profit = True
+
             if stock_data.loc[position_time:, 'high'].max() >= top_chan_p: # reached target price
                 print("STOP PROFIT {0} reached target price: {1}".format(stock, top_chan_p))
-                do_stop_profit = True
                 
-            stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
-            if do_stop_profit and self.use_ma13 and stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
-                print("STOP PROFIT {0} below ma13: {1}".format(stock, stock_data.iloc[-1].ma13))
-                return True
+                stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
+                if self.use_ma13 and stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
+                    print("STOP PROFIT {0} below ma13: {1}".format(stock, stock_data.iloc[-1].ma13))
+                    return True
 
-            exhausted, xd_exhausted, _ = check_stock_sub(stock,
-                                                  end_time=context.current_dt,
-                                                  periods=['1m'],
-                                                  count=2000,
-                                                  direction=TopBotType.bot2top,
-                                                  chan_types=[Chan_Type.I, Chan_Type.INVALID],
-                                                  isdebug=self.isdebug,
-                                                  is_anal=False,
-                                                  split_time=position_time,
-                                                  check_bi=False,
-                                                  force_zhongshu=True) # synch with selection
-            if exhausted:
-                print("STOP PROFIT {0} exhausted: {1}, {2}".format(stock,
-                                                                   exhausted,
-                                                                   xd_exhausted))
-                return True
+            if stock_data.loc[position_time:, 'high'].max()/context.portfolio.positions[stock].avg_cost-1 >= self.stop_profit:
+                print("STOP PROFIT reached return {0} {1}".format(context.portfolio.positions[stock].avg_cost, stock_data.loc[position_time:, 'high'].max()))
+                exhausted, xd_exhausted, _ = check_stock_sub(stock,
+                                                      end_time=context.current_dt,
+                                                      periods=['1m'],
+                                                      count=2000,
+                                                      direction=TopBotType.bot2top,
+                                                      chan_types=[Chan_Type.I, Chan_Type.INVALID],
+                                                      isdebug=self.isdebug,
+                                                      is_anal=False,
+                                                      split_time=position_time,
+                                                      check_bi=False,
+                                                      force_zhongshu=True) # synch with selection
+                if exhausted:
+                    print("STOP PROFIT {0} exhausted: {1}, {2}".format(stock,
+                                                                       exhausted,
+                                                                       xd_exhausted))
+                    return True
             
         elif top_chan_t == Chan_Type.III:
             
