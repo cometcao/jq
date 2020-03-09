@@ -929,12 +929,12 @@ class Equilibrium():
                 final_zs = self.analytic_result[-1]
                 all_types.append((Chan_Type.INVALID,
                                   TopBotType.noTopBot,
-                                  final_zs.get_core_region()))
+                                  final_zs.get_amplitude_region_original_without_last_xd()))
             elif len(self.analytic_result) > 1 and type(self.analytic_result[-2]) is ZhongShu:
                 final_zs = self.analytic_result[-2]
                 all_types.append((Chan_Type.INVALID,
                                   TopBotType.noTopBot,
-                                  final_zs.get_core_region()))
+                                  final_zs.get_amplitude_region_original()))
         
         if all_types and self.isdebug:
             print("all chan types found: {0}".format(all_types))
