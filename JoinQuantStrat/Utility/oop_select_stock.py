@@ -153,6 +153,7 @@ class Pick_financial_data(Filter_query):
 
 class Filter_financial_data2(Early_Filter_stock_list):
     def normal_filter(self, context, stock_list):
+        print("before filter: {0}".format(stock_list))
         is_by_sector = self._params.get('by_sector', False)
         q = query(
             valuation
@@ -190,6 +191,7 @@ class Filter_financial_data2(Early_Filter_stock_list):
             q = q.limit(limit)
         # print get_fundamentals(q)
         stock_list = list(get_fundamentals(q)['code'])
+        print("after filter: {0}".format(stock_list))
         return stock_list    
     
     def filter_by_sector(self, context):
