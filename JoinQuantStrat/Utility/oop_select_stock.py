@@ -312,6 +312,55 @@ class Filter_financial_data(Early_Filter_stock_list):
         return s    
 
 
+class Sort_By_Financial_Data(Early_Filter_stock_list):
+    def __init__(self, params):
+        self.limit = params.get('limit', 10)
+        self.f_type = params.get('f_type', "evs")
+        self.isdebug= params.get('isdebug', False)
+    
+    def filter(self, context, stock_list):
+        if self.f_type == "evs": # EV/EBIT
+# valuation.market_cap*100000000+
+# balance.longterm_loan+
+# balance.bonds_payable+
+# balance.minority_interests+
+# balance.capital_reserve_fund-
+# balance.cash_equivalents)
+# /(income.net_profit+income.income_tax_expense+income.interest_expense
+            q = query(
+                    valuation.market_cap,
+                    balance.longterm_loan,
+                    balance.bonds_payable,
+                    balance.minority_interests,
+                    balance.capital_reserve_fund,
+                    balance.cash_equivalents,
+                    income.net_profit,
+                    income.income_tax_expense,
+                    income.interest_expense
+                    ).filter(
+                    valuation.code.in_(stock_list)
+                    )
+            df = get_fundamentals(q).fillna(0)
+            
+            df['evs'] =\
+            (df['market_cap'] * 1e8 + 
+            df['longterm_loan'] + 
+            df['bonds_payable'] + 
+            df['minority_interests'] +
+            df['capital_reserve_fund'] - 
+            df['cash_equivalents'])/(
+            df['net_profit'] +
+            df['income_tax_expense'] +
+            df['interest_expense']
+            )
+            df.sort_values(by=['evs'], inplace=True)
+            if self.isdebug:
+                print(df.head(10))
+            
+            return df['code'].head(self.limit).tolist()
+            
+    def __str__(self):
+        return "sort and limit by {0} data".format(self.f_type)
 ################## Chan Filter ##################
 class Pick_Chan_Stocks(Create_stock_list):
     def __init__(self, params):
