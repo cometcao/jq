@@ -328,6 +328,7 @@ class Sort_By_Financial_Data(Early_Filter_stock_list):
 # balance.cash_equivalents)
 # /(income.net_profit+income.income_tax_expense+income.interest_expense
             q = query(
+                    valuation.code,
                     valuation.market_cap,
                     balance.longterm_loan,
                     balance.bonds_payable,
