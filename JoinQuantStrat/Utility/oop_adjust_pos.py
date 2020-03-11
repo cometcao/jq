@@ -994,6 +994,7 @@ class Long_Chan(Buy_stocks_portion):
             return
 
         self.to_buy = self.g.monitor_buy_list
+        type_I_stocks = []
         to_ignore = []
         for stock in self.to_buy:
             top_profile = self.g.stock_chan_type[stock][0]
@@ -1019,6 +1020,9 @@ class Long_Chan(Buy_stocks_portion):
             # check current price of the stock ignore the ones not suitable
             # sort the stocks prioritize TYPE I stocks
             if Chan_Type.I == top_chan_t:
+                type_I_stocks.append(stock)
+                self.to_buy.remove(stock)
+                
                 if self.force_price_check and (latest_high_price >= top_chan_p or top_chan_p/latest_price - 1 < self.expected_profit):
                     to_ignore.append(stock)
                     
@@ -1038,6 +1042,8 @@ class Long_Chan(Buy_stocks_portion):
                     # if TYPE III not valid anymore
                     to_ignore.append(stock)
                 
+        self.to_buy = type_I_stocks + self.to_buy
+        
         if to_ignore:
             print("stocks: {0} ignored due to price over target value".format(to_ignore)) 
         self.to_buy = [stock for stock in self.to_buy if stock not in to_ignore]
