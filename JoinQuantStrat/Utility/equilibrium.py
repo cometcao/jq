@@ -896,35 +896,36 @@ class Equilibrium():
                         if self.isdebug:
                             print("TYPE III trade point 4")
                 
+        # IGNORE THIS CASE!! WE NEED CERTAINTY
         # TYPE III two reverse direction zslx, with new reverse direction zhongshu in the middle
-        if len(self.analytic_result) >= 4 and type(self.analytic_result[-1]) is ZouShiLeiXing:
-            latest_zslx = self.analytic_result[-1]
-            now_zs = self.analytic_result[-2]
-            pre_zs = self.analytic_result[-4]
-            amplitude_region_original = pre_zs.get_amplitude_region_original()
-            core_region = pre_zs.get_core_region()
-            if not self.two_zslx_interact_original(pre_zs, latest_zslx) and\
-                latest_zslx.direction != now_zs.direction and\
-                not now_zs.is_complex_type():
-                if not check_end_tb or\
-                ((latest_zslx.zoushi_nodes[-1].tb == TopBotType.top and latest_zslx.direction == TopBotType.bot2top) or\
-                 (latest_zslx.zoushi_nodes[-1].tb == TopBotType.bot and latest_zslx.direction == TopBotType.top2bot)):
-                    all_types.append((Chan_Type.III, 
-                                      latest_zslx.direction,
-                                      amplitude_region_original[1] if latest_zslx.direction == TopBotType.top2bot else amplitude_region_original[0]))
-                    if self.isdebug:
-                        print("TYPE III trade point 5")
-            if not self.two_zslx_interact(pre_zs, latest_zslx) and\
-                latest_zslx.direction != now_zs.direction and\
-                not now_zs.is_complex_type():
-                if not check_end_tb or\
-                ((latest_zslx.zoushi_nodes[-1].tb == TopBotType.top and latest_zslx.direction == TopBotType.bot2top) or\
-                 (latest_zslx.zoushi_nodes[-1].tb == TopBotType.bot and latest_zslx.direction == TopBotType.top2bot)):            
-                    all_types.append((Chan_Type.III_weak, 
-                                      latest_zslx.direction,
-                                      core_region[1] if latest_zslx.direction == TopBotType.top2bot else core_region[0]))
-                    if self.isdebug:
-                        print("TYPE III trade point 6")
+#         if len(self.analytic_result) >= 4 and type(self.analytic_result[-1]) is ZouShiLeiXing:
+#             latest_zslx = self.analytic_result[-1]
+#             now_zs = self.analytic_result[-2]
+#             pre_zs = self.analytic_result[-4]
+#             amplitude_region_original = pre_zs.get_amplitude_region_original()
+#             core_region = pre_zs.get_core_region()
+#             if not self.two_zslx_interact_original(pre_zs, latest_zslx) and\
+#                 latest_zslx.direction != now_zs.direction and\
+#                 not now_zs.is_complex_type():
+#                 if not check_end_tb or\
+#                 ((latest_zslx.zoushi_nodes[-1].tb == TopBotType.top and latest_zslx.direction == TopBotType.bot2top) or\
+#                  (latest_zslx.zoushi_nodes[-1].tb == TopBotType.bot and latest_zslx.direction == TopBotType.top2bot)):
+#                     all_types.append((Chan_Type.III, 
+#                                       latest_zslx.direction,
+#                                       amplitude_region_original[1] if latest_zslx.direction == TopBotType.top2bot else amplitude_region_original[0]))
+#                     if self.isdebug:
+#                         print("TYPE III trade point 5")
+#             if not self.two_zslx_interact(pre_zs, latest_zslx) and\
+#                 latest_zslx.direction != now_zs.direction and\
+#                 not now_zs.is_complex_type():
+#                 if not check_end_tb or\
+#                 ((latest_zslx.zoushi_nodes[-1].tb == TopBotType.top and latest_zslx.direction == TopBotType.bot2top) or\
+#                  (latest_zslx.zoushi_nodes[-1].tb == TopBotType.bot and latest_zslx.direction == TopBotType.top2bot)):            
+#                     all_types.append((Chan_Type.III_weak, 
+#                                       latest_zslx.direction,
+#                                       core_region[1] if latest_zslx.direction == TopBotType.top2bot else core_region[0]))
+#                     if self.isdebug:
+#                         print("TYPE III trade point 6")
         all_types = list(set(all_types))
         
         if not all_types: # if not found, we give the boundary of latest ZhongShu
