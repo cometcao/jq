@@ -878,7 +878,7 @@ class Equilibrium():
             zslx = self.analytic_result[-2]
             now_zs = self.analytic_result[-1]
             core_region = pre_zs.get_core_region()
-            [lc, uc] = pre_zs.get_amplitude_region_original()
+            amplitude_region_original = pre_zs.get_amplitude_region_original()
             if not now_zs.is_complex_type():
                 if not check_end_tb or\
                 ((now_zs.forth.tb == TopBotType.bot and now_zs.direction == TopBotType.bot2top) or\
@@ -886,13 +886,13 @@ class Equilibrium():
                     if not self.two_zslx_interact_original(pre_zs, now_zs):
                         all_types.append((Chan_Type.III, 
                                           TopBotType.top2bot if now_zs.direction == TopBotType.bot2top else TopBotType.bot2top,
-                                          lc if now_zs.direction == TopBotType.bot2top else uc))
+                                          amplitude_region_original[1] if now_zs.direction == TopBotType.bot2top else amplitude_region_original[0]))
                         if self.isdebug:
                             print("TYPE III trade point 3")
                     elif not self.two_zslx_interact(pre_zs, now_zs):
                         all_types.append((Chan_Type.III_weak, 
                                           TopBotType.top2bot if now_zs.direction == TopBotType.bot2top else TopBotType.bot2top,
-                                          core_region[0] if now_zs.direction == TopBotType.bot2top else core_region[1]))
+                                          core_region[1] if now_zs.direction == TopBotType.bot2top else core_region[0]))
                         if self.isdebug:
                             print("TYPE III trade point 4")
                 
@@ -901,7 +901,7 @@ class Equilibrium():
             latest_zslx = self.analytic_result[-1]
             now_zs = self.analytic_result[-2]
             pre_zs = self.analytic_result[-4]
-            [lc, uc] = pre_zs.get_amplitude_region_original()
+            amplitude_region_original = pre_zs.get_amplitude_region_original()
             core_region = pre_zs.get_core_region()
             if not self.two_zslx_interact_original(pre_zs, latest_zslx) and\
                 latest_zslx.direction != now_zs.direction and\
@@ -911,7 +911,7 @@ class Equilibrium():
                  (latest_zslx.zoushi_nodes[-1].tb == TopBotType.bot and latest_zslx.direction == TopBotType.top2bot)):
                     all_types.append((Chan_Type.III, 
                                       latest_zslx.direction,
-                                      uc if latest_zslx.direction == TopBotType.top2bot else lc))
+                                      amplitude_region_original[1] if latest_zslx.direction == TopBotType.top2bot else amplitude_region_original[0]))
                     if self.isdebug:
                         print("TYPE III trade point 5")
             if not self.two_zslx_interact(pre_zs, latest_zslx) and\
