@@ -721,6 +721,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
             return filter_stock_list
         stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
         for stock in stock_list:
+            if self.long_stock_num == len(filter_stock_list):
+                # we don't need to look further, we have enough candidates for long position
+                break
+            
             top_profile = self.g.stock_chan_type[stock]
             splitTime = top_profile[0][6]
             
@@ -942,8 +946,22 @@ class Filter_common(Filter_stock_list):
     def __init__(self, params):
         self.filters = params.get('filters', ['st', 'high_limit', 'low_limit', 'pause','ban'])
 
+    def set_feasible_stocks(self, initial_stocks, current_data):
+        # 判断初始股票池的股票是否停牌，返回list
+        paused_info = []
+        
+        for i in initial_stocks:
+            paused_info.append(current_data[i].paused)
+        df_paused_info = pd.DataFrame({'paused_info':paused_info},index = initial_stocks)
+        unsuspened_stocks =list(df_paused_info.index[df_paused_info.paused_info == False])
+        return unsuspened_stocks
+
     def filter(self, context, data, stock_list):
         current_data = get_current_data()
+        
+        # filter out paused stocks
+        stock_list = self.set_feasible_stocks(stock_list,context, current_data)
+        
         if 'st' in self.filters:
             stock_list = [stock for stock in stock_list
                           if not current_data[stock].is_st
