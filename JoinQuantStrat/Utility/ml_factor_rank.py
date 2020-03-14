@@ -908,12 +908,12 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         # concat dataset 
         data_df = pd.DataFrame()
         for stock in factor_val_by_date:
-
             if self.regress_profit:
                 stock_price = get_price(security=stock, end_date=end_date, count=trainlength, frequency='daily', skip_paused=True, panel=False, fields='close')
                 factor_val_by_date[stock]['return'] = stock_price['close']
-
-            factor_val_by_date[stock] = factor_val_by_date[stock].drop_duplicates(subset=for_drop_duplicates,keep='last') # remove duplicated rows
+                
+            if for_drop_duplicates:
+                factor_val_by_date[stock] = factor_val_by_date[stock].drop_duplicates(subset=for_drop_duplicates,keep='last') # remove duplicated rows
 #             print("check remove duplicated: {0}".format(factor_val_by_date[stock]))
 
             if self.regress_profit:
