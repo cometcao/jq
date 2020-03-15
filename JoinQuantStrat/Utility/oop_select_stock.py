@@ -960,7 +960,7 @@ class Filter_common(Filter_stock_list):
         current_data = get_current_data()
         
         # filter out paused stocks
-        stock_list = self.set_feasible_stocks(stock_list,context, current_data)
+        stock_list = self.set_feasible_stocks(stock_list, current_data)
         
         if 'st' in self.filters:
             stock_list = [stock for stock in stock_list
