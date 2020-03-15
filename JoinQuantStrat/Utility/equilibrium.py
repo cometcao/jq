@@ -19,15 +19,17 @@ def check_top_chan(stock,
                    chan_type, 
                    isdebug=False, 
                    is_anal=False,
+                   is_description=True,
                    check_structure=False, 
                    not_check_bi_exhaustion=False):
-    print("check_top_chan working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
+    if is_description:
+        print("check_top_chan working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
                         periods=periods, 
                         count=count, 
                         isdebug=isdebug, 
-                        isDescription=True,
+                        isDescription=is_description,
                         isAnal=is_anal)
     
     return ni.One_period_full_check(direction, 
@@ -44,16 +46,18 @@ def check_sub_chan(stock,
                     chan_type=Chan_Type.INVALID, 
                     isdebug=False, 
                     is_anal=False, 
+                    is_description=True,
                     split_time=None,
                     not_check_bi_exhaustion=False,
                     force_zhongshu=False):
-    print("check_sub_chan working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
+    if is_description:
+        print("check_sub_chan working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
                         periods=periods, 
                         count=count, 
                         isdebug=isdebug, 
-                        isDescription=True,
+                        isDescription=is_description,
                         isAnal=is_anal,
                         initial_pe_prep=periods[0], 
                         initial_split_time=split_time, 
@@ -72,8 +76,10 @@ def check_full_chan(stock,
                     direction=TopBotType.top2bot, 
                     isdebug=False, 
                     is_anal=False, 
+                    is_description=True,
                     bi_level_precision=True):
-    print("check_full_chan working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
+    if is_description:
+        print("check_full_chan working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
     top_pe = periods[0]
     sub_pe = periods[1]
     exhausted, chan_profile = check_top_chan(stock=stock, 
@@ -84,6 +90,7 @@ def check_full_chan(stock,
                                               chan_type=[Chan_Type.I, Chan_Type.III], 
                                               isdebug=isdebug, 
                                               is_anal=is_anal,
+                                              is_description=is_description,
                                               check_structure=True,
                                               not_check_bi_exhaustion=not bi_level_precision)
     if not chan_profile:
@@ -104,6 +111,7 @@ def check_full_chan(stock,
                                                         chan_type=[Chan_Type.INVALID, Chan_Type.I], 
                                                         isdebug=isdebug, 
                                                         is_anal=is_anal, 
+                                                        is_description=is_description,
                                                         split_time=splitTime,
                                                         not_check_bi_exhaustion=not bi_level_precision)
             stock_profile = stock_profile + sub_chan_types
@@ -121,14 +129,16 @@ def check_chan_by_type_exhaustion(stock,
                                   chan_type, 
                                   isdebug=False, 
                                   is_anal=False, 
+                                  is_description=True,
                                   check_structure=False):
-    print("check_chan_by_type_exhaustion working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
+    if is_description:
+        print("check_chan_by_type_exhaustion working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
                         periods=periods, 
                         count=count, 
                         isdebug=isdebug, 
-                        isDescription=True,
+                        isDescription=is_description,
                         isAnal=is_anal)
     
     return ni.analyze_zoushi(direction, chan_type, check_end_tb=check_structure, check_tb_structure=check_structure)
@@ -140,14 +150,16 @@ def check_chan_indepth(stock,
                        direction, 
                        isdebug=False, 
                        is_anal=False, 
+                       is_description=True,
                        split_time=None):
-    print("check_chan_indepth working on stock: {0} at {1}".format(stock, period))
+    if is_description:
+        print("check_chan_indepth working on stock: {0} at {1}".format(stock, period))
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
                         periods=[period], 
                         count=count, 
                         isdebug=isdebug, 
-                        isDescription=True,
+                        isDescription=is_description,
                         isAnal=is_anal,
                         use_xd=False,
                         initial_pe_prep=period,
@@ -162,16 +174,18 @@ def check_stock_sub(stock,
                     chan_types=[Chan_Type.INVALID, Chan_Type.I], 
                     isdebug=False, 
                     is_anal=False, 
+                    is_description=True,
                     split_time=None,
                     check_bi=False,
                     force_zhongshu=True):
-    print("check_stock_sub working on stock: {0} at {1}".format(stock, periods))
+    if is_description:
+        print("check_stock_sub working on stock: {0} at {1}".format(stock, periods))
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
                         periods=periods, 
                         count=count,
                         isdebug=isdebug, 
-                        isDescription=True,
+                        isDescription=is_description,
                         isAnal=is_anal, 
                         use_xd=True,
                         initial_pe_prep=periods[0],
@@ -187,7 +201,8 @@ def check_stock_sub(stock,
                                                                  force_zhongshu=force_zhongshu) # data split at retrieval time
     if exhausted and xd_exhausted and check_bi:
         bi_exhausted, bi_xd_exhausted, _ = ni.indepth_analyze_zoushi(direction, split_time, pe, force_zhongshu=False)
-        print("BI level {0}, {1}".format(bi_exhausted, bi_xd_exhausted))
+        if is_description:
+            print("BI level {0}, {1}".format(bi_exhausted, bi_xd_exhausted))
         return exhausted, xd_exhausted and bi_exhausted, sub_profile
     return exhausted, xd_exhausted, sub_profile
 
@@ -198,8 +213,10 @@ def check_stock_full(stock,
                      direction=TopBotType.top2bot, 
                      isdebug=False, 
                      is_anal=False,
+                     is_description=True,
                      sub_check_bi=False):
-    print("check_stock_full working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
+    if is_description:
+        print("check_stock_full working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
     top_pe = periods[0]
     sub_pe = periods[1]
     exhausted, xd_exhausted, chan_profile = check_chan_by_type_exhaustion(stock=stock, 
@@ -209,6 +226,7 @@ def check_stock_full(stock,
                                                                       direction=direction, 
                                                                       chan_type=[Chan_Type.I, Chan_Type.III], 
                                                                       isdebug=isdebug, 
+                                                                      is_description=is_description,
                                                                       check_structure=False,
                                                                       is_anal=is_anal)    
     if not chan_profile:
@@ -225,6 +243,7 @@ def check_stock_full(stock,
                                                                                 chan_types=[Chan_Type.INVALID, Chan_Type.I], 
                                                                                 isdebug=isdebug, 
                                                                                 is_anal=is_anal, 
+                                                                                is_description=is_description,
                                                                                 split_time=splitTime,
                                                                                 check_bi=sub_check_bi,
                                                                                 force_zhongshu=True)
