@@ -5,7 +5,7 @@ except ImportError as ie:
 from jqdata import *
 
 from biaoLiStatus import * 
-from kBarProcessor import *
+from kBar_Chan import *
 from centralRegion import *
 from chan_common_include import *
 import numpy as np
