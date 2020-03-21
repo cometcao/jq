@@ -677,8 +677,15 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
         chan_stock_list = []
         if self.filename: # model prediction happened outside
             today_date = context.current_dt.date()
-            chan_dict = json.loads(read_file(self.filename).decode())
+            chan_dict = json.loads(read_file(self.filename))
             
+#             try:
+#                 with open(self.filename, "r") as result_file:
+#                     result = json.load(result_file)
+#             except Exception as e:
+#                 print("{0} loading error {1}".format(filename, str(e)))
+#                 return []
+                
             if str(today_date) not in chan_dict:
                 print("{0} not in chan file".format(today_date))
                 return []
