@@ -997,6 +997,7 @@ class Long_Chan(Buy_stocks_portion):
         type_I_stocks = []
         to_ignore = []
         for stock in self.to_buy:
+            print(self.g.stock_chan_type[stock])
             top_profile = self.g.stock_chan_type[stock][0]
             sub_profile = self.g.stock_chan_type[stock][1]
             
