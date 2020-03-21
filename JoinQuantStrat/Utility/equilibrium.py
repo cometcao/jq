@@ -1063,7 +1063,7 @@ class NestedInterval():
                 
             kb_chan = KBarChan(stock_df, isdebug=self.isdebug)
             iis = TopBotType.top if initial_direction == TopBotType.top2bot else TopBotType.bot if initial_direction == TopBotType.bot2top else TopBotType.noTopBot
-            xd_df = kb_chan.getFenDuan(initial_state=iis) if self.use_xd else kb_df.getFenBi(initial_state=iis)
+            xd_df = kb_chan.getFenDuan(initial_state=iis) if self.use_xd else kb_chan.getFenBi(initial_state=iis)
             if xd_df.size==0:
                 self.df_zoushi_tuple_list[pe]=(kb_chan,None)
             else:
