@@ -43,7 +43,7 @@ def get_bars_new(security,
     else:
         print("Unconventional unit, return 1000 for count")
         count = 1000
-        
+    count = count + 1
     return get_bars(security, 
                     count=int(count), 
                     unit=unit,
