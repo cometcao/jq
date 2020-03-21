@@ -11,6 +11,41 @@ from chan_common_include import *
 import numpy as np
 import pandas as pd
 
+def get_bars_new(security, 
+                 unit='1d',
+                 fields=['date', 'open','high','low','close'],
+                 include_now=True, 
+                 end_dt=None, 
+                 start_dt=None, 
+                 fq_ref_date=None, 
+                 df=False):
+    
+    if type(start_dt) is str:
+        start_dt = datetime.datetime.strptime(start_dt, "%Y-%m-%d %H:%M:%S")
+    if type(end_dt) is str:
+        end_dt = datetime.datetime.strptime(end_dt, "%Y-%m-%d %H:%M:%S")
+    time_delta_seconds = (end_dt - start_dt).total_seconds()
+    if unit == '1d':
+        count = np.ceil(time_delta_seconds / (60*30*8))
+    elif unit == '30m':
+        count = np.ceil(time_delta_seconds / (60*30))
+    elif unit == '5m':
+        count = np.ceil(time_delta_seconds / (60*5))
+    elif unit == '1m':
+        count = np.ceil(time_delta_seconds / 60)
+    else:
+        print("Unconventional unit, return 1000 for count")
+        count = 1000
+        
+    return get_bars(security, 
+                    count=int(count), 
+                    unit=unit,
+                    fields=fields,
+                    include_now=include_now, 
+                    end_dt=end_dt, 
+                    fq_ref_date=fq_ref_date, 
+                    df=df)
+
 def check_top_chan(stock, 
                    end_time, 
                    periods, 
@@ -259,16 +294,16 @@ def sanity_check(stock, profile, end_time, pe):
     splitTime = profile[0][6]
     direction = profile[0][1]
     result = False
-    stock_data = get_price(stock,
-                          start_date=splitTime,
-                          end_date=end_time, 
-                          frequency=pe,
+    stock_data = get_bars_new(stock,
+                          start_dt=splitTime,
+                          end_dt=end_time, 
+                          unit=pe,
                           fields= ['close'],
-                          skip_paused=False)
+                          df=False)
     if direction == TopBotType.top2bot:
-        result = stock_data.iloc[0].close > stock_data.iloc[-1].close
+        result = stock_data[0]['close'] > stock_data[-1]['close']
     elif direction == TopBotType.bot2top:
-        result = stock_data.iloc[0].close < stock_data.iloc[-1].close
+        result = stock_data[0]['close'] < stock_data[-1]['close']
     if not result:
         print("{0} failed sanity check".format(stock))
     return result
@@ -277,32 +312,20 @@ class CentralRegionProcess(object):
     '''
     This lib takes XD data, and the dataframe must contain chan_price, new_index, xd_tb, macd columns
     '''
-    def __init__(self, kDf, high_df=None, isdebug=False, use_xd=True):    
-        self.original_xd_df = kDf
-        self.high_level_df = high_df
+    def __init__(self, tb_df, kbar_chan=None, isdebug=False, use_xd=True):
+        self.tb_df = tb_df
+        self.kbar_chan = kbar_chan
         self.use_xd = use_xd
         self.zoushi = None
         self.isdebug = isdebug
-        
-    def find_initial_direction_highlevel(self):
-        # higher level df data, find nearest top or bot
-        # use 30m or 1d
-        max_price_idx = self.high_level_df['close'].idxmax()
-        min_price_idx = self.high_level_df['close'].idxmin()
-        initial_idx = max(max_price_idx, min_price_idx)
-        initial_direction = TopBotType.top2bot if max_price_idx > min_price_idx else TopBotType.bot2top
-        if self.isdebug:
-            print("initial direction: {0}, start idx {1}".format(initial_direction, initial_idx))
-        return initial_idx, initial_direction  
-    
 
     def work_out_direction(self, first, second, third):
-        assert first.tb == third.tb, "Invalid tb information for direction"
+        assert first['tb'] == third['tb'], "Invalid tb information for direction"
         result_direction = TopBotType.noTopBot
-        if first.tb == TopBotType.top and second.tb == TopBotType.bot:
-            result_direction = TopBotType.bot2top if third.chan_price > first.chan_price else TopBotType.top2bot
-        elif first.tb == TopBotType.bot and second.tb == TopBotType.top:
-            result_direction = TopBotType.bot2top if third.chan_price > first.chan_price else TopBotType.top2bot
+        if first['tb'] == TopBotType.top.value and second['tb'] == TopBotType.bot.value:
+            result_direction = TopBotType.bot2top if third['chan_price'] > first['chan_price'] else TopBotType.top2bot
+        elif first['tb'] == TopBotType.bot.value and second['tb'] == TopBotType.top.value:
+            result_direction = TopBotType.bot2top if third['chan_price'] > first['chan_price'] else TopBotType.top2bot
         else:
             print("Invalid tb data!!")
             
@@ -311,38 +334,35 @@ class CentralRegionProcess(object):
     
     def find_initial_direction(self, working_df, initial_direction=TopBotType.noTopBot): 
         i = 0
-        
-        if working_df.shape[0] < 3:
+        if working_df.size < 3:
             if self.isdebug:
                 print("not enough data for checking initial direction")
-            return None, TopBotType.noTopBot
+            return 0, TopBotType.noTopBot
         
         if initial_direction != TopBotType.noTopBot:
-            return working_df.index[0], initial_direction
+            return 0, initial_direction
         
-        first = working_df.iloc[i]
-        second = working_df.iloc[i+1]
-        third = working_df.iloc[i+2]
+        first = working_df[i]
+        second = working_df[i+1]
+        third = working_df[i+2]
         
-#         if ZouShiLeiXing.is_valid_central_region(TopBotType.bot2top, first, second, third, forth):
-#             initial_direction = TopBotType.bot2top
-#             initial_idx = working_df.index[i]
-#         elif ZouShiLeiXing.is_valid_central_region(TopBotType.top2bot, first, second, third, forth):
-#             initial_direction = TopBotType.bot2top
-#             initial_idx = working_df.index[i]
-#         else: # case of ZSLX
         initial_direction = self.work_out_direction(first, second, third)
-        initial_idx = working_df.index[i]
+        initial_loc = i
         
         if self.isdebug:
-            print("initial direction: {0}, start idx {1}".format(initial_direction, initial_idx))
-        return initial_idx, initial_direction  
+            print("initial direction: {0}, start datetime {1} loc {2}".format(initial_direction, working_df[i]['date'], initial_loc))
+        return initial_loc, initial_direction
         
     
-    def find_central_region(self, initial_idx, initial_direction, working_df):
-        working_df = working_df.loc[initial_idx:,:]
+    def find_central_region(self, initial_loc, initial_direction, working_df):
+        working_df = working_df[initial_loc:]
         
-        zoushi = ZouShi([XianDuan_Node(working_df.iloc[i]) for i in range(working_df.shape[0])], self.original_xd_df,isdebug=self.isdebug) if self.use_xd else ZouShi([BI_Node(working_df.iloc[i]) for i in range(working_df.shape[0])], self.original_xd_df, isdebug=self.isdebug)
+        zoushi = ZouShi([XianDuan_Node(working_df[i]) for i in range(working_df.size)], 
+                        self.kbar_chan.getOriginal_df(),
+                        isdebug=self.isdebug) if self.use_xd else\
+                        ZouShi([BI_Node(working_df[i]) for i in range(working_df.size)], 
+                               self.kbar_chan.getOriginal_df(), 
+                               isdebug=self.isdebug)
         zoushi.analyze(initial_direction)
 
         return zoushi
@@ -351,27 +371,28 @@ class CentralRegionProcess(object):
         '''
         We need fully integrated stock df with xd_tb, initial direction can be provided AFTER top level
         '''
-        if self.original_xd_df.empty:
+        if self.tb_df.size==0:
             if self.isdebug:
-                print("empty data, return define_central_region")            
+                print("empty data, return define_central_region")
             return None
-        working_df = self.original_xd_df        
+        working_df = self.tb_df
         
         try:
             working_df = self.prepare_df_data(working_df)
             if self.isdebug:
                 print("Invalid data frame, return define_central_region")
-        except:
+        except Exception as e:
+            print("Error in data preparation:{0}".format(str(e)))
             return None
         
-        init_idx, init_d = self.find_initial_direction(working_df, initial_direction)
+        init_loc, init_d = self.find_initial_direction(working_df, initial_direction)
         
         if init_d == TopBotType.noTopBot: # not enough data, we don't do anything
             if self.isdebug:
                 print("not enough data, return define_central_region")
             return None
         
-        self.zoushi = self.find_central_region(init_idx, init_d, working_df)
+        self.zoushi = self.find_central_region(init_loc, init_d, working_df)
             
         return self.zoushi
         
@@ -393,28 +414,44 @@ class CentralRegionProcess(object):
         
         
     def prepare_df_data(self, working_df):        
-        _, _, working_df.loc[:,'macd'] = talib.MACD(working_df['close'].values)
-
         tb_name = 'xd_tb' if self.use_xd else 'tb'
         working_df = self.prepare_macd(working_df, tb_name)
 
-        working_df = working_df[(working_df[tb_name]==TopBotType.top) | (working_df[tb_name]==TopBotType.bot)]
-        
         if self.isdebug:
-            print("working_df: {0}".format(working_df[['chan_price', tb_name, 'new_index','macd_acc_'+tb_name]]))
+            print("working_df: {0}".format(working_df[['chan_price', tb_name, 'real_loc','macd_acc_'+tb_name]]))
         return working_df
     
     def prepare_macd(self, working_df, tb_col):
-        working_df['tb_pivot'] = working_df.apply(lambda row: 0 if pd.isnull(row[tb_col]) else 1, axis=1)
-        groups = working_df['tb_pivot'][::-1].cumsum()[::-1]
-        working_df['tb_pivot_acc'] = groups
+        self.kbar_chan.prepare_original_kdf() # add macd term
+        working_df = append_fields(
+                                    working_df, 
+                                    'macd_acc_'+tb_col, 
+                                    [0]*working_df.size,
+                                    float,
+                                    usemask=False
+                                    )
         
-        df_macd_acc = working_df.groupby(groups)['macd'].agg([('macd_acc_negative' , lambda x : x[x < 0].sum()) , ('macd_acc_positive' , lambda x : x[x > 0].sum())])
-        working_df = pd.merge(working_df, df_macd_acc, left_on='tb_pivot_acc', right_index=True)
-        working_df['macd_acc_'+tb_col] = working_df.apply(lambda row: 0 if pd.isnull(row[tb_col]) else row['macd_acc_negative'] if row[tb_col] == TopBotType.bot else row['macd_acc_positive'] if row[tb_col] == TopBotType.top else 0, axis=1)
-        
-        working_df.drop(['tb_pivot', 'tb_pivot_acc', 'macd_acc_negative', 'macd_acc_positive'], axis=1, inplace=True)
-        
+        original_df = self.kbar_chan.getOriginal_df()
+        current_loc = previous_loc = 0
+        while current_loc < working_df.size:
+            current_real_loc = working_df[current_loc]['real_loc']
+            previous_real_loc = working_df[previous_loc]['real_loc'] if previous_loc != 0 else 0
+            
+            # gather macd data based on real_loc, be aware of head/tail
+            origin_macd = original_df[previous_real_loc+1 if previous_real_loc != 0 else None:current_real_loc+1]['macd']
+            if working_df[current_loc][tb_col] == TopBotType.top.value:
+                # sum all previous positive macd data 
+                working_df[current_loc]['macd_acc_'+tb_col] = sum([pos_macd for pos_macd in origin_macd if pos_macd > 0])
+                
+            elif working_df[current_loc][tb_col] == TopBotType.bot.value:
+                # sum all previous negative macd data 
+                working_df[current_loc]['macd_acc_'+tb_col] = sum([pos_macd for pos_macd in origin_macd if pos_macd < 0])
+            else:
+                print("Invalid {0} data".format(tb_col))
+            
+            previous_loc = current_loc
+            current_loc = current_loc + 1
+
         return working_df
 
 def take_start_price(elem):
@@ -677,8 +714,7 @@ class Equilibrium():
         if zslx is None or zslx.isEmpty():
             return False
         
-        if guide_price == 0: # This shouldn't happen
-            print("guide price ZERO")
+        if guide_price == 0: # This happens at BI level
             if type(central_zs) is list:
                 central_zs = central_zs[-1]
             
@@ -1005,35 +1041,35 @@ class NestedInterval():
             if period is not None and pe != period:
                 continue
             
-            stock_df = get_price(self.stock, 
+            stock_df = get_bars(self.stock, 
                                  count=self.count, 
-                                 end_date=self.end_dt, 
-                                 frequency=pe,
-                                 fields= ['open',  'high', 'low','close'],
-                                 skip_paused=False) if start_time is None else\
-                        get_price(self.stock, 
-                                 start_date=start_time, 
-                                 end_date=self.end_dt, 
-                                 frequency=pe,
-                                 fields= ['open',  'high', 'low','close'],
-                                 skip_paused=False)
+                                 end_dt=self.end_dt, 
+                                 unit=pe,
+                                 fields= ['date','high', 'low','close'],
+                                 df=False) if start_time is None else\
+                        get_bars_new(self.stock, 
+                                 start_dt=start_time, 
+                                 end_dt=self.end_dt, 
+                                 unit=pe,
+                                 fields= ['date','high', 'low','close'],
+                                 df=False)
                 
-            kb_df = KBarProcessor(stock_df, isdebug=self.isdebug)
+            kb_chan = KBarChan(stock_df, isdebug=self.isdebug)
             iis = TopBotType.top if initial_direction == TopBotType.top2bot else TopBotType.bot if initial_direction == TopBotType.bot2top else TopBotType.noTopBot
-            xd_df = kb_df.getIntegradedXD(initial_state=iis)
-            if xd_df.empty:
-                self.df_zoushi_tuple_list[pe]=(xd_df,None)
+            xd_df = kb_chan.getFenDuan(initial_state=iis) if self.use_xd else kb_df.getFenBi(initial_state=iis)
+            if xd_df.size==0:
+                self.df_zoushi_tuple_list[pe]=(kb_chan,None)
             else:
-                crp_df = CentralRegionProcess(xd_df, isdebug=self.isdebug, use_xd=self.use_xd)
+                crp_df = CentralRegionProcess(xd_df, kb_chan, isdebug=self.isdebug, use_xd=self.use_xd)
                 anal_zoushi = crp_df.define_central_region(initial_direction=initial_direction)
-                self.df_zoushi_tuple_list[pe]=(xd_df,anal_zoushi)
+                self.df_zoushi_tuple_list[pe]=(kb_chan,anal_zoushi)
     
     def completed_zhongshu(self):
         '''
         This method returns True if current zoushi contain at least one Zhongshu, we assume only one period is processed
         '''
         # high level
-        xd_df, anal_zoushi = self.df_zoushi_tuple_list[self.periods[0]]
+        _, anal_zoushi = self.df_zoushi_tuple_list[self.periods[0]]
         zoushi_r = anal_zoushi.zslx_result
         if len(zoushi_r) >= 2:
             return True
@@ -1058,10 +1094,10 @@ class NestedInterval():
                                                                       self.periods[0],
                                                                       chan_type))
         # high level
-        xd_df, anal_zoushi = self.df_zoushi_tuple_list[self.periods[0]]
+        kb_chan, anal_zoushi = self.df_zoushi_tuple_list[self.periods[0]]
         if anal_zoushi is None:
             return False, False, []
-        eq = Equilibrium(xd_df, anal_zoushi.zslx_result, isdebug=self.isdebug, isDescription=self.isDescription)
+        eq = Equilibrium(kb_chan.getOriginal_df(), anal_zoushi.zslx_result, isdebug=self.isdebug, isDescription=self.isDescription)
         chan_types = eq.check_chan_type(check_end_tb=check_end_tb)
         if not chan_types:
             return False, False, []
@@ -1118,10 +1154,10 @@ class NestedInterval():
                                                                       self.periods[0],
                                                                       chan_type))
         # high level
-        xd_df, anal_zoushi = self.df_zoushi_tuple_list[self.periods[0]]
+        kb_chan, anal_zoushi = self.df_zoushi_tuple_list[self.periods[0]]
         if anal_zoushi is None:
             return False, []
-        eq = Equilibrium(xd_df, anal_zoushi.zslx_result, isdebug=self.isdebug, isDescription=self.isDescription)
+        eq = Equilibrium(kb_chan.getOriginal_df(), anal_zoushi.zslx_result, isdebug=self.isdebug, isDescription=self.isDescription)
         chan_types = eq.check_chan_type(check_end_tb=check_end_tb)
         if not chan_types:
             return False, chan_types
@@ -1183,7 +1219,7 @@ class NestedInterval():
         force_zhongshu make sure underlining zoushi contain at least one ZhongShu
         '''
         if self.use_xd:
-            xd_df, anal_zoushi_xd = self.df_zoushi_tuple_list[period]
+            kb_chan, anal_zoushi_xd = self.df_zoushi_tuple_list[period]
             
             if anal_zoushi_xd is None:
                 return False, False, None
@@ -1191,17 +1227,22 @@ class NestedInterval():
             if self.isdebug:
                 print("XD split time at:{0}".format(split_time))
             
-            crp_df = CentralRegionProcess(xd_df.loc[split_time:,:], isdebug=self.isdebug, use_xd=False)
+            fenbi_df = kb_chan.getFenBI_df()
+            split_time_loc = np.where(fenbi_df['date']>=split_time)[0][0]
+            crp_df = CentralRegionProcess(fenbi_df[split_time_loc:], kb_chan, isdebug=self.isdebug, use_xd=False)
             anal_zoushi_bi = crp_df.define_central_region(direction)
             
             split_anal_zoushi_bi_result = anal_zoushi_bi.zslx_result
         else:
-            xd_df, split_anal_zoushi_bi = self.df_zoushi_tuple_list[period]
+            kb_chan, split_anal_zoushi_bi = self.df_zoushi_tuple_list[period]
             if split_anal_zoushi_bi is None:
                 return False, False, None
             split_anal_zoushi_bi_result = split_anal_zoushi_bi.zslx_result
         
-        eq = Equilibrium(xd_df, split_anal_zoushi_bi_result, isdebug=self.isdebug, isDescription=self.isDescription)
+        eq = Equilibrium(kb_chan.getOriginal_df(), 
+                         split_anal_zoushi_bi_result, 
+                         isdebug=self.isdebug, 
+                         isDescription=self.isDescription)
         bi_exhausted, bi_check_exhaustion, _,bi_split_time, _, _ = eq.define_equilibrium(direction, 
                                                                                          check_tb_structure=True,
                                                                                          force_zhongshu=force_zhongshu)
@@ -1228,12 +1269,12 @@ class NestedInterval():
         if self.isdebug:
             print("looking for {0} at top level {1}".format("long" if direction == TopBotType.top2bot else "short",
                                                             period))
-        xd_df, anal_zoushi = self.df_zoushi_tuple_list[period]
+        kb_chan, anal_zoushi = self.df_zoushi_tuple_list[period]
         default_chan_type_result = [(Chan_Type.INVALID, TopBotType.noTopBot, 0, 0, 0, None, None)]# default value
         if anal_zoushi is None:
             return False, False, default_chan_type_result
         
-        eq = Equilibrium(xd_df, 
+        eq = Equilibrium(kb_chan.getOriginal_df(), 
                          anal_zoushi.zslx_result, 
                          isdebug=self.isdebug, 
                          isDescription=self.isDescription)

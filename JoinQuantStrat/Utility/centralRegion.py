@@ -10,15 +10,15 @@ import pandas as pd
 import talib
 from collections import OrderedDict
 from biaoLiStatus import * 
-from kBarProcessor import *
+from kBar_Chan import *
 
 from chan_common_include import ZhongShuLevel, Chan_Type
 
 class Chan_Node(object):
     def __init__(self, df_node):
-        self.time = df_node.name
-        self.chan_price = df_node.chan_price
-        self.loc = df_node.real_loc
+        self.time = df_node['date']
+        self.chan_price = df_node['chan_price']
+        self.loc = df_node['real_loc']
     
     def __repr__(self):
         return "price: {0} time: {1} loc: {2} ".format(self.chan_price, self.time, self.loc)
@@ -29,30 +29,30 @@ class Chan_Node(object):
 class XianDuan_Node(Chan_Node):
     def __init__(self, df_node):
         super(XianDuan_Node, self).__init__(df_node)
-        self.tb = df_node.xd_tb
-        self.macd_acc = df_node.macd_acc_xd_tb
+        self.tb = TopBotType.value2type(df_node['xd_tb'])
+        self.macd_acc = df_node['macd_acc_xd_tb']
         
     def __repr__(self):
         return super().__repr__() + "tb: {0}".format(self.tb)
     
     def __eq__(self, node):
         return super().__eq__(node) and self.tb == node.tb
-        
+    
     def __hash__(self):
         return hash((self.time, self.chan_price, self.loc, self.tb.value, self.macd_acc))
         
 class BI_Node(Chan_Node):
     def __init__(self, df_node):
         super(BI_Node, self).__init__(df_node)
-        self.tb = df_node.tb
-        self.macd_acc = df_node.macd_acc_tb
+        self.tb = TopBotType.value2type(df_node['tb'])
+        self.macd_acc = df_node['macd_acc_tb']
 
     def __repr__(self):
         return super().__repr__() + "tb: {0}".format(self.tb)
     
     def __eq__(self, node):
         return super().__eq__(node) and self.tb == node.tb
-
+    
     def __hash__(self):
         return hash((self.time, self.chan_price, self.loc, self.tb.value, self.macd_acc))
 
@@ -64,7 +64,7 @@ class Double_Nodes(object):
         assert isinstance(self.end, (Chan_Node, XianDuan_Node, BI_Node)), "Invalid ending node type"
         assert (start.tb == TopBotType.top and end.tb == TopBotType.bot) or (start.tb == TopBotType.bot and end.tb == TopBotType.top), "Invalid tb info" 
         assert (start.time < end.time), "Invalid node timing order"
-        self.direction = TopBotType.bot2top if self.start.chan_price < self.end.chan_price else TopBotType.top2bot        
+        self.direction = TopBotType.bot2top if self.start.chan_price < self.end.chan_price else TopBotType.top2bot
 
     def get_time_region(self):
 #         # first node timestamp loc + 1, since first node connect backwords
@@ -164,20 +164,25 @@ class ZouShiLeiXing(object):
         return self.amplitude_region
 
     def get_amplitude_region_original(self, re_evaluate=False):
+        if len(self.zoushi_nodes) < 2:
+            return [None, None]
+        
         if not self.amplitude_region_origin or re_evaluate:
             [s, e] = self.get_time_region(re_evaluate)
-            price_series = self.original_df.loc[s:e, ['high', 'low']]
+            s_loc = np.where(self.original_df['date'] == s)[0][0]
+            e_loc = np.where(self.original_df['date'] == e)[0][0]
+            price_series = self.original_df[s_loc:e_loc+1][['high', 'low']]
             self.amplitude_region_origin = [price_series['low'].min(), price_series['high'].max()]
         return self.amplitude_region_origin
 
     def get_time_region(self, re_evaluate=False):    
-        if self.isEmpty():
+        if len(self.zoushi_nodes) < 2:
             return [None, None]
         if not self.time_region or re_evaluate: # assume node stored in time order
             self.zoushi_nodes.sort(key=lambda x: x.time)
             
             # first node timestamp loc + 1, since first node connect backwords
-            real_start_time = self.original_df.index[self.original_df.index.get_loc(self.zoushi_nodes[0].time)+1]
+            real_start_time = self.original_df[np.where(self.original_df['date']==self.zoushi_nodes[0].time)[0][0]+1]['date']
             self.time_region = [real_start_time, self.zoushi_nodes[-1].time]
         return self.time_region
     
@@ -347,7 +352,7 @@ class ZhongShu(ZouShiLeiXing):
     
     def get_core_time_region(self, re_evaluate=False):
         if not self.core_time_region or re_evaluate:
-            real_start_time = self.original_df.index[self.original_df.index.get_loc(self.first.time)+1]
+            real_start_time = self.original_df[np.where(self.original_df['date']==self.first.time)[0][0]+1]['date']
             self.core_time_region = [real_start_time, self.forth.time]
         return self.core_time_region    
     
@@ -360,7 +365,9 @@ class ZhongShu(ZouShiLeiXing):
     def get_amplitude_region_original(self, re_evaluate=False):
         if not self.amplitude_region_origin or re_evaluate:
             [s, e] = self.get_time_region(re_evaluate)
-            region_price_series = self.original_df.loc[s:e, ['high','low']]
+            s_loc = np.where(self.original_df['date']==s)[0][0]
+            e_loc = np.where(self.original_df['date']==e)[0][0]
+            region_price_series = self.original_df[s_loc:e_loc+1][['high','low']]
             self.amplitude_region_origin = [region_price_series['low'].min(), region_price_series['high'].max()]
         return self.amplitude_region_origin
         
@@ -369,7 +376,9 @@ class ZhongShu(ZouShiLeiXing):
         if self.is_complex_type():
             start_time = self.first.time
             end_time = self.forth.time if len(self.extra_nodes) == 1 else self.extra_nodes[-2].time
-            region_price_series = self.original_df.loc[start_time:end_time, ['high','low']]
+            s_loc = np.where(self.original_df['date']==start_time)[0][0]
+            e_loc = np.where(self.original_df['date']==end_time)[0][0]
+            region_price_series = self.original_df[s_loc:e_loc+1][['high','low']]
             return [region_price_series['low'].min(), region_price_series['high'].max()]
         else:
             return self.get_amplitude_region_original(re_evaluate=False)
@@ -480,11 +489,6 @@ class ZouShi(object):
             i = i + 1
             
         return self.zslx_result[i:]
-            
-    def get_previous_tb_timestamp(self, current_tp):
-        current_loc = self.original_df.index.get_loc(current_tp)
-        previous_loc = get_previous_loc(current_loc,self.original_df)
-        return self.original_df.index[previous_loc]
         
     
     def sub_zoushi_time(self, chan_type, direction, check_xd_exhaustion=False):
@@ -512,8 +516,9 @@ class ZouShi(object):
         elif chan_type == Chan_Type.III or chan_type == Chan_Type.III_weak: # we need to split from past top / bot
             if type(self.zslx_result[-1]) is ZouShiLeiXing:
                 [s, e] = self.zslx_result[-1].get_time_region()
-                temp_df = self.original_df.iloc[self.original_df.index.get_loc(s):,:]
-                pivot_tp = temp_df['high'].idxmax() if direction == TopBotType.top2bot else temp_df['low'].idxmin()
+                s_loc = np.where(self.original_df['date']==s)[0][0]
+                temp_df = self.original_df[s_loc:]
+                pivot_tp = temp_df[temp_df['high'].argmax() if direction == TopBotType.top2bot else temp_df['low'].argmin()]['date']
                 return pivot_tp
             elif type(self.zslx_result[-1]) is ZhongShu:
                 zs = self.zslx_result[-1]
