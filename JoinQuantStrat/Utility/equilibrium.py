@@ -28,7 +28,7 @@ def get_bars_new(security,
     start_time_delta = start_dt.replace(hour=15, minute=0) - start_dt if start_dt.hour >= 13 else start_dt.replace(hour=13, minute=30) - start_dt
     end_time_delta = end_dt - end_dt.replace(hour=9, minute=30) if end_dt.hour <= 11 else end_dt - end_dt.replace(hour=11, minute=0)
     
-    trade_days = JqDataRetriever.get_trading_date(start_date=start_dt.date(), end_date=end_dt.date())
+    trade_days = get_trade_days(start_date=start_dt.date(), end_date=end_dt.date())
     day_diff = len(trade_days) - 2
     time_delta_seconds = start_time_delta.total_seconds() + end_time_delta.total_seconds() + day_diff * 4 * 60 * 60
 
