@@ -727,7 +727,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 break
             
             result, profile = check_stock_full(stock,
-                                                 end_time=end_dt,
+                                                 end_time=context.current_dt,
                                                  periods=['5m', '1m'],
                                                  count=4800,
                                                  direction=TopBotType.top2bot, 
