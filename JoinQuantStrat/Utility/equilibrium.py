@@ -292,7 +292,7 @@ def check_stock_full(stock,
         chan_profile = chan_profile + sub_profile
         return exhausted and xd_exhausted and sub_exhausted and sub_xd_exhausted, chan_profile
     else:
-        return exhausted and xd_exhausted, chan_profile
+        return False, chan_profile
 
 def sanity_check(stock, profile, end_time, pe):
     # This method is used in case we provide the sub level check with initial direction while actual zoushi goes opposite
