@@ -679,12 +679,6 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
             today_date = context.current_dt.date()
             chan_dict = json.loads(read_file(self.filename))
             
-#             try:
-#                 with open(self.filename, "r") as result_file:
-#                     result = json.load(result_file)
-#             except Exception as e:
-#                 print("{0} loading error {1}".format(filename, str(e)))
-#                 return []
                 
             if str(today_date) not in chan_dict:
                 print("{0} not in chan file".format(today_date))
@@ -732,27 +726,39 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 # we don't need to look further, we have enough candidates for long position
                 break
             
-            top_profile = self.g.stock_chan_type[stock]
-            splitTime = top_profile[0][6]
+            result, profile = check_stock_full(stock,
+                                                 end_time=end_dt,
+                                                 periods=['5m', '1m'],
+                                                 count=4800,
+                                                 direction=TopBotType.top2bot, 
+                                                 isdebug=False,
+                                                 is_description=self.isdebug,
+                                                 sub_check_bi=True)
             
-            sub_exhausted, sub_xd_exhausted, sub_profile = check_stock_sub(stock,
-                                                                      end_time=context.current_dt,
-                                                                      periods=['1m'],
-                                                                      count=self.num_of_data,
-                                                                      direction=TopBotType.top2bot,
-                                                                      chan_types=self.sub_chan_type,
-                                                                      isdebug=self.isdebug,
-                                                                      is_anal=False,
-                                                                      split_time=splitTime, 
-                                                                      check_bi=True, 
-                                                                      force_zhongshu=True)
-            if sub_exhausted and sub_xd_exhausted:
+            if result:
                 filter_stock_list.append(stock)
-            
-            if stock in filter_stock_list:
-                # update sub level information
-                top_profile = top_profile + sub_profile
                 self.g.stock_chan_type[stock] = top_profile
+            
+#             top_profile = self.g.stock_chan_type[stock]
+#             splitTime = top_profile[0][6]
+#             sub_exhausted, sub_xd_exhausted, sub_profile = check_stock_sub(stock,
+#                                                                       end_time=context.current_dt,
+#                                                                       periods=['1m'],
+#                                                                       count=self.num_of_data,
+#                                                                       direction=TopBotType.top2bot,
+#                                                                       chan_types=self.sub_chan_type,
+#                                                                       isdebug=self.isdebug,
+#                                                                       is_anal=False,
+#                                                                       split_time=splitTime, 
+#                                                                       check_bi=True, 
+#                                                                       force_zhongshu=True)
+#             if sub_exhausted and sub_xd_exhausted:
+#                 filter_stock_list.append(stock)
+#             
+#             if stock in filter_stock_list:
+#                 # update sub level information
+#                 top_profile = top_profile + sub_profile
+#                 self.g.stock_chan_type[stock] = top_profile
                 
         if self.isdebug:
             print("Stocks ready: {0}".format(filter_stock_list))
