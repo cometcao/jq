@@ -957,7 +957,7 @@ class Short_Chan(Sell_stocks):
                                                       is_anal=False,
                                                       split_time=effective_time,
                                                       check_bi=False,
-                                                      force_zhongshu=True) # synch with selection
+                                                      force_zhongshu=False) # synch with selection
                 if exhausted:
                     print("STOP PROFIT {0} exhausted: {1}, {2}".format(stock,
                                                                        exhausted,
