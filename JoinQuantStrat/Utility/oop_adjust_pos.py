@@ -937,13 +937,12 @@ class Short_Chan(Sell_stocks):
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
 
-            if sub_chan_t == Chan_Type.I:
-                if stock_data.loc[effective_time:, 'high'].max() >= sub_chan_p: 
-                    print("Stock {0} reached target price {1}".format(stock, sub_chan_p))
-                    stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
-                    if self.use_ma13 and stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
-                        print("STOP PROFIT MA13 {0} {1}".format(stock_data.iloc[-1].close, stock_data.iloc[-1].ma13))
-                        return True
+            if stock_data.loc[effective_time:, 'high'].max() >= (sub_chan_p[0] if type(sub_chan_p) is list else sub_chan_p): 
+                print("Stock {0} reached target price {1}".format(stock, (sub_chan_p[0] if type(sub_chan_p) is list else sub_chan_p)))
+                stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
+                if self.use_ma13 and stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
+                    print("STOP PROFIT MA13 {0} {1}".format(stock_data.iloc[-1].close, stock_data.iloc[-1].ma13))
+                    return True
 
             if (stock_data.loc[effective_time:, 'high'].max() / context.portfolio.positions[stock].avg_cost - 1) >= self.stop_profit:
                 print("STOP PROFIT reached return {0} {1}".format(context.portfolio.positions[stock].avg_cost, stock_data.loc[effective_time:, 'high'].max()))
