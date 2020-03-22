@@ -731,6 +731,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                  periods=['5m', '1m'],
                                                  count=4800,
                                                  direction=TopBotType.top2bot, 
+                                                 sub_chan_type=self.sub_chan_type,
                                                  isdebug=False,
                                                  is_description=self.isdebug,
                                                  sub_check_bi=True)
