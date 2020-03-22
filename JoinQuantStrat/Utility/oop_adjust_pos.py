@@ -899,7 +899,7 @@ class Short_Chan(Sell_stocks):
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
 
-            if stock_data.loc[position_time:, 'high'].max() >= top_chan_p: # reached target price
+            if stock_data.loc[effective_time:, 'high'].max() >= top_chan_p: # reached target price
                 print("STOP PROFIT {0} reached target price: {1}".format(stock, top_chan_p))
                 
                 stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
@@ -907,17 +907,18 @@ class Short_Chan(Sell_stocks):
                     print("STOP PROFIT {0} below ma13: {1}".format(stock, stock_data.iloc[-1].ma13))
                     return True
 
-            if stock_data.loc[position_time:, 'high'].max()/context.portfolio.positions[stock].avg_cost-1 >= self.stop_profit:
-                print("STOP PROFIT reached return {0} {1}".format(context.portfolio.positions[stock].avg_cost, stock_data.loc[position_time:, 'high'].max()))
+            if stock_data.loc[effective_time:, 'high'].max()/context.portfolio.positions[stock].avg_cost-1 >= self.stop_profit:
+                print("STOP PROFIT reached return {0} {1}".format(context.portfolio.positions[stock].avg_cost, stock_data.loc[effective_time:, 'high'].max()))
                 exhausted, xd_exhausted, _ = check_stock_sub(stock,
                                                       end_time=context.current_dt,
                                                       periods=['1m'],
                                                       count=2000,
                                                       direction=TopBotType.bot2top,
                                                       chan_types=[Chan_Type.I, Chan_Type.INVALID],
-                                                      isdebug=self.isdebug,
+                                                      isdebug=False,
+                                                      is_description=self.isdebug,
                                                       is_anal=False,
-                                                      split_time=position_time,
+                                                      split_time=effective_time,
                                                       check_bi=False,
                                                       force_zhongshu=True) # synch with selection
                 if exhausted:
@@ -936,26 +937,32 @@ class Short_Chan(Sell_stocks):
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
 
-            if stock_data.loc[position_time:, 'high'].max() >= (sub_chan_p[0] if type(sub_chan_p) is list else sub_chan_p): 
-                stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
-                if self.use_ma13 and stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
-                    print("STOP PROFIT MA13 {0} {1}".format(stock_data.iloc[-1].close, stock_data.iloc[-1].ma13))
-                    return True
+            if sub_chan_t == Chan_Type.I:
+                if stock_data.loc[effective_time:, 'high'].max() >= sub_chan_p: 
+                    print("Stock {0} reached target price {1}".format(stock, sub_chan_p))
+                    stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
+                    if self.use_ma13 and stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
+                        print("STOP PROFIT MA13 {0} {1}".format(stock_data.iloc[-1].close, stock_data.iloc[-1].ma13))
+                        return True
 
-            if (stock_data.loc[position_time:, 'high'].max() / context.portfolio.positions[stock].avg_cost - 1) >= self.stop_profit:
-                print("Stock {0} reached target price {1}".format(stock, sub_chan_p))
-                bi_exhausted, bi_xd_exhausted, _= check_chan_indepth(stock,
-                                                          end_time=context.current_dt, 
-                                                          period='1m', 
-                                                          count=2000, 
-                                                          direction=TopBotType.bot2top,
-                                                          isdebug=self.isdebug, 
-                                                          is_anal=False,
-                                                          split_time=effective_time)
-                if bi_exhausted or bi_xd_exhausted:
+            if (stock_data.loc[effective_time:, 'high'].max() / context.portfolio.positions[stock].avg_cost - 1) >= self.stop_profit:
+                print("STOP PROFIT reached return {0} {1}".format(context.portfolio.positions[stock].avg_cost, stock_data.loc[effective_time:, 'high'].max()))
+                exhausted, xd_exhausted, _ = check_stock_sub(stock,
+                                                      end_time=context.current_dt,
+                                                      periods=['1m'],
+                                                      count=2000,
+                                                      direction=TopBotType.bot2top,
+                                                      chan_types=[Chan_Type.I, Chan_Type.INVALID],
+                                                      isdebug=False,
+                                                      is_description=self.isdebug,
+                                                      is_anal=False,
+                                                      split_time=effective_time,
+                                                      check_bi=False,
+                                                      force_zhongshu=True) # synch with selection
+                if exhausted:
                     print("STOP PROFIT {0} exhausted: {1}, {2}".format(stock,
-                                                                       bi_exhausted,
-                                                                       bi_xd_exhausted))
+                                                                       exhausted,
+                                                                       xd_exhausted))
                     return True
             
             return False
