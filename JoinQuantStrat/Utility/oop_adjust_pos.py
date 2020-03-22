@@ -787,7 +787,7 @@ class Short_Chan(Sell_stocks):
         
         if top_chan_t == Chan_Type.I:
             # This is to make sure we have enough data for MACD and MA
-            data_start_time = top_zoushi_start_time - pd.Timedelta(minutes=150)
+            data_start_time = top_zoushi_start_time - pd.Timedelta(minutes=250)
             stock_data = get_price(stock,
                                    start_date=data_start_time, 
                                    end_date=context.current_dt, 
@@ -830,7 +830,7 @@ class Short_Chan(Sell_stocks):
             return False
         elif top_chan_t == Chan_Type.III:
             # This is to make sure we have enough data for MACD and MA
-            data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=30)
+            data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=120)
             stock_data = get_price(stock,
                                    start_date=data_start_time, 
                                    end_date=context.current_dt, 
@@ -891,7 +891,7 @@ class Short_Chan(Sell_stocks):
         effective_time = sub_profile[6]
         
         if top_chan_t == Chan_Type.I:
-            data_start_time = top_zoushi_start_time - pd.Timedelta(minutes=100)
+            data_start_time = top_zoushi_start_time - pd.Timedelta(minutes=200)
             stock_data = get_price(stock,
                                    start_date=data_start_time, 
                                    end_date=context.current_dt, 
@@ -929,11 +929,11 @@ class Short_Chan(Sell_stocks):
             
         elif top_chan_t == Chan_Type.III:
             
-            data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=20)
+            data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=200)
             stock_data = get_price(stock,
                                    start_date=data_start_time, 
                                    end_date=context.current_dt, 
-                                   frequency='1m', 
+                                   frequency='5m', 
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
 
