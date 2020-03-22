@@ -1001,7 +1001,7 @@ class Filter_common(Filter_stock_list):
         except Exception as e:
             self.log.error(str(e))
             
-        self.log.info('选股过滤:\n' + join_list(["[%s]" % (show_stock(x)) for x in stock_list[:10]], ' ', 10))
+        self.log.info('选股过滤:\n' + join_list(["[%s]" % (show_stock(x)) for x in stock_list], ' ', 10))
         return stock_list
 
     #获取解禁股列表
