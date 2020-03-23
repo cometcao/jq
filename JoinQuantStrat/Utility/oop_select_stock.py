@@ -712,6 +712,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         Filter_stock_list.__init__(self, params)
         self.isdebug = params.get('isdebug', False)
         self.long_stock_num = params.get('long_stock_num', 0)
+        self.top_chan_type = params.get('top_chan_type', [Chan_Type.I, Chan_Type.III])
         self.sub_chan_type = params.get('sub_chan_type', [Chan_Type.INVALID, Chan_Type.I])
         self.num_of_data = params.get('num_of_data', 2500)
         self.bi_level_precision = params.get('bi_level_precision', True)
@@ -731,6 +732,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                  periods=['5m', '1m'],
                                                  count=4800,
                                                  direction=TopBotType.top2bot, 
+                                                 top_chan_type=self.top_chan_type,
                                                  sub_chan_type=self.sub_chan_type,
                                                  isdebug=False,
                                                  is_description=self.isdebug,
