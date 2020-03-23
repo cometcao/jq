@@ -1078,6 +1078,8 @@ class NestedInterval():
         '''
         # high level
         _, anal_zoushi = self.df_zoushi_tuple_list[self.periods[0]]
+        if anal_zoushi is None:
+            return False
         zoushi_r = anal_zoushi.zslx_result
         if len(zoushi_r) >= 2:
             return True
