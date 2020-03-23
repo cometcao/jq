@@ -726,7 +726,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 # we don't need to look further, we have enough candidates for long position
                 break
             
-            result, profile = check_stock_full(stock,
+            result, profile, _ = check_stock_full(stock,
                                                  end_time=context.current_dt,
                                                  periods=['5m', '1m'],
                                                  count=4800,

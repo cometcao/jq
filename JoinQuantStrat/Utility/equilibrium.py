@@ -245,8 +245,8 @@ def check_stock_sub(stock,
         bi_exhausted, bi_xd_exhausted, _ = ni.indepth_analyze_zoushi(direction, split_time, pe, force_zhongshu=False)
         if is_description:
             print("BI level {0}, {1}".format(bi_exhausted, bi_xd_exhausted))
-        return exhausted, xd_exhausted and bi_exhausted, sub_profile
-    return exhausted, xd_exhausted, sub_profile
+        return exhausted, xd_exhausted and bi_exhausted, sub_profile, ni.completed_zhongshu()
+    return exhausted, xd_exhausted, sub_profile, ni.completed_zhongshu()
 
 def check_stock_full(stock, 
                      end_time, 
@@ -278,7 +278,7 @@ def check_stock_full(stock,
     splitTime = chan_profile[0][6]
     
     if exhausted and xd_exhausted and sanity_check(stock, chan_profile, end_time, top_pe):
-        sub_exhausted, sub_xd_exhausted, sub_profile = check_stock_sub(stock=stock, 
+        sub_exhausted, sub_xd_exhausted, sub_profile, zhongshu_completed = check_stock_sub(stock=stock, 
                                                                                 end_time=end_time, 
                                                                                 periods=[sub_pe], 
                                                                                 count=2000, 
@@ -291,9 +291,9 @@ def check_stock_full(stock,
                                                                                 check_bi=sub_check_bi,
                                                                                 force_zhongshu=True)
         chan_profile = chan_profile + sub_profile
-        return exhausted and xd_exhausted and sub_exhausted and sub_xd_exhausted, chan_profile
+        return exhausted and xd_exhausted and sub_exhausted and sub_xd_exhausted, chan_profile, zhongshu_completed
     else:
-        return False, chan_profile
+        return False, chan_profile, False
 
 def sanity_check(stock, profile, end_time, pe):
     # This method is used in case we provide the sub level check with initial direction while actual zoushi goes opposite
