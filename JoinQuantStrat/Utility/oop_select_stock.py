@@ -711,6 +711,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
     def __init__(self, params):
         Filter_stock_list.__init__(self, params)
         self.isdebug = params.get('isdebug', False)
+        self.isDescription= params.get('isDescription', False)
         self.long_stock_num = params.get('long_stock_num', 0)
         self.top_chan_type = params.get('top_chan_type', [Chan_Type.I, Chan_Type.III])
         self.sub_chan_type = params.get('sub_chan_type', [Chan_Type.INVALID, Chan_Type.I])
@@ -734,8 +735,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                  direction=TopBotType.top2bot, 
                                                  top_chan_type=self.top_chan_type,
                                                  sub_chan_type=self.sub_chan_type,
-                                                 isdebug=False,
-                                                 is_description=self.isdebug,
+                                                 isdebug=self.isdebug,
+                                                 is_description=self.isDescription,
                                                  sub_check_bi=True)
             
             if result:
