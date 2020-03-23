@@ -619,7 +619,7 @@ class Set_sys_params(Rule):
             pass
 
     def __str__(self):
-        return '设置系统参数：[使用真实价格交易] [忽略order 的 log] [设置基准]'
+        return '设置系统参数：[使用真实价格交易] [防止未来函数] [忽略order 的 log] [设置基准]'
 
 
 # '''------------------设置手续费-----------------'''

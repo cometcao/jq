@@ -685,7 +685,7 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                 return []
             
             chan_list = chan_dict[str(today_date)]
-            print("data read from file: {0}".format(chan_list))
+            print("data read from file: {0} stocks info".format(len(chan_list)))
             for stock, c_type_value, c_direc_value, c_price, c_slope, c_macd, z_time, s_time in chan_list:
                 if stock in context.portfolio.positions.keys():
                     print("{0} already in position".format(stock))
