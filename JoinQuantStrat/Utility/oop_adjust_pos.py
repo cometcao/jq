@@ -902,9 +902,9 @@ class Short_Chan(Sell_stocks):
             if stock_data.loc[effective_time:, 'high'].max() >= top_chan_p: # reached target price
                 print("STOP PROFIT {0} reached target price: {1}".format(stock, top_chan_p))
                 
-                stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
-                if self.use_ma13 and stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
-                    print("STOP PROFIT {0} below ma13: {1}".format(stock, stock_data.iloc[-1].ma13))
+                sma13 = stock_data['close'].values[-13:].sum() / 13
+                if self.use_ma13 and stock_data.iloc[-1].close < sma13:
+                    print("STOP PROFIT {0} below ma13: {1}".format(stock, sma13))
                     return True
 
             if stock_data.loc[effective_time:, 'high'].max()/context.portfolio.positions[stock].avg_cost-1 >= self.stop_profit:
@@ -937,10 +937,10 @@ class Short_Chan(Sell_stocks):
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
 
+            sma13 = stock_data['close'].values[-13:].sum() / 13
             if stock_data.loc[effective_time:, 'high'].max() >= (sub_chan_p[0] if type(sub_chan_p) is list else sub_chan_p): 
                 print("Stock {0} reached target price {1}".format(stock, (sub_chan_p[0] if type(sub_chan_p) is list else sub_chan_p)))
-                stock_data.loc[:, 'ma13'] = talib.SMA(stock_data['close'].values, 13)
-                if self.use_ma13 and stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
+                if self.use_ma13 and stock_data.iloc[-1].close < sma13:
                     print("STOP PROFIT MA13 {0} {1}".format(stock_data.iloc[-1].close, stock_data.iloc[-1].ma13))
                     return True
 
@@ -964,9 +964,8 @@ class Short_Chan(Sell_stocks):
                                                                    exhausted,
                                                                    xd_exhausted))
                 return True
-            
-            if zhongshu_formed and self.use_ma13 and stock_data.iloc[-1].close < stock_data.iloc[-1].ma13:
-                print("STOP PROFIT MA13 {0} {1} after Zhongshu formed".format(stock_data.iloc[-1].close, stock_data.iloc[-1].ma13))
+            if zhongshu_formed and self.use_ma13 and stock_data.iloc[-1].close < sma13:
+                print("STOP PROFIT MA13 {0} {1} after Zhongshu formed".format(stock_data.iloc[-1].close, sma13))
                 return True
             
             return False
