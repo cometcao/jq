@@ -225,18 +225,42 @@ class ZouShiLeiXing(object):
         return [node.tb for node in self.zoushi_nodes]
     
     def get_loc_diff(self):
-        return self.zoushi_nodes[-1].loc - self.zoushi_nodes[0].loc
+        mag = 1200 # THSI IS AN ESTIMATE! we have to upgrade one level so 240 * 5
+#         # this is only hacking method it will limit use case upto 30m
+#         time_gap = self.original_df['date'][-1] - self.original_df['date'][-2]
+#         if time_gap.seconds == 60: # 1m case compared at 5m
+#             mag = 240 #4 * 60 # number of 1m in a trading day
+#         elif time_gap.seconds == 5 * 60: # 5m case compared at 30m
+#             mag = 240 #5 * 4 * 60 / 5 # number of 5m in a trading week
+#         elif time_gap.seconds == 30 * 60: 
+#             mag = 160 #20 * 4 * 60 / 30 # number of 30m in a trading month
+#         else: # complex case # check further
+#             time_gap = self.original_df['date'][-2] - self.original_df['date'][-3]
+#             if time_gap.seconds == 60: # 1m case    
+#                 mag = 240 #4 * 60 # number of 1m in a trading day
+#             elif time_gap.seconds == 5 * 60: # 5m case
+#                 mag = 240 #5 * 4 * 60 / 5 # number of 5m in a trading week
+#             elif time_gap.seconds == 30 * 60: # 30m case
+#                 mag = 160 #20 * 4 * 60 / 30 # number of 30m in a trading month
+#             else:
+#                 print("WE are working on unexpected time period!")
+        
+        return (self.zoushi_nodes[-1].loc - self.zoushi_nodes[0].loc) / mag * 100
     
     def get_magnitude(self): 
-        # by our finding of dynamic equilibrium, the magnitude (SHIJIA) is defined as time * price
-        # magnitude is defined using ln same magnitude TODO tested
+        # by our finding of dynamic equilibrium, the magnitude (SHIJIA) is defined as 
+        # (delta time ** 2 + delta price ** 2) ** 0.5
+        # delta time is based off per trading day month roughly 20 days
+        # delta price is based on increase/decrease by % value
+        # magnitude is defined using ln same magnitude 
         [l, u] = self.get_amplitude_region_original()
         if self.direction == TopBotType.top2bot:
             delta = (u-l)/u * 100.0
         else:
             delta = (u-l)/l * 100.0
         loc_diff = self.get_loc_diff()
-        return delta * loc_diff
+#         return delta * loc_diff
+        return (delta**2 + loc_diff**2) ** 0.5
     
     def check_exhaustion(self):
         '''

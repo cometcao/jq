@@ -743,29 +743,40 @@ class Equilibrium():
                 
         a_s = zslx_a.get_tb_structure() 
         c_s =zslx_c.get_tb_structure()
+        
+        zslx_slope = zslx_a.work_out_slope()
+        
+        latest_slope = zslx_c.work_out_slope()
+        
         if check_tb_structure:
             if a_s[0] != c_s[0] or a_s[-1] != c_s[-1]:
                 if self.isdebug:
                     print("Not matching tb structure")
                 return exhaustion_result, False, None, None, 0, 0
         
-        # we need to make sure they structurally match
-        if not self.isQvShi and abs(len(a_s) - len(c_s)) > 2: # or make sure they have to be equal to 1
-            if self.isdebug:
-                print("Not matching XD structure")
-            return exhaustion_result, False, None, None, 0, 0
+        if self.isQvShi: # BEI CHI
+            if abs(len(a_s) - len(c_s)) > 4:
+                if self.isdebug:
+                    print("Not matching XD structure")
+                return exhaustion_result, False, None, None, 0, 0
+        else: # PAN BEI
+            if abs(len(a_s) - len(c_s)) > 2:
+                if self.isdebug:
+                    print("Not matching XD structure")
+                return exhaustion_result, False, None, None, 0, 0
         
-        # We only check magnitude if it's not QvShi and not same structure xd
-        if not self.isQvShi and a_s != c_s and\
-            (zslx_c.get_magnitude()/zslx_a.get_magnitude() < (1-(1-GOLDEN_RATIO)/2) or\
-            (zslx_c.get_magnitude()/zslx_a.get_magnitude() > (1+(1-GOLDEN_RATIO)/2))):
-            if self.isdebug:
-                print("Not matching magnitude")
-            return exhaustion_result, False, None, None, 0, 0
-
-        zslx_slope = zslx_a.work_out_slope()
-        
-        latest_slope = zslx_c.work_out_slope()
+            if a_s != c_s:
+                if (zslx_c.get_magnitude()/zslx_a.get_magnitude() < (1-(1-GOLDEN_RATIO)/2) or\
+                    (zslx_c.get_magnitude()/zslx_a.get_magnitude() > (1+(1-GOLDEN_RATIO)/2))):
+                    if self.isdebug:
+                        print("Not matching magnitude")
+                    return exhaustion_result, False, None, None, 0, 0
+            else:
+                if (zslx_c.get_magnitude()/zslx_a.get_magnitude() < GOLDEN_RATIO) or\
+                    (zslx_c.get_magnitude()/zslx_a.get_magnitude() > (2-GOLDEN_RATIO)):
+                    if self.isdebug:
+                        print("Not matching magnitude")
+                    return exhaustion_result, False, None, None, 0, 0
 
         if np.sign(latest_slope) == 0 or np.sign(zslx_slope) == 0:
             if self.isdebug:
@@ -785,7 +796,8 @@ class Equilibrium():
             exhaustion_result = abs(zslx_macd) > abs(latest_macd)
             if self.isdebug:
                 print("{0} found by macd: {1}, {2}".format("exhaustion" if exhaustion_result else "exhaustion not", zslx_macd, latest_macd))
-        
+
+        #################################################################################################################
         # try to see if there is xd level zslx exhaustion
         check_xd_exhaustion, sub_split_time = zslx_c.check_exhaustion()
         if self.isdebug:
