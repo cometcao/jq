@@ -764,7 +764,8 @@ class Equilibrium():
                     print("Not matching XD structure")
                 return False
         else: # PAN BEI
-            if abs(len(a_s) - len(c_s)) > 2:
+#             if abs(len(a_s) - len(c_s)) > 2:
+            if len(a_s) != 2 or len(c_s) != 2: # strict 1<->1
                 if self.isdebug:
                     print("Not matching XD structure")
                 return False
@@ -781,17 +782,17 @@ class Equilibrium():
                     print("Pan Bei Zhong Shu level too high")
                 return False
             
-            c_a_mag_ratio = zslx_c.get_magnitude() / zslx_a.get_magnitude()
-            if a_s != c_s:
-                if (c_a_mag_ratio < GOLDEN_RATIO) or (c_a_mag_ratio > 1.618):  #(1/GOLDEN_RATIO)
-                    if self.isdebug:
-                        print("Not matching magnitude")
-                    return False
-            else:
-                if (c_a_mag_ratio < 0.382) or (c_a_mag_ratio > 2.618):  # (1-GOLDEN_RATIO)  (1/(1-GOLDEN_RATIO))
-                    if self.isdebug:
-                        print("Not matching magnitude")
-                    return False
+#             c_a_mag_ratio = zslx_c.get_magnitude() / zslx_a.get_magnitude()
+#             if a_s != c_s:
+#                 if (c_a_mag_ratio < GOLDEN_RATIO) or (c_a_mag_ratio > 1.618):  #(1/GOLDEN_RATIO)
+#                     if self.isdebug:
+#                         print("Not matching magnitude")
+#                     return False
+#             else:
+#                 if (c_a_mag_ratio < 0.382) or (c_a_mag_ratio > 2.618):  # (1-GOLDEN_RATIO)  (1/(1-GOLDEN_RATIO))
+#                     if self.isdebug:
+#                         print("Not matching magnitude")
+#                     return False
 
 
         structure_result = True
