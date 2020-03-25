@@ -769,24 +769,29 @@ class Equilibrium():
                     print("Not matching XD structure")
                 return False
             
+            # detect benzou style Zhongshu
+            if central_B.isBenZouStyle():
+                if self.isdebug:
+                    print("Avoid benzou style zhongshu for PanZheng")
+                return False
             
-        # detect benzou style Zhongshu
-        if not self.isQvShi and central_B.isBenZouStyle():
-            if self.isdebug:
-                print("Avoid benzou style zhongshu for PanZheng")
-            return False
-#             CHECK MAGNITUDE IGNORED
-#             c_a_mag_ratio = zslx_c.get_magnitude() / zslx_a.get_magnitude()
-#             if a_s != c_s:
-#                 if (c_a_mag_ratio < GOLDEN_RATIO) or (c_a_mag_ratio > 1.618):  #(1/GOLDEN_RATIO)
-#                     if self.isdebug:
-#                         print("Not matching magnitude")
-#                     return False
-#             else:
-#                 if (c_a_mag_ratio < 0.382) or (c_a_mag_ratio > 2.618):  # (1-GOLDEN_RATIO)  (1/(1-GOLDEN_RATIO))
-#                     if self.isdebug:
-#                         print("Not matching magnitude")
-#                     return False
+            # if current pan bei level too high it will break the assumption made in higher level
+            if central_B.get_level().value > ZhongShuLevel.current.value:
+                if self.isdebug:
+                    print("Pan Bei Zhong Shu level too high")
+                return False
+            
+            c_a_mag_ratio = zslx_c.get_magnitude() / zslx_a.get_magnitude()
+            if a_s != c_s:
+                if (c_a_mag_ratio < GOLDEN_RATIO) or (c_a_mag_ratio > 1.618):  #(1/GOLDEN_RATIO)
+                    if self.isdebug:
+                        print("Not matching magnitude")
+                    return False
+            else:
+                if (c_a_mag_ratio < 0.382) or (c_a_mag_ratio > 2.618):  # (1-GOLDEN_RATIO)  (1/(1-GOLDEN_RATIO))
+                    if self.isdebug:
+                        print("Not matching magnitude")
+                    return False
 
 
         structure_result = True
