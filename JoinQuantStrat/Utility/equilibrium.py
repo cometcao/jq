@@ -498,23 +498,23 @@ class Equilibrium():
                 zs = self.analytic_result[-1]
                 first_zslx = self.analytic_result[-2]
                 last_xd = zs.take_last_xd_as_zslx()
-                return (first_zslx, self.analytic_result[-1], last_xd) if last_xd.direction == direction else (None, None, None)
+                return (first_zslx, self.analytic_result[-1], last_xd, self.analytic_result[-1].get_amplitude_region_original_without_last_xd()) if last_xd.direction == direction else (None, None, None, None)
             elif type(self.analytic_result[-1]) is ZouShiLeiXing:
-                return (self.analytic_result[-3], self.analytic_result[-2], self.analytic_result[-1]) if self.analytic_result[-1].direction == direction else (None, None, None)
+                return (self.analytic_result[-3], self.analytic_result[-2], self.analytic_result[-1], self.analytic_result[-2].get_amplitude_region_original()) if self.analytic_result[-1].direction == direction else (None, None, None, None)
             
         if type(self.analytic_result[-1]) is ZhongShu:
             zs = self.analytic_result[-1]
             if self.analytic_result[-1].is_complex_type():
                 last_xd = zs.take_last_xd_as_zslx()
                 if last_xd.direction != direction:
-                    return None, None, None
+                    return None, None, None, None
                 
                 if len(self.analytic_result) >= 3 and\
                     type(self.analytic_result[-2]) is ZouShiLeiXing and\
                     type(self.analytic_result[-1]) is ZhongShu and\
                     type(self.analytic_result[-3]) is ZhongShu and\
                     self.two_zslx_interact_original(self.analytic_result[-1], self.analytic_result[-3]):
-                    return None, None, None
+                    return None, None, None, None
 # IGNORE THIS CASE###############################
 #                     ## zhong shu combination
 #                     i = -3
@@ -536,51 +536,53 @@ class Equilibrium():
                     first_xd = zs.take_split_xd_as_zslx(direction)
                 else:
                     first_xd = self.analytic_result[-2]
-                return first_xd, zs, last_xd
+                return first_xd, zs, last_xd, zs.get_amplitude_region_original_without_last_xd()
             else:
-                return None, zs, None
+                return None, zs, None, zs.get_amplitude_region_original_without_last_xd()
 
         elif type(self.analytic_result[-1]) is ZouShiLeiXing:
             last_xd = self.analytic_result[-1]
             zs = None
             if last_xd.direction != direction:
-                return None, None, None
+                return None, None, None, None
             
             if len(self.analytic_result) >= 4 and\
                 type(self.analytic_result[-2]) is ZhongShu and\
                 type(self.analytic_result[-4]) is ZhongShu and\
                 self.two_zslx_interact_original(self.analytic_result[-4], self.analytic_result[-2]):
+                return None, None, None, None
+# IGNORE THIS CASE###############################
                 ## zhong shu combination
-                i = -4
-                marked = False
-                while -(i-2) <= len(self.analytic_result):
-                    if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
-                        (not self.analytic_result[i-2].is_complex_type() and self.analytic_result[i-2].direction != self.analytic_result[i].direction):
-                        first_xd = self.analytic_result[i-1]
-                        zs = self.analytic_result[i:-1]
-                        marked = True
-                        break
-                    i = i - 2
-                if not marked or -(i-2) > len(self.analytic_result):
-                    all_zs = [zs for zs in self.analytic_result if type(zs) is ZhongShu]
-                    all_first_xd = [zs.take_split_xd_as_zslx(direction) for zs in all_zs]
-                    first_xd = sorted(all_first_xd, key=take_start_price, reverse=direction==TopBotType.top2bot)[0]
-                    zs = all_zs[-1]
+#                 i = -4
+#                 marked = False
+#                 while -(i-2) <= len(self.analytic_result):
+#                     if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
+#                         (not self.analytic_result[i-2].is_complex_type() and self.analytic_result[i-2].direction != self.analytic_result[i].direction):
+#                         first_xd = self.analytic_result[i-1]
+#                         zs = self.analytic_result[i:-1]
+#                         marked = True
+#                         break
+#                     i = i - 2
+#                 if not marked or -(i-2) > len(self.analytic_result):
+#                     all_zs = [zs for zs in self.analytic_result if type(zs) is ZhongShu]
+#                     all_first_xd = [zs.take_split_xd_as_zslx(direction) for zs in all_zs]
+#                     first_xd = sorted(all_first_xd, key=take_start_price, reverse=direction==TopBotType.top2bot)[0]
+#                     zs = all_zs[-1]
                     
             elif len(self.analytic_result) < 3 or self.analytic_result[-3].direction != last_xd.direction:
                 if len(self.analytic_result) > 1:
                     zs = self.analytic_result[-2]
                     first_xd = zs.take_split_xd_as_zslx(direction)
                 else: # no ZhongShu found
-                    return None, None, None
+                    return None, None, None, None
             else:
                 zs = self.analytic_result[-2]
                 first_xd = self.analytic_result[-3]
-            return first_xd, zs, last_xd
+            return first_xd, zs, last_xd, zs.get_amplitude_region_original(),
             
         else:
             print("Invalid Zou Shi type")
-            return None, None, None
+            return None, None, None, None
     
     def two_zhongshu_form_qvshi(self, zs1, zs2, zs_level=ZhongShuLevel.current):
         '''
@@ -714,70 +716,93 @@ class Equilibrium():
                 xd_exhaustion, ts = zs.check_exhaustion()
                 return True, xd_exhaustion, zs.first.time, ts, 0, 0
         
-        a, central_zs, c = self.find_most_recent_zoushi(direction)
+        a, central_B, c, central_region = self.find_most_recent_zoushi(direction)
         
-        new_high_low = self.reached_new_high_low(guide_price, direction, c, central_zs)
+        new_high_low = self.reached_new_high_low(guide_price, direction, c, central_region)
         
-        return self.check_exhaustion(a, c, new_high_low, check_tb_structure=check_tb_structure)
-        
-    def reached_new_high_low(self, guide_price, direction, zslx, central_zs):
-        if zslx is None or zslx.isEmpty():
-            return False
-        
-        if guide_price == 0: # This happens at BI level
-            if type(central_zs) is list:
-                central_zs = central_zs[-1]
-            
-            zs_range = central_zs.get_amplitude_region_original()
-            guide_price = zs_range[0] if direction == TopBotType.top2bot else zs_range[1]
-            
-        zslx_range = zslx.get_amplitude_region_original()
-        
-        return zslx_range[0] < guide_price if direction == TopBotType.top2bot else zslx_range[1] > guide_price
+        if self.check_zoushi_structure(a, central_B, c, central_region, direction, check_tb_structure=check_tb_structure):
+            return self.check_exhaustion(a, c, new_high_low)
+        else:
+            return False, False, None, None, 0, 0
     
-    def check_exhaustion(self, zslx_a, zslx_c, new_high_low, check_tb_structure=False):
-        exhaustion_result = False
+    def check_zoushi_structure(self, zslx_a, central_B, zslx_c, central_region, direction, check_tb_structure=False):
         if zslx_a is None or zslx_c is None or zslx_a.isEmpty() or zslx_c.isEmpty():
             if self.isdebug:
                 print("Not enough DATA check_exhaustion")
-            return exhaustion_result, False, None, None, 0, 0
+            return False
                 
         a_s = zslx_a.get_tb_structure() 
         c_s =zslx_c.get_tb_structure()
-        
-        zslx_slope = zslx_a.work_out_slope()
-        
-        latest_slope = zslx_c.work_out_slope()
         
         if check_tb_structure:
             if a_s[0] != c_s[0] or a_s[-1] != c_s[-1]:
                 if self.isdebug:
                     print("Not matching tb structure")
-                return exhaustion_result, False, None, None, 0, 0
+                return False
         
         if self.isQvShi: # BEI CHI
             if abs(len(a_s) - len(c_s)) > 4:
                 if self.isdebug:
                     print("Not matching XD structure")
-                return exhaustion_result, False, None, None, 0, 0
+                return False
         else: # PAN BEI
             if abs(len(a_s) - len(c_s)) > 2:
                 if self.isdebug:
                     print("Not matching XD structure")
-                return exhaustion_result, False, None, None, 0, 0
-        
-            c_a_mag_ratio = zslx_c.get_magnitude() / zslx_a.get_magnitude()
-            if a_s != c_s:
-                if (c_a_mag_ratio < GOLDEN_RATIO) or (c_a_mag_ratio > 1.618):  #(1/GOLDEN_RATIO)
-                    if self.isdebug:
-                        print("Not matching magnitude")
-                    return exhaustion_result, False, None, None, 0, 0
-            else:
-                if (c_a_mag_ratio < 0.382) or (c_a_mag_ratio > 2.618):  # (1-GOLDEN_RATIO)  (1/(1-GOLDEN_RATIO))
-                    if self.isdebug:
-                        print("Not matching magnitude")
-                    return exhaustion_result, False, None, None, 0, 0
+                return False
+            
+            
+        # detect benzou style Zhongshu
+        if not self.isQvShi and central_B.isBenZouStyle():
+            if self.isdebug:
+                print("Avoid benzou style zhongshu for PanZheng")
+            return False
+#             CHECK MAGNITUDE IGNORED
+#             c_a_mag_ratio = zslx_c.get_magnitude() / zslx_a.get_magnitude()
+#             if a_s != c_s:
+#                 if (c_a_mag_ratio < GOLDEN_RATIO) or (c_a_mag_ratio > 1.618):  #(1/GOLDEN_RATIO)
+#                     if self.isdebug:
+#                         print("Not matching magnitude")
+#                     return False
+#             else:
+#                 if (c_a_mag_ratio < 0.382) or (c_a_mag_ratio > 2.618):  # (1-GOLDEN_RATIO)  (1/(1-GOLDEN_RATIO))
+#                     if self.isdebug:
+#                         print("Not matching magnitude")
+#                     return False
 
+
+        structure_result = False
+        a_range = zslx_a.get_amplitude_region_original()
+        c_range = zslx_c.get_amplitude_region_original()
+        if direction == TopBotType.top2bot:
+            structure_result = a_range[1] > central_region[1] and central_region[0] > c_range[0]
+        elif direction == TopBotType.bot2top:
+            structure_result = a_range[0] < central_region[0] and central_region[1] < c_range[1]
+        else:
+            print("Invalid direction")
+            
+        if not structure_result and self.isdebug:
+            print("Not balanced structure")
+        
+        return structure_result
+    
+    def reached_new_high_low(self, guide_price, direction, zslx, central_region):
+        if zslx is None or zslx.isEmpty():
+            return False
+        
+        if guide_price == 0: # This happens at BI level
+            guide_price = central_region[0] if direction == TopBotType.top2bot else central_region[1]
+            
+        zslx_range = zslx.get_amplitude_region_original()
+        
+        return zslx_range[0] < guide_price if direction == TopBotType.top2bot else zslx_range[1] > guide_price
+    
+    def check_exhaustion(self, zslx_a, zslx_c, new_high_low):
+        exhaustion_result = False
+        
+        zslx_slope = zslx_a.work_out_slope()
+        
+        latest_slope = zslx_c.work_out_slope()
         if np.sign(latest_slope) == 0 or np.sign(zslx_slope) == 0:
             if self.isdebug:
                 print("Invalid slope {0}, {1}".format(zslx_slope, latest_slope))

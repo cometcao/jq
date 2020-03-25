@@ -465,7 +465,23 @@ class ZhongShu(ZouShiLeiXing):
     def is_complex_type(self):
         # if the ZhongShu contain more than 3 XD, it's a complex ZhongShu, in practice the direction of it can be interpreted differently
         return bool(self.extra_nodes)
-    
+
+    def isBenZouStyle(self): 
+        '''
+        check if current Zhongshu is BenZou style
+        '''
+        if not self.is_complex_type() or len(self.extra_nodes)==1:
+            core_range = self.get_core_region()
+            amplitude_range = self.get_amplitude_region()
+            core_gap = core_range[1] - core_range[0]
+            amplitude_gap = amplitude_range[1] - amplitude_range[0]
+            
+            if core_gap / amplitude_gap < 0.191: # (1-GOLDEN_RATIO)/2
+                return True
+        return False
+                
+            
+
     def check_exhaustion(self):
         last_xd = self.take_last_xd_as_zslx()
         if self.is_complex_type():
