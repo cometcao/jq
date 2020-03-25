@@ -990,11 +990,43 @@ class KBarChan(object):
                 next_valid_elems = self.get_next_N_elem(i, working_df, 6)
                 if len(next_valid_elems) < 6:
                     break
-                
                 # make sure we are checking the right elem by direction
                 if not self.direction_assert(working_df[next_valid_elems[0]], current_direction):
                     i = next_valid_elems[1]
-                    continue     
+                    continue
+                
+                secondElem = working_df[next_valid_elems[1]]
+                previous_gap_elem = working_df[self.gap_XD[-1]]
+                if current_direction == TopBotType.top2bot:
+                    if secondElem[chan_price] > previous_gap_elem[chan_price]:
+                        previous_gap_loc = self.gap_XD.pop()
+                        if self.isdebug:
+                            print("xd_tb cancelled due to new high found: {0} {1}".format(working_df[previous_gap_loc][date], working_df[previous_gap_loc][real_loc]))
+                        working_df[previous_gap_loc][xd_tb] = TopBotType.noTopBot.value
+                        
+                        # restore any combined bi due to the gapped XD
+                        working_df[previous_gap_loc:next_valid_elems[-1]][tb] = working_df[previous_gap_loc:next_valid_elems[-1]][original_tb]
+                        current_direction = TopBotType.reverse(current_direction)
+                        if self.isdebug:
+                            print("gap closed 1:{0}, {1} tb info restored to {2}".format(working_df[previous_gap_loc][date], TopBotType.value2type(working_df[previous_gap_loc][tb]), working_df[next_valid_elems[-1]][date])) 
+                            [print("gap info 3:{0}, {1}".format(working_df[gap_loc][date], TopBotType.value2type(working_df[gap_loc][tb]))) for gap_loc in self.gap_XD]
+                        i = previous_gap_loc
+                        continue
+                elif current_direction == TopBotType.bot2top:
+                    if secondElem[chan_price] < previous_gap_elem[chan_price]:
+                        previous_gap_loc = self.gap_XD.pop()
+                        if self.isdebug:
+                            print("xd_tb cancelled due to new low found: {0} {1}".format(working_df[previous_gap_loc][date], working_df[previous_gap_loc][real_loc]))
+                        working_df[previous_gap_loc][xd_tb] = TopBotType.noTopBot.value
+                        
+                        # restore any combined bi due to the gapped XD
+                        working_df[previous_gap_loc:next_valid_elems[-1]][tb] = working_df[previous_gap_loc:next_valid_elems[-1]][original_tb]
+                        current_direction = TopBotType.reverse(current_direction)
+                        if self.isdebug:
+                            print("gap closed 2:{0}, {1} tb info restored to {2}".format(working_df[previous_gap_loc][date],  TopBotType.value2type(working_df[previous_gap_loc][tb]), working_df[next_valid_elems[-1]][date]))
+                            [print("gap info 3:{0}, {1}".format(working_df[gap_loc][date], TopBotType.value2type(working_df[gap_loc][tb]))) for gap_loc in self.gap_XD]
+                        i = previous_gap_loc
+                        continue
                 
                 current_status, with_gap, with_xd_gap = self.check_XD_topbot_directed(next_valid_elems, current_direction, working_df)  
 
@@ -1017,47 +1049,7 @@ class KBarChan(object):
                     current_direction = TopBotType.top2bot if current_status == TopBotType.top else TopBotType.bot2top
                     i = next_valid_elems[1] if with_xd_gap else next_valid_elems[3]
                     continue
-                else:
-                    secondElem = working_df[next_valid_elems[1]]
- 
-                    previous_gap_elem = working_df[self.gap_XD[-1]]
-                    if current_direction == TopBotType.top2bot:
-                        if secondElem[chan_price] > previous_gap_elem[chan_price]:
-                            previous_gap_loc = self.gap_XD.pop()
-                            if self.isdebug:
-                                print("xd_tb cancelled due to new high found: {0} {1}".format(working_df[previous_gap_loc][date], working_df[previous_gap_loc][real_loc]))
-                            working_df[previous_gap_loc][xd_tb] = TopBotType.noTopBot.value
-                            
-                            # restore any combined bi due to the gapped XD
-                            working_df[previous_gap_loc:next_valid_elems[-1]][tb] = working_df[previous_gap_loc:next_valid_elems[-1]][original_tb]
-                            current_direction = TopBotType.reverse(current_direction)
-                            if self.isdebug:
-                                print("gap closed 1:{0}, {1} tb info restored to {2}".format(working_df[previous_gap_loc][date], TopBotType.value2type(working_df[previous_gap_loc][tb]), working_df[next_valid_elems[-1]][date])) 
-                            i = previous_gap_loc
-                            continue
-                            
-                    elif current_direction == TopBotType.bot2top:
-                        if secondElem[chan_price] < previous_gap_elem[chan_price]:
-                            previous_gap_loc = self.gap_XD.pop()
-                            if self.isdebug:
-                                print("xd_tb cancelled due to new low found: {0} {1}".format(working_df[previous_gap_loc][date], working_df[previous_gap_loc][real_loc]))
-                            working_df[previous_gap_loc][xd_tb] = TopBotType.noTopBot.value
-                            
-                            # restore any combined bi due to the gapped XD
-                            working_df[previous_gap_loc:next_valid_elems[-1]][tb] = working_df[previous_gap_loc:next_valid_elems[-1]][original_tb]
-                            current_direction = TopBotType.reverse(current_direction)
-                            if self.isdebug:
-                                print("gap closed 2:{0}, {1} tb info restored to {2}".format(working_df[previous_gap_loc][date],  TopBotType.value2type(working_df[previous_gap_loc][tb]), working_df[next_valid_elems[-1]][date]))
-                            i = previous_gap_loc
-                            continue
-                            
-                    else:
-                        print("Invalid current direction!")
-                        break
-                    if self.isdebug:
-                        [print("gap info 3:{0}, {1}".format(working_df[gap_loc][date], TopBotType.value2type(working_df[gap_loc][tb]))) for gap_loc in self.gap_XD]
-                    i = next_valid_elems[2] #  i = i + 2 # check next bi with same direction
-                    
+                i = next_valid_elems[2]
             else:    # no gap case            
                 # find next 3 elems with the same tb info
                 next_valid_elems = self.get_next_N_elem(i, working_df, 3, start_tb = TopBotType.top if current_direction == TopBotType.bot2top else TopBotType.bot, single_direction=True)
@@ -1119,22 +1111,54 @@ class KBarChan(object):
                 temp_df = working_df[previous_xd_tb_loc:][columns]
                 if temp_df.size > 0:
                     temp_df = temp_df[temp_df[tb] != TopBotType.noTopBot.value]
-                    if current_direction == TopBotType.top2bot:
-                        min_loc = temp_df[chan_price].argmin()
-                        min_date = temp_df[min_loc][date]
-                        working_loc = np.where(working_df[date]==min_date)[0][0]
-                        working_df[working_loc][xd_tb] = TopBotType.bot.value
-                        if self.isdebug:
-                            print("final xd_tb located from {0} for {1}".format(min_date, TopBotType.bot))
-                    elif current_direction == TopBotType.bot2top:
-                        max_loc = temp_df[chan_price].argmax()
-                        max_date = temp_df[max_loc][date]
-                        working_loc = np.where(working_df[date]==max_date)[0][0]
-                        working_df[working_loc][xd_tb] = TopBotType.top.value
-                        if self.isdebug:
-                            print("final xd_tb located from {0} for {1}".format(max_date, TopBotType.top))
-                    else:
-                        print("Invalid direction")
+                    gapped_change = False
+                    if self.gap_XD: 
+                        # with gap we check if there is higher/lower tb for xd_tb
+                        if current_direction == TopBotType.top2bot:
+                            max_loc = temp_df[chan_price].argmax()
+                            max_date = temp_df[max_loc][date]
+                            max_price = temp_df[max_loc][chan_price]
+                            working_loc = np.where(working_df[date]==max_date)[0][0]
+                            if max_price > working_df[previous_xd_tb_locs[0]][chan_price]:
+                                working_df[previous_xd_tb_locs[0]] = TopBotType.noTopBot.value
+                                working_df[working_loc][xd_tb] = TopBotType.top.value
+                                gapped_change = True
+                            if self.isdebug:
+                                print("final gapped xd_tb located from {0} for {1}".format(max_date, TopBotType.top))
+                        elif current_direction == TopBotType.bot2top:
+                            min_loc = temp_df[chan_price].argmin()
+                            min_date = temp_df[min_loc][date]
+                            min_price = temp_df[min_loc][chan_price]
+                            working_loc = np.where(working_df[date]==min_date)[0][0]
+                            if min_price < working_df[previous_xd_tb_locs[0]][chan_price]:
+                                working_df[previous_xd_tb_locs[0]] = TopBotType.noTopBot.value
+                                working_df[working_loc][xd_tb] = TopBotType.bot.value
+                                gapped_change = True
+                            if self.isdebug:
+                                print("final gapped xd_tb located from {0} for {1}".format(min_date, TopBotType.bot))
+                    
+                        if gapped_change:
+                            previous_xd_tb_loc = working_loc+3
+                            temp_df = working_df[previous_xd_tb_loc:][columns]
+                        
+                    # We could make an assumption based on assumption. 
+                    if temp_df.size > 0:
+                        if current_direction == TopBotType.top2bot:
+                            min_loc = temp_df[chan_price].argmin()
+                            min_date = temp_df[min_loc][date]
+                            working_loc = np.where(working_df[date]==min_date)[0][0]
+                            working_df[working_loc][xd_tb] = TopBotType.bot.value
+                            if self.isdebug:
+                                print("final xd_tb located from {0} for {1}".format(min_date, TopBotType.bot))
+                        elif current_direction == TopBotType.bot2top:
+                            max_loc = temp_df[chan_price].argmax()
+                            max_date = temp_df[max_loc][date]
+                            working_loc = np.where(working_df[date]==max_date)[0][0]
+                            working_df[working_loc][xd_tb] = TopBotType.top.value
+                            if self.isdebug:
+                                print("final xd_tb located from {0} for {1}".format(max_date, TopBotType.top))
+                        else:
+                            print("Invalid direction")
                 else:
                     print("empty temp_df, continue")
         
