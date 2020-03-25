@@ -673,7 +673,12 @@ class Equilibrium():
 
 
         
-    def define_equilibrium(self, direction, guide_price=0, check_tb_structure=False, force_zhongshu=False, type_III=False):
+    def define_equilibrium(self, direction, 
+                           guide_price=0, 
+                           check_tb_structure=False, 
+                           check_balance_structure=False, 
+                           force_zhongshu=False, 
+                           type_III=False):
         '''
         We are dealing type III differently at top level
         return:
@@ -720,12 +725,25 @@ class Equilibrium():
         
         new_high_low = self.reached_new_high_low(guide_price, direction, c, central_region)
         
-        if self.check_zoushi_structure(a, central_B, c, central_region, direction, check_tb_structure=check_tb_structure):
+        if self.check_zoushi_structure(a, 
+                                       central_B, 
+                                       c, 
+                                       central_region, 
+                                       direction, 
+                                       check_tb_structure=check_tb_structure,
+                                       check_balance_structure=check_balance_structure):
             return self.check_exhaustion(a, c, new_high_low)
         else:
             return False, False, None, None, 0, 0
     
-    def check_zoushi_structure(self, zslx_a, central_B, zslx_c, central_region, direction, check_tb_structure=False):
+    def check_zoushi_structure(self, 
+                               zslx_a, 
+                               central_B, 
+                               zslx_c, 
+                               central_region, 
+                               direction, 
+                               check_tb_structure=False,
+                               check_balance_structure=False):
         if zslx_a is None or zslx_c is None or zslx_a.isEmpty() or zslx_c.isEmpty():
             if self.isdebug:
                 print("Not enough DATA check_exhaustion")
@@ -771,18 +789,19 @@ class Equilibrium():
 #                     return False
 
 
-        structure_result = False
-        a_range = zslx_a.get_amplitude_region_original()
-        c_range = zslx_c.get_amplitude_region_original()
-        if direction == TopBotType.top2bot:
-            structure_result = a_range[1] > central_region[1] and central_region[0] > c_range[0]
-        elif direction == TopBotType.bot2top:
-            structure_result = a_range[0] < central_region[0] and central_region[1] < c_range[1]
-        else:
-            print("Invalid direction")
-            
-        if not structure_result and self.isdebug:
-            print("Not balanced structure")
+        structure_result = True
+        if check_balance_structure: # This is shouldn't be checked at BI level
+            a_range = zslx_a.get_amplitude_region_original()
+            c_range = zslx_c.get_amplitude_region_original()
+            if direction == TopBotType.top2bot:
+                structure_result = a_range[1] > central_region[1] and central_region[0] > c_range[0]
+            elif direction == TopBotType.bot2top:
+                structure_result = a_range[0] < central_region[0] and central_region[1] < c_range[1]
+            else:
+                print("Invalid direction")
+                
+            if not structure_result and self.isdebug:
+                print("Not balanced structure")
         
         return structure_result
     
@@ -1166,6 +1185,7 @@ class NestedInterval():
             high_exhausted, check_xd_exhaustion, last_zs_time, sub_split_time, high_slope, high_macd = eq.define_equilibrium(direction, 
                                                                                     guide_price,
                                                                                     check_tb_structure=check_tb_structure, 
+                                                                                    check_balance_structure=True,
                                                                                     type_III=(chan_t == Chan_Type.III))
         else:
             high_exhausted, check_xd_exhaustion = False, False
@@ -1220,6 +1240,7 @@ class NestedInterval():
                          isDescription=self.isDescription)
         bi_exhausted, bi_check_exhaustion, _,bi_split_time, _, _ = eq.define_equilibrium(direction, 
                                                                                          check_tb_structure=True,
+                                                                                         check_balance_structure=False,
                                                                                          force_zhongshu=force_zhongshu)
         if (self.isdebug):
             print("BI level {0}, {1}".format(bi_exhausted, bi_check_exhaustion))
@@ -1276,7 +1297,11 @@ class NestedInterval():
         # reverse direction case are dealt above
         chan_t, chan_d, chan_p = chan_type_result[0]
         guide_price = (chan_p[0] if direction == TopBotType.top2bot else chan_p[1]) if type(chan_p) is list else chan_p
-        exhausted, check_xd_exhaustion, _, sub_split_time, a_slope, a_macd = eq.define_equilibrium(direction, guide_price, force_zhongshu=force_zhongshu, check_tb_structure=check_tb_structure)
+        exhausted, check_xd_exhaustion, _, sub_split_time, a_slope, a_macd = eq.define_equilibrium(direction, 
+                                                                                                   guide_price, 
+                                                                                                   force_zhongshu=force_zhongshu, 
+                                                                                                   check_tb_structure=check_tb_structure,
+                                                                                                   check_balance_structure=True)
         if self.isDescription or self.isdebug:
             print("current level {0} {1} {2} {3} {4} with price:{5}".format(period, 
                                                                         chan_d, 
@@ -1327,6 +1352,7 @@ class NestedInterval():
                                                                                                                              guide_price,
                                                                                                                              check_tb_structure=check_tb_structure,
                                                                                                                              type_III=(chan_t==Chan_Type.III),
+                                                                                                                             check_balance_structure=True,
                                                                                                                              force_zhongshu=force_zhongshu)
         else:
             return False, [(chan_t, chan_d, chan_p, 0, 0, None, None)]
