@@ -20,13 +20,16 @@ class Sort_turnover_ratio_avg(Early_Filter_stock_list):
         self.isdebug= params.get('isdebug', False)
 
     def filter(self, context, stock_list):
+        if self.isdebug:
+            print("before sorting: {0}".format(stock_list))
         q = query(valuation.code, valuation.turnover_ratio).filter(
             valuation.code.in_(stock_list)
         )
         stock_df = get_fundamentals_continuously(q, count = self.day_count, end_date=None, panel=False)
         stock_df_mean = stock_df.groupby(['code']).mean().sort_values(by='turnover_ratio', ascending=False)
         stock_list = stock_df_mean.index[:self.limit].tolist()
-        
+        if self.isdebug:
+            print("after sorting/limiting: {0}".format(stock_list))
         return stock_list
 
     def __str__(self):
