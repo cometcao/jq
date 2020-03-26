@@ -680,7 +680,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             result, profile, _ = check_stock_full(stock,
                                                  end_time=context.current_dt,
                                                  periods=['5m', '1m'],
-                                                 count=4800,
+                                                 count=self.num_of_data,
                                                  direction=TopBotType.top2bot, 
                                                  top_chan_type=self.top_chan_type,
                                                  sub_chan_type=self.sub_chan_type,
