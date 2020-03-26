@@ -764,8 +764,8 @@ class Equilibrium():
                     print("Not matching XD structure")
                 return False
         else: # PAN BEI
-#             if abs(len(a_s) - len(c_s)) > 2:
-            if len(a_s) != 2 or len(c_s) != 2: # strict 1<->1
+            if abs(len(a_s) - len(c_s)) > 2:
+#             if len(a_s) != 2 or len(c_s) != 2: # strict 1<->1
                 if self.isdebug:
                     print("Not matching XD structure")
                 return False
