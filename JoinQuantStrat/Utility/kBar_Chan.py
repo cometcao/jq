@@ -635,7 +635,8 @@ class KBarChan(object):
         check the 4 elems are inclusion free by direction, if not operate the inclusion, gaps are defined as pure gap
         '''
         if len(next_valid_elems) < 4:
-            print("Invalid number of elems found")
+            if self.isdebug:
+                print("Invalid number of elems found")
             return False
         
         firstElem = working_df[next_valid_elems[0]]
@@ -697,11 +698,12 @@ class KBarChan(object):
     def check_inclusion_by_direction(self, current_loc, working_df, direction, with_gap):
         '''
         make sure next 6 (with gap) / 4 (without gap) bi are inclusive free, assuming the starting loc is the start of characteristic elem
+        We need to check 2 kbars extra!
         '''
         i = current_loc
         first_run = True
 
-        count_num = 6 if with_gap else 4
+        count_num = 8 if with_gap else 6
             
         while first_run or (i+count_num-1 < working_df.shape[0]):
             first_run = False
@@ -712,11 +714,13 @@ class KBarChan(object):
             
             if with_gap:
                 if self.is_XD_inclusion_free(direction, next_valid_elems[:4], working_df):
-                    if self.is_XD_inclusion_free(direction, next_valid_elems[-4:], working_df):
-                        break
+                    if self.is_XD_inclusion_free(direction, next_valid_elems[2:6], working_df):
+                        if self.is_XD_inclusion_free(direction, next_valid_elems[-4:], working_df):
+                            break
             else:
                 if self.is_XD_inclusion_free(direction, next_valid_elems[:4], working_df):
-                    break
+                    if self.is_XD_inclusion_free(direction, next_valid_elems[-4:], working_df):
+                        break
                 
 
     def check_XD_topbot(self, first, second, third, forth, fifth, sixth):
@@ -995,6 +999,7 @@ class KBarChan(object):
                     i = next_valid_elems[1]
                     continue
                 
+                #################### pop gap_XD ##########################
                 secondElem = working_df[next_valid_elems[1]]
                 previous_gap_elem = working_df[self.gap_XD[-1]]
                 if current_direction == TopBotType.top2bot:
@@ -1027,6 +1032,7 @@ class KBarChan(object):
                             [print("gap info 3:{0}, {1}".format(working_df[gap_loc][date], TopBotType.value2type(working_df[gap_loc][tb]))) for gap_loc in self.gap_XD]
                         i = previous_gap_loc
                         continue
+                #################### pop gap_XD ##########################
                 
                 current_status, with_gap, with_xd_gap = self.check_XD_topbot_directed(next_valid_elems, current_direction, working_df)  
 
