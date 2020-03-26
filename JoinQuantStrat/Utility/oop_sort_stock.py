@@ -10,7 +10,73 @@ except:
     pass
 from jqdata import *
 from oop_strategy_frame import *
-from oop_select_stock import Filter_stock_list
+from oop_select_stock import Filter_stock_list, Early_Filter_stock_list
+
+# --- 按换手率排序 ---
+class Sort_turnover_ratio_avg(Early_Filter_stock_list):
+    def __init__(self, params):
+        self.limit = params.get('limit', 13)
+        self.day_count = params.get('day_count', 5)
+        self.isdebug= params.get('isdebug', False)
+
+    def filter(self, context, stock_list):
+        q = query(valuation.code, valuation.turnover_ratio).filter(
+            valuation.code.in_(stock_list)
+        )
+        stock_df = get_fundamentals_continuously(q, count = self.day_count, end_date=None, panel=False)
+        stock_df_mean = stock_df.groupby(['code']).mean().sort_values(by='turnover_ratio', ascending=False)
+        stock_list = stock_df_mean.index[:self.limit].tolist()
+        
+        return stock_list
+
+    def __str__(self):
+        return "按换手率排序  stock num limit: {0} average days: {1}".format(self.limit, self.day_count)
+
+
+class Sort_By_Financial_Data(Early_Filter_stock_list):
+    def __init__(self, params):
+        self.limit = params.get('limit', 10)
+        self.f_type = params.get('f_type', "evs")
+        self.isdebug= params.get('isdebug', False)
+    
+    def filter(self, context, stock_list):
+        if self.f_type == "evs": # EV/EBIT
+            q = query(
+                    valuation.code,
+                    valuation.market_cap,
+                    balance.longterm_loan,
+                    balance.bonds_payable,
+                    balance.minority_interests,
+                    balance.capital_reserve_fund,
+                    balance.cash_equivalents,
+                    income.net_profit,
+                    income.income_tax_expense,
+                    income.interest_expense
+                    ).filter(
+                    valuation.code.in_(stock_list)
+                    )
+            df = get_fundamentals(q).fillna(0)
+            
+            df['evs'] =\
+            (df['market_cap'] * 1e8 + 
+            df['longterm_loan'] + 
+            df['bonds_payable'] + 
+            df['minority_interests'] +
+            df['capital_reserve_fund'] - 
+            df['cash_equivalents'])/(
+            df['net_profit'] +
+            df['income_tax_expense'] +
+            df['interest_expense']
+            )
+            df.sort_values(by=['evs'], inplace=True)
+            if self.isdebug:
+                print(df.head(10))
+            
+            return df['code'].head(self.limit).tolist()
+            
+    def __str__(self):
+        return "sort and limit by {0} data".format(self.f_type)
+
 
 # 排序基本类 共用指定参数为 weight
 class SortBase(Rule):
