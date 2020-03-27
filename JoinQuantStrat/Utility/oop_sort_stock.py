@@ -20,6 +20,9 @@ class Sort_turnover_ratio_avg(Early_Filter_stock_list):
         self.isdebug= params.get('isdebug', False)
 
     def filter(self, context, stock_list):
+        if not stock_list or stock_list is None:
+            return []
+        
         if self.isdebug:
             print("before sorting: {0}".format(stock_list))
         q = query(valuation.code, valuation.turnover_ratio).filter(
