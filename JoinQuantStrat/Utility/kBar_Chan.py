@@ -1187,6 +1187,48 @@ class KBarChan(object):
             print("Invalid direction!!! {0}".format(current_direction))
         return result
     
+    def pop_gap(self, working_df, next_valid_elems, current_direction):
+        chan_price = 'chan_price'
+        tb = 'tb'
+        original_tb = 'original_tb'
+        xd_tb='xd_tb'
+        date='date'
+        real_loc='real_loc'
+        i = None
+        #################### pop gap_XD ##########################
+        secondElem = working_df[next_valid_elems[1]]
+        previous_gap_elem = working_df[self.gap_XD[-1]]
+        if current_direction == TopBotType.top2bot:
+            if secondElem[chan_price] > previous_gap_elem[chan_price]:
+                previous_gap_loc = self.gap_XD.pop()
+                if self.isdebug:
+                    print("xd_tb cancelled due to new high found: {0} {1}".format(working_df[previous_gap_loc][date], working_df[previous_gap_loc][real_loc]))
+                working_df[previous_gap_loc][xd_tb] = TopBotType.noTopBot.value
+                
+                # restore any combined bi due to the gapped XD
+                working_df[previous_gap_loc:next_valid_elems[-1]][tb] = working_df[previous_gap_loc:next_valid_elems[-1]][original_tb]
+                current_direction = TopBotType.reverse(current_direction)
+                if self.isdebug:
+                    print("gap closed 1:{0}, {1} tb info restored to {2}".format(working_df[previous_gap_loc][date], TopBotType.value2type(working_df[previous_gap_loc][tb]), working_df[next_valid_elems[-1]][date])) 
+                    [print("gap info 3:{0}, {1}".format(working_df[gap_loc][date], TopBotType.value2type(working_df[gap_loc][tb]))) for gap_loc in self.gap_XD]
+                i = previous_gap_loc
+                
+        elif current_direction == TopBotType.bot2top:
+            if secondElem['chan_price'] < previous_gap_elem[chan_price]:
+                previous_gap_loc = self.gap_XD.pop()
+                if self.isdebug:
+                    print("xd_tb cancelled due to new low found: {0} {1}".format(working_df[previous_gap_loc][date], working_df[previous_gap_loc][real_loc]))
+                working_df[previous_gap_loc][xd_tb] = TopBotType.noTopBot.value
+                
+                # restore any combined bi due to the gapped XD
+                working_df[previous_gap_loc:next_valid_elems[-1]][tb] = working_df[previous_gap_loc:next_valid_elems[-1]][original_tb]
+                current_direction = TopBotType.reverse(current_direction)
+                if self.isdebug:
+                    print("gap closed 2:{0}, {1} tb info restored to {2}".format(working_df[previous_gap_loc][date],  TopBotType.value2type(working_df[previous_gap_loc][tb]), working_df[next_valid_elems[-1]][date]))
+                    [print("gap info 3:{0}, {1}".format(working_df[gap_loc][date], TopBotType.value2type(working_df[gap_loc][tb]))) for gap_loc in self.gap_XD]
+                i = previous_gap_loc
+        return i, current_direction
+        #################### pop gap_XD ##########################
 
     def find_XD(self, initial_i, initial_direction, working_df):
         real_loc = 'real_loc'
@@ -1223,40 +1265,9 @@ class KBarChan(object):
                     i = next_valid_elems[1]
                     continue
                 
-                #################### pop gap_XD ##########################
-                secondElem = working_df[next_valid_elems[1]]
-                previous_gap_elem = working_df[self.gap_XD[-1]]
-                if current_direction == TopBotType.top2bot:
-                    if secondElem[chan_price] > previous_gap_elem[chan_price]:
-                        previous_gap_loc = self.gap_XD.pop()
-                        if self.isdebug:
-                            print("xd_tb cancelled due to new high found: {0} {1}".format(working_df[previous_gap_loc][date], working_df[previous_gap_loc][real_loc]))
-                        working_df[previous_gap_loc][xd_tb] = TopBotType.noTopBot.value
-                        
-                        # restore any combined bi due to the gapped XD
-                        working_df[previous_gap_loc:next_valid_elems[-1]][tb] = working_df[previous_gap_loc:next_valid_elems[-1]][original_tb]
-                        current_direction = TopBotType.reverse(current_direction)
-                        if self.isdebug:
-                            print("gap closed 1:{0}, {1} tb info restored to {2}".format(working_df[previous_gap_loc][date], TopBotType.value2type(working_df[previous_gap_loc][tb]), working_df[next_valid_elems[-1]][date])) 
-                            [print("gap info 3:{0}, {1}".format(working_df[gap_loc][date], TopBotType.value2type(working_df[gap_loc][tb]))) for gap_loc in self.gap_XD]
-                        i = previous_gap_loc
-                        continue
-                elif current_direction == TopBotType.bot2top:
-                    if secondElem[chan_price] < previous_gap_elem[chan_price]:
-                        previous_gap_loc = self.gap_XD.pop()
-                        if self.isdebug:
-                            print("xd_tb cancelled due to new low found: {0} {1}".format(working_df[previous_gap_loc][date], working_df[previous_gap_loc][real_loc]))
-                        working_df[previous_gap_loc][xd_tb] = TopBotType.noTopBot.value
-                        
-                        # restore any combined bi due to the gapped XD
-                        working_df[previous_gap_loc:next_valid_elems[-1]][tb] = working_df[previous_gap_loc:next_valid_elems[-1]][original_tb]
-                        current_direction = TopBotType.reverse(current_direction)
-                        if self.isdebug:
-                            print("gap closed 2:{0}, {1} tb info restored to {2}".format(working_df[previous_gap_loc][date],  TopBotType.value2type(working_df[previous_gap_loc][tb]), working_df[next_valid_elems[-1]][date]))
-                            [print("gap info 3:{0}, {1}".format(working_df[gap_loc][date], TopBotType.value2type(working_df[gap_loc][tb]))) for gap_loc in self.gap_XD]
-                        i = previous_gap_loc
-                        continue
-                #################### pop gap_XD ##########################
+                i, current_direction = self.pop_gap(working_df, next_valid_elems, current_direction)
+                if i is not None:
+                    continue
                 
                 current_status, with_gap, with_xd_gap = self.check_XD_topbot_directed(next_valid_elems, current_direction, working_df)  
 
@@ -1279,7 +1290,13 @@ class KBarChan(object):
                     current_direction = TopBotType.top2bot if current_status == TopBotType.top else TopBotType.bot2top
                     i = next_valid_elems[1] if with_xd_gap else next_valid_elems[3]
                     continue
-                i = next_valid_elems[2]
+                
+                else:
+                    i, current_direction = self.pop_gap(working_df, next_valid_elems, current_direction)
+                    if i is not None:
+                        continue
+                
+                    i = next_valid_elems[2]
             else:    # no gap case            
                 # find next 3 elems with the same tb info
                 next_valid_elems = self.get_next_N_elem(i, working_df, 3, start_tb = TopBotType.top if current_direction == TopBotType.bot2top else TopBotType.bot, single_direction=True)
