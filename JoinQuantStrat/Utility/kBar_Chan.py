@@ -317,7 +317,7 @@ class KBarChan(object):
         '''
         i = idx+1
         while i < working_df.size:
-            if working_df[i]['tb'] == TopBotType.top or working_df[i]['tb'] == TopBotType.bot:
+            if working_df[i]['tb'] == TopBotType.top.value or working_df[i]['tb'] == TopBotType.bot.value:
                 break
             i += 1
         return i
@@ -634,25 +634,6 @@ class KBarChan(object):
                 current_index = next_index
                 next_index = self.get_next_tb(next_index, working_df)
                 continue
-#                 if currentFenXing[tb] == TopBotType.top.value and previousFenXing[low] < nextFenXing[low]:
-#                     working_df[next_index][tb] = TopBotType.noTopBot.value
-#                     next_index += 1
-#                     continue
-#                 if currentFenXing[tb] == TopBotType.top.value and previousFenXing[low] >= nextFenXing[low]:
-#                     # leave it for next round!
-#                     previous_index = current_index
-#                     current_index = next_index
-#                     next_index = next_index+1
-#                     continue
-#                 if currentFenXing[tb] == TopBotType.bot.value and previousFenXing[high] > nextFenXing[high]:
-#                     working_df[next_index][tb] = TopBotType.noTopBot.value
-#                     next_index += 1
-#                     continue
-#                 if currentFenXing[tb] == TopBotType.bot.value and previousFenXing[high] <= nextFenXing[high]:
-#                     previous_index = current_index
-#                     current_index = next_index
-#                     next_index = next_index+1
-#                     continue
             elif (nextFenXing[new_index] - currentFenXing[new_index]) >= 4 or gap_qualify:
                 if currentFenXing[tb] == TopBotType.top.value and nextFenXing[tb] == TopBotType.bot.value and currentFenXing[high] > nextFenXing[high]:
                     pass
