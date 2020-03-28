@@ -405,6 +405,22 @@ class KBarChan(object):
         working_df = working_df[working_df[tb]!=TopBotType.noTopBot.value]
         return working_df
         
+    def check_gap_qualify(self, working_df, previous_index, current_index, next_index):
+        # possible BI status 1 check top high > bot low 2 check more than 3 bars (strict BI) in between
+        # under this section of code we expect there are no two adjacent fenxings with the same status
+        gap_qualify = False
+        if self.gap_exists_in_range(working_df[current_index]['date'], working_df[next_index]['date']):
+            gap_ranges = self.gap_region(working_df[current_index]['date'], working_df[next_index]['date'])
+            for gap in gap_ranges:
+                if working_df[previous_index]['tb'] == TopBotType.top.value: 
+                    #gap higher than previous high
+                    gap_qualify = gap[0] < working_df[previous_index]['low'] <= working_df[previous_index]['high'] < gap[1]
+                elif working_df[previous_index]['tb'] == TopBotType.bot.value:
+                    #gap higher than previous low
+                    gap_qualify = gap[1] > working_df[previous_index]['high'] >= working_df[previous_index]['low'] > gap[0]
+                if gap_qualify:
+                    break
+        return gap_qualify
         
     def defineBi(self):
         self.gap_exists() # work out gap in the original kline
@@ -523,21 +539,7 @@ class KBarChan(object):
                             current_index = temp_index
                     continue
             
-            # possible BI status 1 check top high > bot low 2 check more than 3 bars (strict BI) in between
-            # under this section of code we expect there are no two adjacent fenxings with the same status
-            gap_qualify = False
-            if self.gap_exists_in_range(working_df[current_index]['date'], working_df[next_index]['date']):
-                gap_ranges = self.gap_region(working_df[current_index]['date'], working_df[next_index]['date'])
-                for gap in gap_ranges:
-                    if working_df[previous_index][tb] == TopBotType.top.value: 
-                        #gap higher than previous high
-                        gap_qualify = gap[0] < working_df[previous_index][low] <= working_df[previous_index][high] < gap[1]
-                    elif working_df[previous_index][tb] == TopBotType.bot.value:
-                        #gap higher than previous low
-                        gap_qualify = gap[1] > working_df[previous_index][high] >= working_df[previous_index][low] > gap[0]
-                    if gap_qualify:
-                        break
-            
+            gap_qualify = self.check_gap_qualify(working_df, previous_index, current_index, next_index)
             if currentFenXing[new_index] - previousFenXing[new_index] < 4:
                 # comming from current next less than 4 new_index gap, we need to determine which ones to kill
                 # once done we trace back
