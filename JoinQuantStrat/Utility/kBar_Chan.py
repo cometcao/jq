@@ -312,12 +312,15 @@ class KBarChan(object):
         return gap_working_df[gap_working_df['gap']][['gap_range_start', 'gap_range_end']].tolist()
 
     def get_next_tb(self, idx, working_df):
-        
-        all_elem = self.get_next_N_elem(idx, working_df, 2)
-        if len(all_elem) > 1:
-            return all_elem[1]
-        else:
-            return None
+        '''
+        give the next loc from current idx(excluded) if overflow return size of working_df
+        '''
+        i = idx+1
+        while i < working_df.size:
+            if working_df[i]['tb'] == TopBotType.top or working_df[i]['tb'] == TopBotType.bot:
+                break
+            i += 1
+        return i
 
     def defineBi(self):
         self.gap_exists() # work out gap in the original kline
@@ -408,8 +411,7 @@ class KBarChan(object):
         current_index = previous_index + 1
         next_index = current_index + 1
         #################################
-        while next_index is not None and\
-            previous_index < working_df.size-2 and\
+        while previous_index < working_df.size-2 and\
             current_index < working_df.size-1 and\
             next_index < working_df.size:
             previousFenXing = working_df[previous_index]
@@ -540,6 +542,8 @@ class KBarChan(object):
                             pre_pre_index = self.trace_back_index(working_df, previous_index)
                             if pre_pre_index is None:
                                 working_df[current_index][tb] = TopBotType.noTopBot.value
+                                current_index = next_index
+                                next_index = self.get_next_tb(next_index, working_df)
                                 continue
                             
                             if pre_pre_index in self.previous_skipped_idx:
@@ -581,6 +585,8 @@ class KBarChan(object):
                             pre_pre_index = self.trace_back_index(working_df, previous_index)
                             if pre_pre_index is None:
                                 working_df[current_index][tb] = TopBotType.noTopBot.value
+                                current_index = next_index
+                                next_index = self.get_next_tb(next_index, working_df)
                                 continue
                             
                             if pre_pre_index in self.previous_skipped_idx:
@@ -715,7 +721,8 @@ class KBarChan(object):
         ###################################    
         self.kDataFrame_marked = working_df[working_df[tb]!=TopBotType.noTopBot.value][FEN_BI_COLUMNS]
         if self.isdebug:
-            print("self.kDataFrame_marked[20]:{0}".format(self.kDataFrame_marked[-20:]))
+            print("self.kDataFrame_marked head 20:{0}".format(self.kDataFrame_marked[:20]))
+            print("self.kDataFrame_marked tail 20:{0}".format(self.kDataFrame_marked[-20:]))
 
     def getMarkedBL(self):
         self.standardize()
@@ -744,7 +751,7 @@ class KBarChan(object):
             i = i + 1
             
         if self.isdebug:
-            print("getPureBi self.kDataFrame_marked[20]:{0}".format(self.kDataFrame_marked[['date', 'chan_price', 'tb', 'real_loc']][-20:]))
+            print("getPureBi:{0}".format(self.kDataFrame_marked[['date', 'chan_price', 'tb', 'real_loc']][-20:]))
 
     def getFenBi(self, initial_state=TopBotType.noTopBot):
         self.standardize(initial_state)
