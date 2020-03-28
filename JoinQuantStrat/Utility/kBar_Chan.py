@@ -538,8 +538,12 @@ class KBarChan(object):
                         if previousFenXing[high] >= nextFenXing[high]:
                             # still can't make decision, but we can have idea about prepre case
                             pre_pre_index = self.trace_back_index(working_df, previous_index)
-                            if previous_index in self.previous_skipped_idx:
-                                self.previous_skipped_idx.remove(previous_index)
+                            if pre_pre_index is None:
+                                working_df[current_index][tb] = TopBotType.noTopBot.value
+                                continue
+                            
+                            if pre_pre_index in self.previous_skipped_idx:
+                                self.previous_skipped_idx.remove(pre_pre_index)
                             prepreFenXing = working_df[pre_pre_index]
                             if prepreFenXing[low] >= currentFenXing[low]:
                                 working_df[pre_pre_index][tb] = TopBotType.noTopBot.value
@@ -575,8 +579,12 @@ class KBarChan(object):
                         if previousFenXing[low] < nextFenXing[low]:
                             # still can't make decision, but we can have idea about prepre case
                             pre_pre_index = self.trace_back_index(working_df, previous_index)
-                            if previous_index in self.previous_skipped_idx:
-                                self.previous_skipped_idx.remove(previous_index)
+                            if pre_pre_index is None:
+                                working_df[current_index][tb] = TopBotType.noTopBot.value
+                                continue
+                            
+                            if pre_pre_index in self.previous_skipped_idx:
+                                self.previous_skipped_idx.remove(pre_pre_index)
                             prepreFenXing = working_df[pre_pre_index]
                             if prepreFenXing[high] <= currentFenXing[high]:
                                 working_df[pre_pre_index][tb] = TopBotType.noTopBot.value
