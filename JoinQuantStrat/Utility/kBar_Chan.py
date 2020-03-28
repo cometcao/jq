@@ -322,10 +322,7 @@ class KBarChan(object):
             i += 1
         return i
 
-    def defineBi(self):
-        self.gap_exists() # work out gap in the original kline
-        working_df = self.kDataFrame_standardized[self.kDataFrame_standardized['tb']!=TopBotType.noTopBot.value]
-        
+    def clean_first_two_tb(self, working_df):
         ############################# make sure the first two Ding/Di are valid to start with ###########################
         firstIdx = 0
         secondIdx= firstIdx+1
@@ -334,6 +331,7 @@ class KBarChan(object):
         high = 'high'
         low = 'low'
         new_index = 'new_index'
+
         while thirdIdx is not None and thirdIdx < working_df.size:
             firstFenXing = working_df[firstIdx]
             secondFenXing = working_df[secondIdx]
@@ -405,15 +403,25 @@ class KBarChan(object):
                 break
  
         working_df = working_df[working_df[tb]!=TopBotType.noTopBot.value]
+        return working_df
+        
+        
+    def defineBi(self):
+        self.gap_exists() # work out gap in the original kline
+        working_df = self.kDataFrame_standardized[self.kDataFrame_standardized['tb']!=TopBotType.noTopBot.value]
+        tb = 'tb'
+        high = 'high'
+        low = 'low'
+        new_index = 'new_index'
+        
+        working_df = self.clean_first_two_tb(working_df)
         
         #################################
         previous_index = 0
         current_index = previous_index + 1
         next_index = current_index + 1
         #################################
-        while previous_index < working_df.size-2 and\
-            current_index < working_df.size-1 and\
-            next_index < working_df.size:
+        while next_index < working_df.size:
             previousFenXing = working_df[previous_index]
             currentFenXing = working_df[current_index]
             nextFenXing = working_df[next_index]
@@ -620,19 +628,33 @@ class KBarChan(object):
                                 self.previous_skipped_idx.remove(previous_index)
                             continue
                 else: #(nextFenXing[new_index] - currentFenXing[new_index]) < 4 and not gap_qualify:
+                    temp_index = self.get_next_tb(next_index, working_df)
+                    if temp_index == working_df.size: # we reached the end, need to go back
+                        previous_index, current_index, next_index = self.work_on_end(previous_index, 
+                                                                                     current_index, 
+                                                                                     next_index, 
+                                                                                     working_df)
+                    else:
+                        # leave it for next round again!
+                        self.previous_skipped_idx.append(previous_index) # mark index so we come back 
+                        previous_index = current_index
+                        current_index = next_index
+                        next_index = temp_index
+                    continue
+                
+            elif (nextFenXing[new_index] - currentFenXing[new_index]) < 4 and not gap_qualify: 
+                temp_index = self.get_next_tb(next_index, working_df)
+                if temp_index == working_df.size: # we reached the end, need to go back
+                    previous_index, current_index, next_index = self.work_on_end(previous_index, 
+                                                                                 current_index, 
+                                                                                 next_index, 
+                                                                                 working_df)
+                else:
                     # leave it for next round again!
                     self.previous_skipped_idx.append(previous_index) # mark index so we come back 
                     previous_index = current_index
                     current_index = next_index
-                    next_index = self.get_next_tb(next_index, working_df)
-                    continue
-                    
-                
-            elif (nextFenXing[new_index] - currentFenXing[new_index]) < 4 and not gap_qualify: 
-                self.previous_skipped_idx.append(previous_index) # mark index so we come back 
-                previous_index = current_index
-                current_index = next_index
-                next_index = self.get_next_tb(next_index, working_df)
+                    next_index = temp_index
                 continue
             elif (nextFenXing[new_index] - currentFenXing[new_index]) >= 4 or gap_qualify:
                 if currentFenXing[tb] == TopBotType.top.value and nextFenXing[tb] == TopBotType.bot.value and currentFenXing[high] > nextFenXing[high]:
@@ -674,7 +696,7 @@ class KBarChan(object):
             previous_index = current_index
             current_index=next_index
             next_index = self.get_next_tb(next_index, working_df)
-                
+
         # if nextIndex is the last one, final clean up
         if next_index == working_df.size:
             if ((working_df[current_index][tb]==TopBotType.top.value and self.kDataFrame_origin[-1][high] > working_df[current_index][high]) \
@@ -704,6 +726,35 @@ class KBarChan(object):
         if self.isdebug:
             print("self.kDataFrame_marked head 20:{0}".format(self.kDataFrame_marked[:20]))
             print("self.kDataFrame_marked tail 20:{0}".format(self.kDataFrame_marked[-20:]))
+
+
+    def work_on_end(self, pre_idx, cur_idx, nex_idx, working_df):
+        '''
+        only triggered at the end of fenbi loop
+        '''
+        previousFenXing = working_df[pre_idx]
+        currentFenXing = working_df[cur_idx]
+        nextFenXing = working_df[nex_idx]
+
+        if currentFenXing['tb'] == TopBotType.top.value:
+            if previousFenXing['low'] > nextFenXing['low']:
+                working_df[pre_idx]['tb'] = TopBotType.noTopBot.value
+                pre_idx = self.trace_back_index(working_df, pre_idx)
+            else:
+                working_df[nex_idx]['tb'] = TopBotType.noTopBot.value
+                nex_idx = cur_idx
+                cur_idx = pre_idx
+                pre_idx = self.trace_back_index(working_df, pre_idx)
+        else: # TopBotType.bot
+            if previousFenXing['high'] < nextFenXing['high']:
+                working_df[pre_idx]['tb'] = TopBotType.noTopBot.value
+                pre_idx = self.trace_back_index(working_df, pre_idx)
+            else:
+                working_df[nex_idx]['tb'] = TopBotType.noTopBot.value
+                nex_idx = cur_idx
+                cur_idx = pre_idx
+                pre_idx = self.trace_back_index(working_df, pre_idx)
+        return pre_idx, cur_idx, nex_idx
 
     def getMarkedBL(self):
         self.standardize()
