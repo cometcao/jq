@@ -451,7 +451,7 @@ class KBarChan(object):
         current_index = previous_index + 1
         next_index = current_index + 1
         #################################
-        while next_index < working_df.size:
+        while next_index < working_df.size and previous_index is not None:
             previousFenXing = working_df[previous_index]
             currentFenXing = working_df[current_index]
             nextFenXing = working_df[next_index]
