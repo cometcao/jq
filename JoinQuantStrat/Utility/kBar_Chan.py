@@ -1265,9 +1265,9 @@ class KBarChan(object):
                     i = next_valid_elems[1]
                     continue
                 
-                i, current_direction = self.pop_gap(working_df, next_valid_elems, current_direction)
-                if i is not None:
-                    continue
+#                 i, current_direction = self.pop_gap(working_df, next_valid_elems, current_direction)
+#                 if i is not None:
+#                     continue
                 
                 current_status, with_gap, with_xd_gap = self.check_XD_topbot_directed(next_valid_elems, current_direction, working_df)  
 
