@@ -423,6 +423,16 @@ class KBarChan(object):
         return gap_qualify
         
     def defineBi(self):
+        '''
+        This method defines fenbi for all marked top/bot:
+        three indices maintained. 
+        if the first two have < 4 new_index distance, we move forward
+        if the second two have < 4 new_index distance, we move forward, but mark the first index
+        if the second two have >= 4 new_index distance, we make decision on which one to remove, and go backwards
+        if we hit all good three kbars, we check marked record and start from there
+        finally, if we hit end but still have marked index, we make decision to remove one kbar and resume till finishes
+        '''
+        
         self.gap_exists() # work out gap in the original kline
         working_df = self.kDataFrame_standardized[self.kDataFrame_standardized['tb']!=TopBotType.noTopBot.value]
         tb = 'tb'
@@ -853,6 +863,31 @@ class KBarChan(object):
             
         return initial_loc, initial_direction
 
+    def kbar_gap_as_xd(self, working_df, first_idx, second_idx, compare_idx):
+        '''
+        check given gapped kbar can be considered xd alone
+        '''
+        firstElem = working_df[first_idx]
+        secondElem = working_df[second_idx]
+        compareElem = working_df[compare_idx]
+        if first_idx + 1 == second_idx and\
+            self.gap_exists_in_range(firstElem['date'], secondElem['date']):
+            regions = self.gap_region(firstElem['date'], secondElem['date'])
+            for re in regions:
+                if re[0] <= compareElem['chan_price'] <= re[1] and\
+                (re[1]-re[0])/abs(firstElem['chan_price']-secondElem['chan_price']) >= GOLDEN_RATIO:
+                    return True
+        return False
+    
+
+    def xd_inclusion(self, firstElem, secondElem, thirdElem, forthElem):
+        '''
+        given four elem check the xd formed contain inclusive relationship, positive as True, negative as False
+        '''
+        if (firstElem['chan_price'] <= thirdElem['chan_price'] and secondElem['chan_price'] >= forthElem['chan_price']) or\
+            (firstElem['chan_price'] >= thirdElem['chan_price'] and secondElem['chan_price'] <= forthElem['chan_price']):
+            return True
+        return False
 
     def is_XD_inclusion_free(self, direction, next_valid_elems, working_df):
         '''
@@ -874,36 +909,17 @@ class KBarChan(object):
         elif direction == TopBotType.bot2top:
             assert firstElem[tb] == thirdElem[tb] == TopBotType.top.value and  secondElem[tb] == forthElem[tb] == TopBotType.bot.value, "Invalid starting tb status for checking inclusion bot2top: {0}, {1}, {2}, {3}".format(firstElem, thirdElem, secondElem, forthElem)       
         
-        if (firstElem[chan_price] <= thirdElem[chan_price] and secondElem[chan_price] >= forthElem[chan_price]) or\
-            (firstElem[chan_price] >= thirdElem[chan_price] and secondElem[chan_price] <= forthElem[chan_price]):  
-            
+        if not self.xd_inclusion(firstElem, secondElem, thirdElem, forthElem):  
             ############################## special case of kline gap as XD ##############################
             # only checking if any one node is in pure gap range. The same logic as gap for XD
-            if next_valid_elems[0] + 1 == next_valid_elems[1] and\
-            self.gap_exists_in_range(working_df[next_valid_elems[0]]['date'], working_df[next_valid_elems[1]]['date']):
-                regions = self.gap_region(working_df[next_valid_elems[0]]['date'], working_df[next_valid_elems[1]]['date'])
-                for re in regions:
-                    if re[0] <= thirdElem[chan_price] <= re[1] and\
-                    (re[1]-re[0])/abs(working_df[next_valid_elems[0]][chan_price]-working_df[next_valid_elems[1]][chan_price]) >= GOLDEN_RATIO:
-                        if self.isdebug:
-                            print("inclusion ignored due to kline gaps, with loc {0}@{1}, {2}@{3}".format(working_df[next_valid_elems[0]]['date'], 
-                                                                                                          working_df[next_valid_elems[0]][chan_price],
-                                                                                                          working_df[next_valid_elems[1]]['date'],
-                                                                                                          working_df[next_valid_elems[1]][chan_price]))
-                        return True
-
-            if next_valid_elems[2] + 1 == next_valid_elems[3] and\
-            self.gap_exists_in_range(working_df[next_valid_elems[2]]['date'], working_df[next_valid_elems[3]]['date']):
-                regions = self.gap_region(working_df[next_valid_elems[2]]['date'], working_df[next_valid_elems[3]]['date'])
-                for re in regions:
-                    if re[0] <= secondElem[chan_price] <= re[1] and\
-                    (re[1]-re[0])/abs(working_df[next_valid_elems[2]][chan_price]-working_df[next_valid_elems[3]][chan_price]) >= GOLDEN_RATIO:
-                        if self.isdebug:
-                            print("inclusion ignored due to kline gaps, with loc {0}@{1}, {2}@{3}".format(working_df[next_valid_elems[2]]['date'],
-                                                                                                          working_df[next_valid_elems[2]][chan_price],
-                                                                                                          working_df[next_valid_elems[3]]['date'],
-                                                                                                          working_df[next_valid_elems[3]][chan_price]))
-                        return True             
+            if self.kbar_gap_as_xd(working_df, next_valid_elems[0], next_valid_elems[1], next_valid_elems[2]) or\
+                self.kbar_gap_as_xd(working_df, next_valid_elems[2], next_valid_elems[3], next_valid_elems[1]):
+                if self.isdebug:
+                    print("inclusion ignored due to kline gaps, with loc {0}@{1}, {2}@{3}".format(firstElem['date'], 
+                                                                                                  firstElem['chan_price'],
+                                                                                                  secondElem['date'],
+                                                                                                  secondElem['chan_price']))
+                return True
             ############################## special case of kline gap as XD ##############################                
                   
             working_df[next_valid_elems[1]][tb] = TopBotType.noTopBot.value
@@ -945,6 +961,8 @@ class KBarChan(object):
                 if self.is_XD_inclusion_free(direction, next_valid_elems[:4], working_df):
                     if self.is_XD_inclusion_free(direction, next_valid_elems[-4:], working_df):
                         break
+        
+        return next_valid_elems
                 
 
     def check_XD_topbot(self, first, second, third, forth, fifth, sixth):
@@ -996,33 +1014,22 @@ class KBarChan(object):
         # C change direction as usual, and increment counter by 1 only
         chan_price = 'chan_price'
         if not self.previous_with_xd_gap and\
-        next_valid_elems[2] + 1 == next_valid_elems[3] and\
-        self.gap_exists_in_range(working_df[next_valid_elems[2]]['date'], working_df[next_valid_elems[3]]['date']):
-            gap_ranges = self.gap_region(working_df[next_valid_elems[2]]['date'], working_df[next_valid_elems[3]]['date'])
-
-            for (l,h) in gap_ranges:
-                # make sure the gap break previous FIRST FEATURED ELEMENT
-                without_gap = l <= second[chan_price] <= h and\
-                (h-l)/abs(working_df[next_valid_elems[2]][chan_price]-working_df[next_valid_elems[3]][chan_price])>=GOLDEN_RATIO
-                if without_gap:
-                    with_xd_gap = True
-                    self.previous_with_xd_gap = True #open status
-                    if self.isdebug:
-                        print("XD represented by kline gap 2, {0}, {1}".format(working_df[next_valid_elems[2]]['date'], working_df[next_valid_elems[3]]['date']))
+            self.kbar_gap_as_xd(working_df, next_valid_elems[2], next_valid_elems[3], next_valid_elems[1]):
+            without_gap = with_xd_gap = True
+            self.previous_with_xd_gap = True
+            if self.isdebug:
+                print("XD represented by kline gap 2, {0}, {1}".format(working_df[next_valid_elems[2]]['date'], working_df[next_valid_elems[3]]['date']))
         
-        if not with_xd_gap and\
-        self.previous_with_xd_gap and next_valid_elems[1] + 1 == next_valid_elems[2] and\
-        self.gap_exists_in_range(working_df[next_valid_elems[1]]['date'], working_df[next_valid_elems[2]]['date']):
-            gap_ranges = self.gap_region(working_df[next_valid_elems[1]]['date'], working_df[next_valid_elems[2]]['date'])
+        if not with_xd_gap and self.previous_with_xd_gap and\
+            next_valid_elems[1] + 1 == next_valid_elems[2] and\
+            self.gap_exists_in_range(working_df[next_valid_elems[1]]['date'], working_df[next_valid_elems[2]]['date']):
+            # a bit of redudance due to line below
             self.previous_with_xd_gap=False # close status
-            for (l,h) in gap_ranges:
-                # make sure first is within the gap_XD range
-                without_gap = l <= forth[chan_price] <= h and\
-                (h-l)/abs(working_df[next_valid_elems[1]][chan_price]-working_df[next_valid_elems[2]][chan_price])>=GOLDEN_RATIO
-                if without_gap:
-                    with_xd_gap = True
-                    if self.isdebug:
-                        print("XD represented by kline gap 1, {0}, {1}".format(working_df[next_valid_elems[1]]['date'], working_df[next_valid_elems[2]]['date']))
+            
+            if self.kbar_gap_as_xd(working_df, next_valid_elems[0], next_valid_elems[1], next_valid_elems[2]):
+                without_gap = with_xd_gap = True
+                if self.isdebug:
+                    print("XD represented by kline gap 1, {0}, {1}".format(working_df[next_valid_elems[1]]['date'], working_df[next_valid_elems[2]]['date']))
 
         if with_xd_gap:
             if (direction == TopBotType.bot2top and third[chan_price] > fifth[chan_price] and third[chan_price] > first[chan_price]):
@@ -1163,10 +1170,13 @@ class KBarChan(object):
         '''
         check current candidates BIs are positioned as idx is at tb
         we are only expecting newly found index to move forward
+        
+        added extra check after inclusion done
         '''
         result = None
         
-        if len(next_valid_elems) != 3:
+        # simple check
+        if len(next_valid_elems) != 3 and self.isdebug:
             print("Invalid number of tb elem passed in")
         
         chan_price_list = [working_df[nv]['chan_price'] for nv in next_valid_elems]
@@ -1174,7 +1184,7 @@ class KBarChan(object):
         if current_direction == TopBotType.top2bot:
             min_value = min(chan_price_list) 
             min_index = chan_price_list.index(min_value)  
-            if min_index > 1: 
+            if min_index > 1: # ==2
                 result = next_valid_elems[min_index-1] # navigate to the starting for current bot
              
         elif current_direction == TopBotType.bot2top:
@@ -1183,8 +1193,30 @@ class KBarChan(object):
             if max_index > 1:
                 result = next_valid_elems[max_index-1] # navigate to the starting for current bot
         
+        if result is not None:
+            return result
+        
+        # check with inclusion
+        new_valid_elems = self.check_inclusion_by_direction(next_valid_elems[1], working_df, current_direction, with_gap=False)
+        
+        affected_chan_prices = working_df[new_valid_elems[0]:new_valid_elems[-1]+1]['chan_price']
+        if current_direction == TopBotType.top2bot:
+            min_price = min(affected_chan_prices)
+            if min_price <= working_df[new_valid_elems[0]]['chan_price']:
+                return next_valid_elems[1] # next candidate
         else:
-            print("Invalid direction!!! {0}".format(current_direction))
+            max_price = max(affected_chan_prices)
+            if max_price >= working_df[new_valid_elems[0]]['chan_price']:
+                return next_valid_elems[1]
+        
+        if result is not None: # restore data
+            working_df[new_valid_elems[0]:new_valid_elems[-1]][tb] = working_df[new_valid_elems[0]:new_valid_elems[-1]][original_tb]
+            if self.isdebug:
+                print("tb data restored from {0} to {1} real_loc {2} to {3}".format(working_df[new_valid_elems[0]][date], 
+                                                                                    working_df[new_valid_elems[-1]][date], 
+                                                                                    working_df[new_valid_elems[0]][real_loc], 
+                                                                                    working_df[new_valid_elems[-1]][real_loc]))
+        
         return result
     
     def pop_gap(self, working_df, next_valid_elems, current_direction):
@@ -1300,10 +1332,9 @@ class KBarChan(object):
             else:    # no gap case            
                 # find next 3 elems with the same tb info
                 next_valid_elems = self.get_next_N_elem(i, working_df, 3, start_tb = TopBotType.top if current_direction == TopBotType.bot2top else TopBotType.bot, single_direction=True)
-                firstElem = working_df[next_valid_elems[0]]
                 
                 # make sure we are checking the right elem by direction
-                if not self.direction_assert(firstElem, current_direction):
+                if not self.direction_assert(working_df[next_valid_elems[0]], current_direction):
                     i = next_valid_elems[1]
                     continue
                 
@@ -1312,8 +1343,6 @@ class KBarChan(object):
                 if possible_xd_tb_idx is not None:
                     i = possible_xd_tb_idx
                     continue
-                # all elem with the same tb
-                self.check_inclusion_by_direction(next_valid_elems[1], working_df, current_direction, previous_gap)
                 
                 # find next 6 elems with both direction
                 next_valid_elems = self.get_next_N_elem(next_valid_elems[0], working_df, 6)
@@ -1324,7 +1353,7 @@ class KBarChan(object):
                 
                 if current_status != TopBotType.noTopBot:
 #                     # do inclusion till find DING DI
-                    self.check_inclusion_by_direction(next_valid_elems[2], working_df, current_direction, previous_gap)
+#                     self.check_inclusion_by_direction(next_valid_elems[2], working_df, current_direction, previous_gap)
                     if with_gap:
                         # save existing gapped Ding/Di
                         self.gap_XD.append(next_valid_elems[2])
