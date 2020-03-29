@@ -411,6 +411,7 @@ class KBarChan(object):
         gap_qualify = False
         if self.gap_exists_in_range(working_df[current_index]['date'], working_df[next_index]['date']):
             gap_ranges = self.gap_region(working_df[current_index]['date'], working_df[next_index]['date'])
+            gap_ranges = self.combine_gaps(gap_ranges)
             for gap in gap_ranges:
                 if working_df[previous_index]['tb'] == TopBotType.top.value: 
                     #gap higher than previous high
@@ -863,6 +864,36 @@ class KBarChan(object):
             
         return initial_loc, initial_direction
 
+    def combine_gaps(self, gap_regions):
+        '''
+        gap regions come in as ordered
+        '''
+        i = 0 
+        if len(gap_regions) == 1:
+            return gap_regions
+        new_gaps = []
+        temp_range= None
+        while i + 1 < len(gap_regions):
+            current_range = gap_regions[i]
+            next_range = gap_regions[i+1]
+            
+            if temp_range is None:
+                if np.isclose(current_range[1], next_range[0]):
+                    temp_range = (current_range[0], next_range[1])
+                else:
+                    new_gaps.append(current_range)
+                    temp_range = next_range
+            else:
+                if np.isclose(temp_range[1], next_range[0]):
+                    temp_range = (temp_range[0], next_range[1])
+                else:
+                    new_gaps.append(temp_range)
+                    temp_range = next_range
+            i = i + 1
+        new_gaps.append(temp_range)
+        
+        return new_gaps
+
     def kbar_gap_as_xd(self, working_df, first_idx, second_idx, compare_idx):
         '''
         check given gapped kbar can be considered xd alone
@@ -870,12 +901,18 @@ class KBarChan(object):
         firstElem = working_df[first_idx]
         secondElem = working_df[second_idx]
         compareElem = working_df[compare_idx]
+        item_price_covered = False
+        gap_range_in_portion = False
         if first_idx + 1 == second_idx and\
             self.gap_exists_in_range(firstElem['date'], secondElem['date']):
             regions = self.gap_region(firstElem['date'], secondElem['date'])
+            regions = self.combine_gaps(regions)
             for re in regions:
-                if re[0] <= compareElem['chan_price'] <= re[1] and\
-                (re[1]-re[0])/abs(firstElem['chan_price']-secondElem['chan_price']) >= GOLDEN_RATIO:
+                if re[0] <= compareElem['chan_price'] <= re[1]:
+                    item_price_covered = True
+                if (re[1]-re[0])/abs(firstElem['chan_price']-secondElem['chan_price']) >= GOLDEN_RATIO:
+                    gap_range_in_portion = True
+                if item_price_covered and gap_range_in_portion:
                     return True
         return False
     
@@ -909,7 +946,7 @@ class KBarChan(object):
         elif direction == TopBotType.bot2top:
             assert firstElem[tb] == thirdElem[tb] == TopBotType.top.value and  secondElem[tb] == forthElem[tb] == TopBotType.bot.value, "Invalid starting tb status for checking inclusion bot2top: {0}, {1}, {2}, {3}".format(firstElem, thirdElem, secondElem, forthElem)       
         
-        if not self.xd_inclusion(firstElem, secondElem, thirdElem, forthElem):  
+        if self.xd_inclusion(firstElem, secondElem, thirdElem, forthElem):  
             ############################## special case of kline gap as XD ##############################
             # only checking if any one node is in pure gap range. The same logic as gap for XD
             if self.kbar_gap_as_xd(working_df, next_valid_elems[0], next_valid_elems[1], next_valid_elems[2]) or\
@@ -1202,20 +1239,20 @@ class KBarChan(object):
         affected_chan_prices = working_df[new_valid_elems[0]:new_valid_elems[-1]+1]['chan_price']
         if current_direction == TopBotType.top2bot:
             min_price = min(affected_chan_prices)
-            if min_price <= working_df[new_valid_elems[0]]['chan_price']:
-                return next_valid_elems[1] # next candidate
+            if min_price < working_df[new_valid_elems[0]]['chan_price']:
+                result = next_valid_elems[1] # next candidate
         else:
             max_price = max(affected_chan_prices)
-            if max_price >= working_df[new_valid_elems[0]]['chan_price']:
-                return next_valid_elems[1]
+            if max_price > working_df[new_valid_elems[0]]['chan_price']:
+                result = next_valid_elems[1]
         
         if result is not None: # restore data
-            working_df[new_valid_elems[0]:new_valid_elems[-1]][tb] = working_df[new_valid_elems[0]:new_valid_elems[-1]][original_tb]
+            working_df[new_valid_elems[0]:new_valid_elems[-1]]['tb'] = working_df[new_valid_elems[0]:new_valid_elems[-1]]['original_tb']
             if self.isdebug:
-                print("tb data restored from {0} to {1} real_loc {2} to {3}".format(working_df[new_valid_elems[0]][date], 
-                                                                                    working_df[new_valid_elems[-1]][date], 
-                                                                                    working_df[new_valid_elems[0]][real_loc], 
-                                                                                    working_df[new_valid_elems[-1]][real_loc]))
+                print("tb data restored from {0} to {1} real_loc {2} to {3}".format(working_df[new_valid_elems[0]]['date'], 
+                                                                                    working_df[new_valid_elems[-1]]['date'], 
+                                                                                    working_df[new_valid_elems[0]]['real_loc'], 
+                                                                                    working_df[new_valid_elems[-1]]['real_loc']))
         
         return result
     
