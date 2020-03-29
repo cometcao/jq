@@ -69,7 +69,8 @@ class KBarChan(object):
         self.previous_skipped_idx = []
         self.previous_with_xd_gap = False # help to check current gap as XD
         if self.isdebug:
-            print("self.kDataFrame_origin:{0}".format(self.kDataFrame_origin[:10]))
+            print("self.kDataFrame_origin head:{0}".format(self.kDataFrame_origin[:10]))
+            print("self.kDataFrame_origin tail:{0}".format(self.kDataFrame_origin[-10:]))
         
     def checkInclusive(self, first, second):
         # output: 0 = no inclusion, 1 = first contains second, 2 second contains first
