@@ -309,6 +309,7 @@ def sanity_check(stock, profile, end_time, pe):
                           end_dt=end_time, 
                           unit=pe,
                           fields= ['close'],
+                          fq_ref_date=datetime.datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S") if type(end_time) is str else end_time,
                           df=False)
     if direction == TopBotType.top2bot:
         result = stock_data[0]['close'] > stock_data[-1]['close']
@@ -1120,12 +1121,14 @@ class NestedInterval():
                                  end_dt=self.end_dt, 
                                  unit=pe,
                                  fields= ['date','high', 'low','close'],
+                                 fq_ref_date=datetime.datetime.strptime(self.end_dt, "%Y-%m-%d %H:%M:%S") if type(self.end_dt) is str else self.end_dt,
                                  df=False) if start_time is None else\
                         get_bars_new(self.stock, 
                                  start_dt=start_time, 
                                  end_dt=self.end_dt, 
                                  unit=pe,
                                  fields= ['date','high', 'low','close'],
+                                 fq_ref_date=datetime.datetime.strptime(self.end_dt, "%Y-%m-%d %H:%M:%S") if type(self.end_dt) is str else self.end_dt,
                                  df=False)
                 
             kb_chan = KBarChan(stock_df, isdebug=self.isdebug)
