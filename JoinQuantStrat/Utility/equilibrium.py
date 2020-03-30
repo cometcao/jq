@@ -1001,30 +1001,30 @@ class Equilibrium():
                         if self.isdebug:
                             print("TYPE III trade point 7")
         
-#         # IGNORE THIS CASE as we don't yet check panbei at top level for the ZhongShu
-#         # TYPE III where zslx form reverse direction zhongshu, and last XD of new zhong shu didn't go back 
-#         if len(self.analytic_result) >= 3 and type(self.analytic_result[-1]) is ZhongShu:
-#             pre_zs = self.analytic_result[-3]
-#             zslx = self.analytic_result[-2]
-#             now_zs = self.analytic_result[-1]
-#             core_region = pre_zs.get_core_region()
-#             amplitude_region_original = pre_zs.get_amplitude_region_original()
-#             if not now_zs.is_complex_type():
-#                 if not check_end_tb or\
-#                 ((now_zs.forth.tb == TopBotType.bot and now_zs.direction == TopBotType.bot2top) or\
-#                  (now_zs.forth.tb == TopBotType.top and now_zs.direction == TopBotType.top2bot)): # reverse type here
-#                     if not self.two_zslx_interact_original(pre_zs, now_zs):
-#                         all_types.append((Chan_Type.III, 
-#                                           TopBotType.top2bot if now_zs.direction == TopBotType.bot2top else TopBotType.bot2top,
-#                                           amplitude_region_original[1] if now_zs.direction == TopBotType.bot2top else amplitude_region_original[0]))
-#                         if self.isdebug:
-#                             print("TYPE III trade point 3")
-#                     elif not self.two_zslx_interact(pre_zs, now_zs):
-#                         all_types.append((Chan_Type.III_weak, 
-#                                           TopBotType.top2bot if now_zs.direction == TopBotType.bot2top else TopBotType.bot2top,
-#                                           core_region[1] if now_zs.direction == TopBotType.bot2top else core_region[0]))
-#                         if self.isdebug:
-#                             print("TYPE III trade point 4")
+        # We do check panbei if it's Zhongshu
+        # TYPE III where zslx form reverse direction zhongshu, and last XD of new zhong shu didn't go back 
+        if len(self.analytic_result) >= 3 and type(self.analytic_result[-1]) is ZhongShu:
+            pre_zs = self.analytic_result[-3]
+            zslx = self.analytic_result[-2]
+            now_zs = self.analytic_result[-1]
+            core_region = pre_zs.get_core_region()
+            amplitude_region_original = pre_zs.get_amplitude_region_original()
+            if not now_zs.is_complex_type():
+                if not check_end_tb or\
+                ((now_zs.forth.tb == TopBotType.bot and now_zs.direction == TopBotType.bot2top) or\
+                 (now_zs.forth.tb == TopBotType.top and now_zs.direction == TopBotType.top2bot)): # reverse type here
+                    if not self.two_zslx_interact_original(pre_zs, now_zs):
+                        all_types.append((Chan_Type.III, 
+                                          TopBotType.top2bot if now_zs.direction == TopBotType.bot2top else TopBotType.bot2top,
+                                          amplitude_region_original[1] if now_zs.direction == TopBotType.bot2top else amplitude_region_original[0]))
+                        if self.isdebug:
+                            print("TYPE III trade point 3")
+                    elif not self.two_zslx_interact(pre_zs, now_zs):
+                        all_types.append((Chan_Type.III_weak, 
+                                          TopBotType.top2bot if now_zs.direction == TopBotType.bot2top else TopBotType.bot2top,
+                                          core_region[1] if now_zs.direction == TopBotType.bot2top else core_region[0]))
+                        if self.isdebug:
+                            print("TYPE III trade point 4")
                 
         # IGNORE THIS CASE!! WE NEED CERTAINTY
         # TYPE III two reverse direction zslx, with new reverse direction zhongshu in the middle
