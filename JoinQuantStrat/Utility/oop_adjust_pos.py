@@ -938,8 +938,8 @@ class Short_Chan(Sell_stocks):
                                    skip_paused=False)
 
             sma13 = stock_data['close'].values[-13:].sum() / 13
-            if stock_data.loc[effective_time:, 'high'].max() >= (sub_chan_p[0] if type(sub_chan_p) is list else sub_chan_p): 
-                print("Stock {0} reached target price {1}".format(stock, (sub_chan_p[0] if type(sub_chan_p) is list else sub_chan_p)))
+            if stock_data.loc[effective_time:, 'high'].max() >= (sub_chan_p[1] if type(sub_chan_p) is list else sub_chan_p): 
+                print("Stock {0} reached upper ZhongShu/target price {1}".format(stock, (sub_chan_p[1] if type(sub_chan_p) is list else sub_chan_p)))
                 if self.use_ma13 and stock_data.iloc[-1].close < sma13:
                     print("STOP PROFIT MA13 {0} {1}".format(stock_data.iloc[-1].close, sma13))
                     return True
