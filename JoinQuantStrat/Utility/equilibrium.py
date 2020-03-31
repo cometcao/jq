@@ -1250,7 +1250,7 @@ class NestedInterval():
                          isDescription=self.isDescription)
         bi_exhausted, bi_check_exhaustion, _,bi_split_time, _, _ = eq.define_equilibrium(direction, 
                                                                                          check_tb_structure=True,
-                                                                                         check_balance_structure=False,
+                                                                                         check_balance_structure=True,
                                                                                          force_zhongshu=force_zhongshu)
         if (self.isdebug):
             print("BI level {0}, {1}".format(bi_exhausted, bi_check_exhaustion))
