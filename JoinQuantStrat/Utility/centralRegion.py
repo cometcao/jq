@@ -488,7 +488,16 @@ class ZhongShu(ZouShiLeiXing):
             first_xd = self.take_split_xd_as_zslx(last_xd.direction)
         else:
             first_xd = self.take_first_xd_as_zslx()
-        exhausted = abs(first_xd.work_out_slope()) > abs(last_xd.work_out_slope())
+            
+        # also need to check balance structure
+        core_region = self.get_core_region()
+        if first_xd.direction == TopBotType.top2bot == last_xd.direction:
+            exhausted = first_xd.zoushi_nodes[0].chan_price > core_region[1] and last_xd.zoushi_nodes[-1].chan_price < core_region[0]
+        elif first_xd.direction == TopBotType.bot2top == last_xd.direction:
+            exhausted = first_xd.zoushi_nodes[0].chan_price < core_region[0] and last_xd.zoushi_nodes[-1].chan_price > core_region[1]
+        # check exhaustion
+        if exhausted:
+            exhausted = abs(first_xd.work_out_slope()) > abs(last_xd.work_out_slope())
         return exhausted, last_xd.zoushi_nodes[0].time if exhausted else first_xd.zoushi_nodes[0].time
 
     def is_running_type(self):
