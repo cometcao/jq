@@ -283,8 +283,10 @@ class ZouShiLeiXing(object):
         
         same_direction_nodes = [n for n in all_double_nodes if n.direction == self.direction]
         # make sure the last two slope goes flatten, if not it's NOT exhausted
+        # macd is only used if we have 5+ xds
         if len(same_direction_nodes) >= 2 and abs(same_direction_nodes[-1].work_out_slope()) >= abs(same_direction_nodes[-2].work_out_slope()):
-            if (same_direction_nodes[-1].direction == TopBotType.top2bot and same_direction_nodes[-2].end.chan_price <= same_direction_nodes[-1].end.chan_price) or\
+            if len(same_direction_nodes) < 3 or\
+                (same_direction_nodes[-1].direction == TopBotType.top2bot and same_direction_nodes[-2].end.chan_price <= same_direction_nodes[-1].end.chan_price) or\
                 (same_direction_nodes[-1].direction == TopBotType.bot2top and same_direction_nodes[-2].end.chan_price >= same_direction_nodes[-1].end.chan_price) or\
                 (abs(same_direction_nodes[-1].end.macd_acc)>=abs(same_direction_nodes[-2].end.macd_acc)): # we can use macd for the last two
                     return False, same_direction_nodes[0].start.time
@@ -470,14 +472,14 @@ class ZhongShu(ZouShiLeiXing):
         '''
         check if current Zhongshu is BenZou style
         '''
-        if not self.is_complex_type() or len(self.extra_nodes)==1:
-            core_range = self.get_core_region()
-            amplitude_range = self.get_amplitude_region()
-            core_gap = core_range[1] - core_range[0]
-            amplitude_gap = amplitude_range[1] - amplitude_range[0]
-            
-            if core_gap / amplitude_gap < 0.191: # (1-GOLDEN_RATIO)/2
-                return True
+#         if not self.is_complex_type() or len(self.extra_nodes)==1: # we don't need this condition
+        core_range = self.get_core_region()
+        amplitude_range = self.get_amplitude_region()
+        core_gap = core_range[1] - core_range[0]
+        amplitude_gap = amplitude_range[1] - amplitude_range[0]
+        
+        if core_gap / amplitude_gap < 0.191: # (1-GOLDEN_RATIO)/2
+            return True
         return False
                 
             

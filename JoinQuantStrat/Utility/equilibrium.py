@@ -244,8 +244,6 @@ def check_stock_sub(stock,
     bi_split_time = sub_profile[0][5]
     if exhausted and xd_exhausted and check_bi:
         bi_exhausted, bi_xd_exhausted, _ = ni.indepth_analyze_zoushi(direction, bi_split_time, pe, force_zhongshu=force_zhongshu)
-        if is_description:
-            print("BI level {0}, {1}".format(bi_exhausted, bi_xd_exhausted))
         return exhausted, xd_exhausted and bi_exhausted, sub_profile, ni.completed_zhongshu()
     return exhausted, xd_exhausted, sub_profile, ni.completed_zhongshu()
 
@@ -841,7 +839,7 @@ class Equilibrium():
 
         zslx_macd = 0
         # if QV SHI => at least two Zhong Shu, We could also use macd, but they must be new low/high
-        if not exhaustion_result and new_high_low:
+        if not exhaustion_result and new_high_low and self.isQvShi:
             zslx_macd = zslx_a.get_macd_acc()
             latest_macd = zslx_c.get_macd_acc()
             exhaustion_result = abs(zslx_macd) > abs(latest_macd)
