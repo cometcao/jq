@@ -473,7 +473,7 @@ class ZhongShu(ZouShiLeiXing):
         '''
 #         if not self.is_complex_type() or len(self.extra_nodes)==1: # we don't need this condition
         core_range = self.get_core_region()
-        amplitude_range = self.get_amplitude_region()
+        amplitude_range = self.get_amplitude_region_original_without_last_xd()
         core_gap = core_range[1] - core_range[0]
         amplitude_gap = amplitude_range[1] - amplitude_range[0]
         
