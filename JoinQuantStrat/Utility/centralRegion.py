@@ -491,7 +491,7 @@ class ZhongShu(ZouShiLeiXing):
             first_xd = self.take_first_xd_as_zslx()
             
         # check exhaustion
-        exhausted = abs(first_xd.work_out_slope()) > abs(last_xd.work_out_slope()) or\
+        exhausted = abs(first_xd.work_out_slope()) > abs(last_xd.work_out_slope())
             
         if not exhausted:
             # also need to check balance structure
