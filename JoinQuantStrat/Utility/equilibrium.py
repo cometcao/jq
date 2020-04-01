@@ -758,16 +758,17 @@ class Equilibrium():
                 return False
         
         if self.isQvShi: # BEI CHI
-            if abs(len(a_s) - len(c_s)) > 4:
-                if self.isdebug:
-                    print("Not matching XD structure")
-                return False
+#             if abs(len(a_s) - len(c_s)) > 4:
+#                 if self.isdebug:
+#                     print("Not matching XD structure")
+#                 return False
+            pass
         else: # PAN BEI
 #             if abs(len(a_s) - len(c_s)) > 2:
-            if len(a_s) != 2 or len(c_s) != 2: # strict 1<->1
-                if self.isdebug:
-                    print("Not matching XD structure")
-                return False
+# #             if len(a_s) != 2 or len(c_s) != 2: # strict 1<->1
+#                 if self.isdebug:
+#                     print("Not matching XD structure")
+#                 return False
             
             # detect benzou style Zhongshu
             if central_B.isBenZouStyle():
@@ -1249,7 +1250,7 @@ class NestedInterval():
                          isDescription=self.isDescription)
         bi_exhausted, bi_check_exhaustion, _,bi_split_time, _, _ = eq.define_equilibrium(direction, 
                                                                                          check_tb_structure=True,
-                                                                                         check_balance_structure=False,
+                                                                                         check_balance_structure=True,
                                                                                          force_zhongshu=force_zhongshu)
         if (self.isdebug):
             print("BI level {0}, {1}".format(bi_exhausted, bi_check_exhaustion))
