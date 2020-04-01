@@ -283,10 +283,9 @@ class ZouShiLeiXing(object):
         
         same_direction_nodes = [n for n in all_double_nodes if n.direction == self.direction]
         # make sure the last two slope goes flatten, if not it's NOT exhausted
-        # macd is only used if we have 5+ xds
+        # macd is only used if we have 5+ xds changed len(same_direction_nodes) < 3 or\
         if len(same_direction_nodes) >= 2 and abs(same_direction_nodes[-1].work_out_slope()) >= abs(same_direction_nodes[-2].work_out_slope()):
-            if len(same_direction_nodes) < 3 or\
-                (same_direction_nodes[-1].direction == TopBotType.top2bot and same_direction_nodes[-2].end.chan_price <= same_direction_nodes[-1].end.chan_price) or\
+            if (same_direction_nodes[-1].direction == TopBotType.top2bot and same_direction_nodes[-2].end.chan_price <= same_direction_nodes[-1].end.chan_price) or\
                 (same_direction_nodes[-1].direction == TopBotType.bot2top and same_direction_nodes[-2].end.chan_price >= same_direction_nodes[-1].end.chan_price) or\
                 (abs(same_direction_nodes[-1].end.macd_acc)>=abs(same_direction_nodes[-2].end.macd_acc)): # we can use macd for the last two
                     return False, same_direction_nodes[0].start.time
@@ -499,7 +498,8 @@ class ZhongShu(ZouShiLeiXing):
             exhausted = first_xd.zoushi_nodes[0].chan_price < core_region[0] and last_xd.zoushi_nodes[-1].chan_price > core_region[1]
         # check exhaustion
         if exhausted:
-            exhausted = abs(first_xd.work_out_slope()) > abs(last_xd.work_out_slope())
+            exhausted = abs(first_xd.work_out_slope()) > abs(last_xd.work_out_slope()) or\
+                        abs(first_xd.zoushi_nodes[1].macd_acc) > abs(last_xd.zoushi_nodes[1].macd_acc)
         return exhausted, last_xd.zoushi_nodes[0].time if exhausted else first_xd.zoushi_nodes[0].time
 
     def is_running_type(self):
