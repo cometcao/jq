@@ -666,8 +666,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.sub_chan_type = params.get('sub_chan_type', [Chan_Type.INVALID, Chan_Type.I])
         self.num_of_data = params.get('num_of_data', 2500)
         self.bi_level_precision = params.get('bi_level_precision', True)
+        self.long_hour_start = params.get('long_hour_start', 13)
     
     def filter(self, context, data, stock_list):
+        if context.current_dt.hour < self.long_hour_start: # we should only try to long in the afternoon
+            return []
+        
         filter_stock_list = []
         if len(context.portfolio.positions) == self.long_stock_num != 0:
             return filter_stock_list
