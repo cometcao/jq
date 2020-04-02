@@ -168,10 +168,8 @@ class ZouShiLeiXing(object):
             return [None, None]
         
         if not self.amplitude_region_origin or re_evaluate:
-            [s, e] = self.get_time_region(re_evaluate)
-            s_loc = np.where(self.original_df['date'] == s)[0][0]
-            e_loc = np.where(self.original_df['date'] == e)[0][0]
-            price_series = self.original_df[s_loc:e_loc+1][['high', 'low']]
+            [s, e] = self.get_time_diff(re_evaluate)
+            price_series = self.original_df[s:e+1][['high', 'low']]
             self.amplitude_region_origin = [price_series['low'].min(), price_series['high'].max()]
         return self.amplitude_region_origin
 
@@ -182,7 +180,7 @@ class ZouShiLeiXing(object):
             self.zoushi_nodes.sort(key=lambda x: x.time)
             
             # first node timestamp loc + 1, since first node connect backwords
-            real_start_time = self.original_df[np.where(self.original_df['date']==self.zoushi_nodes[0].time)[0][0]+1]['date']
+            real_start_time = self.original_df[self.zoushi_nodes[0].loc+1]['date']
             self.time_region = [real_start_time, self.zoushi_nodes[-1].time]
         return self.time_region
     
@@ -224,7 +222,7 @@ class ZouShiLeiXing(object):
     def get_tb_structure(self):
         return [node.tb for node in self.zoushi_nodes]
     
-    def get_time_diff(self):
+    def get_time_diff(self, re_evaludate=False):
         return [self.zoushi_nodes[0].loc, self.zoushi_nodes[-1].loc]
     
     def get_loc_diff(self):
@@ -380,7 +378,7 @@ class ZhongShu(ZouShiLeiXing):
     
     def get_core_time_region(self, re_evaluate=False):
         if not self.core_time_region or re_evaluate:
-            real_start_time = self.original_df[np.where(self.original_df['date']==self.first.time)[0][0]+1]['date']
+            real_start_time = self.original_df[self.first.loc+1]['date']
             self.core_time_region = [real_start_time, self.forth.time]
         return self.core_time_region    
     
@@ -389,23 +387,19 @@ class ZhongShu(ZouShiLeiXing):
             all_price_list = [self.first.chan_price, self.second.chan_price, self.third.chan_price, self.forth.chan_price] + [node.chan_price for node in self.extra_nodes]
             self.amplitude_region = [min(all_price_list), max(all_price_list)]
         return self.amplitude_region    
-
+    
     def get_amplitude_region_original(self, re_evaluate=False):
         if not self.amplitude_region_origin or re_evaluate:
-            [s, e] = self.get_time_region(re_evaluate)
-            s_loc = np.where(self.original_df['date']==s)[0][0]
-            e_loc = np.where(self.original_df['date']==e)[0][0]
-            region_price_series = self.original_df[s_loc:e_loc+1][['high','low']]
+            [s, e] = self.get_time_diff(re_evaluate)
+            region_price_series = self.original_df[s:e+1][['high','low']]
             self.amplitude_region_origin = [region_price_series['low'].min(), region_price_series['high'].max()]
         return self.amplitude_region_origin
         
     def get_amplitude_region_original_without_last_xd(self):
         # used for TYPE I when ZhongShu is the last zoushi
         if self.is_complex_type():
-            start_time = self.first.time
-            end_time = self.forth.time if len(self.extra_nodes) == 1 else self.extra_nodes[-2].time
-            s_loc = np.where(self.original_df['date']==start_time)[0][0]
-            e_loc = np.where(self.original_df['date']==end_time)[0][0]
+            s_loc = self.first.loc
+            e_loc = self.forth.loc if len(self.extra_nodes) == 1 else self.extra_nodes[-2].loc
             region_price_series = self.original_df[s_loc:e_loc+1][['high','low']]
             return [region_price_series['low'].min(), region_price_series['high'].max()]
         else:
@@ -484,8 +478,12 @@ class ZhongShu(ZouShiLeiXing):
             return True
         return False
                 
-    def get_time_diff(self):
+    def get_time_diff(self, re_evaluate=False):
         return [self.first.loc, self.extra_nodes[-1].loc] if self.extra_nodes else [self.first.loc, self.forth.loc]
+
+    def get_amplitude_region_between(self, start_loc, end_loc):
+        price_series = self.original_df[start_loc:end_loc+1][['high', 'low']]
+        return [price_series['low'].min(), price_series['high'].max()]
 
     def check_exhaustion(self):
         # usually used in panbei type III, just for completeness
@@ -502,6 +500,7 @@ class ZhongShu(ZouShiLeiXing):
         first_price_region = first_xd.get_amplitude_region_original()
         last_price_region = last_xd.get_amplitude_region_original()
         zhongshu_price_region = self.get_core_region()
+#         zhongshu_price_region = self.get_amplitude_region_between(zhongshu_time_diff[0], zhongshu_time_diff[1])
         
         balanced = zhongshu_time_diff[0] <= (first_time_diff[0] + last_time_diff[1])/2 <= zhongshu_time_diff[1] and\
                     zhongshu_price_region[0] <= (max(first_price_region[1],last_price_region[1]) + min(first_price_region[0],last_price_region[0]))/2 <= zhongshu_price_region[1]
@@ -586,9 +585,8 @@ class ZouShi(object):
                 return pivot_tp
         elif chan_type == Chan_Type.III or chan_type == Chan_Type.III_weak: # we need to split from past top / bot
             if type(self.zslx_result[-1]) is ZouShiLeiXing:
-                [s, e] = self.zslx_result[-1].get_time_region()
-                s_loc = np.where(self.original_df['date']==s)[0][0]
-                temp_df = self.original_df[s_loc:]
+                [s, e] = self.zslx_result[-1].get_time_diff()
+                temp_df = self.original_df[s:]
                 pivot_tp = temp_df[temp_df['high'].argmax() if direction == TopBotType.top2bot else temp_df['low'].argmin()]['date']
                 return pivot_tp
             elif type(self.zslx_result[-1]) is ZhongShu:

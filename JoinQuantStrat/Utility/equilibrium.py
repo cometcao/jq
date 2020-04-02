@@ -750,12 +750,14 @@ class Equilibrium():
                 
         a_s = zslx_a.get_tb_structure() 
         c_s =zslx_c.get_tb_structure()
-        a_range = zslx_a.get_amplitude_region_original()
-        c_range = zslx_c.get_amplitude_region_original()
-        b_range = central_B.get_core_region()
+
         a_time = zslx_a.get_time_diff()
         c_time = zslx_c.get_time_diff()
-        b_time = central_B.get_time_diff()
+        b_time = [a_time[1], c_time[0]]
+        
+        a_range = zslx_a.get_amplitude_region_original()
+        c_range = zslx_c.get_amplitude_region_original()
+        b_range = central_B.get_core_region() # use core region
         
         if check_tb_structure:
             if a_s[0] != c_s[0] or a_s[-1] != c_s[-1]:
@@ -788,27 +790,24 @@ class Equilibrium():
                     print("Pan Bei Zhong Shu level too high")
                 return False
             
-        if not self.price_balance(a_range, b_range, c_range):
-            if self.isdebug:
-                print("price range balance failed")
-            return False
-        
-        if not self.time_balance(a_time, b_time, c_time):
-            if self.isdebug:
-                print("time range balance failed")
-            return False
-            
         structure_result = True
+        if direction == TopBotType.top2bot:
+            structure_result = a_range[1] > central_region[1] and central_region[0] > c_range[0]
+        elif direction == TopBotType.bot2top:
+            structure_result = a_range[0] < central_region[0] and central_region[1] < c_range[1]
+        if self.isdebug and not structure_result:
+            print("price within ZhongShu range")
+            
         if check_balance_structure: # This is shouldn't be checked at BI level
-            if direction == TopBotType.top2bot:
-                structure_result = a_range[1] > central_region[1] and central_region[0] > c_range[0]
-            elif direction == TopBotType.bot2top:
-                structure_result = a_range[0] < central_region[0] and central_region[1] < c_range[1]
-            else:
-                print("Invalid direction")
-                
-            if not structure_result and self.isdebug:
-                print("Not balanced structure")
+            if not self.price_balance(a_range, b_range, c_range):
+                if self.isdebug:
+                    print("price range balance failed")
+                structure_result = False
+            
+            if not self.time_balance(a_time, b_time, c_time):
+                if self.isdebug:
+                    print("time range balance failed")
+                structure_result = False
         
         return structure_result
     
@@ -1319,7 +1318,7 @@ class NestedInterval():
         
         if not found_chan_type:
             if self.isdebug:
-                print("chan type {0} not found".format(chan_type))
+                print("chan type {0} not found".format(chan_type_result))
             return False, False, default_chan_type_result
 
         # only type II and III can coexist, only need to check the first one
