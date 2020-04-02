@@ -750,6 +750,12 @@ class Equilibrium():
                 
         a_s = zslx_a.get_tb_structure() 
         c_s =zslx_c.get_tb_structure()
+        a_range = zslx_a.get_amplitude_region_original()
+        c_range = zslx_c.get_amplitude_region_original()
+        b_range = central_B.get_core_region()
+        a_time = zslx_a.get_time_diff()
+        c_time = zslx_c.get_time_diff()
+        b_time = central_B.get_time_diff()
         
         if check_tb_structure:
             if a_s[0] != c_s[0] or a_s[-1] != c_s[-1]:
@@ -782,23 +788,18 @@ class Equilibrium():
                     print("Pan Bei Zhong Shu level too high")
                 return False
             
-#             c_a_mag_ratio = zslx_c.get_magnitude() / zslx_a.get_magnitude()
-#             if a_s != c_s:
-#                 if (c_a_mag_ratio < GOLDEN_RATIO) or (c_a_mag_ratio > 1.618):  #(1/GOLDEN_RATIO)
-#                     if self.isdebug:
-#                         print("Not matching magnitude")
-#                     return False
-#             else:
-#                 if (c_a_mag_ratio < 0.382) or (c_a_mag_ratio > 2.618):  # (1-GOLDEN_RATIO)  (1/(1-GOLDEN_RATIO))
-#                     if self.isdebug:
-#                         print("Not matching magnitude")
-#                     return False
-
-
+        if not self.price_balance(a_range, b_range, c_range):
+            if self.isdebug:
+                print("price range balance failed")
+            return False
+        
+        if not self.time_balance(a_time, b_time, c_time):
+            if self.isdebug:
+                print("time range balance failed")
+            return False
+            
         structure_result = True
         if check_balance_structure: # This is shouldn't be checked at BI level
-            a_range = zslx_a.get_amplitude_region_original()
-            c_range = zslx_c.get_amplitude_region_original()
             if direction == TopBotType.top2bot:
                 structure_result = a_range[1] > central_region[1] and central_region[0] > c_range[0]
             elif direction == TopBotType.bot2top:
@@ -810,6 +811,12 @@ class Equilibrium():
                 print("Not balanced structure")
         
         return structure_result
+    
+    def price_balance(self, a_range, b_range, c_range):
+        return b_range[0] <= (max(a_range[1], c_range[1]) + min(a_range[0], c_range[0]))/2 <= b_range[1]
+
+    def time_balance(self, a_time, b_time, c_time):
+        return b_time[0] <= (c_time[1] + a_time[0]) / 2 <= b_time[1]
     
     def reached_new_high_low(self, guide_price, direction, zslx, central_region):
         if zslx is None or zslx.isEmpty():
@@ -839,9 +846,20 @@ class Equilibrium():
             exhaustion_result = True
 
         zslx_macd = 0
-        # if QV SHI => at least two Zhong Shu, We could also use macd, but they must be new low/high
-        #  and self.isQvShi for all
         if not exhaustion_result and new_high_low:
+            # macd only checked if we have similar magnitude
+#             c_a_mag_ratio = zslx_c.get_magnitude() / zslx_a.get_magnitude()
+#             if a_s != c_s:
+#                 if (c_a_mag_ratio < GOLDEN_RATIO) or (c_a_mag_ratio > 1.618):  #(1/GOLDEN_RATIO)
+#                     if self.isdebug:
+#                         print("Not matching magnitude")
+#                     exhaustion_result = False
+#             else:
+#                 if (c_a_mag_ratio < 0.382) or (c_a_mag_ratio > 2.618):  # (1-GOLDEN_RATIO)  (1/(1-GOLDEN_RATIO))
+#                     if self.isdebug:
+#                         print("Not matching magnitude")
+#                     exhaustion_result = False
+
             zslx_macd = zslx_a.get_macd_acc()
             latest_macd = zslx_c.get_macd_acc()
             exhaustion_result = abs(zslx_macd) > abs(latest_macd)

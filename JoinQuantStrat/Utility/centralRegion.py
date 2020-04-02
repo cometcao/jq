@@ -224,6 +224,9 @@ class ZouShiLeiXing(object):
     def get_tb_structure(self):
         return [node.tb for node in self.zoushi_nodes]
     
+    def get_time_diff(self):
+        return [self.zoushi_nodes[0].loc, self.zoushi_nodes[-1].loc]
+    
     def get_loc_diff(self):
         mag = 1200 # THSI IS AN ESTIMATE! we have to upgrade one level so 240 * 5
 #         # this is only hacking method it will limit use case upto 30m
@@ -481,17 +484,30 @@ class ZhongShu(ZouShiLeiXing):
             return True
         return False
                 
-            
+    def get_time_diff(self):
+        return [self.first.loc, self.extra_nodes[-1].loc] if self.extra_nodes else [self.first.loc, self.forth.loc]
 
     def check_exhaustion(self):
+        # usually used in panbei type III, just for completeness
         last_xd = self.take_last_xd_as_zslx()
         if self.is_complex_type():
             first_xd = self.take_split_xd_as_zslx(last_xd.direction)
         else:
             first_xd = self.take_first_xd_as_zslx()
             
+        first_time_diff = first_xd.get_time_diff()
+        last_time_diff = last_xd.get_time_diff()
+        zhongshu_time_diff = [first_time_diff[1], last_time_diff[0]]
+        
+        first_price_region = first_xd.get_amplitude_region_original()
+        last_price_region = last_xd.get_amplitude_region_original()
+        zhongshu_price_region = self.get_core_region()
+        
+        balanced = zhongshu_time_diff[0] <= (first_time_diff[0] + last_time_diff[1])/2 <= zhongshu_time_diff[1] and\
+                    zhongshu_price_region[0] <= (max(first_price_region[1],last_price_region[1]) + min(first_price_region[0],last_price_region[0]))/2 <= zhongshu_price_region[1]
+            
         # check exhaustion
-        exhausted = abs(first_xd.work_out_slope()) > abs(last_xd.work_out_slope())
+        exhausted = balanced and abs(first_xd.work_out_slope()) > abs(last_xd.work_out_slope())
             
         if not exhausted:
             # also need to check balance structure
