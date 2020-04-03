@@ -241,7 +241,7 @@ def check_stock_sub(stock,
                                                                  check_end_tb=True, 
                                                                  check_tb_structure=True,
                                                                  force_zhongshu=force_zhongshu) # data split at retrieval time
-    bi_split_time = sub_profile[0][5]
+    bi_split_time = sub_profile[0][5] # split time is the xd start time
     if exhausted and xd_exhausted and check_bi:
         bi_exhausted, bi_xd_exhausted, _ = ni.indepth_analyze_zoushi(direction, bi_split_time, pe, force_zhongshu=force_zhongshu)
         return exhausted, xd_exhausted and bi_exhausted, sub_profile, ni.completed_zhongshu()
@@ -275,7 +275,7 @@ def check_stock_full(stock,
     if not chan_profile:
         chan_profile = [(Chan_Type.INVALID, TopBotType.noTopBot, 0, 0, 0, None, None)]
 
-    splitTime = chan_profile[0][6]
+    splitTime = chan_profile[0][6] # split time and force sub level with zhongshu formed
     
     if exhausted and xd_exhausted and sanity_check(stock, chan_profile, end_time, top_pe):
         sub_exhausted, sub_xd_exhausted, sub_profile, zhongshu_completed = check_stock_sub(stock=stock, 
@@ -695,7 +695,7 @@ class Equilibrium():
                 pure_zslx = ZouShiLeiXing(split_direction, last_zoushi.original_df, split_nodes)
                 
                 xd_exhaustion, ts = pure_zslx.check_exhaustion() 
-                return True, xd_exhaustion, pure_zslx.zoushi_nodes[0].time, ts, 0, 0
+                return True, xd_exhaustion, last_zoushi.zoushi_nodes[0].time, ts, 0, 0
             else: # ZhongShu case 
                 xd_exhaustion, ts = last_zoushi.check_exhaustion()
                 return True, xd_exhaustion, last_zoushi.first.time, ts, 0, 0
@@ -875,7 +875,7 @@ class Equilibrium():
         
         # We don't do precise split with sub_split_time, but give the full range! zslx_a.zoushi_nodes[0].time this is used while we go from top to sub level
         # from sub to bi level, we use precise cut therefore zslx_c.zoushi_nodes[0].time
-        return exhaustion_result, check_xd_exhaustion, zslx_c.zoushi_nodes[0].time, zslx_a.zoushi_nodes[0].time, zslx_slope, zslx_macd
+        return exhaustion_result, check_xd_exhaustion, zslx_c.zoushi_nodes[0].time, sub_split_time, zslx_slope, zslx_macd
         
     def check_chan_type(self, check_end_tb=False):
         '''
@@ -1256,6 +1256,8 @@ class NestedInterval():
             split_time_loc = np.where(fenbi_df['date']>=split_time)[0][0]
             crp_df = CentralRegionProcess(fenbi_df[split_time_loc:], kb_chan, isdebug=self.isdebug, use_xd=False)
             anal_zoushi_bi = crp_df.define_central_region(direction)
+            if anal_zoushi_bi is None:
+                return False, False, None
             
             split_anal_zoushi_bi_result = anal_zoushi_bi.zslx_result
         else:
@@ -1327,7 +1329,7 @@ class NestedInterval():
         # reverse direction case are dealt above
         chan_t, chan_d, chan_p = chan_type_result[0]
         guide_price = (chan_p[0] if direction == TopBotType.top2bot else chan_p[1]) if type(chan_p) is list else chan_p
-        exhausted, check_xd_exhaustion, sub_split_time, sub_start_time, a_slope, a_macd = eq.define_equilibrium(direction, 
+        exhausted, check_xd_exhaustion, sub_start_time, sub_split_time, a_slope, a_macd = eq.define_equilibrium(direction, 
                                                                                                    guide_price, 
                                                                                                    force_zhongshu=force_zhongshu, 
                                                                                                    check_tb_structure=check_tb_structure,
