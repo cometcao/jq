@@ -805,7 +805,7 @@ class Short_Chan(Sell_stocks):
                                                                       chan_type=[Chan_Type.I],
                                                                       isdebug=self.isdebug,
                                                                       is_anal=False,
-                                                                      check_structure=True)
+                                                                      check_structure=False) # synch with selection
                 if not result or not xd_result:
                     print("TYPE I long point broken")
                     return True
@@ -945,8 +945,8 @@ class Short_Chan(Sell_stocks):
                     return True
 
 #             if (stock_data.loc[effective_time:, 'high'].max() / context.portfolio.positions[stock].avg_cost - 1) >= self.stop_profit:
+#             print("STOP PROFIT reached return {0} {1}".format(context.portfolio.positions[stock].avg_cost, stock_data.loc[effective_time:, 'high'].max()))
             max_time = stock_data.loc[effective_time:, 'high'].idxmax()
-            print("STOP PROFIT reached return {0} {1}".format(context.portfolio.positions[stock].avg_cost, stock_data.loc[effective_time:, 'high'].max()))
             exhausted, xd_exhausted, _, zhongshu_formed = check_stock_sub(stock,
                                                           end_time=max_time,
                                                           periods=['1m'],
@@ -959,10 +959,11 @@ class Short_Chan(Sell_stocks):
                                                           split_time=effective_time,
                                                           check_bi=False,
                                                           force_zhongshu=False) # synch with selection
-            if exhausted:
-                print("STOP PROFIT {0} exhausted: {1}, {2}".format(stock,
-                                                                   exhausted,
-                                                                   xd_exhausted))
+            if (exhausted and zhongshu_formed) or (not zhongshu_formed and xd_exhausted):
+                print("STOP PROFIT {0} exhausted: {1}, {2} Zhongshu formed: {3}".format(stock,
+                                                                                   exhausted,
+                                                                                   xd_exhausted,
+                                                                                   zhongshu_formed))
                 return True
             if zhongshu_formed and self.use_ma13 and stock_data.iloc[-1].close < sma13:
                 print("STOP PROFIT MA13 {0} {1} after Zhongshu formed".format(stock_data.iloc[-1].close, sma13))
