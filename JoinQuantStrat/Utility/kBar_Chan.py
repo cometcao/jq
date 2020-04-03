@@ -1242,7 +1242,9 @@ class KBarChan(object):
         new_valid_elems = self.check_inclusion_by_direction(next_valid_elems[1], working_df, current_direction, with_gap=False)
         
         # we only care about the next 4 elements there goes 0 -> 3
-        affected_chan_prices = working_df[new_valid_elems[0]:new_valid_elems[3]+1]['chan_price']
+        end_loc = new_valid_elems[3]+1 if len(new_valid_elems) >= 4 else None
+        affected_chan_prices = working_df[new_valid_elems[0]:end_loc]['chan_price']
+        
         if current_direction == TopBotType.top2bot:
             min_price = min(affected_chan_prices)
             if min_price < working_df[next_valid_elems[1]]['chan_price']:
