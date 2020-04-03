@@ -798,7 +798,7 @@ class Equilibrium():
         if self.isdebug and not structure_result:
             print("price within ZhongShu range")
             
-        if check_balance_structure: # This is shouldn't be checked at BI level
+        if check_balance_structure: # This is should only be checked at BI level, as we can't check sub level from there
             if not self.price_balance(a_range, b_range, c_range):
                 if self.isdebug:
                     print("price range balance failed")
@@ -846,7 +846,8 @@ class Equilibrium():
 
         zslx_macd = 0
         if not exhaustion_result and new_high_low:
-            # macd only checked if we have similar magnitude
+#             exhaustion_result = True
+#             # macd only checked if we have similar magnitude
 #             c_a_mag_ratio = zslx_c.get_magnitude() / zslx_a.get_magnitude()
 #             if a_s != c_s:
 #                 if (c_a_mag_ratio < GOLDEN_RATIO) or (c_a_mag_ratio > 1.618):  #(1/GOLDEN_RATIO)
@@ -1213,7 +1214,7 @@ class NestedInterval():
             high_exhausted, check_xd_exhaustion, last_zs_time, sub_split_time, high_slope, high_macd = eq.define_equilibrium(direction, 
                                                                                     guide_price,
                                                                                     check_tb_structure=check_tb_structure, 
-                                                                                    check_balance_structure=True,
+                                                                                    check_balance_structure=False,
                                                                                     type_III=(chan_t == Chan_Type.III))
         else:
             high_exhausted, check_xd_exhaustion = False, False
@@ -1329,7 +1330,7 @@ class NestedInterval():
                                                                                                    guide_price, 
                                                                                                    force_zhongshu=force_zhongshu, 
                                                                                                    check_tb_structure=check_tb_structure,
-                                                                                                   check_balance_structure=True)
+                                                                                                   check_balance_structure=False)
         if self.isDescription or self.isdebug:
             print("current level {0} {1} {2} {3} {4} with price:{5}".format(period, 
                                                                         chan_d, 
