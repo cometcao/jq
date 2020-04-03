@@ -493,20 +493,21 @@ class ZhongShu(ZouShiLeiXing):
         else:
             first_xd = self.take_first_xd_as_zslx()
             
-        first_time_diff = first_xd.get_time_diff()
-        last_time_diff = last_xd.get_time_diff()
-        zhongshu_time_diff = [first_time_diff[1], last_time_diff[0]]
-        
-        first_price_region = first_xd.get_amplitude_region_original()
-        last_price_region = last_xd.get_amplitude_region_original()
-        zhongshu_price_region = self.get_core_region()
-#         zhongshu_price_region = self.get_amplitude_region_between(zhongshu_time_diff[0], zhongshu_time_diff[1])
-        
-        balanced = zhongshu_time_diff[0] <= (first_time_diff[0] + last_time_diff[1])/2 <= zhongshu_time_diff[1] and\
-                    zhongshu_price_region[0] <= (max(first_price_region[1],last_price_region[1]) + min(first_price_region[0],last_price_region[0]))/2 <= zhongshu_price_region[1]
-            
+#         THIS TURNS to be not needed for type III, as it's not a zhongshu by direction
+#         so we only need to check exhaustion
+#         first_time_diff = first_xd.get_time_diff()
+#         last_time_diff = last_xd.get_time_diff()
+#         zhongshu_time_diff = [first_time_diff[1], last_time_diff[0]]
+#         
+#         first_price_region = first_xd.get_amplitude_region_original()
+#         last_price_region = last_xd.get_amplitude_region_original()
+#         zhongshu_price_region = self.get_core_region()
+# #         zhongshu_price_region = self.get_amplitude_region_between(zhongshu_time_diff[0], zhongshu_time_diff[1])
+#         
+#         balanced = zhongshu_time_diff[0] <= (first_time_diff[0] + last_time_diff[1])/2 <= zhongshu_time_diff[1] and\
+#                     zhongshu_price_region[0] <= (max(first_price_region[1],last_price_region[1]) + min(first_price_region[0],last_price_region[0]))/2 <= zhongshu_price_region[1]
         # check exhaustion
-        exhausted = balanced and abs(first_xd.work_out_slope()) > abs(last_xd.work_out_slope())
+        exhausted = abs(first_xd.work_out_slope()) > abs(last_xd.work_out_slope())
             
         if not exhausted:
             # also need to check balance structure
