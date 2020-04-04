@@ -914,9 +914,9 @@ class KBarChan(object):
             regions = self.gap_region(firstElem['date'], secondElem['date'])
             regions = self.combine_gaps(regions)
             for re in regions:
-                if re[0] <= compareElem['chan_price'] <= re[1]:
+                if float_less_equal(re[0], compareElem['chan_price']) and float_less_equal(compareElem['chan_price'], re[1]):
                     item_price_covered = True
-                if (re[1]-re[0])/abs(firstElem['chan_price']-secondElem['chan_price']) >= GOLDEN_RATIO:
+                if float_more_equal((re[1]-re[0])/abs(firstElem['chan_price']-secondElem['chan_price']), GOLDEN_RATIO):
                     gap_range_in_portion = True
                 if item_price_covered and gap_range_in_portion:
                     return True
