@@ -963,9 +963,32 @@ class KBarChan(object):
                                                                                                   secondElem['chan_price']))
                 return True
             ############################## special case of kline gap as XD ##############################                
-                  
-            working_df[next_valid_elems[1]][tb] = TopBotType.noTopBot.value
-            working_df[next_valid_elems[2]][tb] = TopBotType.noTopBot.value
+            
+            # We need to be careful of which nodes to remove!
+            removed_loc_1 = removed_loc_2 = 0
+            if direction == TopBotType.top2bot:
+                if firstElem[chan_price] < thirdElem[chan_price]:
+                    working_df[next_valid_elems[1]][tb] = TopBotType.noTopBot.value
+                    working_df[next_valid_elems[2]][tb] = TopBotType.noTopBot.value
+                    removed_loc_1 = 1
+                    removed_loc_2 = 2
+                else:
+                    working_df[next_valid_elems[0]][tb] = TopBotType.noTopBot.value
+                    working_df[next_valid_elems[1]][tb] = TopBotType.noTopBot.value
+                    removed_loc_1 = 0
+                    removed_loc_2 = 1
+            else: # bot2top
+                if firstElem[chan_price] > thirdElem[chan_price]:
+                    working_df[next_valid_elems[1]][tb] = TopBotType.noTopBot.value
+                    working_df[next_valid_elems[2]][tb] = TopBotType.noTopBot.value
+                    removed_loc_1 = 1
+                    removed_loc_2 = 2
+                else:
+                    working_df[next_valid_elems[0]][tb] = TopBotType.noTopBot.value
+                    working_df[next_valid_elems[1]][tb] = TopBotType.noTopBot.value
+                    removed_loc_1 = 0
+                    removed_loc_2 = 1
+
             
             if self.isdebug:
                 print("location {0}@{1}, {2}@{3} removed for combination".format(working_df[next_valid_elems[1]]['date'], 
