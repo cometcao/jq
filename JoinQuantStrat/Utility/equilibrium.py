@@ -677,7 +677,7 @@ class Equilibrium():
                            check_tb_structure=False, 
                            check_balance_structure=False, 
                            force_zhongshu=False, 
-                           type_III=False):
+                           current_chan_type=Chan_Type.INVALID):
         '''
         We are dealing type III differently at top level
         return:
@@ -688,7 +688,12 @@ class Equilibrium():
         slope
         macd
         '''
-        if type_III:
+        if current_chan_type == Chan_Type.III:
+            if self.isQvShi:
+                if self.isdebug:
+                    print("type III at type I position we ignore")
+                return False, False, None, None, 0, 0
+            
             last_zoushi = self.analytic_result[-1]
             if type(last_zoushi) is ZouShiLeiXing:
                 split_direction, split_nodes = last_zoushi.get_reverse_split_zslx()
@@ -730,7 +735,8 @@ class Equilibrium():
                                        central_region, 
                                        direction, 
                                        check_tb_structure=check_tb_structure,
-                                       check_balance_structure=check_balance_structure):
+                                       check_balance_structure=check_balance_structure,
+                                       current_chan_type=current_chan_type):
             return self.check_exhaustion(a, c, new_high_low)
         else:
             return False, False, None, None, 0, 0
@@ -742,7 +748,8 @@ class Equilibrium():
                                central_region, 
                                direction, 
                                check_tb_structure=False,
-                               check_balance_structure=False):
+                               check_balance_structure=False, 
+                               current_chan_type=Chan_Type.INVALID):
         if zslx_a is None or zslx_c is None or zslx_a.isEmpty() or zslx_c.isEmpty():
             if self.isdebug:
                 print("Not enough DATA check_exhaustion")
@@ -765,7 +772,7 @@ class Equilibrium():
                     print("Not matching tb structure")
                 return False
         
-        if self.isQvShi: # BEI CHI
+        if self.isQvShi and current_chan_type==Chan_Type.I: # BEI CHI
             if abs(len(a_s) - len(c_s)) > 4:
                 if self.isdebug:
                     print("Not matching XD structure")
@@ -1212,10 +1219,10 @@ class NestedInterval():
         
         if chan_type_check: # there is no need to do current level check if it's type III
             high_exhausted, check_xd_exhaustion, last_zs_time, sub_split_time, high_slope, high_macd = eq.define_equilibrium(direction, 
-                                                                                    guide_price,
-                                                                                    check_tb_structure=check_tb_structure, 
-                                                                                    check_balance_structure=False,
-                                                                                    type_III=(chan_t == Chan_Type.III))
+                                                                                                    guide_price,
+                                                                                                    check_tb_structure=check_tb_structure, 
+                                                                                                    check_balance_structure=False,
+                                                                                                    current_chan_type=chan_t)
         else:
             high_exhausted, check_xd_exhaustion = False, False
         if self.isDescription or self.isdebug:
@@ -1332,7 +1339,8 @@ class NestedInterval():
                                                                                                    guide_price, 
                                                                                                    force_zhongshu=force_zhongshu, 
                                                                                                    check_tb_structure=check_tb_structure,
-                                                                                                   check_balance_structure=False)
+                                                                                                   check_balance_structure=False,
+                                                                                                   current_chan_type=chan_t)
         if self.isDescription or self.isdebug:
             print("current level {0} {1} {2} {3} {4} with price:{5}".format(period, 
                                                                         chan_d, 
