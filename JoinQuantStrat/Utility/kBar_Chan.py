@@ -6,7 +6,7 @@ import talib
 from biaoLiStatus import * 
 from chan_common_include import GOLDEN_RATIO, MIN_PRICE_UNIT
 from kBarProcessor import synchOpenPrice, synchClosePrice
-from common_include import float_less, float_more, float_less_equal, float_more_equal
+from chan_common_include import float_less, float_more, float_less_equal, float_more_equal
 from numpy.lib.recfunctions import append_fields
 from scipy.ndimage.interpolation import shift
 
