@@ -6,6 +6,7 @@ import talib
 from biaoLiStatus import * 
 from chan_common_include import GOLDEN_RATIO, MIN_PRICE_UNIT
 from kBarProcessor import synchOpenPrice, synchClosePrice
+from common_include import float_less, float_more, float_less_equal, float_more_equal
 from numpy.lib.recfunctions import append_fields
 from scipy.ndimage.interpolation import shift
 
@@ -967,7 +968,7 @@ class KBarChan(object):
             # We need to be careful of which nodes to remove!
             removed_loc_1 = removed_loc_2 = 0
             if direction == TopBotType.top2bot:
-                if firstElem[chan_price] < thirdElem[chan_price]:
+                if float_less(firstElem[chan_price], thirdElem[chan_price]):
                     working_df[next_valid_elems[1]][tb] = TopBotType.noTopBot.value
                     working_df[next_valid_elems[2]][tb] = TopBotType.noTopBot.value
                     removed_loc_1 = 1
@@ -978,7 +979,7 @@ class KBarChan(object):
                     removed_loc_1 = 0
                     removed_loc_2 = 1
             else: # bot2top
-                if firstElem[chan_price] > thirdElem[chan_price]:
+                if float_more(firstElem[chan_price], thirdElem[chan_price]):
                     working_df[next_valid_elems[1]][tb] = TopBotType.noTopBot.value
                     working_df[next_valid_elems[2]][tb] = TopBotType.noTopBot.value
                     removed_loc_1 = 1

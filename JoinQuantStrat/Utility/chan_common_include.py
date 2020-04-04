@@ -4,8 +4,22 @@ Created on 09 Feb 2020
 
 @author: MetalInvest
 '''
-from enum import Enum 
+import numpy as np
 
+from enum import Enum 
+######################## common method ###############################
+
+def float_less(a, b):
+    return a < b and not np.isclose(a, b)
+
+def float_more(a, b):
+    return a > b and not np.isclose(a, b)
+
+def float_less_equal(a, b):
+    return a < b or np.isclose(a, b)
+
+def float_more_equal(a, b):
+    return a > b or np.isclose(a, b)
 
 
 ######################## chan_kbar_filter ##########################
