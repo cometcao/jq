@@ -991,10 +991,10 @@ class KBarChan(object):
 
             
             if self.isdebug:
-                print("location {0}@{1}, {2}@{3} removed for combination".format(working_df[next_valid_elems[1]]['date'], 
-                                                                                 working_df[next_valid_elems[1]][chan_price], 
-                                                                                 working_df[next_valid_elems[2]]['date'], 
-                                                                                 working_df[next_valid_elems[2]][chan_price]))
+                print("location {0}@{1}, {2}@{3} removed for combination".format(working_df[next_valid_elems[removed_loc_1]]['date'], 
+                                                                                 working_df[next_valid_elems[removed_loc_1]][chan_price], 
+                                                                                 working_df[next_valid_elems[removed_loc_2]]['date'], 
+                                                                                 working_df[next_valid_elems[removed_loc_2]][chan_price]))
             return False
         
         return True
@@ -1278,11 +1278,11 @@ class KBarChan(object):
                 result = next_valid_elems[1]
         
         if result is not None: # restore data
-            working_df[new_valid_elems[0]:new_valid_elems[-1]]['tb'] = working_df[new_valid_elems[0]:new_valid_elems[-1]]['original_tb']
+            working_df[next_valid_elems[0]:new_valid_elems[-1]]['tb'] = working_df[next_valid_elems[0]:new_valid_elems[-1]]['original_tb']
             if self.isdebug:
-                print("tb data restored from {0} to {1} real_loc {2} to {3}".format(working_df[new_valid_elems[0]]['date'], 
+                print("tb data restored from {0} to {1} real_loc {2} to {3}".format(working_df[next_valid_elems[0]]['date'], 
                                                                                     working_df[new_valid_elems[-1]]['date'], 
-                                                                                    working_df[new_valid_elems[0]]['real_loc'], 
+                                                                                    working_df[next_valid_elems[0]]['real_loc'], 
                                                                                     working_df[new_valid_elems[-1]]['real_loc']))
         
         return result
