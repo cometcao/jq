@@ -598,7 +598,7 @@ class Equilibrium():
             if lr1 > ur2 or lr2 > ur1: # two Zhong Shu without intersection
                 if self.isdebug:
                     print("1 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(zs1, zs2))
-                relex_result = True
+                relax_result = True
                 
             [l1, u1] = zs1.get_amplitude_region_original()
             [l2, u2] = zs2.get_amplitude_region_original()
@@ -624,7 +624,7 @@ class Equilibrium():
                 if lr1 > ur2 or lr2 > ur1: # two Zhong Shu without intersection
                     if self.isdebug:
                         print("2 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(new_zs, zs2))
-                    relex_result = True
+                    relax_result = True
      
                 [l1, u1] = new_zs.get_amplitude_region_original()
                 [l2, u2] = zs2.get_amplitude_region_original()
@@ -635,7 +635,7 @@ class Equilibrium():
 
         
 
-        return strict_result, relex_result
+        return strict_result, relax_result
     
     def two_zslx_interact(self, zs1, zs2):
         result = False
