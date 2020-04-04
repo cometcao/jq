@@ -590,15 +590,9 @@ class Equilibrium():
         due to the rule of connectivity:
         two adjacent ZhongShu going in the same direction, or the first ZhongShu is complex(can be both direction)
         '''
-        strict_result = relax_result = False
+        strict_result = False
         if zs1.get_level().value == zs2.get_level().value == zs_level.value and\
             (zs1.direction == zs2.direction or zs1.is_complex_type()):
-            [lr1, ur1] = zs1.get_core_region()
-            [lr2, ur2] = zs2.get_core_region()
-            if lr1 > ur2 or lr2 > ur1: # two Zhong Shu without intersection
-                if self.isdebug:
-                    print("1 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(zs1, zs2))
-                relax_result = True
                 
             [l1, u1] = zs1.get_amplitude_region_original()
             [l2, u2] = zs2.get_amplitude_region_original()
@@ -611,7 +605,36 @@ class Equilibrium():
         # LETS NOT IGNORE COMPLEX CASES
         # if the first ZhongShu is complex and can be split to form QvShi with second ZhongShu
         # with the same structure after split as the next zhongshu
-        if (not strict_result or not relax_result) and zs1.get_level().value > zs2.get_level().value == zs_level.value and\
+        if not strict_result and zs1.get_level().value > zs2.get_level().value == zs_level.value and\
+            (zs1.direction == zs2.direction or zs1.is_complex_type()):
+#             split_nodes = zs1.get_ending_nodes(N=5)
+            split_nodes = zs1.get_split_zs(zs2.direction, contain_zs=False)
+            if len(split_nodes) >= 5 and -1<=(len(split_nodes) - 1 - (4+len(zs2.extra_nodes)))<=0:
+                new_zs = ZhongShu(split_nodes[1], split_nodes[2], split_nodes[3], split_nodes[4], zs2.direction, zs2.original_df)
+                new_zs.add_new_nodes(split_nodes[5:])
+     
+                [l1, u1] = new_zs.get_amplitude_region_original()
+                [l2, u2] = zs2.get_amplitude_region_original()
+                if l1 > u2 or l2 > u1: # two Zhong Shu without intersection
+                    if self.isdebug:
+                        print("2 current Zou Shi is QV SHI \n{0} \n{1}".format(new_zs, zs2))
+                    strict_result = True 
+        
+        return strict_result
+    
+    def two_zhongshu_form_qvshi_simple(self, zs1, zs2, zs_level=ZhongShuLevel.current):
+        
+        relax_result = False
+        if zs1.get_level().value == zs2.get_level().value == zs_level.value and\
+            (zs1.direction == zs2.direction or zs1.is_complex_type()):
+            [lr1, ur1] = zs1.get_core_region()
+            [lr2, ur2] = zs2.get_core_region()
+            if lr1 > ur2 or lr2 > ur1: # two Zhong Shu without intersection
+                if self.isdebug:
+                    print("1 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(zs1, zs2))
+                relax_result = True
+    
+        if not relax_result and zs1.get_level().value > zs2.get_level().value == zs_level.value and\
             (zs1.direction == zs2.direction or zs1.is_complex_type()):
 #             split_nodes = zs1.get_ending_nodes(N=5)
             split_nodes = zs1.get_split_zs(zs2.direction, contain_zs=False)
@@ -625,17 +648,7 @@ class Equilibrium():
                     if self.isdebug:
                         print("2 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(new_zs, zs2))
                     relax_result = True
-     
-                [l1, u1] = new_zs.get_amplitude_region_original()
-                [l2, u2] = zs2.get_amplitude_region_original()
-                if l1 > u2 or l2 > u1: # two Zhong Shu without intersection
-                    if self.isdebug:
-                        print("2 current Zou Shi is QV SHI \n{0} \n{1}".format(new_zs, zs2))
-                    strict_result = True 
-
-        
-
-        return strict_result, relax_result
+        return relax_result
     
     def two_zslx_interact(self, zs1, zs2):
         result = False
@@ -668,10 +681,16 @@ class Equilibrium():
             return self.isQvShi
         
         # STARDARD CASE: 
-        self.isQvShi, self.isQvShi_simple = self.two_zhongshu_form_qvshi(recent_zhongshu[-2], recent_zhongshu[-1]) 
+        self.isQvShi = self.two_zhongshu_form_qvshi(recent_zhongshu[-2], recent_zhongshu[-1]) 
         if self.isQvShi and self.isdebug:
             print("QU SHI 1")
         
+        
+        if type(self.analytic_result[-1]) is ZouShiLeiXing:
+            self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-2], recent_zhongshu[-1])
+        elif len(recent_zhongshu) > 2 and not recent_zhongshu[-1].is_complex_type(): # This is the case of TYPE III
+            self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-3], recent_zhongshu[-2])
+            
 #         # TWO ZHONG SHU followed by ZHONGYIN ZHONGSHU
 #         # first two zhong shu no interaction
 #         # last zhong shu interacts with second, this is for TYPE II trade point
