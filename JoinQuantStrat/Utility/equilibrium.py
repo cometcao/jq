@@ -622,14 +622,15 @@ class Equilibrium():
         
         return strict_result
     
-    def two_zhongshu_form_qvshi_simple(self, zs1, zs2, zs_level=ZhongShuLevel.current):
+    def two_zhongshu_form_qvshi_simple(self, zs1, zs2, zslx, zs_level=ZhongShuLevel.current):
         
         relax_result = False
         if zs1.get_level().value == zs2.get_level().value == zs_level.value and\
             (zs1.direction == zs2.direction or zs1.is_complex_type()):
             [lr1, ur1] = zs1.get_core_region()
             [lr2, ur2] = zs2.get_core_region()
-            if lr1 > ur2 or lr2 > ur1: # two Zhong Shu without intersection
+            if (lr1 > ur2 or lr2 > ur1) and\
+                (not (self.two_zslx_interact(zs1, zs2) and zslx.isSimple())): # two Zhong Shu without intersection
                 if self.isdebug:
                     print("1 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(zs1, zs2))
                 relax_result = True
@@ -644,7 +645,8 @@ class Equilibrium():
      
                 [lr1, ur1] = new_zs.get_core_region()
                 [lr2, ur2] = zs2.get_core_region()
-                if lr1 > ur2 or lr2 > ur1: # two Zhong Shu without intersection
+                if (lr1 > ur2 or lr2 > ur1) and\
+                    (not (self.two_zslx_interact(zs1, zs2) and zslx.isSimple())): # two Zhong Shu without intersection
                     if self.isdebug:
                         print("2 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(new_zs, zs2))
                     relax_result = True
@@ -687,9 +689,9 @@ class Equilibrium():
         
         
         if type(self.analytic_result[-1]) is ZouShiLeiXing:
-            self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-2], recent_zhongshu[-1])
+            self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-2], recent_zhongshu[-1], self.analytic_result[-3])
         elif len(recent_zhongshu) > 2 and not recent_zhongshu[-1].is_complex_type(): # This is the case of TYPE III
-            self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-3], recent_zhongshu[-2])
+            self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-3], recent_zhongshu[-2], self.analytic_result[-4])
             
 #         # TWO ZHONG SHU followed by ZHONGYIN ZHONGSHU
 #         # first two zhong shu no interaction
