@@ -480,6 +480,7 @@ class Equilibrium():
         self.isdebug = isdebug
         self.isDescription = isDescription
         self.isQvShi = False
+        self.isQvShi_simple = False # used for only checking zhongshu core range
         self.check_zoushi_status()
         pass
     
@@ -589,20 +590,28 @@ class Equilibrium():
         due to the rule of connectivity:
         two adjacent ZhongShu going in the same direction, or the first ZhongShu is complex(can be both direction)
         '''
-        result = False
+        strict_result = relax_result = False
         if zs1.get_level().value == zs2.get_level().value == zs_level.value and\
             (zs1.direction == zs2.direction or zs1.is_complex_type()):
+            [lr1, ur1] = zs1.get_core_region()
+            [lr2, ur2] = zs2.get_core_region()
+            if lr1 > ur2 or lr2 > ur1: # two Zhong Shu without intersection
+                if self.isdebug:
+                    print("1 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(zs1, zs2))
+                relex_result = True
+                
             [l1, u1] = zs1.get_amplitude_region_original()
             [l2, u2] = zs2.get_amplitude_region_original()
             if l1 > u2 or l2 > u1: # two Zhong Shu without intersection
                 if self.isdebug:
                     print("1 current Zou Shi is QV SHI \n{0} \n{1}".format(zs1, zs2))
-                result = True        
+                strict_result = True 
+            
         
         # LETS NOT IGNORE COMPLEX CASES
         # if the first ZhongShu is complex and can be split to form QvShi with second ZhongShu
         # with the same structure after split as the next zhongshu
-        if not result and zs1.get_level().value > zs2.get_level().value == zs_level.value and\
+        if (not strict_result or not relax_result) and zs1.get_level().value > zs2.get_level().value == zs_level.value and\
             (zs1.direction == zs2.direction or zs1.is_complex_type()):
 #             split_nodes = zs1.get_ending_nodes(N=5)
             split_nodes = zs1.get_split_zs(zs2.direction, contain_zs=False)
@@ -610,15 +619,23 @@ class Equilibrium():
                 new_zs = ZhongShu(split_nodes[1], split_nodes[2], split_nodes[3], split_nodes[4], zs2.direction, zs2.original_df)
                 new_zs.add_new_nodes(split_nodes[5:])
      
+                [lr1, ur1] = new_zs.get_core_region()
+                [lr2, ur2] = zs2.get_core_region()
+                if lr1 > ur2 or lr2 > ur1: # two Zhong Shu without intersection
+                    if self.isdebug:
+                        print("2 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(new_zs, zs2))
+                    relex_result = True
+     
                 [l1, u1] = new_zs.get_amplitude_region_original()
                 [l2, u2] = zs2.get_amplitude_region_original()
                 if l1 > u2 or l2 > u1: # two Zhong Shu without intersection
                     if self.isdebug:
-                        print("2 current Zou Shi is QV SHI \n{0} \n{1}".format(zs1, zs2))
-                    result = True
+                        print("2 current Zou Shi is QV SHI \n{0} \n{1}".format(new_zs, zs2))
+                    strict_result = True 
 
+        
 
-        return result
+        return strict_result, relex_result
     
     def two_zslx_interact(self, zs1, zs2):
         result = False
@@ -651,7 +668,7 @@ class Equilibrium():
             return self.isQvShi
         
         # STARDARD CASE: 
-        self.isQvShi = self.two_zhongshu_form_qvshi(recent_zhongshu[-2], recent_zhongshu[-1]) 
+        self.isQvShi, self.isQvShi_simple = self.two_zhongshu_form_qvshi(recent_zhongshu[-2], recent_zhongshu[-1]) 
         if self.isQvShi and self.isdebug:
             print("QU SHI 1")
         
@@ -689,9 +706,9 @@ class Equilibrium():
         macd
         '''
         if current_chan_type == Chan_Type.III:
-            if self.isQvShi:
+            if self.isQvShi_simple:
                 if self.isdebug:
-                    print("type III at type I position we ignore")
+                    print("type III mixed with type I position we ignore")
                 return False, False, None, None, 0, 0
             
             last_zoushi = self.analytic_result[-1]
