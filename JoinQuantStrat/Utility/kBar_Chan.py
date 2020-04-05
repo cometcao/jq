@@ -431,6 +431,50 @@ class KBarChan(object):
                     break
         return gap_qualify
         
+    def same_tb_remove_previous(self, working_df, previous_index, current_index, next_index):
+        working_df[previous_index]['tb'] = TopBotType.noTopBot.value
+        previous_index = self.trace_back_index(working_df, previous_index) #current_index # 
+        if previous_index is None:
+            previous_index = current_index
+            current_index = next_index
+            next_index = self.get_next_tb(next_index, working_df)
+        else:
+            if previous_index in self.previous_skipped_idx:
+                self.previous_skipped_idx.remove(previous_index)
+            
+        return previous_index, current_index, next_index
+
+    def same_tb_remove_current(self, working_df, previous_index, current_index, next_index):
+        working_df[current_index]['tb'] = TopBotType.noTopBot.value
+        temp_index = previous_index
+        current_index = previous_index
+        previous_index = self.trace_back_index(working_df, previous_index)
+        if previous_index is None:
+            previous_index = temp_index
+            current_index = next_index
+            next_index = self.get_next_tb(next_index, working_df)
+        else:
+            if previous_index in self.previous_skipped_idx:
+                self.previous_skipped_idx.remove(previous_index)
+        
+        return previous_index, current_index, next_index
+    
+    def same_tb_remove_next(self, working_df, previous_index, current_index, next_index):
+        working_df[next_index]['tb'] = TopBotType.noTopBot.value
+        temp_index = previous_index
+        previous_index = self.trace_back_index(working_df, previous_index)
+        if previous_index is None:
+            previous_index = temp_index
+            next_index = self.get_next_tb(next_index, working_df)
+        else:
+            next_index = current_index
+            current_index = temp_index
+            if previous_index in self.previous_skipped_idx:
+                self.previous_skipped_idx.remove(previous_index)
+            
+        return previous_index, current_index, next_index
+    
+
     def defineBi(self):
         '''
         This method defines fenbi for all marked top/bot:
@@ -464,98 +508,117 @@ class KBarChan(object):
             if currentFenXing[tb] == previousFenXing[tb]: # used to track back the skipped previous_index
                 if currentFenXing[tb] == TopBotType.top.value:
                     if float_less(currentFenXing[high], previousFenXing[high]):
-                        working_df[current_index][tb] = TopBotType.noTopBot.value
-                        temp_index = previous_index
-                        current_index = previous_index
-                        previous_index = self.trace_back_index(working_df, previous_index)
-                        if previous_index is None:
-                            previous_index = temp_index
-                            current_index = next_index
-                            next_index = self.get_next_tb(next_index, working_df)
+                        previous_index, current_index, next_index = self.same_tb_remove_current(working_df, 
+                                                                                                 previous_index, 
+                                                                                                 current_index, 
+                                                                                                 next_index)
+                    elif float_more(currentFenXing[high], previousFenXing[high]):
+                        previous_index, current_index, next_index = self.same_tb_remove_previous(working_df, 
+                                                                                                 previous_index, 
+                                                                                                 current_index, 
+                                                                                                 next_index)
+                    else: # equal case
+                        gap_qualify = self.check_gap_qualify(working_df, previous_index, current_index, next_index)
+                        # only remove current if it's not valid with next in case of equality
+                        if working_df[next_index][new_index] - working_df[current_index][new_index] < 4 and not gap_qualify:
+                            previous_index, current_index, next_index = self.same_tb_remove_current(working_df, 
+                                                                                                     previous_index, 
+                                                                                                     current_index, 
+                                                                                                     next_index)
                         else:
-                            if previous_index in self.previous_skipped_idx:
-                                self.previous_skipped_idx.remove(previous_index)
-                    else:
-                        working_df[previous_index][tb] = TopBotType.noTopBot.value
-                        previous_index = self.trace_back_index(working_df, previous_index) #current_index # 
-                        if previous_index is None:
-                            previous_index = current_index
-                            current_index = next_index
-                            next_index = self.get_next_tb(next_index, working_df)
-                        else:
-                            if previous_index in self.previous_skipped_idx:
-                                self.previous_skipped_idx.remove(previous_index)
+                            previous_index, current_index, next_index = self.same_tb_remove_previous(working_df, 
+                                                                                                     previous_index, 
+                                                                                                     current_index, 
+                                                                                                     next_index)
                     continue
                 elif currentFenXing[tb] == TopBotType.bot.value:
                     if float_more(currentFenXing[low], previousFenXing[low]):
-                        working_df[current_index][tb] = TopBotType.noTopBot.value
-                        temp_index = previous_index
-                        current_index = previous_index
-                        previous_index = self.trace_back_index(working_df, previous_index)
-                        if previous_index is None:
-                            previous_index = temp_index
-                            current_index = next_index
-                            next_index = self.get_next_tb(next_index, working_df)
+                        previous_index, current_index, next_index = self.same_tb_remove_current(working_df, 
+                                                                                                 previous_index, 
+                                                                                                 current_index, 
+                                                                                                 next_index)
+                    elif float_less(currentFenXing[low], previousFenXing[low]):
+                        previous_index, current_index, next_index = self.same_tb_remove_previous(working_df, 
+                                                                                                 previous_index, 
+                                                                                                 current_index, 
+                                                                                                 next_index)
+                    else:# equal case
+                        gap_qualify = self.check_gap_qualify(working_df, previous_index, current_index, next_index)
+                        # only remove current if it's not valid with next in case of equality
+                        if working_df[next_index][new_index] - working_df[current_index][new_index] < 4 and not gap_qualify:
+                            previous_index, current_index, next_index = self.same_tb_remove_current(working_df, 
+                                                                                                     previous_index, 
+                                                                                                     current_index, 
+                                                                                                     next_index)
                         else:
-                            if previous_index in self.previous_skipped_idx:
-                                self.previous_skipped_idx.remove(previous_index)
-                    else:
-                        working_df[previous_index][tb] = TopBotType.noTopBot.value
-                        previous_index = self.trace_back_index(working_df, previous_index) #current_index # 
-                        if previous_index is None:
-                            previous_index = current_index
-                            current_index = next_index
-                            next_index = self.get_next_tb(next_index, working_df)
-                        else:
-                            if previous_index in self.previous_skipped_idx:
-                                self.previous_skipped_idx.remove(previous_index)
+                            previous_index, current_index, next_index = self.same_tb_remove_previous(working_df, 
+                                                                                                     previous_index, 
+                                                                                                     current_index, 
+                                                                                                     next_index)
                     continue
             elif currentFenXing[tb] == nextFenXing[tb]:
                 if currentFenXing[tb] == TopBotType.top.value:
                     if float_less(currentFenXing[high], nextFenXing[high]):
-                        working_df[current_index][tb] = TopBotType.noTopBot.value
-                        temp_index = previous_index
-                        previous_index = self.trace_back_index(working_df, previous_index)
-                        if previous_index is None:
-                            previous_index = temp_index
-                            current_index = next_index
-                            next_index = self.get_next_tb(next_index, working_df)
-                        else:
-                            current_index = temp_index
+                        previous_index, current_index, next_index = self.same_tb_remove_current(working_df, 
+                                                                                                 previous_index, 
+                                                                                                 current_index, 
+                                                                                                 next_index)
                         
-                    else:
-                        working_df[next_index][tb] = TopBotType.noTopBot.value
-                        temp_index = previous_index
-                        previous_index = self.trace_back_index(working_df, previous_index)
-                        if previous_index is None:
-                            previous_index = temp_index
-                            next_index = self.get_next_tb(next_index, working_df)
+                    elif float_more(currentFenXing[high], nextFenXing[high]):
+                        previous_index, current_index, next_index = self.same_tb_remove_next(working_df, 
+                                                                                                 previous_index, 
+                                                                                                 current_index, 
+                                                                                                 next_index)
+                    else: #equality case
+                        pre_pre_index = self.trace_back_index(working_df, previous_index)
+                        if pre_pre_index is None:
+                            previous_index, current_index, next_index = self.same_tb_remove_current(working_df, 
+                                                                                                     previous_index, 
+                                                                                                     current_index, 
+                                                                                                     next_index)
+                            continue
+                        gap_qualify = self.check_gap_qualify(working_df, pre_pre_index, previous_index, current_index)
+                        if working_df[current_index][new_index] - working_df[previous_index][new_index] >= 4 or gap_qualify:
+                            previous_index, current_index, next_index = self.same_tb_remove_next(working_df, 
+                                                                                                     previous_index, 
+                                                                                                     current_index, 
+                                                                                                     next_index)
                         else:
-                            next_index = current_index
-                            current_index = temp_index
-                            
+                            previous_index, current_index, next_index = self.same_tb_remove_current(working_df, 
+                                                                                                     previous_index, 
+                                                                                                     current_index, 
+                                                                                                     next_index)
                     continue
                 elif currentFenXing[tb] == TopBotType.bot.value:
                     if float_more(currentFenXing[low], nextFenXing[low]):
-                        working_df[current_index][tb] = TopBotType.noTopBot.value
-                        temp_index = previous_index
-                        previous_index = self.trace_back_index(working_df, previous_index)
-                        if previous_index is None:
-                            previous_index = temp_index
-                            current_index = next_index
-                            next_index = self.get_next_tb(next_index, working_df)
-                        else:
-                            current_index = temp_index
+                        previous_index, current_index, next_index = self.same_tb_remove_current(working_df, 
+                                                                                                 previous_index, 
+                                                                                                 current_index, 
+                                                                                                 next_index)
+                    elif float_less(currentFenXing[low], nextFenXing[low]):
+                        previous_index, current_index, next_index = self.same_tb_remove_next(working_df, 
+                                                                                                 previous_index, 
+                                                                                                 current_index, 
+                                                                                                 next_index)
                     else:
-                        working_df[next_index][tb] = TopBotType.noTopBot.value
-                        temp_index = previous_index
-                        previous_index = self.trace_back_index(working_df, previous_index)
-                        if previous_index is None:
-                            previous_index = temp_index
-                            next_index = self.get_next_tb(next_index, working_df)
+                        pre_pre_index = self.trace_back_index(working_df, previous_index)
+                        if pre_pre_index is None:
+                            previous_index, current_index, next_index = self.same_tb_remove_current(working_df, 
+                                                                                                     previous_index, 
+                                                                                                     current_index, 
+                                                                                                     next_index)
+                            continue
+                        gap_qualify = self.check_gap_qualify(working_df, pre_pre_index, previous_index, current_index)
+                        if working_df[current_index][new_index] - working_df[previous_index][new_index] >= 4 or gap_qualify:
+                            previous_index, current_index, next_index = self.same_tb_remove_next(working_df, 
+                                                                                                     previous_index, 
+                                                                                                     current_index, 
+                                                                                                     next_index)
                         else:
-                            next_index = current_index
-                            current_index = temp_index
+                            previous_index, current_index, next_index = self.same_tb_remove_current(working_df, 
+                                                                                                     previous_index, 
+                                                                                                     current_index, 
+                                                                                                     next_index)
                     continue
             
             gap_qualify = self.check_gap_qualify(working_df, previous_index, current_index, next_index)
