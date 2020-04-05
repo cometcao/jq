@@ -823,10 +823,10 @@ class Equilibrium():
                 return False
         else: # PAN BEI
 #             if abs(len(a_s) - len(c_s)) > 2:
-#             if len(a_s) != len(c_s):
-#                 if self.isdebug:
-#                     print("Not matching XD structure")
-#                 return False
+            if len(a_s) != len(c_s):
+                if self.isdebug:
+                    print("Not matching XD structure")
+                return False
             
             # detect benzou style Zhongshu
             if central_B.isBenZouStyle():
