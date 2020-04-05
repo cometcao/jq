@@ -138,9 +138,9 @@ class ZouShiLeiXing(object):
     def is_valid_central_region(cls, direction, first, second, third, forth):
         valid = False
         if direction == TopBotType.top2bot:
-            valid = first.chan_price < second.chan_price and second.chan_price > third.chan_price and third.chan_price < forth.chan_price and first.chan_price <= forth.chan_price
+            valid = float_less(first.chan_price, second.chan_price) and float_more(second.chan_price, third.chan_price) and float_less(third.chan_price, forth.chan_price) and float_less_equal(first.chan_price, forth.chan_price)
         elif direction == TopBotType.bot2top:
-            valid = first.chan_price > second.chan_price and second.chan_price < third.chan_price and third.chan_price > forth.chan_price and first.chan_price >= forth.chan_price           
+            valid = float_more(first.chan_price, second.chan_price) and float_less(second.chan_price, third.chan_price) and float_more(third.chan_price, forth.chan_price) and float_more_equal(first.chan_price, forth.chan_price)           
         else:
             print("Invalid direction: {0}".format(direction))
         return valid
@@ -285,10 +285,10 @@ class ZouShiLeiXing(object):
         same_direction_nodes = [n for n in all_double_nodes if n.direction == self.direction]
         # make sure the last two slope goes flatten, if not it's NOT exhausted
         # macd is only used if we have 5+ xds changed len(same_direction_nodes) < 3 or\
-        if len(same_direction_nodes) >= 2 and abs(same_direction_nodes[-1].work_out_slope()) >= abs(same_direction_nodes[-2].work_out_slope()):
-            if (same_direction_nodes[-1].direction == TopBotType.top2bot and same_direction_nodes[-2].end.chan_price <= same_direction_nodes[-1].end.chan_price) or\
-                (same_direction_nodes[-1].direction == TopBotType.bot2top and same_direction_nodes[-2].end.chan_price >= same_direction_nodes[-1].end.chan_price) or\
-                (abs(same_direction_nodes[-1].end.macd_acc)>=abs(same_direction_nodes[-2].end.macd_acc)): # we can use macd for the last two
+        if len(same_direction_nodes) >= 2 and float_more_equal(abs(same_direction_nodes[-1].work_out_slope()), abs(same_direction_nodes[-2].work_out_slope())):
+            if (same_direction_nodes[-1].direction == TopBotType.top2bot and float_less_equal(same_direction_nodes[-2].end.chan_price, same_direction_nodes[-1].end.chan_price)) or\
+                (same_direction_nodes[-1].direction == TopBotType.bot2top and float_more_equal(same_direction_nodes[-2].end.chan_price, same_direction_nodes[-1].end.chan_price)) or\
+                float_more_equal(abs(same_direction_nodes[-1].end.macd_acc),abs(same_direction_nodes[-2].end.macd_acc)): # we can use macd for the last two
                     return False, same_direction_nodes[0].start.time
         return True, same_direction_nodes[-1].start.time
         
@@ -346,9 +346,9 @@ class ZhongShu(ZouShiLeiXing):
     def out_of_zhongshu(self, node1, node2):
         [l,h] = self.get_core_region()
         exit_direction = TopBotType.noTopBot
-        if (node1.chan_price < l and node2.chan_price < l):
+        if (float_less(node1.chan_price, l) and float_less(node2.chan_price, l)):
             exit_direction = TopBotType.top2bot  
-        elif (node1.chan_price > h and node2.chan_price > h):
+        elif (float_more(node1.chan_price, h) and float_more(node2.chan_price, h)):
             exit_direction = TopBotType.bot2top
         else:
             exit_direction = TopBotType.noTopBot
@@ -507,19 +507,19 @@ class ZhongShu(ZouShiLeiXing):
 #         balanced = zhongshu_time_diff[0] <= (first_time_diff[0] + last_time_diff[1])/2 <= zhongshu_time_diff[1] and\
 #                     zhongshu_price_region[0] <= (max(first_price_region[1],last_price_region[1]) + min(first_price_region[0],last_price_region[0]))/2 <= zhongshu_price_region[1]
         # check exhaustion
-        exhausted = abs(first_xd.work_out_slope()) > abs(last_xd.work_out_slope())
+        exhausted = float_more(abs(first_xd.work_out_slope()), abs(last_xd.work_out_slope()))
             
         if not exhausted:
             # also need to check balance structure
             core_region = self.get_core_region()
             if first_xd.direction == TopBotType.top2bot == last_xd.direction:
-                exhausted = first_xd.zoushi_nodes[0].chan_price > core_region[1] and\
-                            last_xd.zoushi_nodes[-1].chan_price < core_region[0] and\
-                            abs(first_xd.zoushi_nodes[1].macd_acc) > abs(last_xd.zoushi_nodes[1].macd_acc)
+                exhausted = float_more(first_xd.zoushi_nodes[0].chan_price, core_region[1]) and\
+                            float_less(last_xd.zoushi_nodes[-1].chan_price, core_region[0]) and\
+                            float_more(abs(first_xd.zoushi_nodes[1].macd_acc), abs(last_xd.zoushi_nodes[1].macd_acc))
             elif first_xd.direction == TopBotType.bot2top == last_xd.direction:
-                exhausted = first_xd.zoushi_nodes[0].chan_price < core_region[0] and\
-                            last_xd.zoushi_nodes[-1].chan_price > core_region[1] and\
-                            abs(first_xd.zoushi_nodes[1].macd_acc) > abs(last_xd.zoushi_nodes[1].macd_acc)
+                exhausted = float_less(first_xd.zoushi_nodes[0].chan_price, core_region[0]) and\
+                            float_more(last_xd.zoushi_nodes[-1].chan_price, core_region[1]) and\
+                            float_more(abs(first_xd.zoushi_nodes[1].macd_acc), abs(last_xd.zoushi_nodes[1].macd_acc))
         return exhausted, last_xd.zoushi_nodes[0].time if exhausted else first_xd.zoushi_nodes[0].time
 
     def is_running_type(self):

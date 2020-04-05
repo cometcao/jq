@@ -81,9 +81,9 @@ class KBarChan(object):
         first_low = first['low'] if first['new_low']==0 else first['new_low']
         second_low = second['low'] if second['new_low']==0 else second['new_low']
         
-        if first_high <= second_high and first_low >= second_low:
+        if float_less_equal(first_high, second_high) and float_more_equal(first_low, second_low):
             isInclusion = InclusionType.firstCsecond
-        elif first_high >= second_high and first_low <= second_low:
+        elif float_more_equal(first_high, second_high) and float_less_equal(first_low, second_low):
             isInclusion = InclusionType.secondCfirst
         return isInclusion
     
@@ -91,7 +91,7 @@ class KBarChan(object):
         # this is assuming first second aren't inclusive
         f_high = first['high'] if first['new_high']==0 else first['new_high']
         s_high = second['high'] if second['new_high']==0 else second['new_high']
-        return TopBotType.bot2top if f_high < s_high else TopBotType.top2bot
+        return TopBotType.bot2top if float_less(f_high, s_high) else TopBotType.top2bot
             
         
     def standardize(self, initial_state=TopBotType.noTopBot):
@@ -193,9 +193,9 @@ class KBarChan(object):
         return self.kDataFrame_standardized
     
     def checkTopBot(self, current, first, second):
-        if first['high'] > current['high'] and first['high'] > second['high']:
+        if float_more(first['high'], current['high']) and float_more(first['high'], second['high']):
             return TopBotType.top
-        elif first['low'] < current['low'] and first['low'] < second['low']:
+        elif float_less(first['low'], current['low']) and float_less(first['low'], second['low']):
             return TopBotType.bot
         else:
             return TopBotType.noTopBot
@@ -212,8 +212,8 @@ class KBarChan(object):
         if initial_state == TopBotType.top or initial_state == TopBotType.bot:
             felem = self.kDataFrame_standardized[0]
             selem = self.kDataFrame_standardized[1]
-            if (initial_state == TopBotType.top and felem['high'] >= selem['high']) or \
-                (initial_state == TopBotType.bot and felem['low'] <= selem['low']):
+            if (initial_state == TopBotType.top and float_more_equal(felem['high'], selem['high'])) or \
+                (initial_state == TopBotType.bot and float_less_equal(felem['low'], selem['low'])):
                 self.kDataFrame_standardized[0][tb] = initial_state.value
             else:
                 if self.isdebug:
@@ -340,47 +340,47 @@ class KBarChan(object):
             firstFenXing = working_df[firstIdx]
             secondFenXing = working_df[secondIdx]
             thirdFenXing = working_df[thirdIdx]
-            if firstFenXing[tb] == secondFenXing[tb] == TopBotType.top.value and firstFenXing[high] < secondFenXing[high]:
+            if firstFenXing[tb] == secondFenXing[tb] == TopBotType.top.value and float_less(firstFenXing[high], secondFenXing[high]):
                 working_df[firstIdx][tb] = TopBotType.noTopBot.value
                 firstIdx = get_next_loc(firstIdx, working_df)
                 secondIdx=get_next_loc(firstIdx, working_df)
                 thirdIdx=get_next_loc(secondIdx, working_df)
                 continue
-            elif firstFenXing[tb] == secondFenXing[tb] == TopBotType.top.value and firstFenXing[high] >= secondFenXing[high]:
+            elif firstFenXing[tb] == secondFenXing[tb] == TopBotType.top.value and float_more_equal(firstFenXing[high], secondFenXing[high]):
                 working_df[secondIdx][tb] = TopBotType.noTopBot.value
                 secondIdx = get_next_loc(secondIdx, working_df)
                 thirdIdx=get_next_loc(secondIdx, working_df)
                 continue
-            elif firstFenXing[tb] == secondFenXing[tb] == TopBotType.bot.value and firstFenXing[low] > secondFenXing[low]:
+            elif firstFenXing[tb] == secondFenXing[tb] == TopBotType.bot.value and float_more(firstFenXing[low], secondFenXing[low]):
                 working_df[firstIdx][tb] = TopBotType.noTopBot.value
                 firstIdx = get_next_loc(firstIdx, working_df)
                 secondIdx=get_next_loc(firstIdx, working_df)
                 thirdIdx=get_next_loc(secondIdx, working_df)
                 continue
-            elif firstFenXing[tb] == secondFenXing[tb] == TopBotType.bot.value and firstFenXing[low] <= secondFenXing[low]:
+            elif firstFenXing[tb] == secondFenXing[tb] == TopBotType.bot.value and float_less_equal(firstFenXing[low], secondFenXing[low]):
                 working_df[secondIdx][tb] = TopBotType.noTopBot.value
                 secondIdx = get_next_loc(secondIdx, working_df)
                 thirdIdx=get_next_loc(secondIdx, working_df)
                 continue
             elif secondFenXing[new_index] - firstFenXing[new_index] < 4:
-                if firstFenXing[tb] == thirdFenXing[tb] == TopBotType.top.value and firstFenXing[high] < thirdFenXing[high]:
+                if firstFenXing[tb] == thirdFenXing[tb] == TopBotType.top.value and float_less(firstFenXing[high], thirdFenXing[high]):
                     working_df[firstIdx][tb] = TopBotType.noTopBot.value
                     firstIdx = get_next_loc(firstIdx, working_df)
                     secondIdx=get_next_loc(firstIdx, working_df)
                     thirdIdx=get_next_loc(secondIdx, working_df)
                     continue
-                elif firstFenXing[tb] == thirdFenXing[tb] == TopBotType.top.value and firstFenXing[high] >= thirdFenXing[high]:
+                elif firstFenXing[tb] == thirdFenXing[tb] == TopBotType.top.value and float_more_equal(firstFenXing[high], thirdFenXing[high]):
                     working_df[secondIdx][tb] = TopBotType.noTopBot.value
                     secondIdx=get_next_loc(secondIdx, working_df)
                     thirdIdx=get_next_loc(secondIdx, working_df)
                     continue
-                elif firstFenXing[tb] == thirdFenXing[tb] == TopBotType.bot.value and firstFenXing[low] > thirdFenXing[low]:
+                elif firstFenXing[tb] == thirdFenXing[tb] == TopBotType.bot.value and float_more(firstFenXing[low], thirdFenXing[low]):
                     working_df[firstIdx][tb] = TopBotType.noTopBot.value
                     firstIdx = get_next_loc(firstIdx, working_df)
                     secondIdx=get_next_loc(firstIdx, working_df)
                     thirdIdx=get_next_loc(secondIdx, working_df)
                     continue
-                elif firstFenXing[tb] == thirdFenXing[tb] == TopBotType.bot.value and firstFenXing[low] <= thirdFenXing[low]:
+                elif firstFenXing[tb] == thirdFenXing[tb] == TopBotType.bot.value and float_less_equal(firstFenXing[low], thirdFenXing[low]):
                     working_df[secondIdx][tb] = TopBotType.noTopBot.value
                     secondIdx=get_next_loc(secondIdx, working_df)
                     thirdIdx=get_next_loc(secondIdx, working_df)
@@ -389,14 +389,14 @@ class KBarChan(object):
                     print("somthing WRONG!")
                     return
                     
-            elif firstFenXing[tb] == TopBotType.top.value and secondFenXing[tb] == TopBotType.bot.value and firstFenXing[high] <= secondFenXing[low]:
+            elif firstFenXing[tb] == TopBotType.top.value and secondFenXing[tb] == TopBotType.bot.value and float_less_equal(firstFenXing[high], secondFenXing[low]):
                 working_df[firstIdx][tb] = TopBotType.noTopBot.value
                 working_df[secondIdx][tb] = TopBotType.noTopBot.value
                 firstIdx = get_next_loc(firstIdx, working_df)
                 secondIdx=get_next_loc(firstIdx, working_df)
                 thirdIdx=get_next_loc(secondIdx, working_df)
                 continue
-            elif firstFenXing[tb] == TopBotType.bot.value and secondFenXing[tb] == TopBotType.top.value and firstFenXing[low] >= secondFenXing[high]:
+            elif firstFenXing[tb] == TopBotType.bot.value and secondFenXing[tb] == TopBotType.top.value and float_more_equal(firstFenXing[low], secondFenXing[high]):
                 working_df[firstIdx][tb] = TopBotType.noTopBot.value
                 working_df[secondIdx][tb] = TopBotType.noTopBot.value
                 firstIdx = get_next_loc(firstIdx, working_df)
@@ -419,10 +419,14 @@ class KBarChan(object):
             for gap in gap_ranges:
                 if working_df[previous_index]['tb'] == TopBotType.top.value: 
                     #gap higher than previous high
-                    gap_qualify = gap[0] < working_df[previous_index]['low'] <= working_df[previous_index]['high'] < gap[1]
+                    gap_qualify = float_less(gap[0], working_df[previous_index]['low']) and\
+                                  float_less_equal(working_df[previous_index]['low'], working_df[previous_index]['high']) and\
+                                  float_less(working_df[previous_index]['high'], gap[1])
                 elif working_df[previous_index]['tb'] == TopBotType.bot.value:
                     #gap higher than previous low
-                    gap_qualify = gap[1] > working_df[previous_index]['high'] >= working_df[previous_index]['low'] > gap[0]
+                    gap_qualify = float_more(gap[1], working_df[previous_index]['high']) and\
+                                  float_more_equal(working_df[previous_index]['high'], working_df[previous_index]['low']) and\
+                                  float_more(working_df[previous_index]['low'], gap[0])
                 if gap_qualify:
                     break
         return gap_qualify
@@ -459,7 +463,7 @@ class KBarChan(object):
             
             if currentFenXing[tb] == previousFenXing[tb]: # used to track back the skipped previous_index
                 if currentFenXing[tb] == TopBotType.top.value:
-                    if currentFenXing[high] < previousFenXing[high]:
+                    if float_less(currentFenXing[high], previousFenXing[high]):
                         working_df[current_index][tb] = TopBotType.noTopBot.value
                         temp_index = previous_index
                         current_index = previous_index
@@ -483,7 +487,7 @@ class KBarChan(object):
                                 self.previous_skipped_idx.remove(previous_index)
                     continue
                 elif currentFenXing[tb] == TopBotType.bot.value:
-                    if currentFenXing[low] > previousFenXing[low]:
+                    if float_more(currentFenXing[low], previousFenXing[low]):
                         working_df[current_index][tb] = TopBotType.noTopBot.value
                         temp_index = previous_index
                         current_index = previous_index
@@ -508,7 +512,7 @@ class KBarChan(object):
                     continue
             elif currentFenXing[tb] == nextFenXing[tb]:
                 if currentFenXing[tb] == TopBotType.top.value:
-                    if currentFenXing[high] < nextFenXing[high]:
+                    if float_less(currentFenXing[high], nextFenXing[high]):
                         working_df[current_index][tb] = TopBotType.noTopBot.value
                         temp_index = previous_index
                         previous_index = self.trace_back_index(working_df, previous_index)
@@ -532,7 +536,7 @@ class KBarChan(object):
                             
                     continue
                 elif currentFenXing[tb] == TopBotType.bot.value:
-                    if currentFenXing[low] > nextFenXing[low]:
+                    if float_more(currentFenXing[low], nextFenXing[low]):
                         working_df[current_index][tb] = TopBotType.noTopBot.value
                         temp_index = previous_index
                         previous_index = self.trace_back_index(working_df, previous_index)
@@ -562,7 +566,7 @@ class KBarChan(object):
                     if currentFenXing[tb] == TopBotType.bot.value and\
                         previousFenXing[tb] == TopBotType.top.value and\
                         nextFenXing[tb] == TopBotType.top.value:
-                        if previousFenXing[high] >= nextFenXing[high]:
+                        if float_more_equal(previousFenXing[high], nextFenXing[high]):
                             # still can't make decision, but we can have idea about prepre case
                             pre_pre_index = self.trace_back_index(working_df, previous_index)
                             if pre_pre_index is None:
@@ -574,7 +578,7 @@ class KBarChan(object):
                             if pre_pre_index in self.previous_skipped_idx:
                                 self.previous_skipped_idx.remove(pre_pre_index)
                             prepreFenXing = working_df[pre_pre_index]
-                            if prepreFenXing[low] >= currentFenXing[low]:
+                            if float_more_equal(prepreFenXing[low], currentFenXing[low]):
                                 working_df[pre_pre_index][tb] = TopBotType.noTopBot.value
                                 temp_index = self.trace_back_index(working_df, pre_pre_index)
                                 if temp_index is None:
@@ -605,7 +609,7 @@ class KBarChan(object):
                     elif currentFenXing[tb] == TopBotType.top.value and\
                         previousFenXing[tb] == TopBotType.bot.value and\
                         nextFenXing[tb] == TopBotType.bot.value:
-                        if previousFenXing[low] < nextFenXing[low]:
+                        if float_less(previousFenXing[low], nextFenXing[low]):
                             # still can't make decision, but we can have idea about prepre case
                             pre_pre_index = self.trace_back_index(working_df, previous_index)
                             if pre_pre_index is None:
@@ -617,7 +621,7 @@ class KBarChan(object):
                             if pre_pre_index in self.previous_skipped_idx:
                                 self.previous_skipped_idx.remove(pre_pre_index)
                             prepreFenXing = working_df[pre_pre_index]
-                            if prepreFenXing[high] <= currentFenXing[high]:
+                            if float_less_equal(prepreFenXing[high], currentFenXing[high]):
                                 working_df[pre_pre_index][tb] = TopBotType.noTopBot.value
                                 temp_index = self.trace_back_index(working_df, pre_pre_index)
                                 if temp_index is None:
@@ -674,31 +678,31 @@ class KBarChan(object):
                     next_index = temp_index
                 continue
             elif (nextFenXing[new_index] - currentFenXing[new_index]) >= 4 or gap_qualify:
-                if currentFenXing[tb] == TopBotType.top.value and nextFenXing[tb] == TopBotType.bot.value and currentFenXing[high] > nextFenXing[high]:
+                if currentFenXing[tb] == TopBotType.top.value and nextFenXing[tb] == TopBotType.bot.value and float_more(currentFenXing[high], nextFenXing[high]):
                     pass
-                elif currentFenXing[tb] == TopBotType.top.value and nextFenXing[tb] == TopBotType.bot.value and currentFenXing[high] <= nextFenXing[high]:
+                elif currentFenXing[tb] == TopBotType.top.value and nextFenXing[tb] == TopBotType.bot.value and float_less_equal(currentFenXing[high], nextFenXing[high]):
                     working_df[current_index][tb] = TopBotType.noTopBot.value
                     current_index = next_index
                     next_index = self.get_next_tb(next_index, working_df)
                     continue
                 
-                elif currentFenXing[tb] == TopBotType.top.value and nextFenXing[tb] == TopBotType.bot.value and currentFenXing[low] <= nextFenXing[low]:
+                elif currentFenXing[tb] == TopBotType.top.value and nextFenXing[tb] == TopBotType.bot.value and float_less_equal(currentFenXing[low],nextFenXing[low]):
                     working_df[next_index][tb] = TopBotType.noTopBot.value
                     next_index = self.get_next_tb(next_index, working_df)
                     continue
-                elif currentFenXing[tb] == TopBotType.top.value and nextFenXing[tb] == TopBotType.bot.value and currentFenXing[low] > nextFenXing[low]:
+                elif currentFenXing[tb] == TopBotType.top.value and nextFenXing[tb] == TopBotType.bot.value and float_more(currentFenXing[low], nextFenXing[low]):
                     pass
                 
-                elif currentFenXing[tb] == TopBotType.bot.value and nextFenXing[tb] == TopBotType.top.value and currentFenXing[low] < nextFenXing[low]:
+                elif currentFenXing[tb] == TopBotType.bot.value and nextFenXing[tb] == TopBotType.top.value and float_less(currentFenXing[low], nextFenXing[low]):
                     pass
-                elif currentFenXing[tb] == TopBotType.bot.value and nextFenXing[tb] == TopBotType.top.value and currentFenXing[low] >= nextFenXing[low]:
+                elif currentFenXing[tb] == TopBotType.bot.value and nextFenXing[tb] == TopBotType.top.value and float_more_equal(currentFenXing[low], nextFenXing[low]):
                     working_df[current_index][tb] = TopBotType.noTopBot.value
                     current_index = next_index 
                     next_index = self.get_next_tb(next_index, working_df)
                     continue
-                elif currentFenXing[tb] == TopBotType.bot.value and nextFenXing[tb] == TopBotType.top.value and currentFenXing[high] < nextFenXing[high]:
+                elif currentFenXing[tb] == TopBotType.bot.value and nextFenXing[tb] == TopBotType.top.value and float_less(currentFenXing[high], nextFenXing[high]):
                     pass
-                elif currentFenXing[tb] == TopBotType.bot.value and nextFenXing[tb] == TopBotType.top.value and currentFenXing[high] >= nextFenXing[high]:
+                elif currentFenXing[tb] == TopBotType.bot.value and nextFenXing[tb] == TopBotType.top.value and float_more_equal(currentFenXing[high], nextFenXing[high]):
                     working_df[next_index][tb] = TopBotType.noTopBot.value
                     next_index = self.get_next_tb(next_index, working_df)
                     continue
@@ -718,25 +722,25 @@ class KBarChan(object):
 
         # if nextIndex is the last one, final clean up
         if next_index == working_df.size:
-            if ((working_df[current_index][tb]==TopBotType.top.value and self.kDataFrame_origin[-1][high] > working_df[current_index][high]) \
-                or (working_df[current_index][tb]==TopBotType.bot.value and self.kDataFrame_origin[-1][low] < working_df[current_index][low]) ):
+            if ((working_df[current_index][tb]==TopBotType.top.value and float_more(self.kDataFrame_origin[-1][high], working_df[current_index][high])) \
+                or (working_df[current_index][tb]==TopBotType.bot.value and float_less(self.kDataFrame_origin[-1][low], working_df[current_index][low]) )):
                 working_df[-1][tb] = working_df[current_index][tb]
                 working_df[current_index][tb] = TopBotType.noTopBot.value
             
             if working_df[current_index][tb] == TopBotType.noTopBot.value and\
-                ((working_df[previous_index][tb]==TopBotType.top.value and self.kDataFrame_origin[-1][high] > working_df[previous_index][high]) or\
-                 (working_df[previous_index][tb]==TopBotType.bot.value and self.kDataFrame_origin[-1][low] < working_df[previous_index][low])):
+                ((working_df[previous_index][tb]==TopBotType.top.value and float_more(self.kDataFrame_origin[-1][high], working_df[previous_index][high])) or\
+                 (working_df[previous_index][tb]==TopBotType.bot.value and float_less(self.kDataFrame_origin[-1][low], working_df[previous_index][low]))):
                 working_df[-1][tb] = working_df[previous_index][tb]
                 working_df[previous_index][tb] = TopBotType.noTopBot.value
                 
             if working_df[previous_index][tb] == working_df[current_index][tb]:
                 if working_df[current_index][tb] == TopBotType.top.value:
-                    if working_df[current_index][high] > working_df[previous_index][high]:
+                    if float_more(working_df[current_index][high],working_df[previous_index][high]):
                         working_df[previous_index][tb] = TopBotType.noTopBot.value
                     else:
                         working_df[current_index][tb] = TopBotType.noTopBot.value
                 elif working_df[current_index][tb] == TopBotType.bot.value:
-                    if working_df[current_index][low] < working_df[previous_index][low]:
+                    if float_less(working_df[current_index][low], working_df[previous_index][low]):
                         working_df[previous_index][tb] = TopBotType.noTopBot.value
                     else:
                         working_df[current_index][tb] = TopBotType.noTopBot.value
@@ -756,7 +760,7 @@ class KBarChan(object):
         nextFenXing = working_df[nex_idx]
 
         if currentFenXing['tb'] == TopBotType.top.value:
-            if previousFenXing['low'] > nextFenXing['low']:
+            if float_more(previousFenXing['low'], nextFenXing['low']):
                 working_df[pre_idx]['tb'] = TopBotType.noTopBot.value
                 pre_idx = self.trace_back_index(working_df, pre_idx)
             else:
@@ -765,7 +769,7 @@ class KBarChan(object):
                 cur_idx = pre_idx
                 pre_idx = self.trace_back_index(working_df, pre_idx)
         else: # TopBotType.bot
-            if previousFenXing['high'] < nextFenXing['high']:
+            if float_less(previousFenXing['high'], nextFenXing['high']):
                 working_df[pre_idx]['tb'] = TopBotType.noTopBot.value
                 pre_idx = self.trace_back_index(working_df, pre_idx)
             else:
@@ -854,15 +858,15 @@ class KBarChan(object):
                 third = working_df[current_loc+2]
                 forth = working_df[current_loc+3]
                 
-                if first[chan_price] < second[chan_price]:
-                    found_direction = (first[chan_price]<=third[chan_price] and second[chan_price]<forth[chan_price]) or\
-                                        (first[chan_price]>=third[chan_price] and second[chan_price]>forth[chan_price])
+                if float_less(first[chan_price], second[chan_price]):
+                    found_direction = (float_less_equal(first[chan_price],third[chan_price]) and float_less(second[chan_price],forth[chan_price])) or\
+                                        (float_more_equal(first[chan_price],third[chan_price]) and float_more(second[chan_price],forth[chan_price]))
                 else:
-                    found_direction = (first[chan_price]<third[chan_price] and second[chan_price]<=forth[chan_price]) or\
-                                        (first[chan_price]>third[chan_price] and second[chan_price]>=forth[chan_price])
+                    found_direction = (float_less(first[chan_price],third[chan_price]) and float_less_equal(second[chan_price],forth[chan_price])) or\
+                                        (float_more(first[chan_price],third[chan_price]) and float_more_equal(second[chan_price],forth[chan_price]))
                                     
                 if found_direction:
-                    initial_direction = TopBotType.bot2top if (first[chan_price]<third[chan_price] or second[chan_price]<forth[chan_price]) else TopBotType.top2bot
+                    initial_direction = TopBotType.bot2top if (float_less(first[chan_price],third[chan_price]) or float_less(second[chan_price],forth[chan_price])) else TopBotType.top2bot
                     initial_loc = current_loc
                     break
                 else:
@@ -927,8 +931,8 @@ class KBarChan(object):
         '''
         given four elem check the xd formed contain inclusive relationship, positive as True, negative as False
         '''
-        if (firstElem['chan_price'] <= thirdElem['chan_price'] and secondElem['chan_price'] >= forthElem['chan_price']) or\
-            (firstElem['chan_price'] >= thirdElem['chan_price'] and secondElem['chan_price'] <= forthElem['chan_price']):
+        if (float_less_equal(firstElem['chan_price'], thirdElem['chan_price']) and float_more_equal(secondElem['chan_price'], forthElem['chan_price'])) or\
+            (float_more_equal(firstElem['chan_price'], thirdElem['chan_price']) and float_less_equal(secondElem['chan_price'], forthElem['chan_price'])):
             return True
         return False
 
@@ -1044,17 +1048,17 @@ class KBarChan(object):
         with_gap = False
         
         if third[tb] == TopBotType.top.value:
-            with_gap = first[chan_price] < forth[chan_price]
-            if third[chan_price] > first[chan_price] and\
-             third[chan_price] > fifth[chan_price] and\
-             forth[chan_price] > sixth[chan_price]:
+            with_gap = float_less(first[chan_price], forth[chan_price])
+            if float_more(third[chan_price], first[chan_price]) and\
+             float_more(third[chan_price], fifth[chan_price]) and\
+             float_more(forth[chan_price], sixth[chan_price]):
                 result_status = TopBotType.top
                 
         elif third[tb] == TopBotType.bot.value:
-            with_gap = first[chan_price] > forth[chan_price]
-            if third[chan_price] < first[chan_price] and\
-             third[chan_price] < fifth[chan_price] and\
-             forth[chan_price] < sixth[chan_price]:
+            with_gap = float_more(first[chan_price], forth[chan_price])
+            if float_less(third[chan_price], first[chan_price]) and\
+             float_less(third[chan_price], fifth[chan_price]) and\
+             float_less(forth[chan_price], sixth[chan_price]):
                 result_status = TopBotType.bot
                             
         else:
@@ -1098,9 +1102,9 @@ class KBarChan(object):
                     print("XD represented by kline gap 1, {0}, {1}".format(working_df[next_valid_elems[1]]['date'], working_df[next_valid_elems[2]]['date']))
 
         if with_xd_gap:
-            if (direction == TopBotType.bot2top and third[chan_price] > fifth[chan_price] and third[chan_price] > first[chan_price]):
+            if (direction == TopBotType.bot2top and float_more(third[chan_price], fifth[chan_price]) and float_more(third[chan_price], first[chan_price])):
                 xd_gap_result = TopBotType.top
-            elif (direction == TopBotType.top2bot and third[chan_price] < first[chan_price] and third[chan_price] < fifth[chan_price]):
+            elif (direction == TopBotType.top2bot and float_less(third[chan_price], first[chan_price]) and float_less(third[chan_price], fifth[chan_price])):
                 xd_gap_result = TopBotType.bot
             else:
                 if self.isdebug:
@@ -1121,9 +1125,9 @@ class KBarChan(object):
                                                  single_direction=True)
         if len(previous_elem) >= 1: # use single direction at least 1 needed
             if first[tb] == TopBotType.top.value:
-                with_gap = working_df[previous_elem][chan_price].max() < forth[chan_price]
+                with_gap = float_less(working_df[previous_elem][chan_price].max(), forth[chan_price])
             elif first[tb] == TopBotType.bot.value:
-                with_gap = working_df[previous_elem][chan_price].min() > forth[chan_price]
+                with_gap = float_more(working_df[previous_elem][chan_price].min(), forth[chan_price])
             else:
                 assert first[tb] == TopBotType.top.value or first[tb] == TopBotType.bot.value, "Invalid first elem tb"
         if not with_gap and self.isdebug:
@@ -1271,11 +1275,11 @@ class KBarChan(object):
         
         if current_direction == TopBotType.top2bot:
             min_price = min(affected_chan_prices)
-            if min_price < working_df[next_valid_elems[1]]['chan_price']:
+            if float_less(min_price, working_df[next_valid_elems[1]]['chan_price']):
                 result = next_valid_elems[1] # next candidate
         else:
             max_price = max(affected_chan_prices)
-            if max_price > working_df[next_valid_elems[1]]['chan_price']:
+            if float_more(max_price, working_df[next_valid_elems[1]]['chan_price']):
                 result = next_valid_elems[1]
         
         if result is not None: # restore data
@@ -1300,7 +1304,7 @@ class KBarChan(object):
         secondElem = working_df[next_valid_elems[1]]
         previous_gap_elem = working_df[self.gap_XD[-1]]
         if current_direction == TopBotType.top2bot:
-            if secondElem[chan_price] > previous_gap_elem[chan_price]:
+            if float_more(secondElem[chan_price], previous_gap_elem[chan_price]):
                 previous_gap_loc = self.gap_XD.pop()
                 if self.isdebug:
                     print("xd_tb cancelled due to new high found: {0} {1}".format(working_df[previous_gap_loc][date], working_df[previous_gap_loc][real_loc]))
@@ -1315,7 +1319,7 @@ class KBarChan(object):
                 i = previous_gap_loc
                 
         elif current_direction == TopBotType.bot2top:
-            if secondElem['chan_price'] < previous_gap_elem[chan_price]:
+            if float_less(secondElem['chan_price'], previous_gap_elem[chan_price]):
                 previous_gap_loc = self.gap_XD.pop()
                 if self.isdebug:
                     print("xd_tb cancelled due to new low found: {0} {1}".format(working_df[previous_gap_loc][date], working_df[previous_gap_loc][real_loc]))
@@ -1464,7 +1468,7 @@ class KBarChan(object):
                             max_date = temp_df[max_loc][date]
                             max_price = temp_df[max_loc][chan_price]
                             working_loc = np.where(working_df[date]==max_date)[0][0]
-                            if max_price > working_df[previous_xd_tb_locs[0]][chan_price]:
+                            if float_more(max_price, working_df[previous_xd_tb_locs[0]][chan_price]):
                                 working_df[previous_xd_tb_locs[0]] = TopBotType.noTopBot.value
                                 working_df[working_loc][xd_tb] = TopBotType.top.value
                                 gapped_change = True
@@ -1475,7 +1479,7 @@ class KBarChan(object):
                             min_date = temp_df[min_loc][date]
                             min_price = temp_df[min_loc][chan_price]
                             working_loc = np.where(working_df[date]==min_date)[0][0]
-                            if min_price < working_df[previous_xd_tb_locs[0]][chan_price]:
+                            if float_less(min_price, working_df[previous_xd_tb_locs[0]][chan_price]):
                                 working_df[previous_xd_tb_locs[0]] = TopBotType.noTopBot.value
                                 working_df[working_loc][xd_tb] = TopBotType.bot.value
                                 gapped_change = True
