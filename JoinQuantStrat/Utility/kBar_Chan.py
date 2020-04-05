@@ -1076,7 +1076,12 @@ class KBarChan(object):
         i = current_loc
         first_run = True
 
-        count_num = 8 if with_gap else 6
+#         count_num = 8 if with_gap else 6
+        # for without gap case we need to make sure all second and third (carry forward as well) 
+        # elem are inclusion free that results 6 nodes to be tested
+        # for with gap case we need to test all first second and third elem (not carry forward) 
+        # this also results 6 nodes to be tested
+        count_num = 6
             
         while first_run or (i+count_num-1 < working_df.shape[0]):
             first_run = False
@@ -1088,8 +1093,8 @@ class KBarChan(object):
             if with_gap:
                 if self.is_XD_inclusion_free(direction, next_valid_elems[:4], working_df):
                     if self.is_XD_inclusion_free(direction, next_valid_elems[2:6], working_df):
-                        if self.is_XD_inclusion_free(direction, next_valid_elems[-4:], working_df):
-                            break
+#                         if self.is_XD_inclusion_free(direction, next_valid_elems[-4:], working_df):
+                        break
             else:
                 if self.is_XD_inclusion_free(direction, next_valid_elems[:4], working_df):
                     if self.is_XD_inclusion_free(direction, next_valid_elems[-4:], working_df):
