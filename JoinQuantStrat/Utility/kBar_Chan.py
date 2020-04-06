@@ -1463,7 +1463,6 @@ class KBarChan(object):
             if previous_gap:
                 # do inclusion find the next two elems we need to do inclusion as we have previous gaps
                 next_valid_elems= self.check_inclusion_by_direction(i, working_df, current_direction, count_num=4)
-                
                 if len(next_valid_elems) < 4:
                     break
                 # make sure we are checking the right elem by direction
@@ -1517,6 +1516,8 @@ class KBarChan(object):
             else:    # no gap case
                 # find next 4 elems, we don't do inclusion as there were no gap previously
                 next_elems = self.get_next_N_elem(i, working_df, 4)
+                if len(next_elems) < 4:
+                    break
                 
                 # check if we have current gap
                 current_gap = self.check_current_gap(working_df[next_elems[0]],
