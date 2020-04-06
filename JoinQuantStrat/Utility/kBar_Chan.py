@@ -1481,7 +1481,10 @@ class KBarChan(object):
                     next_valid_elems= self.check_inclusion_by_direction(next_valid_elems[0], working_df, current_direction, count_num=6)
                 else:
                     next_valid_elems= self.check_inclusion_by_direction(next_valid_elems[0], working_df, current_direction, count_num=8)
-                    
+                
+                if len(next_valid_elems) < 6:
+                    break
+                
                 # due to kline gap as xd reasons we do check the current gap again
                 current_status, with_current_gap, with_kline_gap_as_xd = self.check_XD_topbot_directed(next_valid_elems, current_direction, working_df)  
 
