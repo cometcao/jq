@@ -469,8 +469,8 @@ class KBarChan(object):
         else:
             next_index = current_index
             current_index = temp_index
-            if previous_index in self.previous_skipped_idx:
-                self.previous_skipped_idx.remove(previous_index)
+#             if previous_index in self.previous_skipped_idx:
+#                 self.previous_skipped_idx.remove(previous_index)
             
         return previous_index, current_index, next_index
     
