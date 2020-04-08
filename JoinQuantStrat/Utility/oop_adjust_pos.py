@@ -840,13 +840,15 @@ class Short_Chan(Sell_stocks):
             # check slope
             max_price = stock_data.loc[sub_zoushi_start_time:, 'high'].max()
             min_price = stock_data.loc[sub_zoushi_start_time:, 'low'].min()
-            max_loc = stock_data.index.get_loc(stock_data.loc[sub_zoushi_start_time:, 'high'].idxmax())
-            min_loc = stock_data.index.get_loc(stock_data.loc[sub_zoushi_start_time:, 'low'].idxmin())
+            max_price_time = stock_data.loc[sub_zoushi_start_time:, 'high'].idxmax()
+            min_price_time = stock_data.loc[sub_zoushi_start_time:, 'low'].idxmin()
+            max_loc = stock_data.index.get_loc(max_price_time)
+            min_loc = stock_data.index.get_loc(min_price_time)
             latest_slope = (max_price-min_price)/(max_loc-min_loc)
 
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss: # reached stop loss mark
                 exhausted, xd_exhausted, _, _ = check_stock_sub(stock,
-                                                              end_time=context.current_dt,
+                                                              end_time=min_price_time,
                                                               periods=['1m'],
                                                               count=2500,
                                                               direction=TopBotType.top2bot,
@@ -958,7 +960,7 @@ class Short_Chan(Sell_stocks):
                                                           is_anal=False,
                                                           split_time=effective_time,
                                                           check_bi=False,
-                                                          force_zhongshu=False) # synch with selection
+                                                          force_zhongshu=False) # relax rule
             if (exhausted and zhongshu_formed) or (not zhongshu_formed and xd_exhausted):
                 print("STOP PROFIT {0} exhausted: {1}, {2} Zhongshu formed: {3}".format(stock,
                                                                                    exhausted,

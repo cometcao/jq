@@ -344,9 +344,15 @@ class CentralRegionProcess(object):
     def find_initial_direction(self, working_df, initial_direction=TopBotType.noTopBot): 
         i = 0
         if working_df.size < 3:
-            if self.isdebug:
-                print("not enough data for checking initial direction")
-            return 0, TopBotType.noTopBot
+            if working_df.size < 2:
+                if self.isdebug:
+                    print("not enough data for checking initial direction")
+                return 0, TopBotType.noTopBot
+            else: # 2 xd nodes
+                first_node = working_df[0]
+                second_node = working_df[1]
+                assert first_node['tb'] != second_node['tb'], "Invalid xd tb data"
+                return 0, TopBotType.top2bot if float_more(first_node['chan_price'], second_node['chan_price']) else TopBotType.bot2top
         
         if initial_direction != TopBotType.noTopBot:
             return 0, initial_direction
@@ -388,8 +394,6 @@ class CentralRegionProcess(object):
         
         try:
             working_df = self.prepare_df_data(working_df)
-            if self.isdebug:
-                print("Invalid data frame, return define_central_region")
         except Exception as e:
             print("Error in data preparation:{0}".format(str(e)))
             return None
@@ -1262,7 +1266,7 @@ class NestedInterval():
             high_exhausted, check_xd_exhaustion, last_zs_time, sub_split_time, high_slope, high_macd = eq.define_equilibrium(direction, 
                                                                                                     guide_price,
                                                                                                     check_tb_structure=check_tb_structure, 
-                                                                                                    check_balance_structure=True,
+                                                                                                    check_balance_structure=False,
                                                                                                     current_chan_type=chan_t)
         else:
             high_exhausted, check_xd_exhaustion = False, False
@@ -1380,7 +1384,7 @@ class NestedInterval():
                                                                                                    guide_price, 
                                                                                                    force_zhongshu=force_zhongshu, 
                                                                                                    check_tb_structure=check_tb_structure,
-                                                                                                   check_balance_structure=True,
+                                                                                                   check_balance_structure=False,
                                                                                                    current_chan_type=chan_t)
         if self.isDescription or self.isdebug:
             print("current level {0} {1} {2} {3} {4} with price:{5}".format(period, 
