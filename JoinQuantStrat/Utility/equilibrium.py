@@ -737,10 +737,10 @@ class Equilibrium():
         macd
         '''
         if current_chan_type == Chan_Type.III:
-            if self.isQvShi_simple or self.isQvShi:
-                if self.isdebug:
-                    print("type III mixed with type I position we ignore")
-                return False, False, None, None, 0, 0
+#             if self.isQvShi_simple or self.isQvShi:
+#                 if self.isdebug:
+#                     print("type III mixed with type I position we ignore")
+#                 return False, False, None, None, 0, 0
             
             last_zoushi = self.analytic_result[-1]
             if type(last_zoushi) is ZouShiLeiXing:
@@ -834,10 +834,10 @@ class Equilibrium():
                 return False
             
             # detect benzou style Zhongshu
-            if central_B.isBenZouStyle():
-                if self.isdebug:
-                    print("Avoid benzou style zhongshu for PanZheng")
-                return False
+#             if central_B.isBenZouStyle():
+#                 if self.isdebug:
+#                     print("Avoid benzou style zhongshu for PanZheng")
+#                 return False
             
             # if current pan bei level too high it will break the assumption made in higher level
             if central_B.get_level().value > ZhongShuLevel.current.value:
