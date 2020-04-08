@@ -257,6 +257,7 @@ def check_stock_full(stock,
                      isdebug=False, 
                      is_anal=False,
                      is_description=True,
+                     sub_force_zhongshu=True,
                      sub_check_bi=False):
     if is_description:
         print("check_stock_full working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
@@ -289,7 +290,7 @@ def check_stock_full(stock,
                                                                                 is_description=is_description,
                                                                                 split_time=splitTime,
                                                                                 check_bi=sub_check_bi,
-                                                                                force_zhongshu=True)
+                                                                                force_zhongshu=sub_force_zhongshu)
         chan_profile = chan_profile + sub_profile
         return exhausted and xd_exhausted and sub_exhausted and sub_xd_exhausted, chan_profile, zhongshu_completed
     else:

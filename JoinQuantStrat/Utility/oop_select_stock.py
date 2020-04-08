@@ -690,6 +690,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                  sub_chan_type=self.sub_chan_type,
                                                  isdebug=self.isdebug,
                                                  is_description=self.isDescription,
+                                                 sub_force_zhongshu=False, 
                                                  sub_check_bi=True)
             
             if result:
