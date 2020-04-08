@@ -1267,7 +1267,7 @@ class NestedInterval():
             high_exhausted, check_xd_exhaustion, last_zs_time, sub_split_time, high_slope, high_macd = eq.define_equilibrium(direction, 
                                                                                                     guide_price,
                                                                                                     check_tb_structure=check_tb_structure, 
-                                                                                                    check_balance_structure=False,
+                                                                                                    check_balance_structure=True,
                                                                                                     current_chan_type=chan_t)
         else:
             high_exhausted, check_xd_exhaustion = False, False
@@ -1385,7 +1385,7 @@ class NestedInterval():
                                                                                                    guide_price, 
                                                                                                    force_zhongshu=force_zhongshu, 
                                                                                                    check_tb_structure=check_tb_structure,
-                                                                                                   check_balance_structure=False,
+                                                                                                   check_balance_structure=True,
                                                                                                    current_chan_type=chan_t)
         if self.isDescription or self.isdebug:
             print("current level {0} {1} {2} {3} {4} with price:{5}".format(period, 
