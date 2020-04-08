@@ -733,7 +733,7 @@ class Equilibrium():
         macd
         '''
         if current_chan_type == Chan_Type.III:
-            if self.isQvShi_simple:
+            if self.isQvShi_simple or self.isQvShi:
                 if self.isdebug:
                     print("type III mixed with type I position we ignore")
                 return False, False, None, None, 0, 0
@@ -822,11 +822,12 @@ class Equilibrium():
                     print("Not matching XD structure")
                 return False
         else: # PAN BEI
-#             if abs(len(a_s) - len(c_s)) > 2:
-#             if len(a_s) != len(c_s):
-#                 if self.isdebug:
-#                     print("Not matching XD structure")
-#                 return False
+            if len(a_s) != len(c_s) and\
+                check_balance_structure and\
+                (not self.price_balance(a_range, b_range, c_range) or not self.time_balance(a_time, b_time, c_time)):
+                if self.isdebug:
+                    print("Not matching XD structure")
+                return False
             
             # detect benzou style Zhongshu
             if central_B.isBenZouStyle():
@@ -848,27 +849,21 @@ class Equilibrium():
         if self.isdebug and not structure_result:
             print("price within ZhongShu range")
         
-#         if check_balance_structure: 
-            # This is should only be checked at BI level, as we can't check sub level from there
-#             if not self.price_balance(a_range, b_range, c_range):
-#                 if self.isdebug:
-#                     print("price range balance failed")
-#                 structure_result = False
-#              
-#             if not self.time_balance(a_time, b_time, c_time):
-#                 if self.isdebug:
-#                     print("time range balance failed")
-#                 structure_result = False
-        
         return structure_result
     
     def price_balance(self, a_range, b_range, c_range):
         balance_point = (max(a_range[1], c_range[1]) + min(a_range[0], c_range[0]))/2
-        return float_less_equal(b_range[0], balance_point) and float_less_equal(balance_point, b_range[1])
+        result = float_less_equal(b_range[0], balance_point) and float_less_equal(balance_point, b_range[1])
+        if self.isdebug and not result:
+            print("price range balance failed")
+        return result
 
     def time_balance(self, a_time, b_time, c_time):
         balance_point = (c_time[1] + a_time[0]) / 2
-        return float_less_equal(b_time[0], balance_point) and float_less_equal(balance_point, b_time[1])
+        result = float_less_equal(b_time[0], balance_point) and float_less_equal(balance_point, b_time[1])
+        if self.isdebug and not result:
+            print("time range balance failed")
+        return result
     
     def reached_new_high_low(self, guide_price, direction, zslx, central_region):
         if zslx is None or zslx.isEmpty():
@@ -1267,7 +1262,7 @@ class NestedInterval():
             high_exhausted, check_xd_exhaustion, last_zs_time, sub_split_time, high_slope, high_macd = eq.define_equilibrium(direction, 
                                                                                                     guide_price,
                                                                                                     check_tb_structure=check_tb_structure, 
-                                                                                                    check_balance_structure=False,
+                                                                                                    check_balance_structure=True,
                                                                                                     current_chan_type=chan_t)
         else:
             high_exhausted, check_xd_exhaustion = False, False
@@ -1385,7 +1380,7 @@ class NestedInterval():
                                                                                                    guide_price, 
                                                                                                    force_zhongshu=force_zhongshu, 
                                                                                                    check_tb_structure=check_tb_structure,
-                                                                                                   check_balance_structure=False,
+                                                                                                   check_balance_structure=True,
                                                                                                    current_chan_type=chan_t)
         if self.isDescription or self.isdebug:
             print("current level {0} {1} {2} {3} {4} with price:{5}".format(period, 
