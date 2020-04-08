@@ -8,6 +8,7 @@ from biaoLiStatus import *
 from kBar_Chan import *
 from centralRegion import *
 from chan_common_include import *
+import datetime
 import numpy as np
 import pandas as pd
 
@@ -24,6 +25,10 @@ def get_bars_new(security,
         start_dt = datetime.datetime.strptime(start_dt, "%Y-%m-%d %H:%M:%S")
     if type(end_dt) is str:
         end_dt = datetime.datetime.strptime(end_dt, "%Y-%m-%d %H:%M:%S")
+        if end_dt.hour < 9:
+            end_dt = (end_dt - datetime.timedelta(days = 1)).replace(hour=15, minute=0)
+        elif end_dt.hour > 14:
+            end_dt = end_dt.replace(hour=15, minute=0)
 
     start_time_delta = start_dt.replace(hour=15, minute=0) - start_dt if start_dt.hour >= 13 else start_dt.replace(hour=13, minute=30) - start_dt
     end_time_delta = end_dt - end_dt.replace(hour=9, minute=30) if end_dt.hour <= 11 else end_dt - end_dt.replace(hour=11, minute=0)
