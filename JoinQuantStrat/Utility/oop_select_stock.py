@@ -685,7 +685,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stock_data = get_bars(stock, 
                                 count=20, 
                                 unit='5m',
-                                fields=['low'],
+                                fields=['date','low'],
                                 include_now=True, 
                                 end_dt=context.current_dt, 
                                 fq_ref_date=context.current_dt.date(), 
