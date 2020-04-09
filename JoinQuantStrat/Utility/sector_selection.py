@@ -231,7 +231,7 @@ class SectorSelection(object):
                     MA_144 = self.stock_data_buffer[stock][7]
                     MA_233 = self.stock_data_buffer[stock][8]
             except Exception as e:
-                print (str(e))
+#                 print (str(e))
                 return -1
             if len(stock_df['paused'])==0 or stock_df['paused'][index]: # paused we need to remove it from calculation
                 return -1 
