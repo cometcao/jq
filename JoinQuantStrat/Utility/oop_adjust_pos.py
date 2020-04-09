@@ -959,8 +959,9 @@ class Short_Chan(Sell_stocks):
                                                           is_description=self.isdebug,
                                                           is_anal=False,
                                                           split_time=effective_time,
-                                                          check_bi=False,
-                                                          force_zhongshu=False) # relax rule
+                                                          check_bi=True,
+                                                          force_zhongshu=False,
+                                                          force_bi_zhongshu=True) # relax rule
             if (exhausted and zhongshu_formed) or (not zhongshu_formed and xd_exhausted):
                 print("STOP PROFIT {0} exhausted: {1}, {2} Zhongshu formed: {3}".format(stock,
                                                                                    exhausted,
