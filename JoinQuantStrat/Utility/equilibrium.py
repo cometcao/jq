@@ -296,7 +296,8 @@ def check_stock_full(stock,
                                                                                 is_description=is_description,
                                                                                 split_time=splitTime,
                                                                                 check_bi=sub_check_bi,
-                                                                                force_zhongshu=sub_force_zhongshu)
+                                                                                force_zhongshu=sub_force_zhongshu,
+                                                                                force_bi_zhongshu=True)
         chan_profile = chan_profile + sub_profile
         return exhausted and xd_exhausted and sub_exhausted and sub_xd_exhausted, chan_profile, zhongshu_completed
     else:
@@ -636,8 +637,7 @@ class Equilibrium():
     def two_zhongshu_form_qvshi_simple(self, zs1, zs2, zslx, zs_level=ZhongShuLevel.current):
         
         relax_result = False
-        if zs1.get_level().value == zs2.get_level().value == zs_level.value and\
-            (zs1.direction == zs2.direction or zs1.is_complex_type()):
+        if zs1.get_level().value >= zs2.get_level().value == zs_level.value:
             [lr1, ur1] = zs1.get_core_region()
             [lr2, ur2] = zs2.get_core_region()
             if (float_more(lr1, ur2) or float_more(lr2, ur1)) and\
@@ -646,21 +646,21 @@ class Equilibrium():
                     print("1 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(zs1, zs2))
                 relax_result = True
     
-        if not relax_result and zs1.get_level().value > zs2.get_level().value == zs_level.value and\
-            (zs1.direction == zs2.direction or zs1.is_complex_type()):
-#             split_nodes = zs1.get_ending_nodes(N=5)
-            split_nodes = zs1.get_split_zs(zs2.direction, contain_zs=False)
-            if len(split_nodes) >= 5 and -1<=(len(split_nodes) - 1 - (4+len(zs2.extra_nodes)))<=0:
-                new_zs = ZhongShu(split_nodes[1], split_nodes[2], split_nodes[3], split_nodes[4], zs2.direction, zs2.original_df)
-                new_zs.add_new_nodes(split_nodes[5:])
-     
-                [lr1, ur1] = new_zs.get_core_region()
-                [lr2, ur2] = zs2.get_core_region()
-                if (float_more(lr1, ur2) or float_more(lr2, ur1)) and\
-                    (not (self.two_zslx_interact(zs1, zs2) and zslx.isSimple())): # two Zhong Shu without intersection
-                    if self.isdebug:
-                        print("2 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(new_zs, zs2))
-                    relax_result = True
+#         if not relax_result and zs1.get_level().value > zs2.get_level().value == zs_level.value and\
+#             (zs1.direction == zs2.direction or zs1.is_complex_type()):
+# #             split_nodes = zs1.get_ending_nodes(N=5)
+#             split_nodes = zs1.get_split_zs(zs2.direction, contain_zs=False)
+#             if len(split_nodes) >= 5 and -1<=(len(split_nodes) - 1 - (4+len(zs2.extra_nodes)))<=0:
+#                 new_zs = ZhongShu(split_nodes[1], split_nodes[2], split_nodes[3], split_nodes[4], zs2.direction, zs2.original_df)
+#                 new_zs.add_new_nodes(split_nodes[5:])
+#      
+#                 [lr1, ur1] = new_zs.get_core_region()
+#                 [lr2, ur2] = zs2.get_core_region()
+#                 if (float_more(lr1, ur2) or float_more(lr2, ur1)) and\
+#                     (not (self.two_zslx_interact(zs1, zs2) and zslx.isSimple())): # two Zhong Shu without intersection
+#                     if self.isdebug:
+#                         print("2 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(new_zs, zs2))
+#                     relax_result = True
         return relax_result
     
     def two_zslx_interact(self, zs1, zs2):
@@ -832,7 +832,7 @@ class Equilibrium():
                 if self.isdebug:
                     print("Not matching XD structure")
                 return False
-        else: # PAN BEI
+        else: # PAN BEI #     
             if len(a_s) != len(c_s) and\
                 check_balance_structure and\
                 (not self.price_balance(a_range, b_range, c_range) or\
@@ -1274,7 +1274,7 @@ class NestedInterval():
             high_exhausted, check_xd_exhaustion, last_zs_time, sub_split_time, high_slope, high_macd = eq.define_equilibrium(direction, 
                                                                                                     guide_price,
                                                                                                     check_tb_structure=check_tb_structure, 
-                                                                                                    check_balance_structure=True,
+                                                                                                    check_balance_structure=False,
                                                                                                     current_chan_type=chan_t)
         else:
             high_exhausted, check_xd_exhaustion = False, False
@@ -1331,7 +1331,7 @@ class NestedInterval():
                          isDescription=self.isDescription)
         bi_exhausted, bi_check_exhaustion, _,bi_split_time, _, _ = eq.define_equilibrium(direction, 
                                                                                          check_tb_structure=True,
-                                                                                         check_balance_structure=True,
+                                                                                         check_balance_structure=False,
                                                                                          force_zhongshu=force_zhongshu)
         if (self.isdebug):
             print("BI level {0}, {1}".format(bi_exhausted, bi_check_exhaustion))
@@ -1392,7 +1392,7 @@ class NestedInterval():
                                                                                                    guide_price, 
                                                                                                    force_zhongshu=force_zhongshu, 
                                                                                                    check_tb_structure=check_tb_structure,
-                                                                                                   check_balance_structure=True,
+                                                                                                   check_balance_structure=False,
                                                                                                    current_chan_type=chan_t)
         if self.isDescription or self.isdebug:
             print("current level {0} {1} {2} {3} {4} with price:{5}".format(period, 
