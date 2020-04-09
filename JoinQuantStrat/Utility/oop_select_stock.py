@@ -682,20 +682,20 @@ class Filter_Chan_Stocks(Filter_stock_list):
             if self.long_stock_num == len(filter_stock_list):
                 # we don't need to look further, we have enough candidates for long position
                 break
-            stock_data = get_bars(stock, 
-                                count=20, 
-                                unit='5m',
-                                fields=['date','low'],
-                                include_now=True, 
-                                end_dt=context.current_dt, 
-                                fq_ref_date=context.current_dt.date(), 
-                                df=False)
-            min_low = stock_data['low'].min()
-            start_time = stock_data[np.where(stock_data['low']==min_low)[0][-1]]['date']
-            if self.isDescription:
-                print("start_time: {0}".format(start_time))
+#             stock_data = get_bars(stock, 
+#                                 count=20, 
+#                                 unit='5m',
+#                                 fields=['date','low'],
+#                                 include_now=True, 
+#                                 end_dt=context.current_dt, 
+#                                 fq_ref_date=context.current_dt.date(), 
+#                                 df=False)
+#             min_low = stock_data['low'].min()
+#             end_time = stock_data[np.where(stock_data['low']==min_low)[0][-1]]['date']
+#             if self.isDescription:
+#                 print("start_time: {0}".format(end_time))
             result, profile, _ = check_stock_full(stock,
-                                                 end_time=start_time,
+                                                 end_time=context.current_dt,
                                                  periods=['5m', '1m'],
                                                  count=self.num_of_data,
                                                  direction=TopBotType.top2bot, 
