@@ -692,7 +692,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                 df=False)
             min_low = stock_data['low'].min()
             start_time = stock_data[np.where(stock_data['low']==min_low)[0][-1]]['date']
-            print("start_time: {0}".format(start_time))
+            if self.isDescription:
+                print("start_time: {0}".format(start_time))
             result, profile, _ = check_stock_full(stock,
                                                  end_time=start_time,
                                                  periods=['5m', '1m'],
