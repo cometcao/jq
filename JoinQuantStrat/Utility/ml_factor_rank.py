@@ -4,7 +4,6 @@ Created on 2 Aug 2017
 
 @author: MetalInvest
 '''
-from pandas.tests.frame.test_sort_values_level_as_str import ascending
 try:
     from kuanke.user_space_api import *         
 except ImportError as ie:
