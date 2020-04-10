@@ -670,6 +670,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.long_stock_num = params.get('long_stock_num', 0)
         self.top_chan_type = params.get('top_chan_type', [Chan_Type.I, Chan_Type.III])
         self.sub_chan_type = params.get('sub_chan_type', [Chan_Type.INVALID, Chan_Type.I])
+        self.periods = params.get('periods', ['5m', '1m'])
         self.num_of_data = params.get('num_of_data', 2500)
         self.bi_level_precision = params.get('bi_level_precision', True)
         self.long_hour_start = params.get('long_hour_start', 13)
@@ -702,7 +703,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #                 print("start_time: {0}".format(end_time))
             result, profile, _ = check_stock_full(stock,
                                                  end_time=context.current_dt,
-                                                 periods=['5m', '1m'],
+                                                 periods=self.periods,
                                                  count=self.num_of_data,
                                                  direction=TopBotType.top2bot, 
                                                  top_chan_type=self.top_chan_type,
