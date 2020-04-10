@@ -763,7 +763,8 @@ class Buy_stocks_pair(Buy_stocks_var):
 class Short_Chan(Sell_stocks):
     def __init__(self, params):
         Sell_stocks.__init__(self, params)
-        self.period = params.get('period', '1m')
+        self.top_period = params.get('top_period', '5m')
+        self.sub_period = params.get('sub_period', '1m')
         self.isdebug = params.get('isdebug', False)
         self.stop_loss = params.get('stop_loss', 0.02)
         self.stop_profit = params.get('stop_profit', 0.03)
@@ -791,7 +792,7 @@ class Short_Chan(Sell_stocks):
             stock_data = get_price(stock,
                                    start_date=data_start_time, 
                                    end_date=context.current_dt, 
-                                   frequency='5m', 
+                                   frequency=self.top_period, 
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
 
@@ -799,7 +800,7 @@ class Short_Chan(Sell_stocks):
                 # check if original long point still holds
                 result, xd_result, _ = check_chan_by_type_exhaustion(stock,
                                                                       end_time=context.current_dt,
-                                                                      periods=['5m'],
+                                                                      periods=[self.top_period],
                                                                       count=4800,
                                                                       direction=TopBotType.top2bot,
                                                                       chan_type=[Chan_Type.I],
@@ -849,7 +850,7 @@ class Short_Chan(Sell_stocks):
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss: # reached stop loss mark
                 exhausted, xd_exhausted, _, _ = check_stock_sub(stock,
                                                               end_time=min_price_time,
-                                                              periods=['1m'],
+                                                              periods=[self.sub_period],
                                                               count=2500,
                                                               direction=TopBotType.top2bot,
                                                               chan_types=[Chan_Type.I, Chan_Type.INVALID],
@@ -913,7 +914,7 @@ class Short_Chan(Sell_stocks):
                 print("STOP PROFIT reached return {0} {1}".format(context.portfolio.positions[stock].avg_cost, stock_data.loc[effective_time:, 'high'].max()))
                 exhausted, xd_exhausted, _, zhongshu_formed = check_stock_sub(stock,
                                                       end_time=context.current_dt,
-                                                      periods=['1m'],
+                                                      periods=[self.sub_period],
                                                       count=2000,
                                                       direction=TopBotType.bot2top,
                                                       chan_types=[Chan_Type.I, Chan_Type.INVALID],
@@ -935,7 +936,7 @@ class Short_Chan(Sell_stocks):
             stock_data = get_price(stock,
                                    start_date=data_start_time, 
                                    end_date=context.current_dt, 
-                                   frequency='5m', 
+                                   frequency=self.top_period, 
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
 
@@ -951,7 +952,7 @@ class Short_Chan(Sell_stocks):
             max_time = stock_data.loc[effective_time:, 'high'].idxmax()
             exhausted, xd_exhausted, _, zhongshu_formed = check_stock_sub(stock,
                                                           end_time=max_time,
-                                                          periods=['1m'],
+                                                          periods=[self.sub_period],
                                                           count=2000,
                                                           direction=TopBotType.bot2top,
                                                           chan_types=[Chan_Type.I, Chan_Type.INVALID],
