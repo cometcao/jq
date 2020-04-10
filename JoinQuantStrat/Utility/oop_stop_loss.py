@@ -952,7 +952,7 @@ class RSRS_timing(Rule):
         else:
             self.add_new_RSRS()
         
-        self.log.info("handle data updated RSRS info")
+        self.log.info("handle data updated RSRS info: \n{0}:".format(self.beta_list[-3:]))
         
         self.check_timing(context)
 

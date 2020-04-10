@@ -24,6 +24,7 @@ from chan_common_include import Chan_Type
 from biaoLiStatus import TopBotType
 from chan_kbar_filter import *
 from equilibrium import *
+from chan_kbar_filter import *
 
 
 '''=========================选股规则相关==================================='''
@@ -389,9 +390,8 @@ class Pick_rank_sector(Create_stock_list):
                     useIntradayData=self.useIntradayData,
                     useAvg=self.useAvg,
                     avgPeriod=self.avgPeriod)
-            new_list = ss.processAllSectorStocks()
+            self.new_list = ss.processAllSectorStocks()
             self.g.filtered_sectors = ss.processAllSectors()
-            self.new_list = new_list
         return self.new_list
     
     def after_trading_end(self, context):
@@ -630,8 +630,14 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
             
                 
             if str(today_date) not in chan_dict:
-                print("{0} not in chan file".format(today_date))
-                return []
+                print("{0} not in chan file, get stocks on demand".format(today_date))
+                check_stocks = filter_high_level_by_index(
+                                                        direction=TopBotType.top2bot, 
+                                                        stock_index='000985.XSHG',
+                                                        df=False,
+                                                        periods = ['1w'],
+                                                        chan_types=[Chan_Type.I, Chan_Type.III])
+                return check_stocks
             
             chan_list = chan_dict[str(today_date)]
             print("data read from file: {0} stocks info".format(len(chan_list)))
@@ -704,7 +710,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                  isdebug=self.isdebug,
                                                  is_description=self.isDescription,
                                                  sub_force_zhongshu=True, 
-                                                 sub_check_bi=True)
+                                                 sub_check_bi=self.bi_level_precision)
             
             if result:
                 filter_stock_list.append(stock)
@@ -721,7 +727,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #                                                                       isdebug=self.isdebug,
 #                                                                       is_anal=False,
 #                                                                       split_time=splitTime, 
-#                                                                       check_bi=True, 
+#                                                                       check_bi=self.bi_level_precision, 
 #                                                                       force_zhongshu=True)
 #             if sub_exhausted and sub_xd_exhausted:
 #                 filter_stock_list.append(stock)
