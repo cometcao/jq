@@ -920,8 +920,15 @@ class Equilibrium():
 #                         print("Not matching magnitude")
 #                     exhaustion_result = False
 
-            zslx_macd = zslx_a.get_macd_acc()
-            latest_macd = zslx_c.get_macd_acc()
+            # macd is converted by mangitude as conversion factor to 
+            # work out the force per unit timeprice value <=> presure
+            # macd / (price * time)
+            # TODO in the future: MONEY * PRICE / time ** 2 <=> force = kg * m / s ** 2 <=> newton
+            zslx_mag = zslx_a.get_magnitude()
+            latest_mag = zslx_c.get_magnitude() 
+
+            zslx_macd = zslx_a.get_macd_acc() / zslx_mag
+            latest_macd = zslx_c.get_macd_acc() / latest_mag
             exhaustion_result = float_more(abs(zslx_macd), abs(latest_macd))
             if self.isdebug:
                 print("{0} found by macd: {1}, {2}".format("exhaustion" if exhaustion_result else "exhaustion not", zslx_macd, latest_macd))

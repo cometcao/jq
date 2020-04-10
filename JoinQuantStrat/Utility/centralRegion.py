@@ -260,6 +260,7 @@ class ZouShiLeiXing(object):
         else:
             delta = (u-l)/l * 100.0
         loc_diff = self.get_loc_diff()
+#         return loc_diff ** 2 / delta
         return delta * loc_diff
 #         return (delta**2 + loc_diff**2) ** 0.5
     

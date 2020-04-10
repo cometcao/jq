@@ -626,6 +626,7 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
         chan_stock_list = []
         if self.filename: # model prediction happened outside
             today_date = context.current_dt.date()
+            yesterday = context.previous_date
             chan_dict = json.loads(read_file(self.filename))
             
                 
@@ -634,6 +635,7 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                 check_stocks = filter_high_level_by_index(
                                                         direction=TopBotType.top2bot, 
                                                         stock_index='000985.XSHG',
+                                                        end_dt=yesterday,
                                                         df=False,
                                                         periods = ['1w'],
                                                         chan_types=[Chan_Type.I, Chan_Type.III])
