@@ -12,7 +12,7 @@ import datetime
 import numpy as np
 import pandas as pd
 
-def work_out_count(start_dt, end_dt):
+def work_out_count(start_dt, end_dt, unit):
     if type(start_dt) is str:
         start_dt = datetime.datetime.strptime(start_dt, "%Y-%m-%d %H:%M:%S")
     if type(end_dt) is str:
@@ -52,7 +52,7 @@ def get_bars_new(security,
                  fq_ref_date=None, 
                  df=False):
     
-    count = work_out_count(start_dt, end_dt)
+    count = work_out_count(start_dt, end_dt, unit)
 
     return get_bars(security, 
                     count=int(count), 
