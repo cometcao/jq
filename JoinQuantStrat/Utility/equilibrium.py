@@ -12,15 +12,7 @@ import datetime
 import numpy as np
 import pandas as pd
 
-def get_bars_new(security, 
-                 unit='1d',
-                 fields=['date', 'open','high','low','close'],
-                 include_now=True, 
-                 end_dt=None, 
-                 start_dt=None, 
-                 fq_ref_date=None, 
-                 df=False):
-    
+def work_out_count(start_dt, end_dt):
     if type(start_dt) is str:
         start_dt = datetime.datetime.strptime(start_dt, "%Y-%m-%d %H:%M:%S")
     if type(end_dt) is str:
@@ -48,7 +40,20 @@ def get_bars_new(security,
     else:
         print("Unconventional unit, return 1000 for count")
         count = 1000
-    count = count + 1
+    count = count + 1 # inclusion for end_dt
+    return count
+
+def get_bars_new(security, 
+                 unit='1d',
+                 fields=['date', 'open','high','low','close'],
+                 include_now=True, 
+                 end_dt=None, 
+                 start_dt=None, 
+                 fq_ref_date=None, 
+                 df=False):
+    
+    count = work_out_count(start_dt, end_dt)
+
     return get_bars(security, 
                     count=int(count), 
                     unit=unit,
