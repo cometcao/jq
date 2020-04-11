@@ -310,19 +310,22 @@ def sanity_check(stock, profile, end_time, pe):
     splitTime = profile[0][6]
     direction = profile[0][1]
     result = False
-    stock_data = get_bars_new(stock,
-                          start_dt=splitTime,
-                          end_dt=end_time, 
-                          unit=pe,
-                          fields= ['close'],
-                          fq_ref_date=datetime.datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S") if type(end_time) is str else end_time,
-                          df=False)
+    stock_data = get_price(stock,
+                          start_date=splitTime,
+                          end_date=end_time, 
+                          frequency='1m',
+                          fields= ['close', 'low','low_limit'])
+    
+    if (stock_data.low == stock_data.low_limit).any():   # touched low limit
+        print("{0} price reached low limit".format(stock))
+        return result
+    
     if direction == TopBotType.top2bot:
-        result = stock_data[0]['close'] > stock_data[-1]['close']
+        result = stock_data.iloc[0, 0] > stock_data.iloc[-1,0]
     elif direction == TopBotType.bot2top:
-        result = stock_data[0]['close'] < stock_data[-1]['close']
+        result = stock_data.iloc[0, 0] < stock_data.iloc[-1,0]
     if not result:
-        print("{0} failed sanity check".format(stock))
+        print("{0} failed sanity check on price".format(stock))
     return result
         
 class CentralRegionProcess(object):
@@ -860,6 +863,7 @@ class Equilibrium():
             structure_result = float_less(a_range[0], central_region[0]) and float_less(central_region[1], c_range[1])
         if self.isdebug and not structure_result:
             print("price within ZhongShu range")
+            
         
         return structure_result
     
