@@ -31,6 +31,7 @@ class XianDuan_Node(Chan_Node):
         super(XianDuan_Node, self).__init__(df_node)
         self.tb = TopBotType.value2type(df_node['xd_tb'])
         self.macd_acc = df_node['macd_acc_xd_tb']
+        self.money_acc = df_node['money_acc_xd_tb']
         
     def __repr__(self):
         return super().__repr__() + "tb: {0}".format(self.tb)
@@ -46,6 +47,7 @@ class BI_Node(Chan_Node):
         super(BI_Node, self).__init__(df_node)
         self.tb = TopBotType.value2type(df_node['tb'])
         self.macd_acc = df_node['macd_acc_tb']
+        self.money_acc = df_node['money_acc_tb']
 
     def __repr__(self):
         return super().__repr__() + "tb: {0}".format(self.tb)
@@ -219,6 +221,9 @@ class ZouShiLeiXing(object):
             print("We have invalid direction for ZhongShu")
         return macd_acc
     
+    def get_money_acc(self):
+        return sum([node.money_acc for node in self.zoushi_nodes])
+    
     def get_tb_structure(self):
         return [node.tb for node in self.zoushi_nodes]
     
@@ -248,17 +253,21 @@ class ZouShiLeiXing(object):
         
         return (self.zoushi_nodes[-1].loc - self.zoushi_nodes[0].loc) / mag * 100
     
+    def get_price_delta(self):
+        [l, u] = self.get_amplitude_region_original()
+        if self.direction == TopBotType.top2bot:
+            delta = (u-l)/u * 100.0
+        else:
+            delta = (u-l)/l * 100.0
+        return delta
+    
     def get_magnitude(self): 
         # by our finding of dynamic equilibrium, the magnitude (SHIJIA) is defined as 
         # (delta time ** 2 + delta price ** 2) ** 0.5
         # delta time is based off per trading day month roughly 20 days
         # delta price is based on increase/decrease by % value
         # magnitude is defined using ln same magnitude 
-        [l, u] = self.get_amplitude_region_original()
-        if self.direction == TopBotType.top2bot:
-            delta = (u-l)/u * 100.0
-        else:
-            delta = (u-l)/l * 100.0
+        delta = self.get_price_delta()
         loc_diff = self.get_loc_diff()
 #         return loc_diff ** 2 / delta
         return delta * loc_diff

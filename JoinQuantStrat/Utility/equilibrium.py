@@ -444,19 +444,22 @@ class CentralRegionProcess(object):
         
     def prepare_df_data(self, working_df):        
         tb_name = 'xd_tb' if self.use_xd else 'tb'
-        working_df = self.prepare_macd(working_df, tb_name)
+        working_df = self.prepare_extra(working_df, tb_name)
 
         if self.isdebug:
             print("working_df: {0}".format(working_df[['chan_price', tb_name, 'real_loc','macd_acc_'+tb_name]]))
         return working_df
     
-    def prepare_macd(self, working_df, tb_col):
+    def prepare_extra(self, working_df, tb_col):
         self.kbar_chan.prepare_original_kdf() # add macd term
         working_df = append_fields(
                                     working_df, 
-                                    'macd_acc_'+tb_col, 
-                                    [0]*working_df.size,
-                                    float,
+                                    ['macd_acc_'+tb_col, 'money_acc_'+tb_col],
+                                    [
+                                        [0]*working_df.size,
+                                        [0]*working_df.size
+                                    ],
+                                    [float,float],
                                     usemask=False
                                     )
         
@@ -477,6 +480,10 @@ class CentralRegionProcess(object):
                 working_df[current_loc]['macd_acc_'+tb_col] = sum([pos_macd for pos_macd in origin_macd if pos_macd < 0])
             else:
                 print("Invalid {0} data".format(tb_col))
+                
+            # gather money data based on pivot
+            origin_money = original_df[previous_real_loc+1 if previous_real_loc != 0 else None:current_real_loc+1]['money']
+            working_df[current_loc]['money_acc_'+tb_col] = sum(origin_money)
             
             previous_loc = current_loc
             current_loc = current_loc + 1
@@ -913,34 +920,28 @@ class Equilibrium():
                 print("exhaustion found by reduced slope: {0} {1}".format(zslx_slope, latest_slope))
             exhaustion_result = True
 
-        zslx_macd = 0
+        zslx_force = 0
+#         zslx_macd = 0
         if not exhaustion_result and new_high_low:
-#             exhaustion_result = True
-#             # macd only checked if we have similar magnitude
-#             c_a_mag_ratio = zslx_c.get_magnitude() / zslx_a.get_magnitude()
-#             if a_s != c_s:
-#                 if (c_a_mag_ratio < GOLDEN_RATIO) or (c_a_mag_ratio > 1.618):  #(1/GOLDEN_RATIO)
-#                     if self.isdebug:
-#                         print("Not matching magnitude")
-#                     exhaustion_result = False
-#             else:
-#                 if (c_a_mag_ratio < 0.382) or (c_a_mag_ratio > 2.618):  # (1-GOLDEN_RATIO)  (1/(1-GOLDEN_RATIO))
-#                     if self.isdebug:
-#                         print("Not matching magnitude")
-#                     exhaustion_result = False
-
             # macd is converted by mangitude as conversion factor to 
             # work out the force per unit timeprice value <=> presure
             # macd / (price * time)
             # TODO in the future: MONEY * PRICE / time ** 2 <=> force = kg * m / s ** 2 <=> newton
-            zslx_mag = zslx_a.get_magnitude()
-            latest_mag = zslx_c.get_magnitude() 
+            
+#             zslx_mag = zslx_a.get_magnitude()
+#             latest_mag = zslx_c.get_magnitude() 
+# 
+#             zslx_macd = zslx_a.get_macd_acc() / zslx_mag
+#             latest_macd = zslx_c.get_macd_acc() / latest_mag
+#             exhaustion_result = float_more(abs(zslx_macd), abs(latest_macd))
+#             if self.isdebug:
+#                 print("{0} found by macd: {1}, {2}".format("exhaustion" if exhaustion_result else "exhaustion not", zslx_macd, latest_macd))
+            
+            zslx_a_force = zslx_a.get_money_acc() / 1e8 * zslx_a.get_price_delta() / (zslx_a.get_loc_diff() ** 2)
+            zslx_force = zslx_c.get_money_acc() / 1e8 * zslx_c.get_price_delta() / (zslx_c.get_loc_diff() ** 2)
 
-            zslx_macd = zslx_a.get_macd_acc() / zslx_mag
-            latest_macd = zslx_c.get_macd_acc() / latest_mag
-            exhaustion_result = float_more(abs(zslx_macd), abs(latest_macd))
             if self.isdebug:
-                print("{0} found by macd: {1}, {2}".format("exhaustion" if exhaustion_result else "exhaustion not", zslx_macd, latest_macd))
+                print("{0} found by force: {1}, {2}".format("exhaustion" if exhaustion_result else "exhaustion not", zslx_a_force, zslx_force))
 
         #################################################################################################################
         # try to see if there is xd level zslx exhaustion
@@ -950,7 +951,7 @@ class Equilibrium():
         
         # We don't do precise split with sub_split_time, but give the full range! zslx_a.zoushi_nodes[0].time this is used while we go from top to sub level
         # from sub to bi level, we use precise cut therefore zslx_c.zoushi_nodes[0].time
-        return exhaustion_result, check_xd_exhaustion, zslx_c.zoushi_nodes[0].time, sub_split_time, zslx_slope, zslx_macd
+        return exhaustion_result, check_xd_exhaustion, zslx_c.zoushi_nodes[0].time, sub_split_time, zslx_slope, zslx_force
         
     def check_chan_type(self, check_end_tb=False):
         '''
