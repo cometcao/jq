@@ -756,10 +756,10 @@ class Equilibrium():
         force
         '''
         if current_chan_type == Chan_Type.III:
-            if self.isQvShi_simple or self.isQvShi:
-                if self.isdebug:
-                    print("type III mixed with type I position we ignore")
-                return False, False, None, None, 0, 0
+#             if self.isQvShi_simple or self.isQvShi:
+#                 if self.isdebug:
+#                     print("type III mixed with type I position we ignore")
+#                 return False, False, None, None, 0, 0
             
             last_zoushi = self.analytic_result[-1]
             if type(last_zoushi) is ZouShiLeiXing:
@@ -936,7 +936,7 @@ class Equilibrium():
             
             zslx_a_force = zslx_a.work_out_force()
             zslx_force = zslx_c.work_out_force()
-
+            exhaustion_result = float_more(abs(zslx_a_force), abs(zslx_force))
             if self.isdebug:
                 print("{0} found by force: {1}, {2}".format("exhaustion" if exhaustion_result else "exhaustion not", zslx_a_force, zslx_force))
 
