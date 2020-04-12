@@ -857,9 +857,8 @@ class Short_Chan(Sell_stocks):
                                                               isdebug=self.isdebug,
                                                               is_anal=False,
                                                               split_time=splitTime,
-                                                              check_bi=True,
-                                                              force_zhongshu=True, 
-                                                              force_bi_zhongshu=True) # synch since we pick min
+                                                              check_bi=False,
+                                                              force_zhongshu=True) # synch with selection
                 if not exhausted or not xd_exhausted:
                     print("sub long point broken")
                     return True
