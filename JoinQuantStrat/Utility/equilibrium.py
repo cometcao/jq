@@ -447,19 +447,16 @@ class CentralRegionProcess(object):
         working_df = self.prepare_extra(working_df, tb_name)
 
         if self.isdebug:
-            print("working_df: {0}".format(working_df[['chan_price', tb_name, 'real_loc','macd_acc_'+tb_name]]))
+            print("working_df: {0}".format(working_df[['chan_price', tb_name, 'real_loc','money_acc_'+tb_name]]))
         return working_df
     
     def prepare_extra(self, working_df, tb_col):
-        self.kbar_chan.prepare_original_kdf() # add macd term
+#         self.kbar_chan.prepare_original_kdf() # add macd term
         working_df = append_fields(
                                     working_df, 
-                                    ['macd_acc_'+tb_col, 'money_acc_'+tb_col],
-                                    [
-                                        [0]*working_df.size,
-                                        [0]*working_df.size
-                                    ],
-                                    [float,float],
+                                    'money_acc_'+tb_col,
+                                    [0]*working_df.size,
+                                    float,
                                     usemask=False
                                     )
         
@@ -469,17 +466,17 @@ class CentralRegionProcess(object):
             current_real_loc = working_df[current_loc]['real_loc']
             previous_real_loc = working_df[previous_loc]['real_loc'] if previous_loc != 0 else 0
             
-            # gather macd data based on real_loc, be aware of head/tail
-            origin_macd = original_df[previous_real_loc+1 if previous_real_loc != 0 else None:current_real_loc+1]['macd']
-            if working_df[current_loc][tb_col] == TopBotType.top.value:
-                # sum all previous positive macd data 
-                working_df[current_loc]['macd_acc_'+tb_col] = sum([pos_macd for pos_macd in origin_macd if pos_macd > 0])
-                
-            elif working_df[current_loc][tb_col] == TopBotType.bot.value:
-                # sum all previous negative macd data 
-                working_df[current_loc]['macd_acc_'+tb_col] = sum([pos_macd for pos_macd in origin_macd if pos_macd < 0])
-            else:
-                print("Invalid {0} data".format(tb_col))
+#             # gather macd data based on real_loc, be aware of head/tail
+#             origin_macd = original_df[previous_real_loc+1 if previous_real_loc != 0 else None:current_real_loc+1]['macd']
+#             if working_df[current_loc][tb_col] == TopBotType.top.value:
+#                 # sum all previous positive macd data 
+#                 working_df[current_loc]['macd_acc_'+tb_col] = sum([pos_macd for pos_macd in origin_macd if pos_macd > 0])
+#                 
+#             elif working_df[current_loc][tb_col] == TopBotType.bot.value:
+#                 # sum all previous negative macd data 
+#                 working_df[current_loc]['macd_acc_'+tb_col] = sum([pos_macd for pos_macd in origin_macd if pos_macd < 0])
+#             else:
+#                 print("Invalid {0} data".format(tb_col))
                 
             # gather money data based on pivot
             origin_money = original_df[previous_real_loc+1 if previous_real_loc != 0 else None:current_real_loc+1]['money']
@@ -756,7 +753,7 @@ class Equilibrium():
         zoushi start time
         sub split time
         slope
-        macd
+        force
         '''
         if current_chan_type == Chan_Type.III:
             if self.isQvShi_simple or self.isQvShi:
@@ -937,8 +934,8 @@ class Equilibrium():
 #             if self.isdebug:
 #                 print("{0} found by macd: {1}, {2}".format("exhaustion" if exhaustion_result else "exhaustion not", zslx_macd, latest_macd))
             
-            zslx_a_force = zslx_a.get_money_acc() / 1e8 * zslx_a.get_price_delta() / (zslx_a.get_loc_diff() ** 2)
-            zslx_force = zslx_c.get_money_acc() / 1e8 * zslx_c.get_price_delta() / (zslx_c.get_loc_diff() ** 2)
+            zslx_a_force = zslx_a.work_out_force()
+            zslx_force = zslx_c.work_out_force()
 
             if self.isdebug:
                 print("{0} found by force: {1}, {2}".format("exhaustion" if exhaustion_result else "exhaustion not", zslx_a_force, zslx_force))

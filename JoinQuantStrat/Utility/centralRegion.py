@@ -30,8 +30,8 @@ class XianDuan_Node(Chan_Node):
     def __init__(self, df_node):
         super(XianDuan_Node, self).__init__(df_node)
         self.tb = TopBotType.value2type(df_node['xd_tb'])
-        self.macd_acc = df_node['macd_acc_xd_tb']
-        self.money_acc = df_node['money_acc_xd_tb']
+#         self.macd_acc = df_node['macd_acc_xd_tb']
+        self.money_acc = df_node['money_acc_xd_tb'] / 1e8
         
     def __repr__(self):
         return super().__repr__() + "tb: {0}".format(self.tb)
@@ -40,14 +40,14 @@ class XianDuan_Node(Chan_Node):
         return super().__eq__(node) and self.tb == node.tb
     
     def __hash__(self):
-        return hash((self.time, self.chan_price, self.loc, self.tb.value, self.macd_acc))
+        return hash((self.time, self.chan_price, self.loc, self.tb.value))
         
 class BI_Node(Chan_Node):
     def __init__(self, df_node):
         super(BI_Node, self).__init__(df_node)
         self.tb = TopBotType.value2type(df_node['tb'])
-        self.macd_acc = df_node['macd_acc_tb']
-        self.money_acc = df_node['money_acc_tb']
+#         self.macd_acc = df_node['macd_acc_tb']
+        self.money_acc = df_node['money_acc_tb'] / 1e8
 
     def __repr__(self):
         return super().__repr__() + "tb: {0}".format(self.tb)
@@ -56,7 +56,7 @@ class BI_Node(Chan_Node):
         return super().__eq__(node) and self.tb == node.tb
     
     def __hash__(self):
-        return hash((self.time, self.chan_price, self.loc, self.tb.value, self.macd_acc))
+        return hash((self.time, self.chan_price, self.loc, self.tb.value))
 
 class Double_Nodes(object):
     def __init__(self, start, end):
@@ -75,6 +75,11 @@ class Double_Nodes(object):
 
     def work_out_slope(self):
         return (self.end.chan_price - self.start.chan_price) / (self.end.loc - self.start.loc)
+    
+    def work_out_force(self):
+        price_delta = (end.chan_price - start.chan_price) / start.chan_price
+        time_delta = (end.loc - start.loc) / 1200 * 100 # use similar conversion factor
+        return end.money_acc * price_delta / (time_delta ** 2)
 
 class XianDuan(Double_Nodes):
     '''
@@ -154,7 +159,7 @@ class ZouShiLeiXing(object):
         all_price = [node.chan_price for node in self.zoushi_nodes]
         toporbotprice = max(all_price) if self.direction == TopBotType.bot2top else min(all_price)
         return TopBotType.top2bot if self.direction == TopBotType.bot2top else TopBotType.bot2top, self.zoushi_nodes[all_price.index(toporbotprice):]
-
+    
     def take_last_xd_as_zslx(self):
         xd = XianDuan(self.zoushi_nodes[-2], self.zoushi_nodes[-1])
         return ZouShiLeiXing(xd.direction, self.original_df, self.zoushi_nodes[-2:])
@@ -164,7 +169,7 @@ class ZouShiLeiXing(object):
             chan_price_list = [node.chan_price for node in self.zoushi_nodes]
             self.amplitude_region = [min(chan_price_list), max(chan_price_list)]
         return self.amplitude_region
-
+    
     def get_amplitude_region_original(self, re_evaluate=False):
         if len(self.zoushi_nodes) < 2:
             return [None, None]
@@ -209,17 +214,27 @@ class ZouShiLeiXing(object):
         delta = 100 * (((max_price - min_price) / max_price) if self.direction == TopBotType.top2bot else ((max_price-min_price) / min_price))
         return delta / off_set
     
-    def get_macd_acc(self):
-        top_nodes = [node for node in self.zoushi_nodes if node.tb == TopBotType.top]
-        bot_nodes = [node for node in self.zoushi_nodes if node.tb == TopBotType.bot]
-        macd_acc = 0.0
-        if self.direction == TopBotType.bot2top:
-            macd_acc = sum([node.macd_acc for node in top_nodes])
-        elif self.direction == TopBotType.top2bot:
-            macd_acc = sum([node.macd_acc for node in bot_nodes])
-        else:
-            print("We have invalid direction for ZhongShu")
-        return macd_acc
+    def work_out_force(self):
+        '''
+        work out force by formulae
+        '''
+        money = self.get_money_acc()
+        price_delta = self.get_price_delta()
+        time_delta = self.get_loc_diff()
+        
+        return money * price_delta / (time_delta ** 2)
+    
+#     def get_macd_acc(self):
+#         top_nodes = [node for node in self.zoushi_nodes if node.tb == TopBotType.top]
+#         bot_nodes = [node for node in self.zoushi_nodes if node.tb == TopBotType.bot]
+#         macd_acc = 0.0
+#         if self.direction == TopBotType.bot2top:
+#             macd_acc = sum([node.macd_acc for node in top_nodes])
+#         elif self.direction == TopBotType.top2bot:
+#             macd_acc = sum([node.macd_acc for node in bot_nodes])
+#         else:
+#             print("We have invalid direction for ZhongShu")
+#         return macd_acc
     
     def get_money_acc(self):
         return sum([node.money_acc for node in self.zoushi_nodes])
@@ -294,11 +309,11 @@ class ZouShiLeiXing(object):
         
         same_direction_nodes = [n for n in all_double_nodes if n.direction == self.direction]
         # make sure the last two slope goes flatten, if not it's NOT exhausted
-        # macd is only used if we have 5+ xds changed len(same_direction_nodes) < 3 or\
+        # force is only used if we have 5+ xds changed len(same_direction_nodes) < 3 or\
         if len(same_direction_nodes) >= 2 and float_more_equal(abs(same_direction_nodes[-1].work_out_slope()), abs(same_direction_nodes[-2].work_out_slope())):
             if (same_direction_nodes[-1].direction == TopBotType.top2bot and float_less_equal(same_direction_nodes[-2].end.chan_price, same_direction_nodes[-1].end.chan_price)) or\
                 (same_direction_nodes[-1].direction == TopBotType.bot2top and float_more_equal(same_direction_nodes[-2].end.chan_price, same_direction_nodes[-1].end.chan_price)) or\
-                float_more_equal(abs(same_direction_nodes[-1].end.macd_acc),abs(same_direction_nodes[-2].end.macd_acc)): # we can use macd for the last two
+                float_more_equal(abs(same_direction_nodes[-1].work_out_force()),abs(same_direction_nodes[-2].work_out_force())): # we can use force for the last two
                     return False, same_direction_nodes[0].start.time
         return True, same_direction_nodes[-1].start.time
         
@@ -525,11 +540,11 @@ class ZhongShu(ZouShiLeiXing):
             if first_xd.direction == TopBotType.top2bot == last_xd.direction:
                 exhausted = float_more(first_xd.zoushi_nodes[0].chan_price, core_region[1]) and\
                             float_less(last_xd.zoushi_nodes[-1].chan_price, core_region[0]) and\
-                            float_more(abs(first_xd.zoushi_nodes[1].macd_acc), abs(last_xd.zoushi_nodes[1].macd_acc))
+                            float_more(abs(first_xd.work_out_force()), abs(last_xd.work_out_force()))
             elif first_xd.direction == TopBotType.bot2top == last_xd.direction:
                 exhausted = float_less(first_xd.zoushi_nodes[0].chan_price, core_region[0]) and\
                             float_more(last_xd.zoushi_nodes[-1].chan_price, core_region[1]) and\
-                            float_more(abs(first_xd.zoushi_nodes[1].macd_acc), abs(last_xd.zoushi_nodes[1].macd_acc))
+                            float_more(abs(first_xd.work_out_force()), abs(last_xd.work_out_force()))
         return exhausted, last_xd.zoushi_nodes[0].time if exhausted else first_xd.zoushi_nodes[0].time
 
     def is_running_type(self):
@@ -540,7 +555,7 @@ class ZhongShu(ZouShiLeiXing):
             pass
         else:
             pass
-    
+        
 
 class ZouShi(object):
     '''
@@ -551,7 +566,7 @@ class ZouShi(object):
         self.zslx_all_nodes = all_nodes
         self.zslx_result = []
         self.isdebug = isdebug
-        
+    
     def split_by_time(self, ts):
         '''
         This method is used after analyze, split the latest zoushi from ts time
@@ -623,10 +638,10 @@ class ZouShi(object):
         while i < len(self.zslx_all_nodes) - 1:
             first = self.zslx_all_nodes[i]
             second = self.zslx_all_nodes[i+1]
-        
+
             third = self.zslx_all_nodes[i+2] if i+2 < len(self.zslx_all_nodes) else None
             forth = self.zslx_all_nodes[i+3] if i+3 < len(self.zslx_all_nodes) else None
-    
+            
             if type(temp_zslx) is ZouShiLeiXing:
                 if third is not None and forth is not None and ZouShiLeiXing.is_valid_central_region(temp_zslx.direction, first, second, third, forth):
                     # new zs found end previous zslx
@@ -667,8 +682,8 @@ class ZouShi(object):
 #         # add remaining nodes
         temp_zslx.add_new_nodes(self.zslx_all_nodes[i:])
         self.zslx_result.append(temp_zslx)
-        
+
         if self.isdebug:
             print("Zou Shi disassembled: {0}".format(self.zslx_result))
-    
+
         return self.zslx_result
