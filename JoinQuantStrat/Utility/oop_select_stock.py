@@ -24,7 +24,6 @@ from chan_common_include import Chan_Type
 from biaoLiStatus import TopBotType
 from chan_kbar_filter import *
 from equilibrium import *
-from chan_kbar_filter import *
 
 
 '''=========================选股规则相关==================================='''
@@ -621,6 +620,7 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
         Pick_Chan_Stocks.__init__(self, params)
         self.filename = params.get('filename', None)
         self.chan_types = params.get('chan_types', [Chan_Type.I, Chan_Type.III])
+        self.enable_on_demand = params.get('on_demand', False)
         
     def before_trading_start(self, context):
         chan_stock_list = []
@@ -631,15 +631,19 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
             
                 
             if str(today_date) not in chan_dict:
-                print("{0} not in chan file, get stocks on demand".format(today_date))
-                check_stocks = filter_high_level_by_index(
-                                                        direction=TopBotType.top2bot, 
-                                                        stock_index='000985.XSHG',
-                                                        end_dt=yesterday,
-                                                        df=False,
-                                                        periods = ['1w'],
-                                                        chan_types=[Chan_Type.I, Chan_Type.III])
-                return check_stocks
+                if self.enable_on_demand:
+                    print("{0} not in chan file, get stocks on demand".format(today_date))
+                    check_stocks = filter_high_level_by_index(
+                                                            direction=TopBotType.top2bot, 
+                                                            stock_index='000985.XSHG',
+                                                            end_dt=yesterday,
+                                                            df=False,
+                                                            periods = ['1w'],
+                                                            chan_types=[Chan_Type.I, Chan_Type.III])
+                    return check_stocks
+                else:
+                    print("{0} not in chan file".format(today_date))
+                    return []
             
             chan_list = chan_dict[str(today_date)]
             print("data read from file: {0} stocks info".format(len(chan_list)))
