@@ -77,9 +77,9 @@ class Double_Nodes(object):
         return (self.end.chan_price - self.start.chan_price) / (self.end.loc - self.start.loc)
     
     def work_out_force(self):
-        price_delta = (end.chan_price - start.chan_price) / start.chan_price
-        time_delta = (end.loc - start.loc) / 1200 * 100 # use similar conversion factor
-        return end.money_acc * price_delta / (time_delta ** 2)
+        price_delta = (self.end.chan_price - self.start.chan_price) / self.start.chan_price
+        time_delta = (self.end.loc - self.start.loc) / 1200 * 100 # use similar conversion factor
+        return self.end.money_acc * price_delta / (time_delta ** 2)
 
 class XianDuan(Double_Nodes):
     '''
