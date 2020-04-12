@@ -1216,14 +1216,14 @@ class NestedInterval():
                                  count=self.count, 
                                  end_dt=self.end_dt, 
                                  unit=pe,
-                                 fields= ['date','high', 'low','close'],
+                                 fields= ['date','high', 'low','close', 'money'],
                                  fq_ref_date=datetime.datetime.strptime(self.end_dt, "%Y-%m-%d %H:%M:%S") if type(self.end_dt) is str else self.end_dt,
                                  df=False) if start_time is None else\
                         get_bars_new(self.stock, 
                                  start_dt=start_time, 
                                  end_dt=self.end_dt, 
                                  unit=pe,
-                                 fields= ['date','high', 'low','close'],
+                                 fields= ['date','high', 'low','close', 'money'],
                                  fq_ref_date=datetime.datetime.strptime(self.end_dt, "%Y-%m-%d %H:%M:%S") if type(self.end_dt) is str else self.end_dt,
                                  df=False)
                 
