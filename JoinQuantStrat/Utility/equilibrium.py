@@ -810,7 +810,8 @@ class Equilibrium():
                                        direction, 
                                        check_tb_structure=check_tb_structure,
                                        check_balance_structure=check_balance_structure,
-                                       current_chan_type=current_chan_type):
+                                       current_chan_type=current_chan_type,
+                                       at_bi_level=at_bi_level):
             return self.check_exhaustion(a, c, new_high_low)
         else:
             return False, False, None, None, 0, 0
@@ -823,7 +824,8 @@ class Equilibrium():
                                direction, 
                                check_tb_structure=False,
                                check_balance_structure=False, 
-                               current_chan_type=Chan_Type.INVALID):
+                               current_chan_type=Chan_Type.INVALID,
+                               at_bi_level=False):
         if zslx_a is None or zslx_c is None or zslx_a.isEmpty() or zslx_c.isEmpty():
             if self.isdebug:
                 print("Not enough DATA check_exhaustion")
@@ -867,7 +869,7 @@ class Equilibrium():
 #                 return False
             
             # if current pan bei level too high it will break the assumption made in higher level
-            if central_B.get_level().value > ZhongShuLevel.current.value:
+            if central_B.get_level().value > ZhongShuLevel.current.value and not at_bi_level:
                 if self.isdebug:
                     print("Pan Bei Zhong Shu level too high")
                 return False
