@@ -300,7 +300,7 @@ class Buy_stocks_var(Buy_stocks):
         Buy_stocks.__init__(self, params)
         self.money_fund = params.get('money_fund', ['511880.XSHG'])
         self.adjust_pos = params.get('adjust_pos', True)
-        self.equal_pos = params.get('equal_pos', False)
+        self.equal_pos = params.get('equal_pos', True)
         self.p_value = params.get('p_val', 2.58)
         self.risk_var = params.get('risk_var', 0.13)
         self.pc_var = None
@@ -1006,7 +1006,7 @@ class Short_Chan(Sell_stocks):
         return '缠论调仓卖出规则'
 
 
-class Long_Chan(Buy_stocks_portion):
+class Long_Chan(Buy_stocks_var):
     def __init__(self, params):
         Buy_stocks_portion.__init__(self, params)
         self.buy_count = params.get('buy_count', 3)
