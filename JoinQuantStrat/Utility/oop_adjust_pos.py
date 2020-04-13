@@ -941,11 +941,12 @@ class Short_Chan(Sell_stocks):
                                    skip_paused=False)
 
             sma13 = stock_data['close'].values[-13:].sum() / 13
-            if stock_data.loc[effective_time:, 'high'].max() >= (sub_chan_p[1] if type(sub_chan_p) is list else sub_chan_p): 
-                print("Stock {0} reached upper ZhongShu/target price {1}".format(stock, (sub_chan_p[1] if type(sub_chan_p) is list else sub_chan_p)))
-                if self.use_ma13 and stock_data.iloc[-1].close < sma13:
-                    print("STOP PROFIT MA13 {0} {1}".format(stock_data.iloc[-1].close, sma13))
-                    return True
+            sma5 = stock_data['close'].values[-5:].sum() / 5
+#             if stock_data.loc[effective_time:, 'high'].max() >= (sub_chan_p[1] if type(sub_chan_p) is list else sub_chan_p): 
+#                 print("Stock {0} reached upper ZhongShu/target price {1}".format(stock, (sub_chan_p[1] if type(sub_chan_p) is list else sub_chan_p)))
+#                 if self.use_ma13 and stock_data.iloc[-1].close < sma13:
+#                     print("STOP PROFIT MA13 {0} {1}".format(stock_data.iloc[-1].close, sma13))
+#                     return True
 
 #             if (stock_data.loc[effective_time:, 'high'].max() / context.portfolio.positions[stock].avg_cost - 1) >= self.stop_profit:
 #             print("STOP PROFIT reached return {0} {1}".format(context.portfolio.positions[stock].avg_cost, stock_data.loc[effective_time:, 'high'].max()))
@@ -969,7 +970,7 @@ class Short_Chan(Sell_stocks):
                                                                                    xd_exhausted,
                                                                                    zhongshu_formed))
                 return True
-            if zhongshu_formed and self.use_ma13 and stock_data.iloc[-1].close < sma13:
+            if zhongshu_formed and self.use_ma13 and sma5 < sma13:
                 print("STOP PROFIT MA13 {0} {1} after Zhongshu formed".format(stock_data.iloc[-1].close, sma13))
                 return True
             
