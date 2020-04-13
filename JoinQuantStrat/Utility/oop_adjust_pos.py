@@ -932,6 +932,7 @@ class Short_Chan(Sell_stocks):
             
         elif top_chan_t == Chan_Type.III:
             
+            # extra data for SMA calculation
             data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=200)
             stock_data = get_price(stock,
                                    start_date=data_start_time, 
@@ -951,6 +952,7 @@ class Short_Chan(Sell_stocks):
 #             if (stock_data.loc[effective_time:, 'high'].max() / context.portfolio.positions[stock].avg_cost - 1) >= self.stop_profit:
 #             print("STOP PROFIT reached return {0} {1}".format(context.portfolio.positions[stock].avg_cost, stock_data.loc[effective_time:, 'high'].max()))
             max_time = stock_data.loc[effective_time:, 'high'].idxmax()
+            min_time = stock_data.loc[effective_time:, 'high'].idxmin()
             exhausted, xd_exhausted, _, zhongshu_formed = check_stock_sub(stock,
                                                           end_time=max_time,
                                                           periods=[self.sub_period],
@@ -960,7 +962,7 @@ class Short_Chan(Sell_stocks):
                                                           isdebug=False,
                                                           is_description=self.isdebug,
                                                           is_anal=False,
-                                                          split_time=effective_time,
+                                                          split_time=min_time,
                                                           check_bi=True,
                                                           force_zhongshu=False,
                                                           force_bi_zhongshu=True) # relax rule

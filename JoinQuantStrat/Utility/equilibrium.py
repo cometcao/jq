@@ -508,7 +508,7 @@ class Equilibrium():
         self.check_zoushi_status()
         pass
     
-    def find_most_recent_zoushi(self, direction):
+    def find_most_recent_zoushi(self, direction, at_bi_level=False):
         '''
         Make sure we find the appropriate two XD for comparison.
         A. in case of QVSHI
@@ -538,23 +538,26 @@ class Equilibrium():
                     type(self.analytic_result[-1]) is ZhongShu and\
                     type(self.analytic_result[-3]) is ZhongShu and\
                     self.two_zslx_interact_original(self.analytic_result[-1], self.analytic_result[-3]):
-                    return None, None, None, None
+#                     return None, None, None, None
 # IGNORE THIS CASE###############################
 #                     ## zhong shu combination
-#                     i = -3
-#                     marked = False
-#                     while -(i-2) <= len(self.analytic_result):
-#                         if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
-#                             (not self.analytic_result[i-2].is_complex_type() and self.analytic_result[i-2].direction != self.analytic_result[i].direction):
-#                             first_xd = self.analytic_result[i-1]
-#                             zs = self.analytic_result[i:-1]
-#                             marked = True
-#                             break
-#                         i = i - 2
-#                     if not marked or -(i-2) > len(self.analytic_result):
-#                         all_zs = [zs for zs in self.analytic_result if type(zs) is ZhongShu]
-#                         all_first_xd = [zs.take_split_xd_as_zslx(direction) for zs in all_zs]
-#                         first_xd = sorted(all_first_xd, key=take_start_price, reverse=direction==TopBotType.top2bot)[0]
+                    if at_bi_level:
+                        i = -3
+                        marked = False
+                        while -(i-2) <= len(self.analytic_result):
+                            if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
+                                (not self.analytic_result[i-2].is_complex_type() and self.analytic_result[i-2].direction != self.analytic_result[i].direction):
+                                first_xd = self.analytic_result[i-1]
+                                zs = self.analytic_result[i:-1]
+                                marked = True
+                                break
+                            i = i - 2
+                        if not marked or -(i-2) > len(self.analytic_result):
+                            all_zs = [zs for zs in self.analytic_result if type(zs) is ZhongShu]
+                            all_first_xd = [zs.take_split_xd_as_zslx(direction) for zs in all_zs]
+                            first_xd = sorted(all_first_xd, key=take_start_price, reverse=direction==TopBotType.top2bot)[0]
+                    else:
+                        return None, None, None, None
                         
                 elif len(self.analytic_result) < 2 or self.analytic_result[-2].direction != last_xd.direction:
                     first_xd = zs.take_split_xd_as_zslx(direction)
@@ -574,24 +577,27 @@ class Equilibrium():
                 type(self.analytic_result[-2]) is ZhongShu and\
                 type(self.analytic_result[-4]) is ZhongShu and\
                 self.two_zslx_interact_original(self.analytic_result[-4], self.analytic_result[-2]):
-                return None, None, None, None
+#                 return None, None, None, None
 # IGNORE THIS CASE###############################
-                ## zhong shu combination
-#                 i = -4
-#                 marked = False
-#                 while -(i-2) <= len(self.analytic_result):
-#                     if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
-#                         (not self.analytic_result[i-2].is_complex_type() and self.analytic_result[i-2].direction != self.analytic_result[i].direction):
-#                         first_xd = self.analytic_result[i-1]
-#                         zs = self.analytic_result[i:-1]
-#                         marked = True
-#                         break
-#                     i = i - 2
-#                 if not marked or -(i-2) > len(self.analytic_result):
-#                     all_zs = [zs for zs in self.analytic_result if type(zs) is ZhongShu]
-#                     all_first_xd = [zs.take_split_xd_as_zslx(direction) for zs in all_zs]
-#                     first_xd = sorted(all_first_xd, key=take_start_price, reverse=direction==TopBotType.top2bot)[0]
-#                     zs = all_zs[-1]
+                if at_bi_level:
+                    ## zhong shu combination
+                    i = -4
+                    marked = False
+                    while -(i-2) <= len(self.analytic_result):
+                        if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
+                            (not self.analytic_result[i-2].is_complex_type() and self.analytic_result[i-2].direction != self.analytic_result[i].direction):
+                            first_xd = self.analytic_result[i-1]
+                            zs = self.analytic_result[i:-1]
+                            marked = True
+                            break
+                        i = i - 2
+                    if not marked or -(i-2) > len(self.analytic_result):
+                        all_zs = [zs for zs in self.analytic_result if type(zs) is ZhongShu]
+                        all_first_xd = [zs.take_split_xd_as_zslx(direction) for zs in all_zs]
+                        first_xd = sorted(all_first_xd, key=take_start_price, reverse=direction==TopBotType.top2bot)[0]
+                        zs = all_zs[-1]
+                else:
+                    return None, None, None, None
                     
             elif len(self.analytic_result) < 3 or self.analytic_result[-3].direction != last_xd.direction:
                 if len(self.analytic_result) > 1:
@@ -744,7 +750,8 @@ class Equilibrium():
                            check_tb_structure=False, 
                            check_balance_structure=False, 
                            force_zhongshu=False, 
-                           current_chan_type=Chan_Type.INVALID):
+                           current_chan_type=Chan_Type.INVALID,
+                           at_bi_level=False):
         '''
         We are dealing type III differently at top level
         return:
@@ -756,10 +763,10 @@ class Equilibrium():
         force
         '''
         if current_chan_type == Chan_Type.III:
-            if self.isQvShi_simple:
-                if self.isdebug:
-                    print("type III mixed with type I position we ignore")
-                return False, False, None, None, 0, 0
+#             if self.isQvShi_simple:
+#                 if self.isdebug:
+#                     print("type III mixed with type I position we ignore")
+#                 return False, False, None, None, 0, 0
             
             last_zoushi = self.analytic_result[-1]
             if type(last_zoushi) is ZouShiLeiXing:
@@ -792,7 +799,7 @@ class Equilibrium():
                 xd_exhaustion, ts = zs.check_exhaustion()
                 return True, xd_exhaustion, zs.first.time, ts, 0, 0
         
-        a, central_B, c, central_region = self.find_most_recent_zoushi(direction)
+        a, central_B, c, central_region = self.find_most_recent_zoushi(direction, at_bi_level=at_bi_level)
         
         new_high_low = self.reached_new_high_low(guide_price, direction, c, central_region)
         
@@ -1289,7 +1296,8 @@ class NestedInterval():
                                                                                                     guide_price,
                                                                                                     check_tb_structure=check_tb_structure, 
                                                                                                     check_balance_structure=False,
-                                                                                                    current_chan_type=chan_t)
+                                                                                                    current_chan_type=chan_t,
+                                                                                                    at_bi_level=False)
         else:
             high_exhausted, check_xd_exhaustion = False, False
         if self.isDescription or self.isdebug:
@@ -1346,7 +1354,8 @@ class NestedInterval():
         bi_exhausted, bi_check_exhaustion, _,bi_split_time, _, _ = eq.define_equilibrium(direction, 
                                                                                          check_tb_structure=True,
                                                                                          check_balance_structure=False,
-                                                                                         force_zhongshu=force_zhongshu)
+                                                                                         force_zhongshu=force_zhongshu,
+                                                                                         at_bi_level=True)
         if (self.isdebug):
             print("BI level {0}, {1}".format(bi_exhausted, bi_check_exhaustion))
         
@@ -1407,7 +1416,8 @@ class NestedInterval():
                                                                                                    force_zhongshu=force_zhongshu, 
                                                                                                    check_tb_structure=check_tb_structure,
                                                                                                    check_balance_structure=False,
-                                                                                                   current_chan_type=chan_t)
+                                                                                                   current_chan_type=chan_t,
+                                                                                                   at_bi_level=False)
         if self.isDescription or self.isdebug:
             print("current level {0} {1} {2} {3} {4} with price:{5}".format(period, 
                                                                         chan_d, 
