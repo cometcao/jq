@@ -770,7 +770,12 @@ class Short_Chan(Sell_stocks):
         self.stop_profit = params.get('stop_profit', 0.03)
         self.use_ma13 = params.get('use_ma13', False)
     
-    def check_stop_loss(self, stock, avg_cost, context):
+    def check_stop_loss(self, stock, context):
+        avg_cost = context.portfolio.positions[stock].avg_cost
+        # short circuit
+        if context.portfolio.positions[stock].avg_cost < context.portfolio.positions[stock].price:
+            return False
+        
         top_profile = self.g.stock_chan_type[stock][0]
         sub_profile = self.g.stock_chan_type[stock][1]
         top_chan_t = top_profile[0]
@@ -882,7 +887,12 @@ class Short_Chan(Sell_stocks):
             
             return False
     
-    def check_stop_profit(self, stock, position_time, context):
+    def check_stop_profit(self, stock, context):
+        # short circuit
+        if context.portfolio.positions[stock].avg_cost > context.portfolio.positions[stock].price:
+            return False
+        
+        position_time = context.portfolio.positions[stock].transact_time
         top_profile = self.g.stock_chan_type[stock][0]
         sub_profile = self.g.stock_chan_type[stock][1]
         top_chan_t = top_profile[0]
@@ -984,14 +994,12 @@ class Short_Chan(Sell_stocks):
         to_check = context.portfolio.positions.keys()
         to_check = [stock for stock in to_check if context.portfolio.positions[stock].closeable_amount > 0]
         for stock in to_check:
-            position_time = context.portfolio.positions[stock].transact_time
-            avg_cost = context.portfolio.positions[stock].avg_cost 
             
-            if self.check_stop_loss(stock, avg_cost, context):
+            if self.check_stop_loss(stock, context):
                 self.g.close_position(self, context.portfolio.positions[stock], True, 0)
                 continue
             
-            if self.check_stop_profit(stock, position_time, context):
+            if self.check_stop_profit(stock, context):
                 self.g.close_position(self, context.portfolio.positions[stock], True, 0)
             
     def __str__(self):
