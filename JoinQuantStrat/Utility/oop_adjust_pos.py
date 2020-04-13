@@ -1006,7 +1006,7 @@ class Short_Chan(Sell_stocks):
         return '缠论调仓卖出规则'
 
 
-class Long_Chan(Buy_stocks_var):
+class Long_Chan(Buy_stocks_portion):
     def __init__(self, params):
         Buy_stocks_portion.__init__(self, params)
         self.buy_count = params.get('buy_count', 3)
