@@ -952,7 +952,9 @@ class Short_Chan(Sell_stocks):
 #             if (stock_data.loc[effective_time:, 'high'].max() / context.portfolio.positions[stock].avg_cost - 1) >= self.stop_profit:
 #             print("STOP PROFIT reached return {0} {1}".format(context.portfolio.positions[stock].avg_cost, stock_data.loc[effective_time:, 'high'].max()))
             max_time = stock_data.loc[effective_time:, 'high'].idxmax()
-            min_time = stock_data.loc[effective_time:, 'high'].idxmin()
+            min_time = stock_data.loc[effective_time:, 'low'].idxmin()
+            if min_time > max_time:
+                min_time = effective_time
             exhausted, xd_exhausted, _, zhongshu_formed = check_stock_sub(stock,
                                                           end_time=max_time,
                                                           periods=[self.sub_period],
