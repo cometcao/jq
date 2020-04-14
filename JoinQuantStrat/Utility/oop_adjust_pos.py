@@ -831,7 +831,7 @@ class Short_Chan(Sell_stocks):
                   
                 # check force
                 money_sum = stock_data.loc[top_zoushi_start_time:, 'money'].sum() / 1e8
-                price_delta = (min_price - max_price) / max_price
+                price_delta = (min_price - max_price) / max_price * 100
                 time_delta = stock_data.loc[top_zoushi_start_time:,:].shape[0] / 1200 * 100
                 latest_force = money_sum * price_delta / time_delta ** 2
                 if top_chan_force != 0 and latest_force < 0 and abs(latest_force) > abs(top_chan_force):
@@ -887,11 +887,11 @@ class Short_Chan(Sell_stocks):
                 
                 # use force instead
                 money_sum = stock_data.loc[sub_zoushi_start_time:, 'money'].sum() / 1e8
-                price_delta = (min_price - max_price) / max_price
+                price_delta = (min_price - max_price) / max_price * 100
                 time_delta = stock_data.loc[sub_zoushi_start_time:, :].shape[0] / 1200 * 100
                 latest_force = money_sum * price_delta / time_delta ** 2
-                if top_chan_force != 0 and latest_force < 0 and abs(latest_force) > abs(top_chan_force):
-                    print("force gets deeper! STOPLOSS {0},{1}".format(top_chan_force, latest_force))
+                if sub_chan_force != 0 and latest_force < 0 and abs(latest_force) > abs(sub_chan_force):
+                    print("force gets deeper! STOPLOSS {0},{1}".format(sub_chan_force, latest_force))
                     return True
 #                 if sub_chan_t == Chan_Type.I and sub_chan_macd != 0:
 #                     # check macd
