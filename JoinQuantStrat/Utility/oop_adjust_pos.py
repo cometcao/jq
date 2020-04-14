@@ -1008,16 +1008,20 @@ class Short_Chan(Sell_stocks):
                 return True
             
             if (stock_data.loc[effective_time:, 'high'].max() / context.portfolio.positions[stock].avg_cost - 1) >= self.stop_profit:
-                top_result, top_xd_result, top_zhongshu_formed = check_chan_by_type_exhaustion(stock,
-                                                                      end_time=max_time,
-                                                                      periods=[self.top_period],
-                                                                      count=1000,
-                                                                      direction=TopBotType.bot2top,
-                                                                      chan_type=[Chan_Type.I, Chan_Type.III, Chan_Type.INVALID],
-                                                                      isdebug=self.isdebug,
-                                                                      is_description=self.isDescription,
-                                                                      is_anal=False,
-                                                                      check_structure=True) # synch with selection
+                # for TYPE III of 5m, we don't want to hold a stock for too long
+                top_result, top_xd_result, top_zhongshu_formed = check_stock_sub(stock,
+                                                              end_time=max_time,
+                                                              periods=[self.stop_period],
+                                                              count=2000,
+                                                              direction=TopBotType.bot2top,
+                                                              chan_types=[Chan_Type.I, Chan_Type.INVALID],
+                                                              isdebug=self.isdebug,
+                                                              is_description=self.isDescription,
+                                                              is_anal=False,
+                                                              split_time=min_time,
+                                                              check_bi=False,
+                                                              force_zhongshu=False,
+                                                              force_bi_zhongshu=True) # relax rule
                 if top_result or top_xd_result:
                     print("STOP PROFIT {0} top exhausted: {1}, {2} Zhongshu formed: {3}".format(stock,
                                                                                        top_result,
