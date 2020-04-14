@@ -1011,7 +1011,7 @@ class Short_Chan(Sell_stocks):
                 # for TYPE III of 5m, we don't want to hold a stock for too long
                 top_result, top_xd_result, top_zhongshu_formed = check_stock_sub(stock,
                                                               end_time=max_time,
-                                                              periods=[self.stop_period],
+                                                              periods=[self.top_period],
                                                               count=2000,
                                                               direction=TopBotType.bot2top,
                                                               chan_types=[Chan_Type.I, Chan_Type.INVALID],
