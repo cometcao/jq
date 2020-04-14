@@ -781,13 +781,13 @@ class Short_Chan(Sell_stocks):
         top_chan_t = top_profile[0]
         top_chan_p = top_profile[2]
         top_chan_slope = top_profile[3]
-        top_chan_macd = top_profile[4]
+        top_chan_force = top_profile[4]
         top_zoushi_start_time = top_profile[5]
         splitTime = top_profile[6]
         sub_chan_t = sub_profile[0]
         sub_chan_p = sub_profile[2]
         sub_chan_slope = sub_profile[3]
-        sub_chan_macd = sub_profile[4]
+        sub_chan_force = sub_profile[4]
         sub_zoushi_start_time = sub_profile[5]
         effective_time = sub_profile[6]
         
@@ -798,13 +798,20 @@ class Short_Chan(Sell_stocks):
                                    start_date=data_start_time, 
                                    end_date=context.current_dt, 
                                    frequency=self.top_period, 
-                                   fields=('high', 'low', 'close'), 
+                                   fields=('high', 'low', 'close', 'money'), 
                                    skip_paused=False)
+
+            max_price = stock_data.loc[top_zoushi_start_time:, 'high'].max()
+            min_price = stock_data.loc[top_zoushi_start_time:, 'low'].min()
+            max_price_time = stock_data.loc[sub_zoushi_start_time:, 'high'].idxmax()
+            min_price_time = stock_data.loc[sub_zoushi_start_time:, 'low'].idxmin()
+            max_loc = stock_data.index.get_loc(max_price_time)
+            min_loc = stock_data.index.get_loc(min_price_time)
 
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
                 # check if original long point still holds
                 result, xd_result, _ = check_chan_by_type_exhaustion(stock,
-                                                                      end_time=context.current_dt,
+                                                                      end_time=min_price_time,
                                                                       periods=[self.top_period],
                                                                       count=4800,
                                                                       direction=TopBotType.top2bot,
@@ -817,22 +824,28 @@ class Short_Chan(Sell_stocks):
                     return True
             elif (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
                 # check slope
-                max_price = stock_data.loc[top_zoushi_start_time:, 'high'].max()
-                min_price = stock_data.loc[top_zoushi_start_time:, 'low'].min()
-                max_loc = stock_data.index.get_loc(stock_data.loc[top_zoushi_start_time:, 'high'].idxmax())
-                min_loc = stock_data.index.get_loc(stock_data.loc[top_zoushi_start_time:, 'low'].idxmin())
                 latest_slope = (max_price-min_price)/(max_loc-min_loc)
                 if latest_slope < 0 and abs(latest_slope) >= abs(top_chan_slope):
                     print("slope gets deeper! STOPLOSS {0},{1}".format(top_chan_slope, latest_slope))
                     return True
-                 
-                # check macd
-                _, _, stock_data.loc[:,'macd'] = talib.MACD(stock_data['close'].values)
-                stock_data_macd = stock_data.loc[top_zoushi_start_time:, :]
-                latest_macd = stock_data_macd[stock_data_macd['macd'] < 0]['macd'].sum()
-                if top_chan_macd != 0 and latest_macd < 0 and abs(latest_macd) > abs(top_chan_macd):
-                    print("macd gets deeper! STOPLOSS {0},{1}".format(top_chan_macd, latest_macd))
+                  
+                # check force
+                money_sum = stock_data.loc[top_zoushi_start_time:, 'money'].sum() / 1e8
+                price_delta = (min_price - max_price) / max_price
+                time_delta = stock_data.loc[top_zoushi_start_time:,:].shape[0] / 1200 * 100
+                latest_force = money_sum * price_delta / time_delta ** 2
+                if top_chan_force != 0 and latest_force < 0 and abs(latest_force) > abs(top_chan_force):
+                    print("force gets deeper! STOPLOSS {0},{1}".format(top_chan_force, latest_force))
                     return True
+                
+#                 # check macd
+#                 _, _, stock_data.loc[:,'macd'] = talib.MACD(stock_data['close'].values)
+#                 stock_data_macd = stock_data.loc[top_zoushi_start_time:, :]
+#                 latest_macd = stock_data_macd[stock_data_macd['macd'] < 0]['macd'].sum()
+#                 if top_chan_macd != 0 and latest_macd < 0 and abs(latest_macd) > abs(top_chan_macd):
+#                     print("macd gets deeper! STOPLOSS {0},{1}".format(top_chan_macd, latest_macd))
+#                     return True
+                
             return False
         elif top_chan_t == Chan_Type.III:
             # This is to make sure we have enough data for MACD and MA
@@ -841,7 +854,7 @@ class Short_Chan(Sell_stocks):
                                    start_date=data_start_time, 
                                    end_date=context.current_dt, 
                                    frequency='1m', 
-                                   fields=('high', 'low', 'close'), 
+                                   fields=('high', 'low', 'close', 'money'), 
                                    skip_paused=False)
             # check slope
             max_price = stock_data.loc[sub_zoushi_start_time:, 'high'].max()
@@ -871,16 +884,23 @@ class Short_Chan(Sell_stocks):
                 if latest_slope < 0 and abs(latest_slope) >= abs(sub_chan_slope):
                     print("slope gets deeper! STOPLOSS {0},{1}".format(sub_chan_slope, latest_slope))
                     return True
-
-                if sub_chan_t == Chan_Type.I and sub_chan_macd != 0:
-                    # check macd
-                    _, _, stock_data.loc[:,'macd'] = talib.MACD(stock_data['close'].values)
-                    stock_data_macd = stock_data.loc[sub_zoushi_start_time:, :]
-                    latest_macd = stock_data_macd[stock_data_macd['macd'] < 0]['macd'].sum()
-                    if latest_macd < 0 and abs(latest_macd) > abs(sub_chan_macd):
-                        print("macd gets deeper! STOPLOSS {0},{1}".format(sub_chan_macd, latest_macd))
-                        return True
-                    
+                
+                # use force instead
+                money_sum = stock_data.loc[sub_zoushi_start_time:, 'money'].sum() / 1e8
+                price_delta = (min_price - max_price) / max_price
+                time_delta = stock_data.loc[sub_zoushi_start_time:, :].shape[0] / 1200 * 100
+                latest_force = money_sum * price_delta / time_delta ** 2
+                if top_chan_force != 0 and latest_force < 0 and abs(latest_force) > abs(top_chan_force):
+                    print("force gets deeper! STOPLOSS {0},{1}".format(top_chan_force, latest_force))
+                    return True
+#                 if sub_chan_t == Chan_Type.I and sub_chan_macd != 0:
+#                     # check macd
+#                     _, _, stock_data.loc[:,'macd'] = talib.MACD(stock_data['close'].values)
+#                     stock_data_macd = stock_data.loc[sub_zoushi_start_time:, :]
+#                     latest_macd = stock_data_macd[stock_data_macd['macd'] < 0]['macd'].sum()
+#                     if latest_macd < 0 and abs(latest_macd) > abs(sub_chan_macd):
+#                         print("macd gets deeper! STOPLOSS {0},{1}".format(sub_chan_macd, latest_macd))
+#                         return True
             if stock_data.loc[effective_time:,'low'].min() <= top_chan_p:
                 print("TYPE III invalidated {0}, {1}".format(stock_data.loc[effective_time:,'low'].min(), top_chan_p))
                 return True
@@ -912,11 +932,12 @@ class Short_Chan(Sell_stocks):
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
 
-            if stock_data.loc[effective_time:, 'high'].max() >= top_chan_p: # reached target price
+            if self.use_ma13 and stock_data.loc[effective_time:, 'high'].max() >= top_chan_p: # reached target price
                 print("STOP PROFIT {0} reached target price: {1}".format(stock, top_chan_p))
                 
                 sma13 = stock_data['close'].values[-13:].sum() / 13
-                if self.use_ma13 and stock_data.iloc[-1].close < sma13:
+                sma5 = stock_data['close'].values[-5:].sum() / 5
+                if sma5 < sma13:
                     print("STOP PROFIT {0} below ma13: {1}".format(stock, sma13))
                     return True
 
