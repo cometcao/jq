@@ -321,7 +321,11 @@ def sanity_check(stock, profile, end_time, pe):
                           frequency='1m',
                           fields= ['close', 'low','low_limit'])
     
-    if (stock_data.low == stock_data.low_limit).any():   # touched low limit
+    if stock_data.iloc[-1, 0] > PRICE_UPPER_LIMIT:
+        print("{0} price over {1}".format(stock, PRICE_UPPER_LIMIT))
+        result = False
+        # low_limit
+    if (stock_data.low == stock_data.low_limit).any():# touched low limit
         print("{0} price reached low limit".format(stock))
         return result
     

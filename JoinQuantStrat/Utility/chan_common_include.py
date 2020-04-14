@@ -5,7 +5,6 @@ Created on 09 Feb 2020
 @author: MetalInvest
 '''
 import numpy as np
-
 from enum import Enum 
 ######################## common method ###############################
 
@@ -29,6 +28,8 @@ TYPE_I_NUM = 10
 ######################## kBarprocessor #############################
 GOLDEN_RATIO = 0.618
 MIN_PRICE_UNIT=0.01
+
+PRICE_UPPER_LIMIT = 200
 
 ######################## Central Region ###########################
 
