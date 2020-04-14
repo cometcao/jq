@@ -766,6 +766,7 @@ class Short_Chan(Sell_stocks):
         self.top_period = params.get('top_period', '5m')
         self.sub_period = params.get('sub_period', '1m')
         self.isdebug = params.get('isdebug', False)
+        self.isDescription = params.get('isDescription', True)
         self.stop_loss = params.get('stop_loss', 0.02)
         self.stop_profit = params.get('stop_profit', 0.03)
         self.use_ma13 = params.get('use_ma13', False)
@@ -817,6 +818,7 @@ class Short_Chan(Sell_stocks):
                                                                       direction=TopBotType.top2bot,
                                                                       chan_type=[Chan_Type.I],
                                                                       isdebug=self.isdebug,
+                                                                      is_description =self.isDescription,
                                                                       is_anal=False,
                                                                       check_structure=False) # synch with selection
                 if not result or not xd_result:
@@ -873,6 +875,7 @@ class Short_Chan(Sell_stocks):
                                                               direction=TopBotType.top2bot,
                                                               chan_types=[Chan_Type.I, Chan_Type.INVALID],
                                                               isdebug=self.isdebug,
+                                                              is_description =self.isDescription,
                                                               is_anal=False,
                                                               split_time=splitTime,
                                                               check_bi=False,
@@ -949,8 +952,8 @@ class Short_Chan(Sell_stocks):
                                                       count=2000,
                                                       direction=TopBotType.bot2top,
                                                       chan_types=[Chan_Type.I, Chan_Type.INVALID],
-                                                      isdebug=False,
-                                                      is_description=self.isdebug,
+                                                      isdebug=self.isdebug,
+                                                      is_description=self.isDescription,
                                                       is_anal=False,
                                                       split_time=effective_time,
                                                       check_bi=False,
@@ -990,8 +993,8 @@ class Short_Chan(Sell_stocks):
                                                           count=2000,
                                                           direction=TopBotType.bot2top,
                                                           chan_types=[Chan_Type.I, Chan_Type.INVALID],
-                                                          isdebug=False,
-                                                          is_description=self.isdebug,
+                                                          isdebug=self.isdebug,
+                                                          is_description=self.isDescription,
                                                           is_anal=False,
                                                           split_time=min_time,
                                                           check_bi=True,
@@ -1012,6 +1015,7 @@ class Short_Chan(Sell_stocks):
                                                                       direction=TopBotType.bot2top,
                                                                       chan_type=[Chan_Type.I, Chan_Type.III, Chan_Type.INVALID],
                                                                       isdebug=self.isdebug,
+                                                                      is_description=self.isDescription,
                                                                       is_anal=False,
                                                                       check_structure=True) # synch with selection
                 if top_result or top_xd_result:
