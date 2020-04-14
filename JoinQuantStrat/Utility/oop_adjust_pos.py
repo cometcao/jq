@@ -1022,7 +1022,7 @@ class Short_Chan(Sell_stocks):
                                                               check_bi=False,
                                                               force_zhongshu=False,
                                                               force_bi_zhongshu=True) # relax rule
-                if top_result or top_xd_result:
+                if top_result and top_xd_result:
                     print("STOP PROFIT {0} top exhausted: {1}, {2} Zhongshu formed: {3}".format(stock,
                                                                                        top_result,
                                                                                        top_xd_result,
