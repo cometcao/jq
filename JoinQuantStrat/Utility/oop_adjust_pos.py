@@ -988,7 +988,7 @@ class Short_Chan(Sell_stocks):
             if min_time > max_time:
                 min_time = effective_time
             exhausted, xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
-                                                          end_time=max_time,
+                                                          end_time=context.current_dt,
                                                           periods=[self.sub_period],
                                                           count=2000,
                                                           direction=TopBotType.bot2top,
@@ -1010,7 +1010,7 @@ class Short_Chan(Sell_stocks):
             if (stock_data.loc[effective_time:, 'high'].max() / context.portfolio.positions[stock].avg_cost - 1) >= self.stop_profit:
                 # for TYPE III of 5m, we don't want to hold a stock for too long
                 top_result, top_xd_result,_, top_zhongshu_formed = check_stock_sub(stock,
-                                                              end_time=max_time,
+                                                              end_time=context.current_dt,
                                                               periods=[self.top_period],
                                                               count=2000,
                                                               direction=TopBotType.bot2top,
