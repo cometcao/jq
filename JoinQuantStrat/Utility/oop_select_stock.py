@@ -683,8 +683,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.long_min_start = params.get('long_min_start', 30)
     
     def filter(self, context, data, stock_list):
-        if context.current_dt.hour < self.long_hour_start and\
-            context.current_dt.minute < self.long_min_start: # we should only try to long in the afternoon
+        if context.current_dt.hour < self.long_hour_start:
+            return []
+        elif context.current_dt.minute < self.long_min_start: # we should only try to long in the afternoon
             return []
         
         filter_stock_list = []
