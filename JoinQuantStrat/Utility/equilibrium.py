@@ -659,15 +659,15 @@ class Equilibrium():
     def two_zhongshu_form_qvshi_simple(self, zs1, zs2, zslx, zs_level=ZhongShuLevel.current):
         
         relax_result = False
-        if zs1.get_level().value >= zs2.get_level().value == zs_level.value:
-            [lr1, ur1] = zs1.get_core_region()
-            [lr2, ur2] = zs2.get_core_region()
-            if (float_more(lr1, ur2) or float_more(lr2, ur1)) and\
-                ((not (self.two_zslx_interact(zs1, zs2) and zslx.isSimple())) or\
-                (not zs1.is_complex_type() and self.two_zslx_interact(zs1, zs2) and zslx.isSimple())): # two Zhong Shu without intersection
-                if self.isdebug:
-                    print("1 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(zs1, zs2))
-                relax_result = True
+#         if zs1.get_level().value >= zs2.get_level().value == zs_level.value:
+        [lr1, ur1] = zs1.get_core_region()
+        [lr2, ur2] = zs2.get_core_region()
+        if (float_more(lr1, ur2) or float_more(lr2, ur1)) and\
+            ((not (self.two_zslx_interact(zs1, zs2) and zslx.isSimple())) or\
+            (not zs1.is_complex_type() and self.two_zslx_interact(zs1, zs2) and zslx.isSimple())): # two Zhong Shu without intersection
+            if self.isdebug:
+                print("1 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(zs1, zs2))
+            relax_result = True
     
 #         if not relax_result and zs1.get_level().value > zs2.get_level().value == zs_level.value and\
 #             (zs1.direction == zs2.direction or zs1.is_complex_type()):
