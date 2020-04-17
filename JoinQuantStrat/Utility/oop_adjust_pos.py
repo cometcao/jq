@@ -934,6 +934,34 @@ class Short_Chan(Sell_stocks):
                                    frequency=self.top_period, 
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
+            max_time = stock_data.loc[effective_time:, 'high'].idxmax()
+            min_time = stock_data.loc[effective_time:, 'low'].idxmin()
+            if min_time > max_time:
+                min_time = effective_time
+#             if stock_data.loc[effective_time:, 'high'].max()/context.portfolio.positions[stock].avg_cost-1 >= self.stop_profit:
+#                 print("STOP PROFIT reached return {0} {1}".format(context.portfolio.positions[stock].avg_cost, stock_data.loc[effective_time:, 'high'].max()))
+            exhausted, xd_exhausted, _, zhongshu_formed = check_stock_sub(stock,
+                                                  end_time=context.current_dt,
+                                                  periods=[self.sub_period],
+                                                  count=2000,
+                                                  direction=TopBotType.bot2top,
+                                                  chan_types=[Chan_Type.I, Chan_Type.INVALID],
+                                                  isdebug=self.isdebug,
+                                                  is_description=self.isDescription,
+                                                  is_anal=False,
+                                                  split_time=min_time,
+                                                  check_bi=True,
+                                                  force_zhongshu=True,
+                                                  force_bi_zhongshu=True) # synch with selection
+            
+            if (exhausted and zhongshu_formed) or (not zhongshu_formed and xd_exhausted):
+                print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
+                                                                            self.sub_period,
+                                                                               exhausted,
+                                                                               xd_exhausted,
+                                                                               zhongshu_formed))
+                return True
+
 
             if self.use_ma13 and stock_data.loc[effective_time:, 'high'].max() >= top_chan_p: # reached target price
                 print("STOP PROFIT {0} reached target price: {1}".format(stock, top_chan_p))
@@ -942,26 +970,6 @@ class Short_Chan(Sell_stocks):
                 sma5 = stock_data['close'].values[-5:].sum() / 5
                 if sma5 < sma13:
                     print("STOP PROFIT {0} below ma13: {1}".format(stock, sma13))
-                    return True
-
-            if stock_data.loc[effective_time:, 'high'].max()/context.portfolio.positions[stock].avg_cost-1 >= self.stop_profit:
-                print("STOP PROFIT reached return {0} {1}".format(context.portfolio.positions[stock].avg_cost, stock_data.loc[effective_time:, 'high'].max()))
-                exhausted, xd_exhausted, _, zhongshu_formed = check_stock_sub(stock,
-                                                      end_time=context.current_dt,
-                                                      periods=[self.sub_period],
-                                                      count=2000,
-                                                      direction=TopBotType.bot2top,
-                                                      chan_types=[Chan_Type.I, Chan_Type.INVALID],
-                                                      isdebug=self.isdebug,
-                                                      is_description=self.isDescription,
-                                                      is_anal=False,
-                                                      split_time=effective_time,
-                                                      check_bi=False,
-                                                      force_zhongshu=True) # synch with selection
-                if exhausted:
-                    print("STOP PROFIT {0} exhausted: {1}, {2}".format(stock,
-                                                                       exhausted,
-                                                                       xd_exhausted))
                     return True
             
         elif top_chan_t == Chan_Type.III:
