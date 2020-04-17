@@ -942,7 +942,7 @@ class Short_Chan(Sell_stocks):
 #                 print("STOP PROFIT reached return {0} {1}".format(context.portfolio.positions[stock].avg_cost, stock_data.loc[effective_time:, 'high'].max()))
             exhausted, xd_exhausted, _, zhongshu_formed = check_stock_sub(stock,
                                                   end_time=context.current_dt,
-                                                  periods=[self.sub_period],
+                                                  periods=[self.top_period],
                                                   count=2000,
                                                   direction=TopBotType.bot2top,
                                                   chan_types=[Chan_Type.I, Chan_Type.INVALID],
@@ -951,15 +951,14 @@ class Short_Chan(Sell_stocks):
                                                   is_anal=False,
                                                   split_time=min_time,
                                                   check_bi=False,
-                                                  force_zhongshu=True,
-                                                  force_bi_zhongshu=True) # synch with selection
+                                                  force_zhongshu=False) # synch with selection
             
-            if (exhausted and zhongshu_formed) or (not zhongshu_formed and xd_exhausted):
+            if exhausted:
                 print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
-                                                                            self.sub_period,
-                                                                               exhausted,
-                                                                               xd_exhausted,
-                                                                               zhongshu_formed))
+                                                                            self.top_period,
+                                                                            exhausted,
+                                                                            xd_exhausted,
+                                                                            zhongshu_formed))
                 return True
 
 

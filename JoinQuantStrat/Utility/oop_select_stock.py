@@ -647,7 +647,7 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
             
             chan_list = chan_dict[str(today_date)]
             print("data read from file: {0} stocks info".format(len(chan_list)))
-            for stock, c_type_value, c_direc_value, c_price, c_slope, c_macd, z_time, s_time in chan_list:
+            for stock, c_type_value, c_direc_value, c_price, c_slope, c_force, z_time, s_time in chan_list:
                 if stock in context.portfolio.positions.keys():
                     print("{0} already in position".format(stock))
                     continue
@@ -659,7 +659,7 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                                                   TopBotType.value2type(c_direc_value),
                                                   c_price, 
                                                   c_slope,
-                                                  c_macd,
+                                                  c_force,
                                                   pd.Timestamp(z_time),
                                                   pd.Timestamp(s_time))]
         return chan_stock_list
