@@ -15,7 +15,7 @@ from oop_strategy_frame import *
 from position_control_analysis import *
 from rsrs_timing import *
 from chan_common_include import Chan_Type
-from equilibrium import check_chan_indepth, check_stock_sub, check_stock_full
+from equilibrium import check_chan_indepth, check_stock_sub, check_chan_by_type_exhaustion
 from biaoLiStatus import TopBotType
 import json
 
@@ -811,34 +811,34 @@ class Short_Chan(Sell_stocks):
 
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
                 # check if original long point still holds
-                result, profile, _ = check_stock_full(stock,
-                                                     end_time=min_price_time,
-                                                     periods=[self.top_period, self.sub_period],
-                                                     count=4800,
-                                                     direction=TopBotType.top2bot, 
-                                                     top_chan_type=[top_chan_t],
-                                                     sub_chan_type=[sub_chan_t],
-                                                     isdebug=self.isdebug,
-                                                     is_description=self.isDescription,
-                                                     sub_force_zhongshu=True, 
-                                                     sub_check_bi=False)
-                if not result:
-                    print("TYPE I long point broken")
-                    return True
-                
-#                 result, xd_result, _ = check_chan_by_type_exhaustion(stock,
-#                                                                       end_time=min_price_time,
-#                                                                       periods=[self.top_period],
-#                                                                       count=4800,
-#                                                                       direction=TopBotType.top2bot,
-#                                                                       chan_type=[Chan_Type.I],
-#                                                                       isdebug=self.isdebug,
-#                                                                       is_description =self.isDescription,
-#                                                                       is_anal=False,
-#                                                                       check_structure=False) # synch with selection
-#                 if not result or not xd_result:
+#                 result, profile, _ = check_stock_full(stock,
+#                                                      end_time=min_price_time,
+#                                                      periods=[self.top_period, self.sub_period],
+#                                                      count=4800,
+#                                                      direction=TopBotType.top2bot, 
+#                                                      top_chan_type=[top_chan_t],
+#                                                      sub_chan_type=[sub_chan_t],
+#                                                      isdebug=self.isdebug,
+#                                                      is_description=self.isDescription,
+#                                                      sub_force_zhongshu=True, 
+#                                                      sub_check_bi=False)
+#                 if not result:
 #                     print("TYPE I long point broken")
 #                     return True
+                
+                result, xd_result, _ = check_chan_by_type_exhaustion(stock,
+                                                                      end_time=min_price_time,
+                                                                      periods=[self.top_period],
+                                                                      count=4800,
+                                                                      direction=TopBotType.top2bot,
+                                                                      chan_type=[Chan_Type.I],
+                                                                      isdebug=self.isdebug,
+                                                                      is_description =self.isDescription,
+                                                                      is_anal=False,
+                                                                      check_structure=False) # synch with selection
+                if not result or not xd_result:
+                    print("TYPE I long point broken")
+                    return True
                 
             elif (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
                 # check slope

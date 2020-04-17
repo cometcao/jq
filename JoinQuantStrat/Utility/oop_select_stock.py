@@ -678,6 +678,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.sub_chan_type = params.get('sub_chan_type', [Chan_Type.INVALID, Chan_Type.I])
         self.periods = params.get('periods', ['5m', '1m'])
         self.num_of_data = params.get('num_of_data', 2500)
+        self.sub_force_zhongshu = params.get('sub_force_zhongshu', True)
         self.bi_level_precision = params.get('bi_level_precision', True)
         self.long_hour_start = params.get('long_hour_start', 13)
         self.long_min_start = params.get('long_min_start', 30)
@@ -717,7 +718,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                  sub_chan_type=self.sub_chan_type,
                                                  isdebug=self.isdebug,
                                                  is_description=self.isDescription,
-                                                 sub_force_zhongshu=True, 
+                                                 sub_force_zhongshu=self.sub_force_zhongshu, 
                                                  sub_check_bi=self.bi_level_precision)
             
             if result:
@@ -736,7 +737,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #                                                                       is_anal=False,
 #                                                                       split_time=splitTime, 
 #                                                                       check_bi=self.bi_level_precision, 
-#                                                                       force_zhongshu=True)
+#                                                                       force_zhongshu=self.sub_force_zhongshu)
 #             if sub_exhausted and sub_xd_exhausted:
 #                 filter_stock_list.append(stock)
 #             
