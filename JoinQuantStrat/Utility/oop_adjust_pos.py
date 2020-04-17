@@ -804,8 +804,8 @@ class Short_Chan(Sell_stocks):
 
             max_price = stock_data.loc[top_zoushi_start_time:, 'high'].max()
             min_price = stock_data.loc[top_zoushi_start_time:, 'low'].min()
-            max_price_time = stock_data.loc[sub_zoushi_start_time:, 'high'].idxmax()
-            min_price_time = stock_data.loc[sub_zoushi_start_time:, 'low'].idxmin()
+            max_price_time = stock_data.loc[top_zoushi_start_time:, 'high'].idxmax()
+            min_price_time = stock_data.loc[top_zoushi_start_time:, 'low'].idxmin()
             max_loc = stock_data.index.get_loc(max_price_time)
             min_loc = stock_data.index.get_loc(min_price_time)
 
@@ -865,7 +865,6 @@ class Short_Chan(Sell_stocks):
             min_price_time = stock_data.loc[sub_zoushi_start_time:, 'low'].idxmin()
             max_loc = stock_data.index.get_loc(max_price_time)
             min_loc = stock_data.index.get_loc(min_price_time)
-            latest_slope = (max_price-min_price)/(max_loc-min_loc)
 
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss: # reached stop loss mark
                 exhausted, xd_exhausted, _, _ = check_stock_sub(stock,
@@ -884,6 +883,7 @@ class Short_Chan(Sell_stocks):
                     print("sub long point broken")
                     return True
             elif (1 - stock_data.iloc[-1].close / avg_cost) >= 0: # negative return
+                latest_slope = (max_price-min_price)/(max_loc-min_loc)
                 if latest_slope < 0 and abs(latest_slope) >= abs(sub_chan_slope):
                     print("slope gets deeper! STOPLOSS {0},{1}".format(sub_chan_slope, latest_slope))
                     return True
@@ -921,6 +921,7 @@ class Short_Chan(Sell_stocks):
         top_chan_t = top_profile[0]
         top_chan_p = top_profile[2]
         top_zoushi_start_time = top_profile[5]
+        top_split_time = top_profile[6]
         sub_chan_t = sub_profile[0]
         sub_chan_p = sub_profile[2]
         sub_zoushi_start_time = sub_profile[5]
@@ -934,15 +935,15 @@ class Short_Chan(Sell_stocks):
                                    frequency=self.top_period, 
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
-            max_time = stock_data.loc[effective_time:, 'high'].idxmax()
-            min_time = stock_data.loc[effective_time:, 'low'].idxmin()
-            if min_time > max_time:
-                min_time = effective_time
+#             max_time = stock_data.loc[effective_time:, 'high'].idxmax()
+            min_time = stock_data.loc[top_split_time:, 'low'].idxmin()
+#             if min_time > max_time:
+#                 min_time = effective_time
 #             if stock_data.loc[effective_time:, 'high'].max()/context.portfolio.positions[stock].avg_cost-1 >= self.stop_profit:
 #                 print("STOP PROFIT reached return {0} {1}".format(context.portfolio.positions[stock].avg_cost, stock_data.loc[effective_time:, 'high'].max()))
             exhausted, xd_exhausted, _, zhongshu_formed = check_stock_sub(stock,
                                                   end_time=context.current_dt,
-                                                  periods=[self.top_period],
+                                                  periods=[self.sub_period],
                                                   count=2000,
                                                   direction=TopBotType.bot2top,
                                                   chan_types=[Chan_Type.I, Chan_Type.INVALID],
@@ -950,12 +951,13 @@ class Short_Chan(Sell_stocks):
                                                   is_description=self.isDescription,
                                                   is_anal=False,
                                                   split_time=min_time,
-                                                  check_bi=False,
-                                                  force_zhongshu=False) # synch with selection
+                                                  check_bi=True,
+                                                  force_zhongshu=True,
+                                                  force_bi_zhongshu=True) # synch with selection
             
             if exhausted:
                 print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
-                                                                            self.top_period,
+                                                                            self.sub_period,
                                                                             exhausted,
                                                                             xd_exhausted,
                                                                             zhongshu_formed))
@@ -990,10 +992,10 @@ class Short_Chan(Sell_stocks):
 #                     print("STOP PROFIT MA13 {0} {1}".format(stock_data.iloc[-1].close, sma13))
 #                     return True
 #             print("STOP PROFIT reached return {0} {1}".format(context.portfolio.positions[stock].avg_cost, stock_data.loc[effective_time:, 'high'].max()))
-            max_time = stock_data.loc[effective_time:, 'high'].idxmax()
-            min_time = stock_data.loc[effective_time:, 'low'].idxmin()
-            if min_time > max_time:
-                min_time = effective_time
+#             max_time = stock_data.loc[effective_time:, 'high'].idxmax()
+            min_time = stock_data.loc[sub_zoushi_start_time:, 'low'].idxmin()
+#             if min_time > max_time:
+#                 min_time = effective_time
             exhausted, xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
                                                           end_time=context.current_dt,
                                                           periods=[self.sub_period],
