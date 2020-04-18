@@ -555,7 +555,7 @@ class Equilibrium():
                                 marked = True
                                 break
                             i = i - 2
-                        zs = CompositeZhongshu(self.analytic_result[i:-1], zs.original_df)
+                        zs = CompositeZhongshu(self.analytic_result[i:], zs.original_df)
                         if not marked:
                             first_xd = zs.take_split_xd_as_zslx(direction)
                             
