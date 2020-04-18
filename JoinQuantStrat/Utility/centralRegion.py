@@ -546,16 +546,49 @@ class ZhongShu(ZouShiLeiXing):
                             float_more(last_xd.zoushi_nodes[-1].chan_price, core_region[1]) and\
                             float_more(abs(first_xd.work_out_force()), abs(last_xd.work_out_force()))
         return exhausted, last_xd.zoushi_nodes[0].time if exhausted else first_xd.zoushi_nodes[0].time
-
-    def is_running_type(self):
-        running_type = False
-        if self.direction == TopBotType.bot2top:
-            pass
-        elif self.direction == TopBotType.top2bot:
-            pass
-        else:
-            pass
         
+class CompositeZhongshu(ZouShiLeiXing):
+    '''
+    This class contains a list of ZouShiLeiXing and Zhongshu which match certain rules and forms combined Zhongshu
+    ZhongShu KUOZHAN
+    '''
+    def __init__(self, zslx_list, original_df):
+        super(ZouShiLeiXing, self).__init__(zslx_list[0].direction, original_df, None)
+        self.zslx_list = zslx_list
+        self.all_zs = [zs for zs in self.zslx_list if type(zs) is ZhongShu]
+        
+    def take_split_xd_as_zslx(self, direction):
+        all_first_xd = [zs.take_split_xd_as_zslx(direction) for zs in self.all_zs]
+        first_xd = sorted(all_first_xd, key=take_start_price, reverse=direction==TopBotType.top2bot)[0]
+        return first_xd
+        
+    def get_amplitude_region_original_without_last_xd(self):
+        [l, u] = self.all_zs[0].get_amplitude_region_original()
+        i = 1
+        n_zs = len(self.all_zs)
+        while i < n_zs:
+            if i != n_zs-1:
+                [tl, tu] = self.all_zs[i].get_amplitude_region_original()
+            else:
+                [tl, tu] = self.all_zs[i].get_amplitude_region_original_without_last_xd()
+            l = min(l, tl)
+            u = max(u, tu)
+            i += 1
+        return [l, u]
+    
+    def get_amplitude_region_original(self):
+        [l, u] = self.all_zs[0].get_amplitude_region_original()
+        i = 1
+        n_zs = len(self.all_zs)
+        while i < n_zs:
+            [tl, tu] = self.all_zs[i].get_amplitude_region_original()
+            l = min(l, tl)
+            u = max(u, tu)
+            i += 1
+        return [l, u]
+        
+    def get_level(self):
+        return ZhongShuLevel.next
 
 class ZouShi(object):
     '''

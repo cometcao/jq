@@ -532,8 +532,8 @@ class Equilibrium():
             
         if type(self.analytic_result[-1]) is ZhongShu:
             zs = self.analytic_result[-1]
-            if self.analytic_result[-1].is_complex_type():
-                last_xd = zs.take_last_xd_as_zslx()
+            last_xd = zs.take_last_xd_as_zslx()
+            if zs.is_complex_type():
                 if last_xd.direction != direction:
                     return None, None, None, None
                 
@@ -542,26 +542,28 @@ class Equilibrium():
                     type(self.analytic_result[-1]) is ZhongShu and\
                     type(self.analytic_result[-3]) is ZhongShu and\
                     self.two_zslx_interact_original(self.analytic_result[-1], self.analytic_result[-3]):
-                    return None, None, None, None
-# IGNORE THIS CASE###############################
-#                     ## zhong shu combination
-#                     if at_bi_level:
-#                         i = -3
-#                         marked = False
-#                         while -(i-2) <= len(self.analytic_result):
-#                             if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
-#                                 (not self.analytic_result[i-2].is_complex_type() and self.analytic_result[i-2].direction != self.analytic_result[i].direction):
-#                                 first_xd = self.analytic_result[i-1]
-#                                 zs = self.analytic_result[i:-1]
-#                                 marked = True
-#                                 break
-#                             i = i - 2
-#                         if not marked or -(i-2) > len(self.analytic_result):
-#                             all_zs = [zs for zs in self.analytic_result if type(zs) is ZhongShu]
-#                             all_first_xd = [zs.take_split_xd_as_zslx(direction) for zs in all_zs]
-#                             first_xd = sorted(all_first_xd, key=take_start_price, reverse=direction==TopBotType.top2bot)[0]
-#                     else:
-#                         return None, None, None, None
+#                     return None, None, None, None
+                    # Zhongshu KUOZHAN ###############################
+                    ## zhong shu combination use CompositeZhongshu class
+                    if at_bi_level:
+                        i = -1
+                        marked = False
+                        while -(i-2) <= len(self.analytic_result):
+                            if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
+                                (not self.analytic_result[i-2].is_complex_type() and self.analytic_result[i-2].direction != self.analytic_result[i].direction):
+                                first_xd = self.analytic_result[i-1]
+                                marked = True
+                                break
+                            i = i - 2
+                        zs = CompositeZhongshu(self.analytic_result[i:-1], zs.original_df)
+                        if not marked:
+                            first_xd = zs.take_split_xd_as_zslx(direction)
+                            
+                    else: # normal case we only consider the last Zhongshu
+                        if self.analytic_result[-2].direction != last_xd.direction:
+                            first_xd = zs.take_split_xd_as_zslx(direction)
+                        else:
+                            first_xd = self.analytic_result[-2]
                         
                 elif len(self.analytic_result) < 2 or self.analytic_result[-2].direction != last_xd.direction:
                     first_xd = zs.take_split_xd_as_zslx(direction)
@@ -569,7 +571,8 @@ class Equilibrium():
                     first_xd = self.analytic_result[-2]
                 return first_xd, zs, last_xd, zs.get_amplitude_region_original_without_last_xd()
             else:
-                return None, zs, None, zs.get_amplitude_region_original_without_last_xd()
+                first_xd = zs.take_first_xd_as_zslx() if zs.direction != last_xd.direction or len(self.analytic_result) < 2 else self.analytic_result[-2]
+                return first_xd, zs, last_xd, zs.get_amplitude_region_original_without_last_xd()
 
         elif type(self.analytic_result[-1]) is ZouShiLeiXing:
             last_xd = self.analytic_result[-1]
@@ -581,27 +584,28 @@ class Equilibrium():
                 type(self.analytic_result[-2]) is ZhongShu and\
                 type(self.analytic_result[-4]) is ZhongShu and\
                 self.two_zslx_interact_original(self.analytic_result[-4], self.analytic_result[-2]):
-                return None, None, None, None
-# IGNORE THIS CASE###############################
-#                 if at_bi_level:
-#                     ## zhong shu combination
-#                     i = -4
-#                     marked = False
-#                     while -(i-2) <= len(self.analytic_result):
-#                         if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
-#                             (not self.analytic_result[i-2].is_complex_type() and self.analytic_result[i-2].direction != self.analytic_result[i].direction):
-#                             first_xd = self.analytic_result[i-1]
-#                             zs = self.analytic_result[i:-1]
-#                             marked = True
-#                             break
-#                         i = i - 2
-#                     if not marked or -(i-2) > len(self.analytic_result):
-#                         all_zs = [zs for zs in self.analytic_result if type(zs) is ZhongShu]
-#                         all_first_xd = [zs.take_split_xd_as_zslx(direction) for zs in all_zs]
-#                         first_xd = sorted(all_first_xd, key=take_start_price, reverse=direction==TopBotType.top2bot)[0]
-#                         zs = all_zs[-1]
-#                 else:
-#                     return None, None, None, None
+                zs = self.analytic_result[-2]
+#                 return None, None, None, None
+# composite ZhongShu case ###############################
+                if at_bi_level:
+                    ## zhong shu combination
+                    i = -2
+                    marked = False
+                    while -(i-2) <= len(self.analytic_result):
+                        if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
+                            (not self.analytic_result[i-2].is_complex_type() and self.analytic_result[i-2].direction != self.analytic_result[i].direction):
+                            first_xd = self.analytic_result[i-1]
+                            marked = True
+                            break
+                        i = i - 2
+                    zs = CompositeZhongshu(self.analytic_result[i:-1], zs.original_df)
+                    if not marked:
+                        first_xd = zs.take_split_xd_as_zslx(direction)
+                else: # normal case we only consider the last Zhongshu
+                    if self.analytic_result[-3].direction != last_xd.direction:
+                        first_xd = zs.take_split_xd_as_zslx(direction)
+                    else:
+                        first_xd = self.analytic_result[-3]
                     
             elif len(self.analytic_result) < 3 or self.analytic_result[-3].direction != last_xd.direction:
                 if len(self.analytic_result) > 1:
@@ -615,7 +619,7 @@ class Equilibrium():
             return first_xd, zs, last_xd, zs.get_amplitude_region_original(),
             
         else:
-            print("Invalid Zou Shi type")
+            print("INVALID Zou Shi type")
             return None, None, None, None
     
     def two_zhongshu_form_qvshi(self, zs1, zs2, zs_level=ZhongShuLevel.current):
@@ -845,7 +849,7 @@ class Equilibrium():
         
         a_range = zslx_a.get_amplitude_region_original()
         c_range = zslx_c.get_amplitude_region_original()
-        b_range = central_B.get_core_region() # use core region
+#         b_range = central_B.get_core_region() # use core region
         
         if check_tb_structure:
             if a_s[0] != c_s[0] or a_s[-1] != c_s[-1]:
@@ -861,7 +865,7 @@ class Equilibrium():
         else: # PAN BEI #     
             if len(a_s) != len(c_s) and\
                 check_balance_structure and\
-                (not self.price_balance(a_range, b_range, c_range) or\
+                (not self.price_balance(a_range, central_region, c_range) or\
                  not self.time_balance(a_time, b_time, c_time)):
                 if self.isdebug:
                     print("Not matching XD structure")
