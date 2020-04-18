@@ -856,14 +856,6 @@ class Short_Chan(Sell_stocks):
                     print("force gets deeper! STOPLOSS {0},{1}".format(top_chan_force, latest_force))
                     return True
                 
-#                 # check macd
-#                 _, _, stock_data.loc[:,'macd'] = talib.MACD(stock_data['close'].values)
-#                 stock_data_macd = stock_data.loc[top_zoushi_start_time:, :]
-#                 latest_macd = stock_data_macd[stock_data_macd['macd'] < 0]['macd'].sum()
-#                 if top_chan_macd != 0 and latest_macd < 0 and abs(latest_macd) > abs(top_chan_macd):
-#                     print("macd gets deeper! STOPLOSS {0},{1}".format(top_chan_macd, latest_macd))
-#                     return True
-                
             return False
         elif top_chan_t == Chan_Type.III:
             # This is to make sure we have enough data for MACD and MA
@@ -912,14 +904,7 @@ class Short_Chan(Sell_stocks):
                 if sub_chan_force != 0 and latest_force < 0 and abs(latest_force) > abs(sub_chan_force):
                     print("force gets deeper! STOPLOSS {0},{1}".format(sub_chan_force, latest_force))
                     return True
-#                 if sub_chan_t == Chan_Type.I and sub_chan_macd != 0:
-#                     # check macd
-#                     _, _, stock_data.loc[:,'macd'] = talib.MACD(stock_data['close'].values)
-#                     stock_data_macd = stock_data.loc[sub_zoushi_start_time:, :]
-#                     latest_macd = stock_data_macd[stock_data_macd['macd'] < 0]['macd'].sum()
-#                     if latest_macd < 0 and abs(latest_macd) > abs(sub_chan_macd):
-#                         print("macd gets deeper! STOPLOSS {0},{1}".format(sub_chan_macd, latest_macd))
-#                         return True
+
             if stock_data.loc[effective_time:,'low'].min() <= top_chan_p:
                 print("TYPE III invalidated {0}, {1}".format(stock_data.loc[effective_time:,'low'].min(), top_chan_p))
                 return True
@@ -971,7 +956,7 @@ class Short_Chan(Sell_stocks):
                                                   force_zhongshu=True,
                                                   force_bi_zhongshu=True) # synch with selection
             
-            if exhausted:
+            if (exhausted and zhongshu_formed) or (not zhongshu_formed and exhausted and xd_exhausted):
                 print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
                                                                             self.sub_period,
                                                                             exhausted,
@@ -1025,7 +1010,7 @@ class Short_Chan(Sell_stocks):
                                                           check_bi=True,
                                                           force_zhongshu=False,
                                                           force_bi_zhongshu=True) # relax rule
-            if (exhausted and sub_zhongshu_formed) or (not sub_zhongshu_formed and xd_exhausted):
+            if (exhausted and sub_zhongshu_formed) or (not sub_zhongshu_formed and exhausted and xd_exhausted):
                 print("STOP PROFIT {0} sub exhausted: {1}, {2} Zhongshu formed: {3}".format(stock,
                                                                                    exhausted,
                                                                                    xd_exhausted,
