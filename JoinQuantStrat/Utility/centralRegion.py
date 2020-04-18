@@ -14,6 +14,12 @@ from kBar_Chan import *
 
 from chan_common_include import ZhongShuLevel, Chan_Type
 
+def take_start_price(elem):
+    if len(elem.zoushi_nodes) > 0:
+        return elem.zoushi_nodes[-1].chan_price
+    else:
+        return 0
+
 class Chan_Node(object):
     def __init__(self, df_node):
         self.time = df_node['date']

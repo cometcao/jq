@@ -491,12 +491,6 @@ class CentralRegionProcess(object):
 
         return working_df
 
-def take_start_price(elem):
-    if len(elem.zoushi_nodes) > 0:
-        return elem.zoushi_nodes[-1].chan_price
-    else:
-        return 0
-
 class Equilibrium():
     '''
     This class use ZouShi analytic results to check BeiChi
