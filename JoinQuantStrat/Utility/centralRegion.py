@@ -553,7 +553,7 @@ class CompositeZhongshu(ZouShiLeiXing):
     ZhongShu KUOZHAN
     '''
     def __init__(self, zslx_list, original_df):
-        super(ZouShiLeiXing, self).__init__(zslx_list[0].direction, original_df, None)
+        super(CompositeZhongshu, self).__init__(zslx_list[0].direction, original_df, None)
         self.zslx_list = zslx_list
         self.all_zs = [zs for zs in self.zslx_list if type(zs) is ZhongShu]
         
