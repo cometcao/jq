@@ -568,6 +568,17 @@ class CompositeZhongshu(ZouShiLeiXing):
         first_xd = sorted(all_first_xd, key=take_start_price, reverse=direction==TopBotType.top2bot)[0]
         return first_xd
         
+    def get_core_region(self):
+        [l, u] = self.all_zs[0].get_core_region()
+        i = 1
+        n_zs = len(self.all_zs)
+        while i < n_zs:
+            [tl, tu] = self.all_zs[i].get_core_region()
+            l = min(l, tl)
+            u = max(u, tu)
+            i += 1
+        return [l, u]
+    
     def get_amplitude_region_original_without_last_xd(self):
         [l, u] = self.all_zs[0].get_amplitude_region_original()
         i = 1

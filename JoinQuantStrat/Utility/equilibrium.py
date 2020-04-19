@@ -289,7 +289,7 @@ def check_stock_full(stock,
 
     splitTime = chan_profile[0][6] # split time and force sub level with zhongshu formed
     
-    if exhausted and xd_exhausted and sanity_check(stock, chan_profile, end_time, top_pe):
+    if exhausted and xd_exhausted and sanity_check(stock, chan_profile, end_time, top_pe, direction):
         sub_exhausted, sub_xd_exhausted, sub_profile, zhongshu_completed = check_stock_sub(stock=stock, 
                                                                                 end_time=end_time, 
                                                                                 periods=[sub_pe], 
@@ -308,12 +308,11 @@ def check_stock_full(stock,
     else:
         return False, chan_profile, False
 
-def sanity_check(stock, profile, end_time, pe):
+def sanity_check(stock, profile, end_time, pe, direction):
     # This method is used in case we provide the sub level check with initial direction while actual zoushi goes opposite
     # This will end up with invalid XD analysis in sub level
     # case: stock = '300760.XSHE' end_dt = '2019-07-01 14:30:00' period = ['5m', '1m']
     splitTime = profile[0][6]
-    direction = profile[0][1]
     result = False
     stock_data = get_price(stock,
                           start_date=splitTime,
@@ -843,7 +842,7 @@ class Equilibrium():
         
         a_range = zslx_a.get_amplitude_region_original()
         c_range = zslx_c.get_amplitude_region_original()
-#         b_range = central_B.get_core_region() # use core region
+        b_range = central_B.get_core_region() # use core region
         
         if check_tb_structure:
             if a_s[0] != c_s[0] or a_s[-1] != c_s[-1]:
@@ -879,9 +878,9 @@ class Equilibrium():
             
         structure_result = True
         if direction == TopBotType.top2bot:
-            structure_result = float_more(a_range[1], central_region[1]) and float_more(central_region[0], c_range[0])
+            structure_result = float_more_equal(a_range[1], b_range[1]) and float_more_equal(b_range[0], c_range[0])
         elif direction == TopBotType.bot2top:
-            structure_result = float_less(a_range[0], central_region[0]) and float_less(central_region[1], c_range[1])
+            structure_result = float_less_equal(a_range[0], b_range[0]) and float_less_equal(b_range[1], c_range[1])
         if self.isdebug and not structure_result:
             print("price within ZhongShu range")
             
