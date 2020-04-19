@@ -505,7 +505,7 @@ class Equilibrium():
         self.check_zoushi_status()
         pass
     
-    def find_most_recent_zoushi(self, direction, at_bi_level=False):
+    def find_most_recent_zoushi(self, direction, at_bi_level=False, enable_composite=False):
         '''
         Make sure we find the appropriate two XD for comparison.
         A. in case of QVSHI
@@ -539,6 +539,8 @@ class Equilibrium():
                     # Zhongshu KUOZHAN ###############################
                     ## zhong shu combination use CompositeZhongshu class
                     if at_bi_level:
+                        if not enable_composite:
+                            return None, None, None, None
                         i = -1
                         marked = False
                         while -(i-2) <= len(self.analytic_result):
@@ -581,6 +583,9 @@ class Equilibrium():
 #                 return None, None, None, None
 # composite ZhongShu case ###############################
                 if at_bi_level:
+                    if not enable_composite:
+                        return None, None, None, None
+                        
                     ## zhong shu combination
                     i = -2
                     marked = False
@@ -753,7 +758,8 @@ class Equilibrium():
                            check_balance_structure=False, 
                            force_zhongshu=False, 
                            current_chan_type=Chan_Type.INVALID,
-                           at_bi_level=False):
+                           at_bi_level=False, 
+                           enable_composite=False):
         '''
         We are dealing type III differently at top level
         return:
@@ -801,7 +807,7 @@ class Equilibrium():
                 xd_exhaustion, ts = zs.check_exhaustion()
                 return True, xd_exhaustion, zs.first.time, ts, 0, 0
         
-        a, central_B, c, central_region = self.find_most_recent_zoushi(direction, at_bi_level=at_bi_level)
+        a, central_B, c, central_region = self.find_most_recent_zoushi(direction, at_bi_level=at_bi_level, enable_composite=enable_composite)
         
         new_high_low = self.reached_new_high_low(guide_price, direction, c, central_region)
         
