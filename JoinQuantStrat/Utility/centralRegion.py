@@ -447,7 +447,7 @@ class ZhongShu(ZouShiLeiXing):
         '''
         node_tb, method = (TopBotType.bot, np.min) if split_direction == TopBotType.bot2top else (TopBotType.top, np.max)
         if self.is_complex_type() or self.get_level().value >= ZhongShuLevel.current.value:
-            all_nodes = [self.first, self.second, self.third, self.forth] if contain_zs else [] + self.extra_nodes
+            all_nodes = ([self.first, self.second, self.third, self.forth] if contain_zs else []) + self.extra_nodes
             all_price = [n.chan_price for n in all_nodes]
             ex_price = method(all_price)
             return all_nodes[all_price.index(ex_price):]
