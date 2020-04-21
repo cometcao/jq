@@ -55,7 +55,7 @@ class sectorSpider(object):
     @classmethod
     def get_concept(self, date=None):
         jq_concept_data = get_concepts()
-        jq_concept_data=jq_concept_data[jq_concept_data['start_date'] < date]
+        jq_concept_data=jq_concept_data[jq_concept_data['start_date'] < pd.Timestamp(date)]
         return jq_concept_data.index.tolist()
         
 
