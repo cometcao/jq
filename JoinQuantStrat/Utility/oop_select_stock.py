@@ -371,12 +371,12 @@ class Pick_rank_sector(Create_stock_list):
         self.useAvg = params.get('useAvg', True)
         self.avgPeriod = params.get('avgPeriod', 5)
         self.period_frequency = params.get('period_frequency', 'W')
-        self.isWeighted = params.get('isWeighted', False)
+        self.isWeighted = params.get('isWeighted', True)
         self.new_list = []
         
     def update_params(self, context, params):
         self.period_frequency = params.get('period_frequency', 'W')        
-        self.isWeighted = params.get('isWeighted', False)
+        self.isWeighted = params.get('isWeighted', True)
         
     def filter(self, context, data):
         return self.new_list
@@ -801,12 +801,12 @@ class Filter_Rank_Sector(Early_Filter_stock_list):
         self.useAvg = params.get('useAvg', True)
         self.avgPeriod = params.get('avgPeriod', 5)
         self.period_frequency = params.get('period_frequency', 'M')
-        self.isWeighted = params.get('isWeighted', False)
+        self.isWeighted = params.get('isWeighted', True)
         self.new_list = []
     
     def update_params(self, context, params):
         self.period_frequency = params.get('period_frequency', 'M')
-        self.isWeighted = params.get('isWeighted', False)
+        self.isWeighted = params.get('isWeighted', True)
     
     def filter(self, context, stock_list):
         return [stock for stock in stock_list if stock in self.new_list]
