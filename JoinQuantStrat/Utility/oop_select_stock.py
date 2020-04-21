@@ -800,12 +800,12 @@ class Filter_Rank_Sector(Early_Filter_stock_list):
         self.useIntradayData = params.get('useIntradayData', False)
         self.useAvg = params.get('useAvg', True)
         self.avgPeriod = params.get('avgPeriod', 5)
-        self.period_frequency = params.get('period_frequency', 'M')
+        self.period_frequency = params.get('period_frequency', 'W')
         self.isWeighted = params.get('isWeighted', True)
         self.new_list = []
     
     def update_params(self, context, params):
-        self.period_frequency = params.get('period_frequency', 'M')
+        self.period_frequency = params.get('period_frequency', 'W')
         self.isWeighted = params.get('isWeighted', True)
     
     def filter(self, context, stock_list):
