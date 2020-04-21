@@ -32,7 +32,17 @@ class SectorSelection(object):
     '''
     This class implement the methods to rank the sectors
     '''
-    def __init__(self, isAnal=False, limit_pct=5, isStrong=True, min_max_strength = 0, useIntradayData=True, useAvg=True, avgPeriod=5, intraday_period='230m', isWeighted=False):
+    def __init__(self, 
+                 isAnal=False, 
+                 limit_pct=5, 
+                 isStrong=True, 
+                 min_max_strength = 0, 
+                 useIntradayData=True, 
+                 useAvg=True, 
+                 avgPeriod=5, 
+                 intraday_period='230m', 
+                 isWeighted=False,
+                 effective_date=None):
         '''
         Constructor
         '''
@@ -49,9 +59,11 @@ class SectorSelection(object):
         self.intraday_period = intraday_period
         self.isWeighted = isWeighted
         
-        self.ss = sectorSpider()
-        self.jqIndustry = self.ss.getSectorCode('sw2') # SW2
-        self.conceptSectors = self.ss.getSectorCode('gn')
+#         self.ss = sectorSpider()
+#         self.jqIndustry = self.ss.getSectorCode('sw2') # SW2
+#         self.conceptSectors = self.ss.getSectorCode('gn')
+        self.jqIndustry = sectorSpider.get_industry('sw_l2', date=effective_date)
+        self.conceptSectors = sectorSpider.get_concept(date=effective_date)
         self.filtered_industry = []
         self.filtered_concept = []
 

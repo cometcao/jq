@@ -391,7 +391,8 @@ class Pick_rank_sector(Create_stock_list):
                     useIntradayData=self.useIntradayData,
                     useAvg=self.useAvg,
                     avgPeriod=self.avgPeriod,
-                    isWeighted=self.isWeighted)
+                    isWeighted=self.isWeighted,
+                    effective_date=context.previous_date)
             self.new_list = ss.processAllSectorStocks()
             self.g.filtered_sectors = ss.processAllSectors()
         return self.new_list
@@ -820,7 +821,8 @@ class Filter_Rank_Sector(Early_Filter_stock_list):
                     useIntradayData=self.useIntradayData,
                     useAvg=self.useAvg,
                     avgPeriod=self.avgPeriod,
-                    isWeighted=self.isWeighted)
+                    isWeighted=self.isWeighted,
+                    effective_date=context.previous_date)
             self.new_list = ss.processAllSectorStocks()
             
     def __str__(self):

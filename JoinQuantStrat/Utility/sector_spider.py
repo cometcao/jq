@@ -47,6 +47,18 @@ class sectorSpider(object):
     def __init__(self):
         self.jq_sector_data, self.counter = self.grabInfo_v2()
 
+    @classmethod
+    def get_industry(self, name, date=None):
+        jq_industry_data = get_industries(name, date=date)
+        return jq_industry_data.index.tolist()
+        
+    @classmethod
+    def get_concept(self, date=None):
+        jq_concept_data = get_concepts()
+        jq_concept_data=jq_concept_data[jq_concept_data['start_date'] >= date]
+        return jq_concept_data.index.tolist()
+        
+
     def default(self):    
         my_dict = {'zjh':HY_ZJH, 
                    'jq1':HY_ZY_1,
