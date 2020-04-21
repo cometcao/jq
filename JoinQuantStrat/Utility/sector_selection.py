@@ -32,7 +32,7 @@ class SectorSelection(object):
     '''
     This class implement the methods to rank the sectors
     '''
-    def __init__(self, isAnal=False, limit_pct=5, isStrong=True, min_max_strength = 0, useIntradayData=True, useAvg=True, avgPeriod=5, intraday_period='230m'):
+    def __init__(self, isAnal=False, limit_pct=5, isStrong=True, min_max_strength = 0, useIntradayData=True, useAvg=True, avgPeriod=5, intraday_period='230m', isWeighted=False):
         '''
         Constructor
         '''
@@ -47,6 +47,7 @@ class SectorSelection(object):
         self.stock_data_buffer = {}
         self.min_max_strength = min_max_strength
         self.intraday_period = intraday_period
+        self.isWeighted = isWeighted
         
         self.ss = sectorSpider()
         self.jqIndustry = self.ss.getSectorCode('sw2') # SW2
@@ -146,7 +147,7 @@ class SectorSelection(object):
             sectorStrength = 0.0
             removed = 0
             for stock in sectorStocks:
-                stockStrength = self.gaugeStockUpTrendStrength_MA(stock, isWeighted=False, index=-1)
+                stockStrength = self.gaugeStockUpTrendStrength_MA(stock, isWeighted=self.isWeighted, index=-1)
                 if stockStrength == -1:
                     removed+=1
                 else:
@@ -162,7 +163,7 @@ class SectorSelection(object):
                 sectorStrength = 0.0
                 removed = 0
                 for stock in sectorStocks:
-                    stockStrength = self.gaugeStockUpTrendStrength_MA(stock, isWeighted=False, index=i)
+                    stockStrength = self.gaugeStockUpTrendStrength_MA(stock, isWeighted=self.isWeighted, index=i)
                     if stockStrength == -1:
                         removed+=1
                     else:
