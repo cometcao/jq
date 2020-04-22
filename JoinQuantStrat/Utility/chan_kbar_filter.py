@@ -38,12 +38,12 @@ def filter_high_level_by_index(direction=TopBotType.top2bot,
                                                                             result_stocks_PB)
     type_i = sorted(list(result_stocks_I))
     type_iii = sorted(list(result_stocks_III))
-    type_pb = sorte(list(result_stocks_PB))
+    type_pb = sorted(list(result_stocks_PB))
     print("qualifying type I stocks:{0} \ntype III stocks: {1} \ntype PB stocks: {2}".format(type_i, 
                                                                                              type_iii,
                                                                                              type_pb))
     
-    return type_i + type_iii
+    return sorted(list(set(type_i + type_iii + type_pb)))
 
 
 def filter_high_level_by_stock(stock, 
@@ -113,12 +113,12 @@ class KBar(object):
                     kbar_list.append(item)
                     i = i + 1
             else:
-                kbar_list = []
+                return chan_type_result
         else:
             if len(high_df['open']) >= num_of_kbar:
                 kbar_list = cls.create_N_kbar(high_df, n=num_of_kbar)
             else:
-                kbar_list = []
+                return chan_type_result
                 
         if Chan_Type.III in chan_types and cls.chan_type_III_check(kbar_list, direction):
             chan_type_result.append(Chan_Type.III)
@@ -181,7 +181,7 @@ class KBar(object):
             return False
         
         start_idx = -4
-        steps = 2
+        steps = -2
         first = kbar_list[start_idx]
         second = kbar_list[start_idx+1] 
         third = kbar_list[start_idx+2]
