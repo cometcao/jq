@@ -24,42 +24,57 @@ def filter_high_level_by_index(direction=TopBotType.top2bot,
     all_stocks = get_index_stocks(stock_index)
     result_stocks_I = set()
     result_stocks_III = set()
+    result_stocks_PB = set()
     for stock in all_stocks:
         for p in periods:
-            result_stocks_I, result_stocks_III = filter_high_level_by_stock(stock, 
+            result_stocks_I, result_stocks_III, result_stocks_PB = filter_high_level_by_stock(stock, 
                                                                             p, 
                                                                             end_dt, 
                                                                             df, 
                                                                             chan_types,
                                                                             direction,
                                                                             result_stocks_I, 
-                                                                            result_stocks_III)
+                                                                            result_stocks_III,
+                                                                            result_stocks_PB)
     type_i = sorted(list(result_stocks_I))
     type_iii = sorted(list(result_stocks_III))
-    print("qualifying type I stocks:{0} \ntype III stocks: {1}".format(type_i, type_iii))
+    type_pb = sorte(list(result_stocks_PB))
+    print("qualifying type I stocks:{0} \ntype III stocks: {1} \ntype PB stocks: {2}".format(type_i, 
+                                                                                             type_iii,
+                                                                                             type_pb))
     
     return type_i + type_iii
 
 
-def filter_high_level_by_stock(stock, period, end_dt, df, chan_types, direction,result_stocks_I, result_stocks_III):
+def filter_high_level_by_stock(stock, 
+                               period, 
+                               end_dt, 
+                               df, 
+                               chan_types, 
+                               direction,
+                               result_stocks_I, 
+                               result_stocks_III,
+                               result_stocks_PB):
     stock_high = get_bars(stock, 
-                                           count=max(TYPE_I_NUM, TYPE_III_NUM), 
-                                           end_dt=end_dt, 
-                                           unit=period,
-                                           fields= ['open',  'high', 'low','close'], 
-                                           df = df,
-                                           include_now=True)
-    for ct in chan_types:
-        if KBar.filter_high_level_kbar(stock_high, 
-                                       direction=direction, 
-                                       df=df, 
-                                       chan_type=ct):
-            if ct == Chan_Type.I:
-                result_stocks_I.add(stock)
-            elif ct == Chan_Type.III:
-                result_stocks_III.add(stock)
+                           count=max(TYPE_I_NUM, TYPE_III_NUM), 
+                           end_dt=end_dt, 
+                           unit=period,
+                           fields= ['open',  'high', 'low','close'], 
+                           df = df,
+                           include_now=True)
     
-    return result_stocks_I, result_stocks_III
+    chan_type_results = KBar.filter_high_level_kbar(stock_high, 
+                                   direction=direction, 
+                                   df=df, 
+                                   chan_types=chan_types)
+    if Chan_Type.I in chan_type_results:
+        result_stocks_I.add(stock)
+    elif Chan_Type.III in chan_type_results:
+        result_stocks_III.add(stock)
+    elif Chan_Type.INVALID in chan_type_results:
+        result_stocks_PB.add(stock)
+    
+    return result_stocks_I, result_stocks_III, result_stocks_PB
 
 class KBar(object):
     '''
@@ -73,6 +88,47 @@ class KBar(object):
         
     def __repr__(self):
         return "\nOPEN:{0} CLOSE:{1} HIGH:{2} LOW:{3}".format(self.open, self.close, self.high, self.low)
+
+
+    @classmethod
+    def filter_high_level_kbar(cls, high_df, direction=TopBotType.top2bot, df=False, chan_types=[Chan_Type.III]):
+        '''
+        This method used by weekly (5d) data to find out rough 5m Zhongshu and 
+        type III trade point
+        
+        It is used as initial filters for all stocks on markets
+        
+        1. find nearest 5m zhongshu => three consecutive weekly kbar share price region
+        2. the kbar following the zhongshu escapes by direction, 
+        3. the same kbar or next kbar's return attempt never touch the previous zhongshu (only strong case)
+        '''
+        chan_type_result = []
+        num_of_kbar = TYPE_I_NUM if Chan_Type.I in chan_types else TYPE_III_NUM
+        if df:
+            if high_df.shape[0] >= num_of_kbar:
+                i = -num_of_kbar
+                kbar_list = []
+                while i <= -1:
+                    item = high_df.iloc[i]
+                    kbar_list.append(item)
+                    i = i + 1
+            else:
+                kbar_list = []
+        else:
+            if len(high_df['open']) >= num_of_kbar:
+                kbar_list = cls.create_N_kbar(high_df, n=num_of_kbar)
+            else:
+                kbar_list = []
+                
+        if Chan_Type.III in chan_types and cls.chan_type_III_check(kbar_list, direction):
+            chan_type_result.append(Chan_Type.III)
+        elif Chan_Type.I in chan_types and cls.chan_type_I_check(kbar_list, direction):
+            chan_type_result.append(Chan_Type.I)
+        elif Chan_Type.INVALID in chan_types and cls.chan_type_PB_check(kbar_list, direction):
+            chan_type_result.append(Chan_Type.INVALID)
+            
+        return chan_type_result
+
 
     @classmethod
     def contain_zhongshu(cls, first, second, third, return_core_range=False):
@@ -108,6 +164,45 @@ class KBar(object):
             kbar_list.append(kb)
             i = i + 1
         return kbar_list
+        
+    @classmethod
+    def chan_type_PB_check(cls, kbar_list, direction):
+        '''
+        maximum 5 Kbars, at high level used for pan bei
+        '''
+        if (
+                direction == TopBotType.top2bot and\
+                max(kbar_list[-2].high, kbar_list[-3].high, kbar_list[-4].high) < kbar_list[-1].close
+            ) or\
+            (
+                direction == TopBotType.bot2top and\
+                min(kbar_list[-2].low, kbar_list[-3].low, kbar_list[-4].low) > kbar_list[-1].close
+            ):
+            return False
+        
+        start_idx = -4
+        steps = 2
+        first = kbar_list[start_idx]
+        second = kbar_list[start_idx+1] 
+        third = kbar_list[start_idx+2]
+        last = kbar_list[-1]
+        result = False
+        if (last.close < last.open) or ((last.close-last.low)/(last.high-last.low) <= (1-GOLDEN_RATIO)):
+            
+            while start_idx < steps:
+                check_result, k_m, k_l = cls.contain_zhongshu(first, second, third, return_core_range=True)
+                
+                if check_result:
+                    result = (last.close < k_l if direction == TopBotType.top2bot else last.close > k_m)
+                if result:
+                    return result
+                else:
+                    start_idx = start_idx + 1
+                    first = kbar_list[start_idx]
+                    second = kbar_list[start_idx+1] 
+                    third = kbar_list[start_idx+2]
+        
+        return result
         
         
     @classmethod
@@ -201,37 +296,3 @@ class KBar(object):
                 extra_count = extra_count - 1
         return result
 
-    @classmethod
-    def filter_high_level_kbar(cls, high_df, direction=TopBotType.top2bot, df=True, chan_type=Chan_Type.III):
-        '''
-        This method used by weekly (5d) data to find out rough 5m Zhongshu and 
-        type III trade point
-        
-        It is used as initial filters for all stocks on markets
-        
-        1. find nearest 5m zhongshu => three consecutive weekly kbar share price region
-        2. the kbar following the zhongshu escapes by direction, 
-        3. the same kbar or next kbar's return attempt never touch the previous zhongshu (only strong case)
-        '''
-        result = False
-        num_of_kbar = TYPE_III_NUM if chan_type == Chan_Type.III else TYPE_I_NUM
-        if df:
-            if high_df.shape[0] >= num_of_kbar:
-                i = -num_of_kbar
-                kbar_list = []
-                while i <= -1:
-                    item = high_df.iloc[i]
-                    kbar_list.append(item)
-                    i = i + 1
-                if chan_type == Chan_Type.III:
-                    result = cls.chan_type_III_check(kbar_list, direction)
-                elif chan_type == Chan_Type.I:
-                    result = cls.chan_type_I_check(kbar_list, direction)
-        else:
-            if len(high_df['open']) >= num_of_kbar:
-                kbar_list = cls.create_N_kbar(high_df, n=num_of_kbar)
-                if chan_type == Chan_Type.III:
-                    result = cls.chan_type_III_check(kbar_list, direction)
-                elif chan_type == Chan_Type.I:
-                    result = cls.chan_type_I_check(kbar_list, direction)          
-        return result
