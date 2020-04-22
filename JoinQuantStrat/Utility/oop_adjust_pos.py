@@ -857,7 +857,7 @@ class Short_Chan(Sell_stocks):
                     return True
                 
             return False
-        elif top_chan_t == Chan_Type.III:
+        elif top_chan_t == Chan_Type.III or top_chan_t == Chan_Type.INVALID:
             # This is to make sure we have enough data for MACD and MA
             data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=120)
             stock_data = get_price(stock,
@@ -905,7 +905,7 @@ class Short_Chan(Sell_stocks):
                     print("force gets deeper! STOPLOSS {0},{1}".format(sub_chan_force, latest_force))
                     return True
 
-            if stock_data.loc[effective_time:,'low'].min() <= top_chan_p:
+            if top_chan_t == Chan_Type.III and stock_data.loc[effective_time:,'low'].min() <= top_chan_p:
                 print("TYPE III invalidated {0}, {1}".format(stock_data.loc[effective_time:,'low'].min(), top_chan_p))
                 return True
             
@@ -974,7 +974,7 @@ class Short_Chan(Sell_stocks):
                     print("STOP PROFIT {0} below ma13: {1}".format(stock, sma13))
                     return True
             
-        elif top_chan_t == Chan_Type.III:
+        elif top_chan_t == Chan_Type.III or top_chan_t == Chan_Type.INVALID:
             
             # extra data for SMA calculation
             data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=200)
