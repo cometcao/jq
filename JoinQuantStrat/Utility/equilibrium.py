@@ -771,10 +771,10 @@ class Equilibrium():
         force
         '''
         if current_chan_type == Chan_Type.III:
-            if self.isQvShi_simple or self.isQvShi:
-                if self.isdebug:
-                    print("type III mixed with type I position we ignore")
-                return False, False, None, None, 0, 0
+#             if self.isQvShi_simple or self.isQvShi:
+#                 if self.isdebug:
+#                     print("type III mixed with type I position we ignore")
+#                 return False, False, None, None, 0, 0
             
             last_zoushi = self.analytic_result[-1]
             if type(last_zoushi) is ZouShiLeiXing:
