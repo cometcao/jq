@@ -1047,23 +1047,34 @@ class Short_Chan(Sell_stocks):
         
     def handle_data(self, context, data):
         to_check = context.portfolio.positions.keys()
-        to_check = [stock for stock in to_check if context.portfolio.positions[stock].closeable_amount > 0]
+        to_check = [stock for stock in to_check if (context.portfolio.positions[stock].closeable_amount > 0 and stock not in self.money_fund)]
+        to_sell = []
         for stock in to_check:
             
             if self.check_stop_loss(stock, context):
-                self.g.close_position(self, context.portfolio.positions[stock], True, 0)
+                to_sell.append(stock)
                 continue
             
             if self.check_stop_profit(stock, context):
-                self.g.close_position(self, context.portfolio.positions[stock], True, 0)
-            
+                to_sell.append(stock)
+        self.adjust(context, data, to_sell)
+
+    def adjust(self, context, data, sell_stocks):
+        # 卖出在待卖股票列表中的股票
+        # 对于因停牌等原因没有卖出的股票则继续持有
+        for pindex in self.g.op_pindexs:
+            for stock in context.subportfolios[pindex].long_positions.keys():
+                if stock in sell_stocks:
+                    position = context.subportfolios[pindex].long_positions[stock]
+                    self.g.close_position(self, position, True, pindex)
+
     def __str__(self):
         return '缠论调仓卖出规则'
 
 
-class Long_Chan(Buy_stocks_portion):
+class Long_Chan(Buy_stocks):  # Buy_stocks_portion
     def __init__(self, params):
-        Buy_stocks_portion.__init__(self, params)
+        Buy_stocks.__init__(self, params)
         self.buy_count = params.get('buy_count', 3)
         self.type_III_threthold = params.get('threthold', 1.2)
         self.force_chan_type = params.get('force_chan_type', [Chan_Type.I])
