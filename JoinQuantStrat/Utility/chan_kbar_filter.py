@@ -5,7 +5,7 @@ Created on 18 Jan 2020
 @author: MetalInvest
 '''
 try:
-    from kuanke.user_space_api import *         
+    from kuanke.user_space_api import *
 except ImportError as ie:
     print(str(ie))
 from jqdata import *
@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from biaoLiStatus import TopBotType
 
-from chan_common_include import TYPE_III_NUM, TYPE_I_NUM, GOLDEN_RATIO, Chan_Type
+from chan_common_include import *
 
 def filter_high_level_by_index(direction=TopBotType.top2bot, 
                                stock_index='000985.XSHG', 
