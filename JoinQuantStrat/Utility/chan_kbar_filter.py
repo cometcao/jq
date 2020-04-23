@@ -39,9 +39,12 @@ def filter_high_level_by_index(direction=TopBotType.top2bot,
     type_i = sorted(list(result_stocks_I))
     type_iii = sorted(list(result_stocks_III))
     type_pb = sorted(list(result_stocks_PB))
-    print("qualifying type I stocks:{0} \ntype III stocks: {1} \ntype PB stocks: {2}".format(type_i, 
+    print("qualifying type I stocks:{0} {1} \ntype III stocks: {2} {3} \ntype PB stocks: {4} {5}".format(type_i,
+                                                                                                         len(type_i),
                                                                                              type_iii,
-                                                                                             type_pb))
+                                                                                             len(type_iii),
+                                                                                             type_pb,
+                                                                                             len(type_pb)))
     
     return sorted(list(set(type_i + type_iii + type_pb)))
 
@@ -172,11 +175,19 @@ class KBar(object):
         '''
         if (
                 direction == TopBotType.top2bot and\
-                max(kbar_list[-2].high, kbar_list[-3].high, kbar_list[-4].high) < kbar_list[-1].close
+                (
+                    kbar_list[-5].close < kbar_list[-1].close or\
+                    min(kbar_list[-2].high, kbar_list[-3].high, kbar_list[-4].high) < kbar_list[-1].close
+#                     max(kbar_list[-2].low, kbar_list[-3].low, kbar_list[-4].low) > kbar_list[-5].high
+                )
             ) or\
             (
                 direction == TopBotType.bot2top and\
-                min(kbar_list[-2].low, kbar_list[-3].low, kbar_list[-4].low) > kbar_list[-1].close
+                (
+                    kbar_list[-5].close > kbar_list[-1].close or\
+                    max(kbar_list[-2].low, kbar_list[-3].low, kbar_list[-4].low) > kbar_list[-1].close
+#                     min(kbar_list[-2].high, kbar_list[-3].high, kbar_list[-4].high) < kbar_list[-5].low
+                )
             ):
             return False
         
@@ -190,10 +201,12 @@ class KBar(object):
         if (last.close < last.open) or ((last.close-last.low)/(last.high-last.low) <= (1-GOLDEN_RATIO)):
             
             while start_idx < steps:
-                check_result, k_m, k_l = cls.contain_zhongshu(first, second, third, return_core_range=True)
+                check_result, k_m, k_l = cls.contain_zhongshu(first, second, third, return_core_range=False)
                 
                 if check_result:
-                    result = (last.close < k_l if direction == TopBotType.top2bot else last.close > k_m)
+                    result = (float_less_equal(last.low, k_l) and float_more_equal(first.high, k_m))\
+                              if direction == TopBotType.top2bot else\
+                              (float_more_equal(last.high, k_m) and float_less_equal(first.low, k_l))
                 if result:
                     return result
                 else:
