@@ -294,7 +294,7 @@ class ZouShiLeiXing(object):
         return delta * loc_diff
 #         return (delta**2 + loc_diff**2) ** 0.5
     
-    def check_exhaustion(self):
+    def check_exhaustion(self, allow_simple_zslx=True):
         '''
         check most recent two XD or BI at current direction on slopes
         check if current ZSLX or series of ZSLX are exhausted.
@@ -304,7 +304,7 @@ class ZouShiLeiXing(object):
         all_double_nodes = []
         # if No. of nodes less than two we pass
         if len(self.zoushi_nodes) <= 2:
-            return True, self.zoushi_nodes[0].time
+            return allow_simple_zslx, self.zoushi_nodes[0].time
         
         while i < len(self.zoushi_nodes)-1:
             current_node = self.zoushi_nodes[i]

@@ -230,6 +230,7 @@ def check_stock_sub(stock,
                     split_time=None,
                     check_bi=False,
                     force_zhongshu=True,
+                    allow_simple_zslx=True,
                     force_bi_zhongshu=True):
     if is_description:
         print("check_stock_sub working on stock: {0} at {1}".format(stock, periods))
@@ -251,7 +252,8 @@ def check_stock_sub(stock,
                                                                  chan_types=chan_types,
                                                                  check_end_tb=True, 
                                                                  check_tb_structure=True,
-                                                                 force_zhongshu=force_zhongshu) # data split at retrieval time
+                                                                 force_zhongshu=force_zhongshu,
+                                                                 allow_simple_zslx=allow_simple_zslx) # data split at retrieval time
     bi_split_time = sub_profile[0][5] # split time is the xd start time
     if exhausted and xd_exhausted and check_bi:
         bi_exhausted, bi_xd_exhausted, _ = ni.indepth_analyze_zoushi(direction, bi_split_time, pe, force_zhongshu=force_bi_zhongshu)
@@ -758,8 +760,9 @@ class Equilibrium():
                            check_balance_structure=False, 
                            force_zhongshu=False, 
                            current_chan_type=Chan_Type.INVALID,
-                           at_bi_level=False, 
-                           enable_composite=False):
+                           at_bi_level=False, # True currently at bi level
+                           allow_simple_zslx=True, # allow simple zoushileixing to be true
+                           enable_composite=False): # allow composite zs, currently only at bi level
         '''
         We are dealing type III differently at top level
         return:
@@ -798,7 +801,7 @@ class Equilibrium():
                 zslx = self.analytic_result[-1]
                 if self.isdebug:
                     print("ZhongShu not yet formed, only check ZSLX exhaustion")
-                xd_exhaustion, ts = zslx.check_exhaustion() 
+                xd_exhaustion, ts = zslx.check_exhaustion(allow_simple_zslx) # only used if we want to avoid one xd
                 return True, xd_exhaustion, zslx.zoushi_nodes[0].time, ts, 0, 0
             elif type(self.analytic_result[-1]) is ZhongShu:
                 zs = self.analytic_result[-1]
@@ -940,7 +943,7 @@ class Equilibrium():
             # macd is converted by mangitude as conversion factor to 
             # work out the force per unit timeprice value <=> presure
             # macd / (price * time)
-            # TODO in the future: MONEY * PRICE / time ** 2 <=> force = kg * m / s ** 2 <=> newton
+            # DONE in the future: MONEY * PRICE / time ** 2 <=> force = kg * m / s ** 2 <=> newton
             
 #             zslx_mag = zslx_a.get_magnitude()
 #             latest_mag = zslx_c.get_magnitude() 
@@ -1307,7 +1310,8 @@ class NestedInterval():
                                                                                                     check_tb_structure=check_tb_structure, 
                                                                                                     check_balance_structure=False,
                                                                                                     current_chan_type=chan_t,
-                                                                                                    at_bi_level=False)
+                                                                                                    at_bi_level=False,
+                                                                                                    allow_simple_zslx=True)
         else:
             high_exhausted, check_xd_exhaustion = False, False
         if self.isDescription or self.isdebug:
@@ -1365,7 +1369,8 @@ class NestedInterval():
                                                                                          check_tb_structure=True,
                                                                                          check_balance_structure=False,
                                                                                          force_zhongshu=force_zhongshu,
-                                                                                         at_bi_level=True)
+                                                                                         at_bi_level=True,
+                                                                                         allow_simple_zslx=True)
         if (self.isdebug):
             print("BI level {0}, {1}".format(bi_exhausted, bi_check_exhaustion))
         
@@ -1375,7 +1380,8 @@ class NestedInterval():
                           chan_types=[Chan_Type.INVALID, Chan_Type.I],
                           check_end_tb=False, 
                           check_tb_structure=False,
-                          force_zhongshu=False):
+                          force_zhongshu=False,
+                          allow_simple_zslx=True):
         '''
         split done at data level
         
@@ -1427,7 +1433,8 @@ class NestedInterval():
                                                                                                    check_tb_structure=check_tb_structure,
                                                                                                    check_balance_structure=False,
                                                                                                    current_chan_type=chan_t,
-                                                                                                   at_bi_level=False)
+                                                                                                   at_bi_level=False,
+                                                                                                   allow_simple_zslx=allow_simple_zslx)
         if self.isDescription or self.isdebug:
             print("current level {0} {1} {2} {3} {4} with price:{5}".format(period, 
                                                                         chan_d, 
