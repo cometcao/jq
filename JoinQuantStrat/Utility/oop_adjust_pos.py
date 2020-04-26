@@ -995,8 +995,23 @@ class Short_Chan(Sell_stocks):
 #             print("STOP PROFIT reached return {0} {1}".format(context.portfolio.positions[stock].avg_cost, stock_data.loc[effective_time:, 'high'].max()))
 #             max_time = stock_data.loc[effective_time:, 'high'].idxmax()
             min_time = stock_data.loc[sub_zoushi_start_time:, 'low'].idxmin()
-#             if min_time > max_time:
-#                 min_time = effective_time
+
+            bi_exhausted, bi_check_exhaustion, _, bi_all_types = check_chan_indepth(stock, 
+                                                                                   end_time=context.current_dt, 
+                                                                                   period=self.sub_period, 
+                                                                                   count=2000, 
+                                                                                   direction=TopBotType.bot2top, 
+                                                                                   isdebug=self.isdebug, 
+                                                                                   is_anal=False, 
+                                                                                   is_description=self.isDescription,
+                                                                                   split_time=min_time)
+            if bi_all_types and bi_all_types[0][0] == Chan_Type.I and bi_exhausted:
+                print("STOP PROFIT {0} bi exhausted: {1}, {2}, {3}".format(stock,
+                                                                           bi_exhausted,
+                                                                           bi_check_exhaustion,
+                                                                           bi_all_types))
+                return True
+                
             exhausted, xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
                                                           end_time=context.current_dt,
                                                           periods=[self.sub_period],
@@ -1009,9 +1024,9 @@ class Short_Chan(Sell_stocks):
                                                           split_time=min_time,
                                                           force_zhongshu=False,
                                                           allow_simple_zslx=False,
-                                                          check_bi=True,
+                                                          check_bi=False,
                                                           force_bi_zhongshu=True) # relax rule
-            if (exhausted and sub_zhongshu_formed) or (not sub_zhongshu_formed and exhausted and xd_exhausted):
+            if bi_exhausted and ((exhausted and sub_zhongshu_formed) or (not sub_zhongshu_formed and exhausted and xd_exhausted)):
                 print("STOP PROFIT {0} sub exhausted: {1}, {2} Zhongshu formed: {3}".format(stock,
                                                                                    exhausted,
                                                                                    xd_exhausted,
