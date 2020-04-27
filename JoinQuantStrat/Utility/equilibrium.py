@@ -1366,6 +1366,8 @@ class NestedInterval():
                          isdebug=self.isdebug, 
                          isDescription=self.isDescription)
         all_types = eq.check_chan_type(check_end_tb=True)
+        if not all_types:
+            all_types = [(Chan_Type.INVALID, TopBotType.noTopBot, 0)]
         
         bi_exhausted, bi_check_exhaustion, _,bi_split_time, _, _ = eq.define_equilibrium(direction, 
                                                                                          check_tb_structure=True,
