@@ -284,7 +284,7 @@ def check_stock_full(stock,
                                                                       chan_type=top_chan_type, 
                                                                       isdebug=isdebug, 
                                                                       is_description=is_description,
-                                                                      check_structure=False,
+                                                                      check_structure=True,
                                                                       is_anal=is_anal)    
     if not chan_profile:
         chan_profile = [(Chan_Type.INVALID, TopBotType.noTopBot, 0, 0, 0, None, None)]
@@ -507,7 +507,7 @@ class Equilibrium():
         self.check_zoushi_status()
         pass
     
-    def find_most_recent_zoushi(self, direction, at_bi_level=False, enable_composite=False):
+    def find_most_recent_zoushi(self, direction, current_chan_type, at_bi_level=False, enable_composite=False):
         '''
         Make sure we find the appropriate two XD for comparison.
         A. in case of QVSHI
@@ -516,7 +516,7 @@ class Equilibrium():
             2. compare entering XD with exit XD for the group of complicated zhongshu
             3. compare two zslx entering and exiting zhongshu (can be opposite direction)
         '''
-        if self.isQvShi:
+        if self.isQvShi and current_chan_type == Chan_Type.I:
             if type(self.analytic_result[-1]) is ZhongShu and self.analytic_result[-1].is_complex_type():  
                 zs = self.analytic_result[-1]
                 first_zslx = self.analytic_result[-2]
@@ -524,26 +524,76 @@ class Equilibrium():
                 return (first_zslx, self.analytic_result[-1], last_xd, self.analytic_result[-1].get_amplitude_region_original_without_last_xd()) if last_xd.direction == direction else (None, None, None, None)
             elif type(self.analytic_result[-1]) is ZouShiLeiXing:
                 return (self.analytic_result[-3], self.analytic_result[-2], self.analytic_result[-1], self.analytic_result[-2].get_amplitude_region_original()) if self.analytic_result[-1].direction == direction else (None, None, None, None)
-            
-        if type(self.analytic_result[-1]) is ZhongShu:
-            zs = self.analytic_result[-1]
-            last_xd = zs.take_last_xd_as_zslx()
-            if zs.is_complex_type():
+        
+        else: # current_chan_type == Chan_Type.INVALID:
+            if type(self.analytic_result[-1]) is ZhongShu:
+                zs = self.analytic_result[-1]
+                last_xd = zs.take_last_xd_as_zslx()
+                if zs.is_complex_type():
+                    if last_xd.direction != direction:
+                        return None, None, None, None
+                    
+                    if len(self.analytic_result) >= 3 and\
+                        type(self.analytic_result[-2]) is ZouShiLeiXing and\
+                        type(self.analytic_result[-1]) is ZhongShu and\
+                        type(self.analytic_result[-3]) is ZhongShu and\
+                        self.two_zslx_interact_original(self.analytic_result[-1], self.analytic_result[-3]):
+    #                     return None, None, None, None
+                        # Zhongshu KUOZHAN ###############################
+                        ## zhong shu combination use CompositeZhongshu class
+                        if at_bi_level:
+                            if not enable_composite:
+                                return None, None, None, None
+                            i = -1
+                            marked = False
+                            while -(i-2) <= len(self.analytic_result):
+                                if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
+                                    (not self.analytic_result[i-2].is_complex_type() and self.analytic_result[i-2].direction != self.analytic_result[i].direction):
+                                    first_xd = self.analytic_result[i-1]
+                                    marked = True
+                                    break
+                                i = i - 2
+                            zs = CompositeZhongshu(self.analytic_result[i:], zs.original_df)
+                            if not marked:
+                                first_xd = zs.take_split_xd_as_zslx(direction)
+                                
+                        else: # normal case we only consider the last Zhongshu
+                            if self.analytic_result[-2].direction != last_xd.direction:
+                                first_xd = zs.take_split_xd_as_zslx(direction)
+                            else:
+                                first_xd = self.analytic_result[-2]
+                            
+                    elif len(self.analytic_result) < 2 or self.analytic_result[-2].direction != last_xd.direction:
+                        first_xd = zs.take_split_xd_as_zslx(direction)
+                    else:
+                        first_xd = self.analytic_result[-2]
+                    return first_xd, zs, last_xd, zs.get_amplitude_region_original_without_last_xd()
+                else:
+                    # allow same direction zs, the point after type III
+#                     if zs.direction != direction:
+#                         return None, None, None, None
+                    first_xd = zs.take_first_xd_as_zslx() if zs.direction != last_xd.direction or len(self.analytic_result) < 2 else self.analytic_result[-2]
+                    return first_xd, zs, last_xd, zs.get_amplitude_region_original_without_last_xd()
+    
+            elif type(self.analytic_result[-1]) is ZouShiLeiXing:
+                last_xd = self.analytic_result[-1]
+                zs = None
                 if last_xd.direction != direction:
                     return None, None, None, None
                 
-                if len(self.analytic_result) >= 3 and\
-                    type(self.analytic_result[-2]) is ZouShiLeiXing and\
-                    type(self.analytic_result[-1]) is ZhongShu and\
-                    type(self.analytic_result[-3]) is ZhongShu and\
-                    self.two_zslx_interact_original(self.analytic_result[-1], self.analytic_result[-3]):
-#                     return None, None, None, None
-                    # Zhongshu KUOZHAN ###############################
-                    ## zhong shu combination use CompositeZhongshu class
+                if len(self.analytic_result) >= 4 and\
+                    type(self.analytic_result[-2]) is ZhongShu and\
+                    type(self.analytic_result[-4]) is ZhongShu and\
+                    self.two_zslx_interact_original(self.analytic_result[-4], self.analytic_result[-2]):
+                    zs = self.analytic_result[-2]
+    #                 return None, None, None, None
+    # composite ZhongShu case ###############################
                     if at_bi_level:
                         if not enable_composite:
                             return None, None, None, None
-                        i = -1
+                            
+                        ## zhong shu combination
+                        i = -2
                         marked = False
                         while -(i-2) <= len(self.analytic_result):
                             if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
@@ -552,75 +602,29 @@ class Equilibrium():
                                 marked = True
                                 break
                             i = i - 2
-                        zs = CompositeZhongshu(self.analytic_result[i:], zs.original_df)
+                        zs = CompositeZhongshu(self.analytic_result[i:-1], zs.original_df)
                         if not marked:
                             first_xd = zs.take_split_xd_as_zslx(direction)
-                            
                     else: # normal case we only consider the last Zhongshu
-                        if self.analytic_result[-2].direction != last_xd.direction:
+                        if self.analytic_result[-3].direction != last_xd.direction:
                             first_xd = zs.take_split_xd_as_zslx(direction)
                         else:
-                            first_xd = self.analytic_result[-2]
+                            first_xd = self.analytic_result[-3]
                         
-                elif len(self.analytic_result) < 2 or self.analytic_result[-2].direction != last_xd.direction:
-                    first_xd = zs.take_split_xd_as_zslx(direction)
-                else:
-                    first_xd = self.analytic_result[-2]
-                return first_xd, zs, last_xd, zs.get_amplitude_region_original_without_last_xd()
-            else:
-                first_xd = zs.take_first_xd_as_zslx() if zs.direction != last_xd.direction or len(self.analytic_result) < 2 else self.analytic_result[-2]
-                return first_xd, zs, last_xd, zs.get_amplitude_region_original_without_last_xd()
-
-        elif type(self.analytic_result[-1]) is ZouShiLeiXing:
-            last_xd = self.analytic_result[-1]
-            zs = None
-            if last_xd.direction != direction:
-                return None, None, None, None
-            
-            if len(self.analytic_result) >= 4 and\
-                type(self.analytic_result[-2]) is ZhongShu and\
-                type(self.analytic_result[-4]) is ZhongShu and\
-                self.two_zslx_interact_original(self.analytic_result[-4], self.analytic_result[-2]):
-                zs = self.analytic_result[-2]
-#                 return None, None, None, None
-# composite ZhongShu case ###############################
-                if at_bi_level:
-                    if not enable_composite:
+                elif len(self.analytic_result) < 3 or self.analytic_result[-3].direction != last_xd.direction:
+                    if len(self.analytic_result) > 1:
+                        zs = self.analytic_result[-2]
+                        first_xd = zs.take_split_xd_as_zslx(direction)
+                    else: # no ZhongShu found
                         return None, None, None, None
-                        
-                    ## zhong shu combination
-                    i = -2
-                    marked = False
-                    while -(i-2) <= len(self.analytic_result):
-                        if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
-                            (not self.analytic_result[i-2].is_complex_type() and self.analytic_result[i-2].direction != self.analytic_result[i].direction):
-                            first_xd = self.analytic_result[i-1]
-                            marked = True
-                            break
-                        i = i - 2
-                    zs = CompositeZhongshu(self.analytic_result[i:-1], zs.original_df)
-                    if not marked:
-                        first_xd = zs.take_split_xd_as_zslx(direction)
-                else: # normal case we only consider the last Zhongshu
-                    if self.analytic_result[-3].direction != last_xd.direction:
-                        first_xd = zs.take_split_xd_as_zslx(direction)
-                    else:
-                        first_xd = self.analytic_result[-3]
-                    
-            elif len(self.analytic_result) < 3 or self.analytic_result[-3].direction != last_xd.direction:
-                if len(self.analytic_result) > 1:
+                else:
                     zs = self.analytic_result[-2]
-                    first_xd = zs.take_split_xd_as_zslx(direction)
-                else: # no ZhongShu found
-                    return None, None, None, None
+                    first_xd = self.analytic_result[-3]
+                return first_xd, zs, last_xd, zs.get_amplitude_region_original(),
+                
             else:
-                zs = self.analytic_result[-2]
-                first_xd = self.analytic_result[-3]
-            return first_xd, zs, last_xd, zs.get_amplitude_region_original(),
-            
-        else:
-            print("INVALID Zou Shi type")
-            return None, None, None, None
+                print("INVALID Zou Shi type")
+                return None, None, None, None
     
     def two_zhongshu_form_qvshi(self, zs1, zs2, zs_level=ZhongShuLevel.current):
         '''
@@ -810,7 +814,7 @@ class Equilibrium():
                 xd_exhaustion, ts = zs.check_exhaustion()
                 return True, xd_exhaustion, zs.first.time, ts, 0, 0
         
-        a, central_B, c, central_region = self.find_most_recent_zoushi(direction, at_bi_level=at_bi_level, enable_composite=enable_composite)
+        a, central_B, c, central_region = self.find_most_recent_zoushi(direction, current_chan_type, at_bi_level=at_bi_level, enable_composite=enable_composite)
         
         new_high_low = self.reached_new_high_low(guide_price, direction, c, central_region)
         
@@ -865,19 +869,23 @@ class Equilibrium():
                     print("Not matching XD structure")
                 return False
         else: # PAN BEI #     
-            if len(a_s) != len(c_s) and\
-                check_balance_structure and\
-                (not self.price_balance(a_range, central_region, c_range) or\
-                 not self.time_balance(a_time, b_time, c_time)):
+            if len(a_s) != len(c_s):
                 if self.isdebug:
                     print("Not matching XD structure")
                 return False
             
+            if check_balance_structure and\
+                (not self.price_balance(a_range, central_region, c_range) or\
+                 not self.time_balance(a_time, b_time, c_time)):
+                if self.isdebug:
+                    print("Not matching XD balane")
+                return False
+            
             # detect benzou style Zhongshu
-#             if central_B.isBenZouStyle():
-#                 if self.isdebug:
-#                     print("Avoid benzou style zhongshu for PanZheng")
-#                 return False
+            if central_B.isBenZouStyle():
+                if self.isdebug:
+                    print("Avoid benzou style zhongshu for PanZheng")
+                return False
             
             # if current pan bei level too high it will break the assumption made in higher level
             if central_B.get_level().value > ZhongShuLevel.current.value and not at_bi_level:
@@ -1114,30 +1122,30 @@ class Equilibrium():
                         if self.isdebug:
                             print("TYPE III trade point 7")
         
-        # We do check panbei if it's Zhongshu
+        # We do check panbei if it's Zhongshu this case is not considered as TYPE III
         # TYPE III where zslx form reverse direction zhongshu, and last XD of new zhong shu didn't go back 
-        if len(self.analytic_result) >= 3 and type(self.analytic_result[-1]) is ZhongShu:
-            pre_zs = self.analytic_result[-3]
-            zslx = self.analytic_result[-2]
-            now_zs = self.analytic_result[-1]
-            core_region = pre_zs.get_core_region()
-            amplitude_region_original = pre_zs.get_amplitude_region_original()
-            if not now_zs.is_complex_type():
-                if not check_end_tb or\
-                ((now_zs.forth.tb == TopBotType.bot and now_zs.direction == TopBotType.bot2top) or\
-                 (now_zs.forth.tb == TopBotType.top and now_zs.direction == TopBotType.top2bot)): # reverse type here
-                    if not self.two_zslx_interact_original(pre_zs, now_zs):
-                        all_types.append((Chan_Type.III, 
-                                          TopBotType.top2bot if now_zs.direction == TopBotType.bot2top else TopBotType.bot2top,
-                                          amplitude_region_original[1] if now_zs.direction == TopBotType.bot2top else amplitude_region_original[0]))
-                        if self.isdebug:
-                            print("TYPE III trade point 3")
-                    elif not self.two_zslx_interact(pre_zs, now_zs):
-                        all_types.append((Chan_Type.III_weak, 
-                                          TopBotType.top2bot if now_zs.direction == TopBotType.bot2top else TopBotType.bot2top,
-                                          core_region[1] if now_zs.direction == TopBotType.bot2top else core_region[0]))
-                        if self.isdebug:
-                            print("TYPE III trade point 4")
+#         if len(self.analytic_result) >= 3 and type(self.analytic_result[-1]) is ZhongShu:
+#             pre_zs = self.analytic_result[-3]
+#             zslx = self.analytic_result[-2]
+#             now_zs = self.analytic_result[-1]
+#             core_region = pre_zs.get_core_region()
+#             amplitude_region_original = pre_zs.get_amplitude_region_original()
+#             if not now_zs.is_complex_type():
+#                 if not check_end_tb or\
+#                 ((now_zs.forth.tb == TopBotType.bot and now_zs.direction == TopBotType.bot2top) or\
+#                  (now_zs.forth.tb == TopBotType.top and now_zs.direction == TopBotType.top2bot)): # reverse type here
+#                     if not self.two_zslx_interact_original(pre_zs, now_zs):
+#                         all_types.append((Chan_Type.III, 
+#                                           TopBotType.top2bot if now_zs.direction == TopBotType.bot2top else TopBotType.bot2top,
+#                                           amplitude_region_original[1] if now_zs.direction == TopBotType.bot2top else amplitude_region_original[0]))
+#                         if self.isdebug:
+#                             print("TYPE III trade point 3")
+#                     elif not self.two_zslx_interact(pre_zs, now_zs):
+#                         all_types.append((Chan_Type.III_weak, 
+#                                           TopBotType.top2bot if now_zs.direction == TopBotType.bot2top else TopBotType.bot2top,
+#                                           core_region[1] if now_zs.direction == TopBotType.bot2top else core_region[0]))
+#                         if self.isdebug:
+#                             print("TYPE III trade point 4")
                 
         # IGNORE THIS CASE!! WE NEED CERTAINTY
         # TYPE III two reverse direction zslx, with new reverse direction zhongshu in the middle

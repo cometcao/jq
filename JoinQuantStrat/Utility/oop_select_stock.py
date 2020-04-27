@@ -342,7 +342,7 @@ class Pick_Chan_Stocks(Create_stock_list):
                                                                           direction=TopBotType.top2bot,
                                                                           chan_type=self.chan_types,
                                                                           isdebug=self.is_debug, 
-                                                                          is_anal=False)
+                                                                          is_anal=True)
             if result and xd_result:
                 self.g.stock_chan_type[stock] = chan_profile
         if self.is_debug:

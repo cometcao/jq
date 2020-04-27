@@ -835,7 +835,7 @@ class Short_Chan(Sell_stocks):
                                                                       isdebug=self.isdebug,
                                                                       is_description =self.isDescription,
                                                                       is_anal=False,
-                                                                      check_structure=False) # synch with selection
+                                                                      check_structure=True) # synch with selection
                 if not result or not xd_result:
                     print("TYPE I long point broken")
                     return True
