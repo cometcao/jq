@@ -1532,7 +1532,7 @@ class KBarChan(object):
                 
                 # make sure we are checking the right elem by direction
                 if not self.direction_assert(working_df[next_single_direction_elems[0]], current_direction):
-                    i = next_valid_elems[1]
+                    i = next_elems[1]
                     continue
                 
                 # make sure we are targetting the min/max by direction
