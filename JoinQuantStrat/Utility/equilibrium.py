@@ -868,7 +868,7 @@ class Equilibrium():
                 if self.isdebug:
                     print("Not matching XD structure")
                 return False
-        elif not at_bi_level: # PAN BEI #     
+        else: # PAN BEI #
             if len(a_s) != len(c_s):
                 if self.isdebug:
                     print("Not matching XD structure")
@@ -888,7 +888,7 @@ class Equilibrium():
                 return False
             
             # if current pan bei level too high it will break the assumption made in higher level
-            if central_B.get_level().value > ZhongShuLevel.current.value:
+            if central_B.get_level().value > ZhongShuLevel.current.value and not at_bi_level:
                 if self.isdebug:
                     print("Pan Bei Zhong Shu level too high")
                 return False
