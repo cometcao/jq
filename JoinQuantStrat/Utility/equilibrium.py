@@ -882,10 +882,10 @@ class Equilibrium():
                 return False
             
             # detect benzou style Zhongshu
-#             if central_B.isBenZouStyle():
-#                 if self.isdebug:
-#                     print("Avoid benzou style zhongshu for PanZheng")
-#                 return False
+            if central_B.isBenZouStyle():
+                if self.isdebug:
+                    print("Avoid benzou style zhongshu for PanZheng")
+                return False
             
             # if current pan bei level too high it will break the assumption made in higher level
             if central_B.get_level().value > ZhongShuLevel.current.value:
