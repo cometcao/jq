@@ -736,6 +736,7 @@ class Equilibrium():
             self.isQvShi = False
             if self.isdebug:
                 print("less than two zhong shu")
+            return
         
         # QV SHI
         self.isQvShi = self.two_zhongshu_form_qvshi(recent_zhongshu[-2], recent_zhongshu[-1]) 
