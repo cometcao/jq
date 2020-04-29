@@ -557,11 +557,14 @@ class Equilibrium():
                             if not marked:
                                 first_xd = zs.take_split_xd_as_zslx(direction)
                                 
-                        else: # normal case we only consider the last Zhongshu
-                            if self.analytic_result[-2].direction != last_xd.direction:
-                                first_xd = zs.take_split_xd_as_zslx(direction)
-                            else:
-                                first_xd = self.analytic_result[-2]
+                        else: 
+                            return None, None, None, None
+                            # method below won't be able to represent the full zoushi
+#                             # normal case we only consider the last Zhongshu
+#                             if self.analytic_result[-2].direction != last_xd.direction:
+#                                 first_xd = zs.take_split_xd_as_zslx(direction)
+#                             else:
+#                                 first_xd = self.analytic_result[-2]
                             
                     elif len(self.analytic_result) < 2 or self.analytic_result[-2].direction != last_xd.direction:
                         first_xd = zs.take_split_xd_as_zslx(direction)
@@ -809,6 +812,10 @@ class Equilibrium():
                 return True, xd_exhaustion, zslx.zoushi_nodes[0].time, ts, 0, 0
             elif type(self.analytic_result[-1]) is ZhongShu:
                 zs = self.analytic_result[-1]
+                if zs.get_level().value > ZhongShuLevel.current.value and not at_bi_level:
+                    if self.isdebug:
+                        print("Pan Bei Zhong Shu level too high")
+                    return False, False, zs.first.time, ts, 0, 0
                 if self.isdebug:
                     print("only one zhongshu, check zhongshu exhaustion")
                 xd_exhaustion, ts = zs.check_exhaustion()
