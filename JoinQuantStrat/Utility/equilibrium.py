@@ -504,6 +504,8 @@ class Equilibrium():
         self.isDescription = isDescription
         self.isQvShi = False
         self.isQvShi_simple = False # used for only checking zhongshu core range
+        self.isComposite = False # check full zoushi of current
+        self.isExtension = False # check full zoushi of current
         self.check_zoushi_status()
         pass
     
@@ -724,7 +726,7 @@ class Equilibrium():
     
     def check_zoushi_status(self):
         # check if current status beichi or panzhengbeichi
-        recent_zoushi = self.analytic_result[-5:] # 5 should include all cases
+        recent_zoushi = self.analytic_result
         recent_zhongshu = []
         for zs in recent_zoushi:
             if type(zs) is ZhongShu:
@@ -734,19 +736,34 @@ class Equilibrium():
             self.isQvShi = False
             if self.isdebug:
                 print("less than two zhong shu")
-            return self.isQvShi
         
-        # STARDARD CASE: 
+        # QV SHI
         self.isQvShi = self.two_zhongshu_form_qvshi(recent_zhongshu[-2], recent_zhongshu[-1]) 
         if self.isQvShi and self.isdebug:
             print("QU SHI 1")
         
-        
-        if type(self.analytic_result[-1]) is ZouShiLeiXing:
+        # simple QVSHI
+        if type(recent_zoushi[-1]) is ZouShiLeiXing:
             self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-2], recent_zhongshu[-1], self.analytic_result[-3])
         elif len(recent_zhongshu) > 2 and not recent_zhongshu[-1].is_complex_type(): # This is the case of TYPE III
             self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-3], recent_zhongshu[-2], self.analytic_result[-4])
             
+        # mark if curent zoushi contain ZhongShu extension or composition
+        # This is needed if we need to have full picture of current zoushi, in which case we avoid them
+        # e.g. sub level or bi level
+        for zs in recent_zhongshu:
+            if zs.get_level().value > ZhongShuLevel.current.value:
+                self.isExtension = True
+                break
+        
+        i = 0
+        while i + 1 < len(recent_zhongshu):
+            if self.two_zslx_interact(recent_zhongshu[i], recent_zhongshu[i+1]):
+                self.isComposite = True
+                break
+            i += 1
+        # mark if curent zoushi contain ZhongShu extension or composition
+        
 #         # TWO ZHONG SHU followed by ZHONGYIN ZHONGSHU
 #         # first two zhong shu no interaction
 #         # last zhong shu interacts with second, this is for TYPE II trade point
@@ -760,8 +777,6 @@ class Equilibrium():
 #                 print("QU SHI 2")
 #         else:
 #             self.isQvShi = False
-        return self.isQvShi
-
 
         
     def define_equilibrium(self, direction, 
@@ -772,6 +787,7 @@ class Equilibrium():
                            current_chan_type=Chan_Type.INVALID,
                            at_bi_level=False, # True currently at bi level
                            allow_simple_zslx=True, # allow simple zoushileixing to be true
+                           check_full_zoushi=False,
                            enable_composite=False): # allow composite zs, currently only at bi level
         '''
         We are dealing type III differently at top level
@@ -783,6 +799,11 @@ class Equilibrium():
         slope
         force
         '''
+        if check_full_zoushi and (self.isComposite or self.isExtenion):
+            if self.isdebug:
+                print("check full zoushi, found ZhongShu composite:{0} extension:{1}".format(self.isComposite,self.isExtension))
+            return False, False, None, None, 0, 0
+        
         if current_chan_type == Chan_Type.III:
 #             if self.isQvShi_simple or self.isQvShi:
 #                 if self.isdebug:
@@ -1329,6 +1350,7 @@ class NestedInterval():
                                                                                                     check_balance_structure=False,
                                                                                                     current_chan_type=chan_t,
                                                                                                     at_bi_level=False,
+                                                                                                    check_full_zoushi=False,
                                                                                                     allow_simple_zslx=True)
         else:
             high_exhausted, check_xd_exhaustion = False, False
@@ -1393,7 +1415,8 @@ class NestedInterval():
                                                                                          current_chan_type=all_types[0][0],
                                                                                          force_zhongshu=force_zhongshu,
                                                                                          at_bi_level=True,
-                                                                                         allow_simple_zslx=True)
+                                                                                         allow_simple_zslx=True,
+                                                                                         check_full_zoushi=True)
         if (self.isdebug):
             print("BI level {0}, {1}".format(bi_exhausted, bi_check_exhaustion))
         
@@ -1457,7 +1480,8 @@ class NestedInterval():
                                                                                                    check_balance_structure=False,
                                                                                                    current_chan_type=chan_t,
                                                                                                    at_bi_level=False,
-                                                                                                   allow_simple_zslx=allow_simple_zslx)
+                                                                                                   allow_simple_zslx=allow_simple_zslx,
+                                                                                                   check_full_zoushi=True)
         if self.isDescription or self.isdebug:
             print("current level {0} {1} {2} {3} {4} with price:{5}".format(period, 
                                                                         chan_d, 
