@@ -1117,6 +1117,7 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
             
             top_chan_t = top_profile[0]
             top_chan_p = top_profile[2]
+            sub_chan_t = sub_profile[0]
             sub_chan_p = sub_profile[2]
             effective_time = sub_profile[6]
             latest_data = get_price(stock,
@@ -1137,21 +1138,28 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
                 if self.force_price_check and (latest_high_price >= top_chan_p or top_chan_p/latest_price - 1 < self.expected_profit):
                     to_ignore.append(stock)
                     
-            elif self.force_price_check and Chan_Type.III == top_chan_t:
-                if type(sub_chan_p) is list:
-                    if latest_high_price >= sub_chan_p[0] or sub_chan_p[0]/latest_price - 1 < self.expected_profit:
+            elif self.force_price_check:
+                if top_chan_t == Chan_Type.III:
+                    if latest_min_price <= top_chan_p:
+                        # if TYPE III not valid anymore
                         to_ignore.append(stock)
-                    elif sub_chan_p[0] / top_chan_p > self.type_III_threthold: # if the TYPE III is too far from previous ZhongShu, we shouldn't go
-                        to_ignore.append(stock)
-                else: # can only be actual price here
-                    if latest_high_price >= sub_chan_p or sub_chan_p/latest_price - 1 < self.expected_profit:
-                        to_ignore.append(stock)
-                    elif sub_chan_p / top_chan_p > self.type_III_threthold:
-                        to_ignore.append(stock)
-                        
-                if latest_min_price <= top_chan_p:
-                    # if TYPE III not valid anymore
-                    to_ignore.append(stock)
+#                     if sub_chan_p / top_chan_p > self.type_III_threthold:
+#                         to_ignore.append(stock)
+                if top_chan_t == Chan_Type.INVALID:
+                    if type(top_chan_p) is list:
+                        if latest_high_price >= top_chan_p[0] or top_chan_p[0]/latest_price - 1 < self.expected_profit:
+                            to_ignore.append(stock)
+                    else: # can only be actual price here
+                        if latest_high_price >= top_chan_p or top_chan_p/latest_price - 1 < self.expected_profit:
+                            to_ignore.append(stock)
+
+                if sub_chan_t == Chan_Type.INVALID:
+                    if type(sub_chan_p) is list:
+                        if latest_high_price >= sub_chan_p[0] or sub_chan_p[0]/latest_price - 1 < self.expected_profit:
+                            to_ignore.append(stock)
+                    else: # can only be actual price here
+                        if latest_high_price >= sub_chan_p or sub_chan_p/latest_price - 1 < self.expected_profit:
+                            to_ignore.append(stock)
                 
         self.to_buy = type_I_stocks + self.to_buy
         
