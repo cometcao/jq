@@ -666,6 +666,7 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                                                   c_force,
                                                   pd.Timestamp(z_time),
                                                   pd.Timestamp(s_time))]
+            self.log.info(str(self.g.stock_chan_type))
         return chan_stock_list
     
     def __str__(self):
