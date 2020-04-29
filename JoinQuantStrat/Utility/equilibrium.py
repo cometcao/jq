@@ -608,11 +608,14 @@ class Equilibrium():
                         zs = CompositeZhongshu(self.analytic_result[i:-1], zs.original_df)
                         if not marked:
                             first_xd = zs.take_split_xd_as_zslx(direction)
-                    else: # normal case we only consider the last Zhongshu
-                        if self.analytic_result[-3].direction != last_xd.direction:
-                            first_xd = zs.take_split_xd_as_zslx(direction)
-                        else:
-                            first_xd = self.analytic_result[-3]
+                    else: 
+                        return None, None, None, None
+                        # method below won't be able to represent the full zoushi
+                        # normal case we only consider the last Zhongshu
+#                         if self.analytic_result[-3].direction != last_xd.direction:
+#                             first_xd = zs.take_split_xd_as_zslx(direction)
+#                         else:
+#                             first_xd = self.analytic_result[-3]
                         
                 elif len(self.analytic_result) < 3 or self.analytic_result[-3].direction != last_xd.direction:
                     if len(self.analytic_result) > 1:
