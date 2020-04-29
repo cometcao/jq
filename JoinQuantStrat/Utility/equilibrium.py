@@ -800,7 +800,7 @@ class Equilibrium():
         slope
         force
         '''
-        if check_full_zoushi and (self.isComposite or self.isExtenion):
+        if check_full_zoushi and (self.isComposite or self.isExtension):
             if self.isdebug:
                 print("check full zoushi, found ZhongShu composite:{0} extension:{1}".format(self.isComposite,self.isExtension))
             return False, False, None, None, 0, 0
