@@ -901,10 +901,10 @@ class Equilibrium():
                     print("Not matching XD structure")
                 return False
         else: # PAN BEI #
-            if len(a_s) != len(c_s):
-                if self.isdebug:
-                    print("Not matching XD structure")
-                return False
+#             if len(a_s) != len(c_s):
+#                 if self.isdebug:
+#                     print("Not matching XD structure")
+#                 return False
             
             if check_balance_structure and\
                 (not self.price_balance(a_range, central_region, c_range) or\
@@ -914,16 +914,16 @@ class Equilibrium():
                 return False
             
             # detect benzou style Zhongshu
-            if central_B.isBenZouStyle():
-                if self.isdebug:
-                    print("Avoid benzou style zhongshu for PanZheng")
-                return False
+#             if central_B.isBenZouStyle():
+#                 if self.isdebug:
+#                     print("Avoid benzou style zhongshu for PanZheng")
+#                 return False
             
             # if current pan bei level too high it will break the assumption made in higher level
-            if central_B.get_level().value > ZhongShuLevel.current.value and not at_bi_level:
-                if self.isdebug:
-                    print("Pan Bei Zhong Shu level too high")
-                return False
+#             if central_B.get_level().value > ZhongShuLevel.current.value and not at_bi_level:
+#                 if self.isdebug:
+#                     print("Pan Bei Zhong Shu level too high")
+#                 return False
             
         structure_result = True
         if direction == TopBotType.top2bot:
