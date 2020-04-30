@@ -991,7 +991,8 @@ class KBarChan(object):
 #                     item_price_covered = True
                 if float_more_equal((re[1]-re[0])/abs(firstElem['chan_price']-secondElem['chan_price']), GOLDEN_RATIO):
                     gap_range_in_portion = True
-                return gap_range_in_portion
+                if gap_range_in_portion:
+                    return gap_range_in_portion
         return False
     
 
