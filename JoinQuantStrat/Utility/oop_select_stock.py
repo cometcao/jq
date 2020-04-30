@@ -623,7 +623,8 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
     def __init__(self, params):
         Pick_Chan_Stocks.__init__(self, params)
         self.filename = params.get('filename', None)
-        self.chan_types = params.get('chan_types', [Chan_Type.I, Chan_Type.III])
+        self.top_chan_types = params.get('chan_types', [Chan_Type.I, Chan_Type.III, Chan_Type.INVALID])
+        self.sub_chan_types = params.get('chan_types', [Chan_Type.I, Chan_Type.INVALID])
         self.enable_on_demand = params.get('on_demand', False)
         
     def before_trading_start(self, context):
@@ -651,12 +652,15 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
             
             chan_list = chan_dict[str(today_date)]
             print("data read from file: {0} stocks info".format(len(chan_list)))
-            for stock, c_type_value, c_direc_value, c_price, c_slope, c_force, z_time, s_time in chan_list:
+            for stock, c_type_value, sub_type_value, top_period, sub_period, c_direc_value, c_price, c_slope, c_force, z_time, s_time in chan_list:
                 if stock in context.portfolio.positions.keys():
                     print("{0} already in position".format(stock))
                     continue
-                if self.chan_types and (Chan_Type.value2type(c_type_value) not in self.chan_types):
+                if self.top_chan_types and (Chan_Type.value2type(c_type_value) not in self.top_chan_types):
                     continue
+                if self.sub_chan_types and (Chan_Type.value2type(sub_type_value) not in self.sub_chan_types):
+                    continue
+                
                 chan_stock_list.append(stock)
                 
                 self.g.stock_chan_type[stock] = [(Chan_Type.value2type(c_type_value), 
@@ -666,7 +670,6 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                                                   c_force,
                                                   pd.Timestamp(z_time),
                                                   pd.Timestamp(s_time))]
-            self.log.info(str(self.g.stock_chan_type))
         return chan_stock_list
     
     def __str__(self):
