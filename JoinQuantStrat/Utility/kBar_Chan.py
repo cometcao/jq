@@ -946,6 +946,10 @@ class KBarChan(object):
         i = 0 
         if len(gap_regions) == 1:
             return gap_regions
+        
+        # sort gap regions
+        gap_regions = sorted(gap_regions, key=lambda tup: tup[0])
+        
         new_gaps = []
         temp_range= None
         while i + 1 < len(gap_regions):
@@ -983,12 +987,11 @@ class KBarChan(object):
             regions = self.gap_region(firstElem['date'], secondElem['date'])
             regions = self.combine_gaps(regions)
             for re in regions:
-                if float_less_equal(re[0], compareElem['chan_price']) and float_less_equal(compareElem['chan_price'], re[1]):
-                    item_price_covered = True
+#                 if float_less_equal(re[0], compareElem['chan_price']) and float_less_equal(compareElem['chan_price'], re[1]):
+#                     item_price_covered = True
                 if float_more_equal((re[1]-re[0])/abs(firstElem['chan_price']-secondElem['chan_price']), GOLDEN_RATIO):
                     gap_range_in_portion = True
-                if item_price_covered and gap_range_in_portion:
-                    return True
+                return gap_range_in_portion
         return False
     
 
@@ -1028,12 +1031,19 @@ class KBarChan(object):
             ############################## special case of kline gap as XD ##############################
             # only checking if any one node is in pure gap range. The same logic as gap for XD
             if self.kbar_gap_as_xd(working_df, next_valid_elems[0], next_valid_elems[1], next_valid_elems[2]) or\
-                self.kbar_gap_as_xd(working_df, next_valid_elems[2], next_valid_elems[3], next_valid_elems[1]):
+                self.kbar_gap_as_xd(working_df, next_valid_elems[2], next_valid_elems[3], next_valid_elems[1]) or\
+                self.kbar_gap_as_xd(working_df, next_valid_elems[1], next_valid_elems[2], next_valid_elems[0]) or\
+                self.kbar_gap_as_xd(working_df, next_valid_elems[1], next_valid_elems[2], next_valid_elems[3]):
                 if self.isdebug:
-                    print("inclusion ignored due to kline gaps, with loc {0}@{1}, {2}@{3}".format(firstElem['date'], 
-                                                                                                  firstElem['chan_price'],
-                                                                                                  secondElem['date'],
-                                                                                                  secondElem['chan_price']))
+                    print("inclusion ignored due to kline gaps, with loc {0}@{1}, {2}@{3}, {4}@{5}, {6}@{7}".format(firstElem['date'], 
+                                                                                                                  firstElem['chan_price'],
+                                                                                                                  secondElem['date'],
+                                                                                                                  secondElem['chan_price'],
+                                                                                                                  thirdElem['date'], 
+                                                                                                                  thirdElem['chan_price'],
+                                                                                                                  forthElem['date'],
+                                                                                                                  forthElem['chan_price'],
+                                                                                                                  ))
                 return True, True
             ############################## special case of kline gap as XD ##############################                
             
