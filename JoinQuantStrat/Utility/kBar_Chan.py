@@ -16,9 +16,9 @@ FEN_DUAN_COLUMNS =  ['date', 'close', 'high', 'low', 'chan_price', 'tb', 'xd_tb'
 def gap_range_func(a):
     print(len(a['low']))
     print(len(a['high_s1']))
-    if a['low'] - a['high_s1'] > MIN_PRICE_UNIT:
+    if float_more(a['low'] - a['high_s1'], MIN_PRICE_UNIT):
         return [a['high_s1'], a['low']]
-    elif a['high'] - a['low_s1'] < -MIN_PRICE_UNIT:
+    elif float_less(a['high'] - a['low_s1'], -MIN_PRICE_UNIT):
         return [a['high'], a['low_s1']]
     else:
         return [0, 0]
@@ -291,16 +291,15 @@ class KBarChan(object):
                                                ],
                                                [bool, float, float, float, float],
                                                usemask=False)
-#                                                ((self.kDataFrame_origin['low'] - high_shift) > MIN_PRICE_UNIT) | ((self.kDataFrame_origin['high'] - low_shift) < -MIN_PRICE_UNIT),
         
         i = 0
         while i < self.kDataFrame_origin.size:
             item = self.kDataFrame_origin[i]
-            if item['low'] - item['high_shift'] > MIN_PRICE_UNIT:
+            if float_more(item['low'] - item['high_shift'], MIN_PRICE_UNIT):
                 self.kDataFrame_origin[i]['gap'] = True
                 self.kDataFrame_origin[i]['gap_range_start'] = item['high_shift']
                 self.kDataFrame_origin[i]['gap_range_end'] = item['low']
-            elif item['high'] - item['low_shift'] < -MIN_PRICE_UNIT:
+            elif float_less(item['high'] - item['low_shift'], -MIN_PRICE_UNIT):
                 self.kDataFrame_origin[i]['gap'] = True
                 self.kDataFrame_origin[i]['gap_range_start'] = item['high']
                 self.kDataFrame_origin[i]['gap_range_end'] = item['low_shift']
