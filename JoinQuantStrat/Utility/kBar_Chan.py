@@ -14,8 +14,8 @@ FEN_BI_COLUMNS = ['date', 'close', 'high', 'low', 'tb', 'real_loc']
 FEN_DUAN_COLUMNS =  ['date', 'close', 'high', 'low', 'chan_price', 'tb', 'xd_tb', 'real_loc']
 
 def gap_range_func(a):
-    print(len(a['low']))
-    print(len(a['high_s1']))
+#     print(len(a['low']))
+#     print(len(a['high_s1']))
     if float_more(a['low'] - a['high_s1'], MIN_PRICE_UNIT):
         return [a['high_s1'], a['low']]
     elif float_less(a['high'] - a['low_s1'], -MIN_PRICE_UNIT):

@@ -438,7 +438,7 @@ class CentralRegionProcess(object):
         y_axis = []
         for zs in self.zoushi.zslx_result:
             if type(zs) is ZhongShu:
-                print(zs)
+#                 print(zs)
                 x_axis = x_axis + zs.get_core_time_region()
                 y_axis = y_axis + zs.get_core_region()
             else:
