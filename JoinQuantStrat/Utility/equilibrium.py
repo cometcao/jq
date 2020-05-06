@@ -630,7 +630,7 @@ class Equilibrium():
                     first_xd = self.analytic_result[-3]
                     
                 # only allow same direction zs, the point after type III
-                if not zs.is_complex_type() and zs.direction != direction:
+                if zs.direction != direction:
                     return None, None, None, None
                 return first_xd, zs, last_xd, zs.get_amplitude_region_original(),
                 
