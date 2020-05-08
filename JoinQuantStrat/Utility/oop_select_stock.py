@@ -651,7 +651,7 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                     return []
             
             chan_list = chan_dict[str(today_date)]
-            print("data read from file: {0} stocks info".format(len(chan_list)))
+            self.log.info("data read from file: {0} stocks info".format(len(chan_list)))
             for stock, c_type_value, sub_type_value, top_period, sub_period, c_direc_value, c_price, c_slope, c_force, z_time, s_time in chan_list:
                 if stock in context.portfolio.positions.keys():
                     print("{0} already in position".format(stock))
@@ -670,6 +670,7 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                                                   c_force,
                                                   pd.Timestamp(z_time),
                                                   pd.Timestamp(s_time))]
+            self.log.info("filtered data read from file: {0} stocks info".format(len(chan_stock_list)))
         return chan_stock_list
     
     def __str__(self):
