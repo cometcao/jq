@@ -326,7 +326,6 @@ class Pick_Chan_Stocks(Create_stock_list):
         pass
     
     def before_trading_start(self, context):
-        print("position chan info: {0}".format(self.g.stock_chan_type))
         stock_list = filter_high_level_by_index(direction=TopBotType.top2bot, 
                                    stock_index=self.index, 
                                    df=False, 
@@ -673,6 +672,13 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                                                   pd.Timestamp(s_time))]
             self.log.info("filtered data read from file: {0} stocks info".format(len(chan_stock_list)))
         return chan_stock_list
+    
+    def after_trading_end(self, context):
+        holding_pos = context.portfolio.positions.keys()
+        stored_stocks = list(self.g.stock_chan_type.keys())
+        to_be_removed = [stock for stock in stored_stocks if stock not in holding_pos]
+        [self.g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
+        self.log.info("position chan info: {0}".format(self.g.stock_chan_type))
     
     def __str__(self):
         return "从文件中读取根据缠论已经写好的股票列表以及数据"
