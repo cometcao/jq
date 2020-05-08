@@ -1065,9 +1065,7 @@ class Short_Chan(Sell_stocks):
         to_check = context.portfolio.positions.keys()
         to_check = [stock for stock in to_check if (context.portfolio.positions[stock].closeable_amount > 0 and stock not in self.money_fund)]
         to_sell = []
-        self.log.info(str(self.g.stock_chan_type))
         for stock in to_check:
-            
             if self.check_stop_loss(stock, context):
                 to_sell.append(stock)
                 continue
