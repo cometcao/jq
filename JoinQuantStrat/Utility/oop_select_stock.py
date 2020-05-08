@@ -623,8 +623,8 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
     def __init__(self, params):
         Pick_Chan_Stocks.__init__(self, params)
         self.filename = params.get('filename', None)
-        self.top_chan_types = params.get('chan_types', [Chan_Type.I, Chan_Type.III, Chan_Type.INVALID])
-        self.sub_chan_types = params.get('chan_types', [Chan_Type.I, Chan_Type.INVALID])
+        self.top_chan_types = params.get('top_chan_types', [Chan_Type.I, Chan_Type.III, Chan_Type.INVALID])
+        self.sub_chan_types = params.get('sub_chan_types', [Chan_Type.I, Chan_Type.INVALID])
         self.enable_on_demand = params.get('on_demand', False)
         
     def before_trading_start(self, context):
