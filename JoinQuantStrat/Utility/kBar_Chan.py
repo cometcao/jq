@@ -274,7 +274,7 @@ class KBarChan(object):
         
         # drop the first row, as we only need to find gaps from start_idx(non-inclusive) to end_idx(inclusive)  
 #         gap_working_df = np.delete(gap_working_df, 0, axis=0)
-        return np.any(gap_working_df['gap'])
+        return np.any(gap_working_df['gap']!=0)
     
     
     def gap_exists(self):
@@ -283,24 +283,24 @@ class KBarChan(object):
         self.kDataFrame_origin = append_fields(self.kDataFrame_origin,
                                                ['gap', 'high_shift', 'low_shift', 'gap_range_start', 'gap_range_end'],
                                                [
-                                                   [False]*self.kDataFrame_origin.size,
+                                                   [0]*self.kDataFrame_origin.size,
                                                    high_shift,
                                                    low_shift,
                                                    [0]*self.kDataFrame_origin.size,
                                                    [0]*self.kDataFrame_origin.size
                                                ],
-                                               [bool, float, float, float, float],
+                                               [int, float, float, float, float],
                                                usemask=False)
         
         i = 0
         while i < self.kDataFrame_origin.size:
             item = self.kDataFrame_origin[i]
-            if float_more(item['low'] - item['high_shift'], MIN_PRICE_UNIT):
-                self.kDataFrame_origin[i]['gap'] = True
+            if float_more(item['low'] - item['high_shift'], MIN_PRICE_UNIT): # upwards gap
+                self.kDataFrame_origin[i]['gap'] = 1
                 self.kDataFrame_origin[i]['gap_range_start'] = item['high_shift']
                 self.kDataFrame_origin[i]['gap_range_end'] = item['low']
-            elif float_less(item['high'] - item['low_shift'], -MIN_PRICE_UNIT):
-                self.kDataFrame_origin[i]['gap'] = True
+            elif float_less(item['high'] - item['low_shift'], -MIN_PRICE_UNIT): # downwards gap
+                self.kDataFrame_origin[i]['gap'] = -1
                 self.kDataFrame_origin[i]['gap_range_start'] = item['high']
                 self.kDataFrame_origin[i]['gap_range_end'] = item['low_shift']
             i = i + 1
@@ -309,10 +309,15 @@ class KBarChan(object):
 #         if self.isdebug:
 #             print(self.kDataFrame_origin[self.kDataFrame_origin['gap']])
     
-    def gap_region(self, start_idx, end_idx):
+    def gap_region(self, start_idx, end_idx, direction=TopBotType.noTopBot):
         # no need to drop first row, simple don't use = 
         gap_working_df = self.kDataFrame_origin[(start_idx < self.kDataFrame_origin['date']) & (self.kDataFrame_origin['date'] <= end_idx)]
-        return gap_working_df[gap_working_df['gap']][['gap_range_start', 'gap_range_end']].tolist()
+        if direction == TopBotType.noTopBot:
+            return gap_working_df[gap_working_df['gap']!=0][['gap_range_start', 'gap_range_end']].tolist()
+        elif direction == TopBotType.top2bot:
+            return gap_working_df[gap_working_df['gap']==-1][['gap_range_start', 'gap_range_end']].tolist()
+        elif direction == TopBotType.bot2top:
+            return gap_working_df[gap_working_df['gap']==1][['gap_range_start', 'gap_range_end']].tolist()
 
     def get_next_tb(self, idx, working_df):
         '''
@@ -413,7 +418,10 @@ class KBarChan(object):
         # under this section of code we expect there are no two adjacent fenxings with the same status
         gap_qualify = False
         if self.gap_exists_in_range(working_df[current_index]['date'], working_df[next_index]['date']):
-            gap_ranges = self.gap_region(working_df[current_index]['date'], working_df[next_index]['date'])
+            gap_direction = TopBotType.bot2top if working_df[next_index]['tb'] == TopBotType.top.value else\
+                            TopBotType.top2bot if working_df[next_index]['tb'] == TopBotType.bot.value else\
+                            TopBotType.noTopBot
+            gap_ranges = self.gap_region(working_df[current_index]['date'], working_df[next_index]['date'], gap_direction)
             gap_ranges = self.combine_gaps(gap_ranges)
             for gap in gap_ranges:
                 if working_df[previous_index]['tb'] == TopBotType.top.value: 
@@ -943,7 +951,7 @@ class KBarChan(object):
         gap regions come in as ordered
         '''
         i = 0 
-        if len(gap_regions) == 1:
+        if len(gap_regions) <= 1:
             return gap_regions
         
         # sort gap regions
@@ -983,7 +991,10 @@ class KBarChan(object):
         gap_range_in_portion = False
         if first_idx + 1 == second_idx and\
             self.gap_exists_in_range(firstElem['date'], secondElem['date']):
-            regions = self.gap_region(firstElem['date'], secondElem['date'])
+            gap_direction = TopBotType.bot2top if secondElem['tb'] == TopBotType.top.value else\
+                            TopBotType.top2bot if secondElem['tb'] == TopBotType.bot.value else\
+                            TopBotType.noTopBot
+            regions = self.gap_region(firstElem['date'], secondElem['date'], gap_direction)
             regions = self.combine_gaps(regions)
             for re in regions:
 #                 if float_less_equal(re[0], compareElem['chan_price']) and float_less_equal(compareElem['chan_price'], re[1]):
@@ -1100,23 +1111,13 @@ class KBarChan(object):
             first_run = False
             
             next_valid_elems = self.get_next_N_elem(i, working_df, count_num)
-            if len(next_valid_elems) < count_num:
-                break
+            
+            # no need to break here, we make best effort!
+#             if len(next_valid_elems) < count_num:
+#                 break
             
             # we need to either get to last layer of is_inclusion_free or any level of is_kline_gap_xd
-            if count_num == 4:
-                is_inclusion_free, _ = self.is_XD_inclusion_free(direction, next_valid_elems[:4], working_df)
-                if is_inclusion_free:
-                    break
-            elif count_num == 6:
-                is_inclusion_free, is_kline_gap_xd = self.is_XD_inclusion_free(direction, next_valid_elems[:4], working_df)
-                if is_kline_gap_xd:
-                    break
-                if is_inclusion_free:
-                    is_inclusion_free, _ = self.is_XD_inclusion_free(direction, next_valid_elems[-4:], working_df)
-                    if is_inclusion_free:
-                        break
-            else: #count_num == 8:
+            if len(next_valid_elems) == 8: # max possible value
                 is_inclusion_free, is_kline_gap_xd = self.is_XD_inclusion_free(direction, next_valid_elems[:4], working_df)
                 if is_kline_gap_xd:
                     break
@@ -1128,6 +1129,21 @@ class KBarChan(object):
                         is_inclusion_free, _ = self.is_XD_inclusion_free(direction, next_valid_elems[-4:], working_df)
                         if is_inclusion_free:
                             break
+            elif len(next_valid_elems) >= 6:
+                is_inclusion_free, is_kline_gap_xd = self.is_XD_inclusion_free(direction, next_valid_elems[:4], working_df)
+                if is_kline_gap_xd:
+                    break
+                if is_inclusion_free:
+                    is_inclusion_free, _ = self.is_XD_inclusion_free(direction, next_valid_elems[-4:], working_df)
+                    if is_inclusion_free:
+                        break
+            elif len(next_valid_elems) >= 4:
+                is_inclusion_free, _ = self.is_XD_inclusion_free(direction, next_valid_elems[:4], working_df)
+                if is_inclusion_free:
+                    break
+            else:
+                break
+
         return next_valid_elems
                 
 
@@ -1201,21 +1217,17 @@ class KBarChan(object):
             if self.isdebug:
                 print("XD represented by kline gap 2, {0}, {1}".format(working_df[next_valid_elems[2]]['date'], working_df[next_valid_elems[3]]['date']))
         
-        if not with_kline_gap_as_xd and self.previous_with_xd_gap and\
-            next_valid_elems[1] + 1 == next_valid_elems[2] and\
-            self.gap_exists_in_range(working_df[next_valid_elems[1]]['date'], working_df[next_valid_elems[2]]['date']):
-            # a bit of redudance due to line below
+        if not with_kline_gap_as_xd and self.previous_with_xd_gap:
             self.previous_with_xd_gap=False # close status
-            
-            if self.kbar_gap_as_xd(working_df, next_valid_elems[0], next_valid_elems[1], next_valid_elems[2]):
+            if self.kbar_gap_as_xd(working_df, next_valid_elems[1], next_valid_elems[2], next_valid_elems[0]):
                 without_gap = with_kline_gap_as_xd = True
                 if self.isdebug:
                     print("XD represented by kline gap 1, {0}, {1}".format(working_df[next_valid_elems[1]]['date'], working_df[next_valid_elems[2]]['date']))
 
-        if with_kline_gap_as_xd:
-            if (direction == TopBotType.bot2top and float_more(third[chan_price], fifth[chan_price]) and float_more(third[chan_price], first[chan_price])):
+        if with_kline_gap_as_xd: # we don't need to compare with the first elem
+            if (direction == TopBotType.bot2top and float_more(third[chan_price], fifth[chan_price])): #and float_more(third[chan_price], first[chan_price])
                 xd_gap_result = TopBotType.top
-            elif (direction == TopBotType.top2bot and float_less(third[chan_price], first[chan_price]) and float_less(third[chan_price], fifth[chan_price])):
+            elif (direction == TopBotType.top2bot and float_less(third[chan_price], fifth[chan_price])): #and float_less(third[chan_price], first[chan_price]) 
                 xd_gap_result = TopBotType.bot
             else:
                 if self.isdebug:
