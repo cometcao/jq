@@ -1112,12 +1112,23 @@ class KBarChan(object):
             
             next_valid_elems = self.get_next_N_elem(i, working_df, count_num)
             
-            # no need to break here, we make best effort!
-#             if len(next_valid_elems) < count_num:
-#                 break
+            if len(next_valid_elems) < count_num:
+                break
             
             # we need to either get to last layer of is_inclusion_free or any level of is_kline_gap_xd
-            if len(next_valid_elems) == 8: # max possible value
+            if count_num == 4:
+                is_inclusion_free, _ = self.is_XD_inclusion_free(direction, next_valid_elems[:4], working_df)
+                if is_inclusion_free:
+                    break
+            elif count_num == 6:
+                is_inclusion_free, is_kline_gap_xd = self.is_XD_inclusion_free(direction, next_valid_elems[:4], working_df)
+                if is_kline_gap_xd:
+                    break
+                if is_inclusion_free:
+                    is_inclusion_free, _ = self.is_XD_inclusion_free(direction, next_valid_elems[-4:], working_df)
+                    if is_inclusion_free:
+                        break
+            else: #count_num == 8:
                 is_inclusion_free, is_kline_gap_xd = self.is_XD_inclusion_free(direction, next_valid_elems[:4], working_df)
                 if is_kline_gap_xd:
                     break
@@ -1129,21 +1140,6 @@ class KBarChan(object):
                         is_inclusion_free, _ = self.is_XD_inclusion_free(direction, next_valid_elems[-4:], working_df)
                         if is_inclusion_free:
                             break
-            elif len(next_valid_elems) >= 6:
-                is_inclusion_free, is_kline_gap_xd = self.is_XD_inclusion_free(direction, next_valid_elems[:4], working_df)
-                if is_kline_gap_xd:
-                    break
-                if is_inclusion_free:
-                    is_inclusion_free, _ = self.is_XD_inclusion_free(direction, next_valid_elems[-4:], working_df)
-                    if is_inclusion_free:
-                        break
-            elif len(next_valid_elems) >= 4:
-                is_inclusion_free, _ = self.is_XD_inclusion_free(direction, next_valid_elems[:4], working_df)
-                if is_inclusion_free:
-                    break
-            else:
-                break
-
         return next_valid_elems
                 
 
