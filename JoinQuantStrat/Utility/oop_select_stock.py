@@ -326,6 +326,7 @@ class Pick_Chan_Stocks(Create_stock_list):
         pass
     
     def before_trading_start(self, context):
+        print("position chan info: {0}".format(self.g.stock_chan_type))
         stock_list = filter_high_level_by_index(direction=TopBotType.top2bot, 
                                    stock_index=self.index, 
                                    df=False, 
