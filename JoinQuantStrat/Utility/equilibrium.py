@@ -326,9 +326,9 @@ def sanity_check(stock, profile, end_time, pe, direction):
         print("{0} price over {1}".format(stock, PRICE_UPPER_LIMIT))
         result = False
         # low_limit
-    if (stock_data.low == stock_data.low_limit).any():# touched low limit
-        print("{0} price reached low limit".format(stock))
-        return result
+#     if (stock_data.low == stock_data.low_limit).any():# touched low limit
+#         print("{0} price reached low limit".format(stock))
+#         return result
     
     if direction == TopBotType.top2bot:
         result = stock_data.iloc[0, 0] > stock_data.iloc[-1,0]
@@ -509,7 +509,7 @@ class Equilibrium():
         self.check_zoushi_status()
         pass
     
-    def find_most_recent_zoushi(self, direction, current_chan_type, at_bi_level=False, enable_composite=False):
+    def find_most_recent_zoushi(self, direction, current_chan_type, enable_composite=False):
         '''
         Make sure we find the appropriate two XD for comparison.
         A. in case of QVSHI
@@ -531,10 +531,9 @@ class Equilibrium():
             if type(self.analytic_result[-1]) is ZhongShu:
                 zs = self.analytic_result[-1]
                 last_xd = zs.take_last_xd_as_zslx()
+                if last_xd.direction != direction:
+                    return None, None, None, None
                 if zs.is_complex_type():
-                    if last_xd.direction != direction:
-                        return None, None, None, None
-                    
                     if len(self.analytic_result) >= 3 and\
                         type(self.analytic_result[-2]) is ZouShiLeiXing and\
                         type(self.analytic_result[-1]) is ZhongShu and\
@@ -543,9 +542,7 @@ class Equilibrium():
     #                     return None, None, None, None
                         # Zhongshu KUOZHAN ###############################
                         ## zhong shu combination use CompositeZhongshu class
-                        if at_bi_level:
-                            if not enable_composite:
-                                return None, None, None, None
+                        if enable_composite:
                             i = -1
                             marked = False
                             while -(i-2) <= len(self.analytic_result):
@@ -568,16 +565,16 @@ class Equilibrium():
 #                             else:
 #                                 first_xd = self.analytic_result[-2]
                             
-                    elif len(self.analytic_result) < 2 or self.analytic_result[-2].direction != last_xd.direction:
+                    elif len(self.analytic_result) < 2 or self.analytic_result[-2].direction != direction:
                         first_xd = zs.take_split_xd_as_zslx(direction)
                     else:
                         first_xd = self.analytic_result[-2]
                     return first_xd, zs, last_xd, zs.get_amplitude_region_original_without_last_xd()
                 else:
-                    # allow same direction zs, the point after type III
+                    # allow same direction zs
                     if zs.direction != direction:
                         return None, None, None, None
-                    first_xd = zs.take_first_xd_as_zslx() if zs.direction != last_xd.direction or len(self.analytic_result) < 2 else self.analytic_result[-2]
+                    first_xd = zs.take_first_xd_as_zslx() if zs.direction != direction or len(self.analytic_result) < 2 else self.analytic_result[-2]
                     return first_xd, zs, last_xd, zs.get_amplitude_region_original_without_last_xd()
     
             elif type(self.analytic_result[-1]) is ZouShiLeiXing:
@@ -593,10 +590,7 @@ class Equilibrium():
                     zs = self.analytic_result[-2]
     #                 return None, None, None, None
     # composite ZhongShu case ###############################
-                    if at_bi_level:
-                        if not enable_composite:
-                            return None, None, None, None
-                            
+                    if enable_composite:
                         ## zhong shu combination
                         i = -2
                         marked = False
@@ -619,7 +613,7 @@ class Equilibrium():
 #                         else:
 #                             first_xd = self.analytic_result[-3]
                         
-                elif len(self.analytic_result) < 3 or self.analytic_result[-3].direction != last_xd.direction:
+                elif len(self.analytic_result) < 3 or self.analytic_result[-3].direction != direction:
                     if len(self.analytic_result) > 1:
                         zs = self.analytic_result[-2]
                         first_xd = zs.take_split_xd_as_zslx(direction)
@@ -629,7 +623,7 @@ class Equilibrium():
                     zs = self.analytic_result[-2]
                     first_xd = self.analytic_result[-3]
                     
-                # only allow same direction zs, the point after type III
+                # only allow same direction zs
                 if zs.direction != direction:
                     return None, None, None, None
                 return first_xd, zs, last_xd, zs.get_amplitude_region_original(),
@@ -850,7 +844,7 @@ class Equilibrium():
                 xd_exhaustion, ts = zs.check_exhaustion()
                 return True, xd_exhaustion, zs.first.time, ts, 0, 0
         
-        a, central_B, c, central_region = self.find_most_recent_zoushi(direction, current_chan_type, at_bi_level=at_bi_level, enable_composite=enable_composite)
+        a, central_B, c, central_region = self.find_most_recent_zoushi(direction, current_chan_type, enable_composite=enable_composite)
         
         new_high_low = self.reached_new_high_low(guide_price, direction, c, central_region)
         
