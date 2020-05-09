@@ -698,6 +698,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.bi_level_precision = params.get('bi_level_precision', True)
         self.long_hour_start = params.get('long_hour_start', 13)
         self.long_min_start = params.get('long_min_start', 30)
+        self.use_sub_split = params.get('sub_split', True)
     
     def filter(self, context, data, stock_list):
         if context.current_dt.hour < self.long_hour_start:
@@ -735,7 +736,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                  isdebug=self.isdebug,
                                                  is_description=self.isDescription,
                                                  sub_force_zhongshu=self.sub_force_zhongshu, 
-                                                 sub_check_bi=self.bi_level_precision)
+                                                 sub_check_bi=self.bi_level_precision,
+                                                 use_sub_split=self.use_sub_split)
             
             if result:
                 filter_stock_list.append(stock)

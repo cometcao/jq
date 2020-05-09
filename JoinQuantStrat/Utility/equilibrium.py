@@ -271,7 +271,9 @@ def check_stock_full(stock,
                      is_anal=False,
                      is_description=True,
                      sub_force_zhongshu=True,
-                     sub_check_bi=False):
+                     sub_check_bi=False,
+                     use_sub_split=True):
+    
     if is_description:
         print("check_stock_full working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
     top_pe = periods[0]
@@ -289,13 +291,13 @@ def check_stock_full(stock,
     if not chan_profile:
         chan_profile = [(Chan_Type.INVALID, TopBotType.noTopBot, 0, 0, 0, None, None)]
 
-    splitTime = chan_profile[0][6] # split time and force sub level with zhongshu formed
+    splitTime = chan_profile[0][6] if use_sub_split else None# split time and force sub level with zhongshu formed
     
     if exhausted and xd_exhausted and sanity_check(stock, chan_profile, end_time, top_pe, direction):
         sub_exhausted, sub_xd_exhausted, sub_profile, zhongshu_completed = check_stock_sub(stock=stock, 
                                                                                 end_time=end_time, 
                                                                                 periods=[sub_pe], 
-                                                                                count=2000, 
+                                                                                count=count, 
                                                                                 direction=direction, 
                                                                                 chan_types=sub_chan_type, 
                                                                                 isdebug=isdebug, 
