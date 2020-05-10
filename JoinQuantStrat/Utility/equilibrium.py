@@ -534,7 +534,9 @@ class Equilibrium():
             2. compare entering XD with exit XD for the group of complicated zhongshu
             3. compare two zslx entering and exiting zhongshu (can be opposite direction)
         '''
-        if self.isQvShi and current_chan_type == Chan_Type.I:
+        if self.isQvShi:
+            if current_chan_type != Chan_Type.I:
+                return None, None, None, None
             if type(self.analytic_result[-1]) is ZhongShu and self.analytic_result[-1].is_complex_type():  
                 zs = self.analytic_result[-1]
                 first_zslx = self.analytic_result[-2]
@@ -543,7 +545,7 @@ class Equilibrium():
             elif type(self.analytic_result[-1]) is ZouShiLeiXing:
                 return (self.analytic_result[-3], self.analytic_result[-2], self.analytic_result[-1], self.analytic_result[-2].get_amplitude_region_original()) if self.analytic_result[-1].direction == direction else (None, None, None, None)
         
-        else: # current_chan_type == Chan_Type.INVALID:
+        else: # PANBEI
             if type(self.analytic_result[-1]) is ZhongShu:
                 zs = self.analytic_result[-1]
                 last_xd = zs.take_last_xd_as_zslx()
