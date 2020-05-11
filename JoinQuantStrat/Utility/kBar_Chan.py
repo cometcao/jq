@@ -1339,12 +1339,12 @@ class KBarChan(object):
         result_locs = []
         while i >= 0:
             current_elem = working_df[i]
-            if current_elem['original_tb'] != TopBotType.noTopBot:
-                if end_tb != TopBotType.noTopBot and current_elem['original_tb'] != end_tb and len(result_locs) == 0:
+            if current_elem['original_tb'] != TopBotType.noTopBot.value:
+                if end_tb != TopBotType.noTopBot and current_elem['original_tb'] != end_tb.value and len(result_locs) == 0:
                     i = i - 1
                     continue
                 if single_direction: 
-                    if current_elem['original_tb'] == end_tb:
+                    if current_elem['original_tb'] == end_tb.value:
                         result_locs.insert(0, i)
                 else:
                     result_locs.insert(0, i)
