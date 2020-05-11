@@ -482,10 +482,11 @@ class CentralRegionProcess(object):
                                     )
         
         original_df = self.kbar_chan.getOriginal_df()
-        current_loc = previous_loc = 0
+        current_loc = 1
+        previous_loc = 0
         while current_loc < working_df.size:
             current_real_loc = working_df[current_loc]['real_loc']
-            previous_real_loc = working_df[previous_loc]['real_loc'] if previous_loc != 0 else 0
+            previous_real_loc = working_df[previous_loc]['real_loc']
             
 #             # gather macd data based on real_loc, be aware of head/tail
 #             origin_macd = original_df[previous_real_loc+1 if previous_real_loc != 0 else None:current_real_loc+1]['macd']
@@ -500,7 +501,7 @@ class CentralRegionProcess(object):
 #                 print("Invalid {0} data".format(tb_col))
                 
             # gather money data based on pivot
-            origin_money = original_df[previous_real_loc+1 if previous_real_loc != 0 else None:current_real_loc+1]['money']
+            origin_money = original_df[previous_real_loc+1:current_real_loc+1]['money']
             working_df[current_loc]['money_acc_'+tb_col] = sum(origin_money)
             
             previous_loc = current_loc
@@ -820,7 +821,8 @@ class Equilibrium():
                 print("check full zoushi, found ZhongShu composite:{0} extension:{1}".format(self.isComposite,self.isExtension))
             return False, False, None, None, 0, 0
         
-        if current_chan_type == Chan_Type.III:
+        # We shouldn't have III at BI level, only PB or BC
+        if current_chan_type == Chan_Type.III and not at_bi_level:
 #             if self.isQvShi_simple or self.isQvShi:
 #                 if self.isdebug:
 #                     print("type III mixed with type I position we ignore")
@@ -892,7 +894,11 @@ class Equilibrium():
             if self.isdebug:
                 print("Not enough DATA check_exhaustion")
             return False
-                
+        
+        # short circuit BI level avoid structural check
+        if at_bi_level:
+            return True
+        
         a_s = zslx_a.get_tb_structure() 
         c_s =zslx_c.get_tb_structure()
 

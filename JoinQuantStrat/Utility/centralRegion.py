@@ -243,7 +243,8 @@ class ZouShiLeiXing(object):
 #         return macd_acc
     
     def get_money_acc(self):
-        return sum([node.money_acc for node in self.zoushi_nodes])
+        # avoid taking the first node
+        return sum([node.money_acc for node in self.zoushi_nodes[1:]])
     
     def get_tb_structure(self):
         return [node.tb for node in self.zoushi_nodes]
