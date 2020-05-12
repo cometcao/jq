@@ -1047,14 +1047,16 @@ class Equilibrium():
                 [lc, uc] = zs.get_amplitude_region_original()
                 if zslx.direction == zslx2.direction:
                     if zslx.direction == TopBotType.top2bot and\
-                        (not check_end_tb or zslx.zoushi_nodes[-1].tb == TopBotType.bot) and\
-                        float_less(zslx.zoushi_nodes[-1].chan_price, lc):
+                        (not check_end_tb or\
+                         (zslx.zoushi_nodes[-1].tb == TopBotType.bot and\
+                        float_less(zslx.zoushi_nodes[-1].chan_price, lc))):
                             if self.isdebug:
                                 print("TYPE I trade point 1")
                             all_types.append((Chan_Type.I, TopBotType.top2bot, lc))
                     elif zslx.direction == TopBotType.bot2top and\
-                        (not check_end_tb or zslx.zoushi_nodes[-1].tb == TopBotType.top) and\
-                        float_more(zslx.zoushi_nodes[-1].chan_price, uc):
+                        (not check_end_tb or\
+                         (zslx.zoushi_nodes[-1].tb == TopBotType.top and\
+                        float_more(zslx.zoushi_nodes[-1].chan_price, uc))):
                             if self.isdebug:
                                 print("TYPE I trade point 2")
                             all_types.append((Chan_Type.I, TopBotType.bot2top, uc))
@@ -1064,14 +1066,16 @@ class Equilibrium():
                 [lc, uc] = zs.get_amplitude_region_original_without_last_xd()
                 if zs.is_complex_type() and len(zs.extra_nodes) >= 1:
                     if zs.direction == TopBotType.top2bot and\
-                        (not check_end_tb or zs.extra_nodes[-1].tb == TopBotType.bot) and\
-                        float_less(zs.extra_nodes[-1].chan_price, lc):
+                        (not check_end_tb or\
+                         (zs.extra_nodes[-1].tb == TopBotType.bot and\
+                        float_less(zs.extra_nodes[-1].chan_price, lc))):
                         if self.isdebug:
                             print("TYPE I trade point 3")
                         all_types.append((Chan_Type.I, TopBotType.top2bot, lc))
                     elif zs.direction == TopBotType.bot2top and\
-                        (not check_end_tb or zs.extra_nodes[-1].tb == TopBotType.top) and\
-                        float_more(zs.extra_nodes[-1].chan_price, uc):
+                        (not check_end_tb or\
+                         (zs.extra_nodes[-1].tb == TopBotType.top and\
+                        float_more(zs.extra_nodes[-1].chan_price, uc))):
                         all_types.append((Chan_Type.I, TopBotType.bot2top, uc))
                         if self.isdebug:
                             print("TYPE I trade point 4")
@@ -1434,7 +1438,7 @@ class NestedInterval():
                          split_anal_zoushi_bi_result, 
                          isdebug=self.isdebug, 
                          isDescription=self.isDescription)
-        all_types = eq.check_chan_type(check_end_tb=True)
+        all_types = eq.check_chan_type(check_end_tb=False)
         if not all_types:
             all_types = [(Chan_Type.INVALID, TopBotType.noTopBot, 0)]
         
