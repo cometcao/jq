@@ -974,7 +974,7 @@ class Short_Chan(Sell_stocks):
                                                   is_anal=False,
                                                   split_time=min_time,
                                                   check_bi=False,
-                                                  allow_simple_zslx=True,
+                                                  allow_simple_zslx=False,
                                                   force_zhongshu=False,
                                                   force_bi_zhongshu=True) # synch with selection
             
