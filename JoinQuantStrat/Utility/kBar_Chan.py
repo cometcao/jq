@@ -1582,25 +1582,26 @@ class KBarChan(object):
                                                                   working_df, 
                                                                   N=0, 
                                                                   end_tb=TopBotType.reverse(current_status), 
-                                                                  single_direction=True)[0]
-                    if previous_xd_tb_idx != -1 and\
-                        ((working_df[previous_xd_tb_idx][xd_tb] == TopBotType.top.value and\
-                        current_status == TopBotType.bot and\
-                        float_less(working_df[previous_xd_tb_idx][chan_price], working_df[next_valid_elems[2]][chan_price])) or\
-                        (working_df[previous_xd_tb_idx][xd_tb] == TopBotType.bot.value and\
-                        current_status == TopBotType.top and\
-                        float_more(working_df[previous_xd_tb_idx][chan_price], working_df[next_valid_elems[2]][chan_price]))):
-                        if self.isdebug:
-                            print("current TB not VALID by price with previous TB retrack to {0}".format(working_df[previous_xd_tb_idx][date]))
-                        self.restore_tb_data(working_df, previous_xd_tb_idx, next_valid_elems[-1])
-                        
-                        working_df[previous_xd_tb_idx][xd_tb] = TopBotType.noTopBot.value
-                        if self.isdebug:
-                            print("{0} {1} cancelled due to higher bot/lower top found".format(working_df[previous_xd_tb_idx][date], 
-                                                                                               TopBotType.value2type(working_df[previous_xd_tb_idx][xd_tb])))
-                        current_direction = TopBotType.top2bot if current_status == TopBotType.top else TopBotType.bot2top
-                        i = previous_xd_tb_idx
-                        continue
+                                                                  single_direction=True)
+                    if previous_xd_tb_idx:
+                        previous_xd_tb_idx = previous_xd_tb_idx[0]
+                        if ((working_df[previous_xd_tb_idx][xd_tb] == TopBotType.top.value and\
+                            current_status == TopBotType.bot and\
+                            float_less(working_df[previous_xd_tb_idx][chan_price], working_df[next_valid_elems[2]][chan_price])) or\
+                            (working_df[previous_xd_tb_idx][xd_tb] == TopBotType.bot.value and\
+                            current_status == TopBotType.top and\
+                            float_more(working_df[previous_xd_tb_idx][chan_price], working_df[next_valid_elems[2]][chan_price]))):
+                            if self.isdebug:
+                                print("current TB not VALID by price with previous TB retrack to {0}".format(working_df[previous_xd_tb_idx][date]))
+                            self.restore_tb_data(working_df, previous_xd_tb_idx, next_valid_elems[-1])
+                            
+                            working_df[previous_xd_tb_idx][xd_tb] = TopBotType.noTopBot.value
+                            if self.isdebug:
+                                print("{0} {1} cancelled due to higher bot/lower top found".format(working_df[previous_xd_tb_idx][date], 
+                                                                                                   TopBotType.value2type(working_df[previous_xd_tb_idx][xd_tb])))
+                            current_direction = TopBotType.top2bot if current_status == TopBotType.top else TopBotType.bot2top
+                            i = previous_xd_tb_idx
+                            continue
                     
                     if with_current_gap:
                         # save existing gapped Ding/Di
