@@ -803,12 +803,12 @@ class Short_Chan(Sell_stocks):
                                    fields=('high', 'low', 'close', 'money'), 
                                    skip_paused=False)
 
-            max_price = stock_data.loc[top_zoushi_start_time:, 'high'].max()
-            min_price = stock_data.loc[top_zoushi_start_time:, 'low'].min()
-            max_price_time = stock_data.loc[top_zoushi_start_time:, 'high'].idxmax()
-            min_price_time = stock_data.loc[top_zoushi_start_time:, 'low'].idxmin()
-            max_loc = stock_data.index.get_loc(max_price_time)
-            min_loc = stock_data.index.get_loc(min_price_time)
+#             max_price = stock_data.loc[top_zoushi_start_time:, 'high'].max()
+#             min_price = stock_data.loc[top_zoushi_start_time:, 'low'].min()
+#             max_price_time = stock_data.loc[top_zoushi_start_time:, 'high'].idxmax()
+            min_price_time = stock_data.loc[effective_time:, 'low'].idxmin()
+#             max_loc = stock_data.index.get_loc(max_price_time)
+#             min_loc = stock_data.index.get_loc(min_price_time)
 
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
                 # check if original long point still holds
@@ -843,21 +843,21 @@ class Short_Chan(Sell_stocks):
                     print("TYPE I long point broken")
                     return True
                 
-            elif (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
-                # check slope
-                latest_slope = (max_price-min_price)/(max_loc-min_loc)
-                if latest_slope < 0 and abs(latest_slope) >= abs(top_chan_slope):
-                    print("slope gets deeper! STOPLOSS {0},{1}".format(top_chan_slope, latest_slope))
-                    return True
-                  
-                # check force
-                money_sum = stock_data.loc[top_zoushi_start_time:, 'money'].sum() / 1e8
-                price_delta = (min_price - max_price) / max_price * 100
-                time_delta = stock_data.loc[top_zoushi_start_time:,:].shape[0] / 1200 * 100
-                latest_force = money_sum * price_delta / time_delta ** 2
-                if top_chan_force != 0 and latest_force < 0 and abs(latest_force) > abs(top_chan_force):
-                    print("force gets deeper! STOPLOSS {0},{1}".format(top_chan_force, latest_force))
-                    return True
+#             elif (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
+#                 # check slope
+#                 latest_slope = (max_price-min_price)/(max_loc-min_loc)
+#                 if latest_slope < 0 and abs(latest_slope) >= abs(top_chan_slope):
+#                     print("slope gets deeper! STOPLOSS {0},{1}".format(top_chan_slope, latest_slope))
+#                     return True
+#                   
+#                 # check force
+#                 money_sum = stock_data.loc[top_zoushi_start_time:, 'money'].sum() / 1e8
+#                 price_delta = (min_price - max_price) / max_price * 100
+#                 time_delta = stock_data.loc[top_zoushi_start_time:,:].shape[0] / 1200 * 100
+#                 latest_force = money_sum * price_delta / time_delta ** 2
+#                 if top_chan_force != 0 and latest_force < 0 and abs(latest_force) > abs(top_chan_force):
+#                     print("force gets deeper! STOPLOSS {0},{1}".format(top_chan_force, latest_force))
+#                     return True
                 
             return False
         elif top_chan_t == Chan_Type.III or top_chan_t == Chan_Type.INVALID:
