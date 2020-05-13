@@ -1405,14 +1405,23 @@ class KBarChan(object):
                 result = next_valid_elems[1]
         
         if result is not None: # restore data
-            working_df[next_valid_elems[1]:new_valid_elems[-1]]['tb'] = working_df[next_valid_elems[1]:new_valid_elems[-1]]['original_tb']
-            if self.isdebug:
-                print("tb data restored from {0} to {1} real_loc {2} to {3}".format(working_df[next_valid_elems[1]]['date'], 
-                                                                                    working_df[new_valid_elems[-1]]['date'], 
-                                                                                    working_df[next_valid_elems[1]]['real_loc'], 
-                                                                                    working_df[new_valid_elems[-1]]['real_loc']))
-        
+#             working_df[next_valid_elems[1]:new_valid_elems[-1]]['tb'] = working_df[next_valid_elems[1]:new_valid_elems[-1]]['original_tb']
+#             if self.isdebug:
+#                 print("tb data restored from {0} to {1} real_loc {2} to {3}".format(working_df[next_valid_elems[1]]['date'], 
+#                                                                                     working_df[new_valid_elems[-1]]['date'], 
+#                                                                                     working_df[next_valid_elems[1]]['real_loc'], 
+#                                                                                     working_df[new_valid_elems[-1]]['real_loc']))
+            self.restore_tb_data(working_df, next_valid_elems[1], new_valid_elems[-1])
         return result
+    
+    def restore_tb_data(self, working_df, from_idx, to_idx):
+        working_df[from_idx:to_idx]['tb'] = working_df[from_idx:to_idx]['original_tb']
+        if self.isdebug:
+            print("tb data restored from {0} to {1} real_loc {2} to {3}".format(working_df[from_idx]['date'], 
+                                                                                working_df[to_idx]['date'], 
+                                                                                working_df[from_idx]['real_loc'], 
+                                                                                working_df[to_idx]['real_loc']))
+ 
     
     def pop_gap(self, working_df, next_valid_elems, current_direction):
         chan_price = 'chan_price'
@@ -1433,10 +1442,11 @@ class KBarChan(object):
                 working_df[previous_gap_loc][xd_tb] = TopBotType.noTopBot.value
                 
                 # restore any combined bi due to the gapped XD
-                working_df[previous_gap_loc:next_valid_elems[-1]][tb] = working_df[previous_gap_loc:next_valid_elems[-1]][original_tb]
+#                 working_df[previous_gap_loc:next_valid_elems[-1]][tb] = working_df[previous_gap_loc:next_valid_elems[-1]][original_tb]
+                self.restore_tb_data(working_df, previous_gap_loc, next_valid_elems[-1])
                 current_direction = TopBotType.reverse(current_direction)
                 if self.isdebug:
-                    print("gap closed 1:{0}, {1} tb info restored to {2}".format(working_df[previous_gap_loc][date], TopBotType.value2type(working_df[previous_gap_loc][tb]), working_df[next_valid_elems[-1]][date])) 
+                    print("gap closed 1:{0}, {1}".format(working_df[previous_gap_loc][date], TopBotType.value2type(working_df[previous_gap_loc][tb]))) 
                     [print("gap info 3:{0}, {1}".format(working_df[gap_loc][date], TopBotType.value2type(working_df[gap_loc][tb]))) for gap_loc in self.gap_XD]
                 i = previous_gap_loc
                 
@@ -1448,10 +1458,11 @@ class KBarChan(object):
                 working_df[previous_gap_loc][xd_tb] = TopBotType.noTopBot.value
                 
                 # restore any combined bi due to the gapped XD
-                working_df[previous_gap_loc:next_valid_elems[-1]][tb] = working_df[previous_gap_loc:next_valid_elems[-1]][original_tb]
+#                 working_df[previous_gap_loc:next_valid_elems[-1]][tb] = working_df[previous_gap_loc:next_valid_elems[-1]][original_tb]
+                self.restore_tb_data(working_df, previous_gap_loc, next_valid_elems[-1])
                 current_direction = TopBotType.reverse(current_direction)
                 if self.isdebug:
-                    print("gap closed 2:{0}, {1} tb info restored to {2}".format(working_df[previous_gap_loc][date],  TopBotType.value2type(working_df[previous_gap_loc][tb]), working_df[next_valid_elems[-1]][date]))
+                    print("gap closed 2:{0}, {1}".format(working_df[previous_gap_loc][date],  TopBotType.value2type(working_df[previous_gap_loc][tb])))
                     [print("gap info 3:{0}, {1}".format(working_df[gap_loc][date], TopBotType.value2type(working_df[gap_loc][tb]))) for gap_loc in self.gap_XD]
                 i = previous_gap_loc
         return i, current_direction
@@ -1467,6 +1478,7 @@ class KBarChan(object):
         if self.isdebug:
             print("Initial direction {0} at location {1} with real_loc {2}".format(initial_direction, initial_i, working_df[initial_i][real_loc]))
         
+        previous_xd_tb_idx = -1
         current_direction = initial_direction  
         i = initial_i
         while i+5 < working_df.size:
@@ -1567,19 +1579,36 @@ class KBarChan(object):
                 current_status, with_current_gap, with_kline_gap_as_xd = self.check_XD_topbot_directed(next_valid_elems, current_direction, working_df)
                 
                 if current_status != TopBotType.noTopBot:
+                    if previous_xd_tb_idx != -1 and\
+                        (working_df[previous_xd_tb_idx][tb] == TopBotType.top.value and\
+                        current_status == TopBotType.bot and\
+                        float_less(working_df[previous_xd_tb_idx][chan_price], working_df[next_valid_elems[2]][chan_price])) or\
+                        (working_df[previous_xd_tb_idx][tb] == TopBotType.bot.value and\
+                        current_status == TopBotType.top and\
+                        float_more(working_df[previous_xd_tb_idx][chan_price], working_df[next_valid_elems[2]][chan_price])):
+                        if self.isdebug:
+                            print("current TB not VALID by price with previous TB retrack to {0}".format(working_df[previous_xd_tb_idx][date]))
+                        
+                        current_direction = TopBotType.top2bot if current_status == TopBotType.top else TopBotType.bot2top
+                        i = previous_xd_tb_idx
+                        continue
+                    else:
+                        previous_xd_tb_idx = next_valid_elems[2]
+                    
                     if with_current_gap:
                         # save existing gapped Ding/Di
                         self.gap_XD.append(next_valid_elems[2])
                         if self.isdebug:
                             [print("gap info 4:{0}, {1}".format(working_df[gap_loc][date], TopBotType.value2type(working_df[gap_loc][tb]))) for gap_loc in self.gap_XD]
-                    
                     else:
                         # cleanest case
                         pass
-                    current_direction = TopBotType.top2bot if current_status == TopBotType.top else TopBotType.bot2top
+                    
                     working_df[next_valid_elems[2]][xd_tb] = current_status.value
                     if self.isdebug:
                         print("xd_tb located {0} {1}".format(working_df[next_valid_elems[2]][date], working_df[next_valid_elems[2]][chan_price]))
+                        
+                    current_direction = TopBotType.top2bot if current_status == TopBotType.top else TopBotType.bot2top
                     i = next_valid_elems[1] if with_kline_gap_as_xd else next_valid_elems[3]
                     continue
                 else:
@@ -1595,7 +1624,8 @@ class KBarChan(object):
             
             if previous_xd_tb_loc < working_df.shape[0]:
                 # restore tb info from loc found from original_tb as we don't need them?
-                working_df[previous_xd_tb_loc:][tb] = working_df[previous_xd_tb_loc:][original_tb]
+#                 working_df[previous_xd_tb_loc:][tb] = working_df[previous_xd_tb_loc:][original_tb]
+                self.restore_tb_data(working_df, previous_xd_tb_loc, None)
                 
                 temp_df = working_df[previous_xd_tb_loc:][columns]
                 if temp_df.size > 0:

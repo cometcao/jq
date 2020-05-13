@@ -830,7 +830,7 @@ class Short_Chan(Sell_stocks):
                 result, profile, _ = check_stock_full(stock,
                                                      end_time=min_price_time,
                                                      periods=[self.top_period, self.sub_period],
-                                                     count=4800,
+                                                     count=6000, # needs more data!
                                                      direction=TopBotType.top2bot, 
                                                      top_chan_type=[top_chan_t],
                                                      sub_chan_type=[sub_chan_t],
