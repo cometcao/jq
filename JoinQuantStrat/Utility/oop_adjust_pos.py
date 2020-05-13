@@ -838,7 +838,8 @@ class Short_Chan(Sell_stocks):
                                                      is_description=self.isDescription,
                                                      sub_force_zhongshu=True, 
                                                      sub_check_bi=False,
-                                                     use_sub_split=self.use_sub_split)
+                                                     use_sub_split=self.use_sub_split, 
+                                                     ignore_sub_xd=True)
                 if not result:
                     print("TYPE I long point broken")
                     return True
