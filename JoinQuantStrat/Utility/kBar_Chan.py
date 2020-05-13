@@ -1418,9 +1418,9 @@ class KBarChan(object):
         working_df[from_idx:to_idx]['tb'] = working_df[from_idx:to_idx]['original_tb']
         if self.isdebug:
             print("tb data restored from {0} to {1} real_loc {2} to {3}".format(working_df[from_idx]['date'], 
-                                                                                working_df[to_idx]['date'], 
+                                                                                working_df[to_idx if to_idx is not None else -1]['date'], 
                                                                                 working_df[from_idx]['real_loc'], 
-                                                                                working_df[to_idx]['real_loc']))
+                                                                                working_df[to_idx if to_idx is not None else -1]['real_loc']))
  
     
     def pop_gap(self, working_df, next_valid_elems, current_direction):
@@ -1478,7 +1478,6 @@ class KBarChan(object):
         if self.isdebug:
             print("Initial direction {0} at location {1} with real_loc {2}".format(initial_direction, initial_i, working_df[initial_i][real_loc]))
         
-        previous_xd_tb_idx = -1
         current_direction = initial_direction  
         i = initial_i
         while i+5 < working_df.size:
@@ -1579,21 +1578,29 @@ class KBarChan(object):
                 current_status, with_current_gap, with_kline_gap_as_xd = self.check_XD_topbot_directed(next_valid_elems, current_direction, working_df)
                 
                 if current_status != TopBotType.noTopBot:
+                    previous_xd_tb_idx = self.get_previous_N_elem(next_valid_elems[0], 
+                                                                  working_df, 
+                                                                  N=0, 
+                                                                  end_tb=TopBotType.reverse(current_status), 
+                                                                  single_direction=True)[0]
                     if previous_xd_tb_idx != -1 and\
-                        (working_df[previous_xd_tb_idx][tb] == TopBotType.top.value and\
+                        ((working_df[previous_xd_tb_idx][xd_tb] == TopBotType.top.value and\
                         current_status == TopBotType.bot and\
                         float_less(working_df[previous_xd_tb_idx][chan_price], working_df[next_valid_elems[2]][chan_price])) or\
-                        (working_df[previous_xd_tb_idx][tb] == TopBotType.bot.value and\
+                        (working_df[previous_xd_tb_idx][xd_tb] == TopBotType.bot.value and\
                         current_status == TopBotType.top and\
-                        float_more(working_df[previous_xd_tb_idx][chan_price], working_df[next_valid_elems[2]][chan_price])):
+                        float_more(working_df[previous_xd_tb_idx][chan_price], working_df[next_valid_elems[2]][chan_price]))):
                         if self.isdebug:
                             print("current TB not VALID by price with previous TB retrack to {0}".format(working_df[previous_xd_tb_idx][date]))
+                        self.restore_tb_data(working_df, previous_xd_tb_idx, next_valid_elems[-1])
                         
+                        working_df[previous_xd_tb_idx][xd_tb] = TopBotType.noTopBot.value
+                        if self.isdebug:
+                            print("{0} {1} cancelled due to higher bot/lower top found".format(working_df[previous_xd_tb_idx][date], 
+                                                                                               TopBotType.value2type(working_df[previous_xd_tb_idx][xd_tb])))
                         current_direction = TopBotType.top2bot if current_status == TopBotType.top else TopBotType.bot2top
                         i = previous_xd_tb_idx
                         continue
-                    else:
-                        previous_xd_tb_idx = next_valid_elems[2]
                     
                     if with_current_gap:
                         # save existing gapped Ding/Di
