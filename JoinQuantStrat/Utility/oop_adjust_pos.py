@@ -803,14 +803,38 @@ class Short_Chan(Sell_stocks):
                                    fields=('high', 'low', 'close', 'money'), 
                                    skip_paused=False)
 
-#             max_price = stock_data.loc[top_zoushi_start_time:, 'high'].max()
-#             min_price = stock_data.loc[top_zoushi_start_time:, 'low'].min()
-#             max_price_time = stock_data.loc[top_zoushi_start_time:, 'high'].idxmax()
+            max_price = stock_data.loc[top_zoushi_start_time:, 'high'].max()
+            min_price = stock_data.loc[top_zoushi_start_time:, 'low'].min()
+            max_price_time = stock_data.loc[top_zoushi_start_time:, 'high'].idxmax()
             min_price_time = stock_data.loc[effective_time:, 'low'].idxmin()
-#             max_loc = stock_data.index.get_loc(max_price_time)
-#             min_loc = stock_data.index.get_loc(min_price_time)
+            max_loc = stock_data.index.get_loc(max_price_time)
+            min_loc = stock_data.index.get_loc(min_price_time)
+            first_loc_diff = min_loc - max_loc
+            current_loc_diff = stock_data.shape[0] - 1 - min_loc
+            
+            if current_loc_diff > first_loc_diff and stock_data.iloc[-1].close < top_chan_p:
+                print("waited for equal period {0}:{1} never reached target price {2}".format(first_loc_diff, 
+                                                                                              current_loc_diff, 
+                                                                                              top_chan_force))
+                return True
 
-            if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
+#             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
+#                 result, profile, _ = check_stock_full(stock,
+#                                                      end_time=min_price_time,
+#                                                      periods=[self.top_period, self.sub_period],
+#                                                      count=6000, # needs more data!
+#                                                      direction=TopBotType.top2bot, 
+#                                                      top_chan_type=[top_chan_t],
+#                                                      sub_chan_type=[sub_chan_t],
+#                                                      isdebug=self.isdebug,
+#                                                      is_description=self.isDescription,
+#                                                      sub_force_zhongshu=True, 
+#                                                      sub_check_bi=False,
+#                                                      use_sub_split=self.use_sub_split, 
+#                                                      ignore_sub_xd=True)
+#                 if not result:
+#                     print("TYPE I long point broken")
+#                     return True
                 # check if original long point still holds
 #                 if self.use_sub_split:
 #                     result, xd_result, _ = check_chan_by_type_exhaustion(stock,
@@ -827,22 +851,6 @@ class Short_Chan(Sell_stocks):
 #                         print("TYPE I long point broken")
 #                         return True
 #                 else:
-                result, profile, _ = check_stock_full(stock,
-                                                     end_time=min_price_time,
-                                                     periods=[self.top_period, self.sub_period],
-                                                     count=6000, # needs more data!
-                                                     direction=TopBotType.top2bot, 
-                                                     top_chan_type=[top_chan_t],
-                                                     sub_chan_type=[sub_chan_t],
-                                                     isdebug=self.isdebug,
-                                                     is_description=self.isDescription,
-                                                     sub_force_zhongshu=True, 
-                                                     sub_check_bi=False,
-                                                     use_sub_split=self.use_sub_split, 
-                                                     ignore_sub_xd=True)
-                if not result:
-                    print("TYPE I long point broken")
-                    return True
                 
 #             elif (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
 #                 # check slope
