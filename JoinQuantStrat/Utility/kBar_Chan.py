@@ -424,6 +424,9 @@ class KBarChan(object):
             gap_ranges = self.gap_region(working_df[current_index]['date'], working_df[next_index]['date'], gap_direction)
             gap_ranges = self.combine_gaps(gap_ranges)
             for gap in gap_ranges:
+                if previous_index is None:
+                    return True
+                    
                 if working_df[previous_index]['tb'] == TopBotType.top.value: 
                     #gap higher than previous high
                     gap_qualify = float_less(gap[0], working_df[previous_index]['low']) and\
@@ -633,7 +636,13 @@ class KBarChan(object):
                 # comming from current next less than 4 new_index gap, we need to determine which ones to kill
                 # once done we trace back
                 if (nextFenXing[new_index] - currentFenXing[new_index]) >= 4 or gap_qualify:
-                    if currentFenXing[tb] == TopBotType.bot.value and\
+                    pre_pre_index = self.trace_back_index(working_df, previous_index)
+                    
+                    # if previous current are good, we go next
+                    if self.check_gap_qualify(working_df, pre_pre_index, previous_index, current_index):
+                        pass
+                    
+                    elif currentFenXing[tb] == TopBotType.bot.value and\
                         previousFenXing[tb] == TopBotType.top.value and\
                         nextFenXing[tb] == TopBotType.top.value:
                         if float_more_equal(previousFenXing[high], nextFenXing[high]):
