@@ -809,8 +809,8 @@ class Short_Chan(Sell_stocks):
             min_price_time = stock_data.loc[effective_time:, 'low'].idxmin()
             max_loc = stock_data.index.get_loc(max_price_time)
             min_loc = stock_data.index.get_loc(min_price_time)
-            first_loc_diff = min_loc - max_loc
-            current_loc_diff = stock_data.shape[0] - 1 - min_loc
+            current_loc_diff = stock_data.loc[effective_time:,].shape[0]
+            first_loc_diff = stock_data.loc[top_zoushi_start_time:,].shape[0] - current_loc_diff
             
             if current_loc_diff > first_loc_diff and stock_data.iloc[-1].close < top_chan_p:
                 print("waited for equal period {0}:{1} never reached target price {2}".format(first_loc_diff, 
