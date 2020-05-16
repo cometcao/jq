@@ -570,7 +570,6 @@ class Equilibrium():
                 if zs.is_complex_type():
                     if len(self.analytic_result) >= 3 and\
                         type(self.analytic_result[-2]) is ZouShiLeiXing and\
-                        type(self.analytic_result[-1]) is ZhongShu and\
                         type(self.analytic_result[-3]) is ZhongShu and\
                         self.two_zslx_interact_original(self.analytic_result[-1], self.analytic_result[-3]):
     #                     return None, None, None, None
@@ -1412,7 +1411,7 @@ class NestedInterval():
         else:
             high_exhausted, check_xd_exhaustion = False, False
             if self.isDescription or self.isdebug:
-                print("print chan type check failed expected {0}, found {1}".format(chan_type, chan_types))
+                print("chan type check failed expected {0}, found {1}".format(chan_type, chan_types))
             
         return high_exhausted, check_xd_exhaustion, [(chan_t, chan_d, chan_p, 0, 0, None, None)]
 
