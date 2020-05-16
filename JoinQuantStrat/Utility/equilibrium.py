@@ -183,7 +183,8 @@ def check_chan_by_type_exhaustion(stock,
                                   is_anal=False, 
                                   is_description=True,
                                   check_structure=False,
-                                  check_full_zoushi=False):
+                                  check_full_zoushi=False,
+                                  ignore_top_xd=True):
     if is_description:
         print("check_chan_by_type_exhaustion working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
     ni = NestedInterval(stock, 
@@ -198,7 +199,8 @@ def check_chan_by_type_exhaustion(stock,
                              chan_type, 
                              check_end_tb=check_structure, 
                              check_tb_structure=check_structure,
-                             check_full_zoushi=check_full_zoushi)
+                             check_full_zoushi=check_full_zoushi,
+                             ignore_top_xd=ignore_top_xd)
 
 def check_chan_indepth(stock, 
                        end_time, 
@@ -238,7 +240,8 @@ def check_stock_sub(stock,
                     force_zhongshu=True,
                     allow_simple_zslx=True,
                     force_bi_zhongshu=True,
-                    check_full_zoushi=True):
+                    check_full_zoushi=True,
+                    ignore_sub_xd=True):
     if is_description:
         print("check_stock_sub working on stock: {0} at {1}".format(stock, periods))
     ni = NestedInterval(stock, 
@@ -261,7 +264,8 @@ def check_stock_sub(stock,
                                                                  check_tb_structure=True,
                                                                  force_zhongshu=force_zhongshu,
                                                                  allow_simple_zslx=allow_simple_zslx,
-                                                                 check_full_zoushi=check_full_zoushi) # data split at retrieval time
+                                                                 check_full_zoushi=check_full_zoushi, 
+                                                                 ignore_sub_xd=ignore_sub_xd) # data split at retrieval time
     bi_split_time = sub_profile[0][5] # split time is the xd start time
     if exhausted and xd_exhausted and check_bi:
         bi_exhausted, bi_xd_exhausted, _, _ = ni.indepth_analyze_zoushi(direction, 
@@ -284,8 +288,9 @@ def check_stock_full(stock,
                      is_description=True,
                      sub_force_zhongshu=True,
                      sub_check_bi=False,
-                     use_sub_split=True, 
-                     ignore_sub_xd=False):
+                     use_sub_split=True,
+                     ignore_top_xd=True, 
+                     ignore_sub_xd=True):
     
     if is_description:
         print("check_stock_full working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
@@ -301,13 +306,14 @@ def check_stock_full(stock,
                                                                       is_description=is_description,
                                                                       check_structure=True,
                                                                       is_anal=is_anal,
-                                                                      check_full_zoushi=False)
+                                                                      check_full_zoushi=False,
+                                                                      ignore_top_xd=ignore_top_xd)
     if not chan_profile:
         chan_profile = [(Chan_Type.INVALID, TopBotType.noTopBot, 0, 0, 0, None, None)]
 
     splitTime = chan_profile[0][6] if use_sub_split else None# split time and force sub level with zhongshu formed
     
-    if exhausted and xd_exhausted and sanity_check(stock, chan_profile, end_time, top_pe, direction):
+    if exhausted and (xd_exhausted or ignore_top_xd) and sanity_check(stock, chan_profile, end_time, top_pe, direction):
         sub_exhausted, sub_xd_exhausted, sub_profile, zhongshu_completed = check_stock_sub(stock=stock, 
                                                                                 end_time=end_time, 
                                                                                 periods=[sub_pe], 
@@ -321,9 +327,10 @@ def check_stock_full(stock,
                                                                                 check_bi=sub_check_bi,
                                                                                 force_zhongshu=sub_force_zhongshu,
                                                                                 force_bi_zhongshu=True,
+                                                                                ignore_sub_xd=ignore_sub_xd,
                                                                                 check_full_zoushi=use_sub_split)
         chan_profile = chan_profile + sub_profile
-        return exhausted and xd_exhausted and sub_exhausted and (ignore_sub_xd or sub_xd_exhausted), chan_profile, zhongshu_completed
+        return exhausted and (xd_exhausted or ignore_top_xd) and sub_exhausted and (ignore_sub_xd or sub_xd_exhausted), chan_profile, zhongshu_completed
     else:
         return False, chan_profile, False
 
@@ -1336,7 +1343,8 @@ class NestedInterval():
                        chan_type = Chan_Type.INVALID, 
                        check_end_tb=False, 
                        check_tb_structure=False,
-                       check_full_zoushi=False):
+                       check_full_zoushi=False,
+                       ignore_top_xd=True):
         ''' THIS METHOD SHOULD ONLY BE USED FOR TOP LEVEL!!
         This is due to the fact that at high level we can't be very precise
         1. check high level chan type
@@ -1371,7 +1379,7 @@ class NestedInterval():
         
         guide_price = (chan_p[0] if direction == TopBotType.top2bot else chan_p[1]) if type(chan_p) is list else chan_p
         
-        if chan_type_check: # there is no need to do current level check if it's type III
+        if chan_type_check:
             high_exhausted, check_xd_exhaustion, last_zs_time, sub_split_time, high_slope, high_macd = eq.define_equilibrium(direction, 
                                                                                                     guide_price,
                                                                                                     check_tb_structure=check_tb_structure, 
@@ -1380,24 +1388,32 @@ class NestedInterval():
                                                                                                     at_bi_level=False,
                                                                                                     check_full_zoushi=check_full_zoushi,
                                                                                                     allow_simple_zslx=True)
+            if self.isDescription or self.isdebug:
+                print("Top level {0} {1} {2} {3} {4} with price level: {5}".format(self.periods[0], 
+                                                                           chan_d, 
+                                                                           chan_t,
+                                                                           "ready" if high_exhausted else "not ready",
+                                                                           "xd ready" if check_xd_exhaustion else "xd continue",
+                                                                           chan_p))
+            return high_exhausted, check_xd_exhaustion, [(chan_t, 
+                                                          chan_d, 
+                                                          chan_p, 
+                                                          high_slope, 
+                                                          high_macd, 
+                                                          last_zs_time, 
+                                                          last_zs_time if ignore_top_xd else sub_split_time)]
         else:
             high_exhausted, check_xd_exhaustion = False, False
-        if self.isDescription or self.isdebug:
-            print("Top level {0} {1} {2} {3} {4} with price level: {5}".format(self.periods[0], 
-                                                                       chan_d, 
-                                                                       chan_t,
-                                                                       "ready" if high_exhausted else "not ready",
-                                                                       "xd ready" if check_xd_exhaustion else "xd continue",
-                                                                       chan_p))
-#         if not high_exhausted or not check_xd_exhaustion:
-#             return high_exhausted, check_xd_exhaustion, [(chan_t, chan_d, chan_p, 0, 0, None, None)]
+            if self.isDescription or self.isdebug:
+                print("print chan type check failed expected {0}, found {1}".format(chan_type, chan_types))
+            
+        return high_exhausted, check_xd_exhaustion, [(chan_t, chan_d, chan_p, 0, 0, None, None)]
 
 #        We don't need thi manual split
 #         split_time = anal_zoushi.sub_zoushi_time(chan_t, chan_d, check_xd_exhaustion)
 #         if self.isdebug:
 #             print("split time at {0}".format(split_time))
 
-        return high_exhausted, check_xd_exhaustion, [(chan_t, chan_d, chan_p, high_slope, high_macd, last_zs_time, sub_split_time)]
     
     def indepth_analyze_zoushi(self, 
                                direction, 
@@ -1462,7 +1478,8 @@ class NestedInterval():
                           check_tb_structure=False,
                           force_zhongshu=False,
                           allow_simple_zslx=True,
-                          check_full_zoushi=True):
+                          check_full_zoushi=True,
+                          ignore_sub_xd=True):
         '''
         split done at data level
         
@@ -1524,7 +1541,13 @@ class NestedInterval():
                                                                         "xd ready" if check_xd_exhaustion else "xd continues",
                                                                         chan_t,
                                                                         chan_p))
-        return exhausted, check_xd_exhaustion, [(chan_t, chan_d, chan_p, a_slope, a_macd, sub_split_time, eq.get_effective_time())] 
+        return exhausted, check_xd_exhaustion, [(chan_t, 
+                                                 chan_d, 
+                                                 chan_p, 
+                                                 a_slope, 
+                                                 a_macd, 
+                                                 sub_start_time if ignore_sub_xd else sub_split_time, 
+                                                 eq.get_effective_time())] 
     
 
 #     def One_period_full_check(self, 
