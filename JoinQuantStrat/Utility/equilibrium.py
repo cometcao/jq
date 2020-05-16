@@ -1389,8 +1389,8 @@ class NestedInterval():
                                                                        "ready" if high_exhausted else "not ready",
                                                                        "xd ready" if check_xd_exhaustion else "xd continue",
                                                                        chan_p))
-        if not high_exhausted or not check_xd_exhaustion:
-            return high_exhausted, check_xd_exhaustion, [(chan_t, chan_d, chan_p, 0, 0, None, None)]
+#         if not high_exhausted or not check_xd_exhaustion:
+#             return high_exhausted, check_xd_exhaustion, [(chan_t, chan_d, chan_p, 0, 0, None, None)]
 
 #        We don't need thi manual split
 #         split_time = anal_zoushi.sub_zoushi_time(chan_t, chan_d, check_xd_exhaustion)
