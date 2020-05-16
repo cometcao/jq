@@ -211,7 +211,8 @@ def check_chan_indepth(stock,
                        is_anal=False, 
                        is_description=True,
                        split_time=None,
-                       check_full_zoushi=True):
+                       check_full_zoushi=True,
+                       ignore_bi_xd=True):
     if is_description:
         print("check_chan_indepth working on stock: {0} at {1}".format(stock, period))
     ni = NestedInterval(stock, 
@@ -224,7 +225,12 @@ def check_chan_indepth(stock,
                         use_xd=False,
                         initial_pe_prep=period,
                         initial_split_time=split_time)
-    return ni.indepth_analyze_zoushi(direction, split_time, period, force_zhongshu=True, check_full_zoushi=check_full_zoushi)
+    return ni.indepth_analyze_zoushi(direction, 
+                                     split_time, 
+                                     period, 
+                                     force_zhongshu=True, 
+                                     check_full_zoushi=check_full_zoushi,
+                                     ignore_bi_xd=ignore_bi_xd)
 
 def check_stock_sub(stock, 
                     end_time, 
@@ -267,13 +273,14 @@ def check_stock_sub(stock,
                                                                  check_full_zoushi=check_full_zoushi, 
                                                                  ignore_sub_xd=ignore_sub_xd) # data split at retrieval time
     bi_split_time = sub_profile[0][5] # split time is the xd start time
-    if exhausted and xd_exhausted and check_bi:
+    if exhausted and (ignore_sub_xd or xd_exhausted) and check_bi:
         bi_exhausted, bi_xd_exhausted, _, _ = ni.indepth_analyze_zoushi(direction, 
                                                                         bi_split_time, 
                                                                         pe, 
                                                                         force_zhongshu=force_bi_zhongshu,
-                                                                        check_full_zoushi=True)
-        return exhausted, xd_exhausted and bi_exhausted, sub_profile, ni.completed_zhongshu()
+                                                                        check_full_zoushi=True,
+                                                                        ignore_bi_xd=ignore_sub_xd)
+        return exhausted and bi_exhausted, xd_exhausted, sub_profile, ni.completed_zhongshu()
     return exhausted, xd_exhausted, sub_profile, ni.completed_zhongshu()
 
 def check_stock_full(stock, 
@@ -1421,7 +1428,8 @@ class NestedInterval():
                                period, 
                                return_effective_time=False, 
                                force_zhongshu=False,
-                               check_full_zoushi=True):
+                               check_full_zoushi=True,
+                               ignore_bi_xd=True):
         '''
         specifically used to gauge the smallest level of precision, check at BI level
         split_time param once provided meaning we need to split zoushi otherwise split done at data level
@@ -1470,7 +1478,7 @@ class NestedInterval():
         if (self.isdebug):
             print("BI level {0}, {1}".format(bi_exhausted, bi_check_exhaustion))
         
-        return bi_exhausted, bi_check_exhaustion, (eq.get_effective_time() if return_effective_time else bi_split_time), all_types
+        return bi_exhausted, ignore_bi_xd or bi_check_exhaustion, (eq.get_effective_time() if return_effective_time else bi_split_time), all_types
 
     def full_check_zoushi(self, period, direction, 
                           chan_types=[Chan_Type.INVALID, Chan_Type.I],
