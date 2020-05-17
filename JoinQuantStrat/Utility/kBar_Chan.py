@@ -1641,8 +1641,7 @@ class KBarChan(object):
             
             if previous_xd_tb_loc < working_df.shape[0]:
                 # restore tb info from loc found from original_tb as we don't need them?
-#                 working_df[previous_xd_tb_loc:][tb] = working_df[previous_xd_tb_loc:][original_tb]
-                self.restore_tb_data(working_df, previous_xd_tb_loc, None)
+#                 self.restore_tb_data(working_df, previous_xd_tb_loc, None)
                 
                 temp_df = working_df[previous_xd_tb_loc:][columns]
                 if temp_df.size > 0:
@@ -1680,19 +1679,25 @@ class KBarChan(object):
                     # We could make an assumption based on assumption. 
                     if temp_df.size > 0:
                         if current_direction == TopBotType.top2bot:
-                            min_loc = temp_df[chan_price].argmin()
-                            min_date = temp_df[min_loc][date]
-                            working_loc = np.where(working_df[date]==min_date)[0][0]
-                            working_df[working_loc][xd_tb] = TopBotType.bot.value
-                            if self.isdebug:
-                                print("final xd_tb located from {0} for {1}".format(min_date, TopBotType.bot))
+                            # only make guess if previous xd ding is the highest so far
+                            max_price = temp_df[chan_price].max()
+                            if float_more(working_df[previous_xd_tb_locs[0]][chan_price], max_price):
+                                min_loc = temp_df[chan_price].argmin()
+                                min_date = temp_df[min_loc][date]
+                                working_loc = np.where(working_df[date]==min_date)[0][0]
+                                working_df[working_loc][xd_tb] = TopBotType.bot.value
+                                if self.isdebug:
+                                    print("final xd_tb located from {0} for {1}".format(min_date, TopBotType.bot))
                         elif current_direction == TopBotType.bot2top:
-                            max_loc = temp_df[chan_price].argmax()
-                            max_date = temp_df[max_loc][date]
-                            working_loc = np.where(working_df[date]==max_date)[0][0]
-                            working_df[working_loc][xd_tb] = TopBotType.top.value
-                            if self.isdebug:
-                                print("final xd_tb located from {0} for {1}".format(max_date, TopBotType.top))
+                            min_price = temp_df[chan_price].min()
+                            # only make guess if previous xd di is the lowest so far
+                            if float_less(working_df[previous_xd_tb_locs[0]][chan_price], min_price):
+                                max_loc = temp_df[chan_price].argmax()
+                                max_date = temp_df[max_loc][date]
+                                working_loc = np.where(working_df[date]==max_date)[0][0]
+                                working_df[working_loc][xd_tb] = TopBotType.top.value
+                                if self.isdebug:
+                                    print("final xd_tb located from {0} for {1}".format(max_date, TopBotType.top))
                         else:
                             print("Invalid direction")
                 else:
