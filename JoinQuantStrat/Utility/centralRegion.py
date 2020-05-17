@@ -119,6 +119,7 @@ class ZouShiLeiXing(object):
         self.amplitude_region = []
         self.amplitude_region_origin = []
         self.time_region = []
+        self.isZhongShu = False
     
     def isEmpty(self):
         return not bool(self.zoushi_nodes)
@@ -348,6 +349,7 @@ class ZhongShu(ZouShiLeiXing):
         self.get_core_time_region()
         self.get_amplitude_region()
         self.get_time_region()
+        self.isZhongShu=True
     
     def __repr__(self):
         [s, e] = self.get_time_region()
@@ -559,6 +561,9 @@ class CompositeZhongshu(ZouShiLeiXing):
     This class contains a list of ZouShiLeiXing and Zhongshu which match certain rules and forms combined Zhongshu
     ZhongShu KUOZHAN
     '''
+    def __repr__(self):
+        return '\n'.join([zs.__repr__() for zs in self.all_zs])
+    
     def __init__(self, zslx_list, original_df):
         super(CompositeZhongshu, self).__init__(zslx_list[0].direction, original_df, None)
         self.zslx_list = zslx_list
@@ -607,6 +612,9 @@ class CompositeZhongshu(ZouShiLeiXing):
         
     def get_level(self):
         return ZhongShuLevel.next
+    
+    def isBenZouStyle(self): 
+        return False
 
 class ZouShi(object):
     '''

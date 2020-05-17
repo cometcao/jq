@@ -278,7 +278,7 @@ def check_stock_sub(stock,
                                                                         bi_split_time, 
                                                                         pe, 
                                                                         force_zhongshu=force_bi_zhongshu,
-                                                                        check_full_zoushi=True,
+                                                                        check_full_zoushi=check_full_zoushi,
                                                                         ignore_bi_xd=ignore_sub_xd)
         return exhausted and bi_exhausted, xd_exhausted, sub_profile, ni.completed_zhongshu()
     return exhausted, xd_exhausted, sub_profile, ni.completed_zhongshu()
@@ -332,10 +332,11 @@ def check_stock_full(stock,
                                                                                 is_description=is_description,
                                                                                 split_time=splitTime,
                                                                                 check_bi=sub_check_bi,
+                                                                                allow_simple_zslx=True,
                                                                                 force_zhongshu=sub_force_zhongshu,
                                                                                 force_bi_zhongshu=True,
                                                                                 ignore_sub_xd=ignore_sub_xd,
-                                                                                check_full_zoushi=use_sub_split)
+                                                                                check_full_zoushi=False)
         chan_profile = chan_profile + sub_profile
         return exhausted and (xd_exhausted or ignore_top_xd) and sub_exhausted and (ignore_sub_xd or sub_xd_exhausted), chan_profile, zhongshu_completed
     else:
@@ -565,8 +566,8 @@ class Equilibrium():
             if type(self.analytic_result[-1]) is ZhongShu:
                 zs = self.analytic_result[-1]
                 last_xd = zs.take_last_xd_as_zslx()
-                if last_xd.direction != direction:
-                    return None, None, None, None
+#                 if last_xd.direction != direction:
+#                     return None, None, None, None
                 if zs.is_complex_type():
                     if len(self.analytic_result) >= 3 and\
                         type(self.analytic_result[-2]) is ZouShiLeiXing and\
@@ -577,26 +578,19 @@ class Equilibrium():
                         ## zhong shu combination use CompositeZhongshu class
                         if enable_composite:
                             i = -1
-                            marked = False
                             while -(i-2) <= len(self.analytic_result):
                                 if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
-                                    (not self.analytic_result[i-2].is_complex_type() and self.analytic_result[i-2].direction != self.analytic_result[i].direction):
-                                    first_xd = self.analytic_result[i-1]
-                                    marked = True
+                                    (i+2 < 0 and not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i+2])):
                                     break
                                 i = i - 2
                             zs = CompositeZhongshu(self.analytic_result[i:], zs.original_df)
-                            if not marked:
+                            if -(i-1) <= len(self.analytic_result) and self.analytic_result[i-1].direction == direction:
+                                first_xd = self.analytic_result[i-1]
+                            else:
                                 first_xd = zs.take_split_xd_as_zslx(direction)
                                 
                         else: 
                             return None, None, None, None
-                            # method below won't be able to represent the full zoushi
-#                             # normal case we only consider the last Zhongshu
-#                             if self.analytic_result[-2].direction != last_xd.direction:
-#                                 first_xd = zs.take_split_xd_as_zslx(direction)
-#                             else:
-#                                 first_xd = self.analytic_result[-2]
                             
                     elif len(self.analytic_result) < 2 or self.analytic_result[-2].direction != direction:
                         first_xd = zs.take_split_xd_as_zslx(direction)
@@ -613,29 +607,27 @@ class Equilibrium():
             elif type(self.analytic_result[-1]) is ZouShiLeiXing:
                 last_xd = self.analytic_result[-1]
                 zs = None
-                if last_xd.direction != direction:
-                    return None, None, None, None
+#                 if last_xd.direction != direction:
+#                     return None, None, None, None
                 
                 if len(self.analytic_result) >= 4 and\
                     type(self.analytic_result[-2]) is ZhongShu and\
                     type(self.analytic_result[-4]) is ZhongShu and\
                     self.two_zslx_interact_original(self.analytic_result[-4], self.analytic_result[-2]):
                     zs = self.analytic_result[-2]
-    #                 return None, None, None, None
-    # composite ZhongShu case ###############################
+                    # composite ZhongShu case ###############################
                     if enable_composite:
                         ## zhong shu combination
                         i = -2
-                        marked = False
                         while -(i-2) <= len(self.analytic_result):
                             if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
-                                (not self.analytic_result[i-2].is_complex_type() and self.analytic_result[i-2].direction != self.analytic_result[i].direction):
-                                first_xd = self.analytic_result[i-1]
-                                marked = True
+                                (i+2 < 0 and not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i+2])):
                                 break
                             i = i - 2
                         zs = CompositeZhongshu(self.analytic_result[i:-1], zs.original_df)
-                        if not marked:
+                        if -(i-1) <= len(self.analytic_result) and self.analytic_result[i-1].direction == direction:
+                            first_xd = self.analytic_result[i-1]
+                        else:
                             first_xd = zs.take_split_xd_as_zslx(direction)
                     else: 
                         return None, None, None, None
@@ -868,10 +860,10 @@ class Equilibrium():
                 return True, xd_exhaustion, zslx.zoushi_nodes[0].time, ts, 0, 0
             elif type(self.analytic_result[-1]) is ZhongShu:
                 zs = self.analytic_result[-1]
-                if zs.get_level().value > ZhongShuLevel.current.value and not at_bi_level:
-                    if self.isdebug:
-                        print("Pan Bei Zhong Shu level too high")
-                    return False, False, zs.first.time, ts, 0, 0
+#                 if zs.get_level().value > ZhongShuLevel.current.value and not at_bi_level:
+#                     if self.isdebug:
+#                         print("Pan Bei Zhong Shu level too high")
+#                     return False, False, zs.first.time, ts, 0, 0
                 if self.isdebug:
                     print("only one zhongshu, check zhongshu exhaustion")
                 xd_exhaustion, ts = zs.check_exhaustion()
@@ -912,6 +904,10 @@ class Equilibrium():
         # short circuit BI level avoid structural check
         if at_bi_level:
             return True
+        
+        if zslx_c.direction != direction:
+            if self.isdebug:
+                print("Invalid last XD direction: {0}".format(zslx_c.direction))
         
         a_s = zslx_a.get_tb_structure() 
         c_s =zslx_c.get_tb_structure()
@@ -990,7 +986,7 @@ class Equilibrium():
             
         zslx_range = zslx.get_amplitude_region_original()
         
-        return float_less(zslx_range[0], guide_price) if direction == TopBotType.top2bot else float_more(zslx_range[1], guide_price)
+        return float_less_equal(zslx_range[0], guide_price) if direction == TopBotType.top2bot else float_more_equal(zslx_range[1], guide_price)
     
     def check_exhaustion(self, zslx_a, zslx_c, new_high_low):
         exhaustion_result = False
@@ -1398,8 +1394,8 @@ class NestedInterval():
                 print("Top level {0} {1} {2} {3} {4} with price level: {5}".format(self.periods[0], 
                                                                            chan_d, 
                                                                            chan_t,
-                                                                           "ready" if high_exhausted else "not ready",
-                                                                           "xd ready" if check_xd_exhaustion else "xd continue",
+                                                                           "exhausted" if high_exhausted else "continue",
+                                                                           "xd exhausted" if check_xd_exhaustion else "xd continue",
                                                                            chan_p))
             return high_exhausted, check_xd_exhaustion, [(chan_t, 
                                                           chan_d, 
@@ -1473,6 +1469,7 @@ class NestedInterval():
                                                                                          force_zhongshu=force_zhongshu,
                                                                                          at_bi_level=True,
                                                                                          allow_simple_zslx=True,
+                                                                                         enable_composite=True,
                                                                                          check_full_zoushi=check_full_zoushi)
         if (self.isdebug):
             print("BI level {0}, {1}".format(bi_exhausted, bi_check_exhaustion))
@@ -1540,12 +1537,13 @@ class NestedInterval():
                                                                                                    current_chan_type=chan_t,
                                                                                                    at_bi_level=False,
                                                                                                    allow_simple_zslx=allow_simple_zslx,
+                                                                                                   enable_composite=True,
                                                                                                    check_full_zoushi=check_full_zoushi)
         if self.isDescription or self.isdebug:
             print("current level {0} {1} {2} {3} {4} with price:{5}".format(period, 
                                                                         chan_d, 
-                                                                        "ready" if exhausted else "not ready",
-                                                                        "xd ready" if check_xd_exhaustion else "xd continues",
+                                                                        "exhausted" if exhausted else "continue",
+                                                                        "xd exhausted" if check_xd_exhaustion else "xd continues",
                                                                         chan_t,
                                                                         chan_p))
         return exhausted, check_xd_exhaustion, [(chan_t, 
