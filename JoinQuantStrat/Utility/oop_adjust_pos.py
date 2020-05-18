@@ -902,7 +902,8 @@ class Short_Chan(Sell_stocks):
                                                               is_anal=False,
                                                               split_time=splitTime,
                                                               check_bi=False,
-                                                              force_zhongshu=True) # synch with selection
+                                                              force_zhongshu=True,
+                                                              check_full_zoushi=False) # synch with selection
                 if not exhausted or not xd_exhausted:
                     print("sub long point broken")
                     return True
@@ -966,7 +967,8 @@ class Short_Chan(Sell_stocks):
                                                   split_time=min_time,
                                                   check_bi=False,
                                                   allow_simple_zslx=False,
-                                                  force_zhongshu=True)
+                                                  force_zhongshu=True,
+                                                  check_full_zoushi=False)
             if sub_exhausted and sub_zhongshu_formed:
                 print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
                                                                             self.sub_period,
@@ -987,7 +989,8 @@ class Short_Chan(Sell_stocks):
                                                   split_time=min_time,
                                                   check_bi=False,
                                                   allow_simple_zslx=False,
-                                                  force_zhongshu=False) # synch with selection
+                                                  force_zhongshu=False,
+                                                  check_full_zoushi=False) # synch with selection
             
             if (exhausted and top_zhongshu_formed) or (not top_zhongshu_formed and exhausted and xd_exhausted):
                 print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
