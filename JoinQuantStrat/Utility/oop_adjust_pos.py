@@ -812,28 +812,31 @@ class Short_Chan(Sell_stocks):
             current_loc_diff = stock_data.loc[effective_time:,].shape[0]
             first_loc_diff = stock_data.loc[top_zoushi_start_time:,].shape[0] - current_loc_diff
             
-            if current_loc_diff > first_loc_diff and stock_data.iloc[-1].close < top_chan_p:
-                print("waited for equal period {0}:{1} never reached target price {2}".format(first_loc_diff, 
-                                                                                              current_loc_diff, 
-                                                                                              top_chan_p))
-                return True
-            else:
-                # check if original long point still holds
-                result, xd_result, _ = check_chan_by_type_exhaustion(stock,
-                                                                      end_time=min_price_time,
-                                                                      periods=[self.top_period],
-                                                                      count=4800,
-                                                                      direction=TopBotType.top2bot,
-                                                                      chan_type=[Chan_Type.I],
-                                                                      isdebug=self.isdebug,
-                                                                      is_description =self.isDescription,
-                                                                      is_anal=False,
-                                                                      check_structure=False,
-                                                                      check_full_zoushi=False,
-                                                                      ignore_top_xd=True) # synch with selection
-                if not result:
-                    print("TYPE I long point broken")
-                    return True
+            if current_loc_diff > first_loc_diff:
+                if stock_data.iloc[-1].close < top_chan_p:
+                    
+                    # check if original long point still holds
+                    result, xd_result, _ = check_chan_by_type_exhaustion(stock,
+                                                                          end_time=min_price_time,
+                                                                          periods=[self.top_period],
+                                                                          count=4800,
+                                                                          direction=TopBotType.top2bot,
+                                                                          chan_type=[Chan_Type.I],
+                                                                          isdebug=self.isdebug,
+                                                                          is_description =self.isDescription,
+                                                                          is_anal=False,
+                                                                          check_structure=False,
+                                                                          check_full_zoushi=False,
+                                                                          ignore_top_xd=True) # synch with selection
+                    if not result:
+                        print("TYPE I long point broken")
+                        return True
+                    
+#                     print("waited for equal period {0}:{1} never reached target price {2}".format(first_loc_diff, 
+#                                                                                                   current_loc_diff, 
+#                                                                                                   top_chan_p))
+#                     return True
+
 
 #             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
 #                 result, profile, _ = check_stock_full(stock,
