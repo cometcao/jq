@@ -208,17 +208,34 @@ class ZouShiLeiXing(object):
         '''
         negative slope meaning price going down
         '''
-        if not self.zoushi_nodes:
+        if not self.zoushi_nodes or len(self.zoushi_nodes) < 2:
             print("Empty zslx")
             return 0
-        min_price_loc, max_price_loc = self.get_amplitude_loc()
-        off_set = max_price_loc - min_price_loc # this could be negative
+#         min_price_loc, max_price_loc = self.get_amplitude_loc()
+#         off_set = max_price_loc - min_price_loc # this could be negative
+#         if np.isclose(off_set, 0.0):
+#             print("0 offset, INVALID")
+#             return 0
+#         
+#         [min_price, max_price] = self.get_amplitude_region()
+#         delta = 100 * (((max_price - min_price) / max_price) if self.direction == TopBotType.top2bot else ((max_price-min_price) / min_price))
+
+        bot_nodes = [bn for bn in self.zoushi_nodes if bn.tb == TopBotType.bot]
+        top_nodes = [bn for bn in self.zoushi_nodes if bn.tb == TopBotType.top]
+        if self.direction == TopBotType.top2bot:
+            first_elem = top_nodes[0]
+            last_elem = bot_nodes[-1]
+        else: # bot2top
+            first_elem = bot_nodes[0]
+            last_elem = top_nodes[-1]
+
+        off_set = last_elem.loc - first_elem.loc 
         if np.isclose(off_set, 0.0):
             print("0 offset, INVALID")
             return 0
         
-        [min_price, max_price] = self.get_amplitude_region()
-        delta = 100 * (((max_price - min_price) / max_price) if self.direction == TopBotType.top2bot else ((max_price-min_price) / min_price))
+        delta = 100 * (last_elem.chan_price - first_elem.chan_price) / first_elem.chan_price
+                
         return delta / off_set
     
     def work_out_force(self):
