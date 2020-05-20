@@ -902,8 +902,8 @@ class Equilibrium():
             return False
         
         # short circuit BI level avoid structural check
-        if at_bi_level:
-            return True
+#         if at_bi_level:
+#             return True
         
         if zslx_c.direction != direction:
             if self.isdebug:
@@ -946,7 +946,7 @@ class Equilibrium():
                 return False
             
             # detect benzou style Zhongshu
-            if central_B.isBenZouStyle():
+            if central_B.isBenZouStyle() and not at_bi_level:
                 if self.isdebug:
                     print("Avoid benzou style zhongshu for PanZheng")
                 return False
