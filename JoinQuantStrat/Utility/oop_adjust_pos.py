@@ -959,7 +959,7 @@ class Short_Chan(Sell_stocks):
                                                   periods=[self.sub_period],
                                                   count=2000,
                                                   direction=TopBotType.bot2top,
-                                                  chan_types=[Chan_Type.I, Chan_Type.INVALID],
+                                                  chan_types=[Chan_Type.I],
                                                   isdebug=self.isdebug,
                                                   is_description=self.isDescription,
                                                   is_anal=False,
