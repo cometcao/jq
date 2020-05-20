@@ -815,25 +815,25 @@ class Short_Chan(Sell_stocks):
             if current_loc_diff > first_loc_diff:
                 if stock_data.iloc[-1].close < top_chan_p:
                     # check if original long point still holds
-                    result, xd_result, _ = check_chan_by_type_exhaustion(stock,
-                                                                          end_time=min_price_time,
-                                                                          periods=[self.top_period],
-                                                                          count=4800,
-                                                                          direction=TopBotType.top2bot,
-                                                                          chan_type=[top_chan_t],
-                                                                          isdebug=self.isdebug,
-                                                                          is_description =self.isDescription,
-                                                                          is_anal=False,
-                                                                          check_structure=False,
-                                                                          check_full_zoushi=False,
-                                                                          ignore_top_xd=True) # synch with selection
-                    if not result:
-                        print("TYPE I long point broken")
-                        return True
-#                     print("waited for equal period {0}:{1} never reached target price {2}".format(first_loc_diff, 
-#                                                                                                   current_loc_diff, 
-#                                                                                                   top_chan_p))
-#                     return True
+#                     result, xd_result, _ = check_chan_by_type_exhaustion(stock,
+#                                                                           end_time=min_price_time,
+#                                                                           periods=[self.top_period],
+#                                                                           count=4800,
+#                                                                           direction=TopBotType.top2bot,
+#                                                                           chan_type=[top_chan_t],
+#                                                                           isdebug=self.isdebug,
+#                                                                           is_description =self.isDescription,
+#                                                                           is_anal=False,
+#                                                                           check_structure=False,
+#                                                                           check_full_zoushi=False,
+#                                                                           ignore_top_xd=True) # synch with selection
+#                     if not result:
+#                         print("TYPE I long point broken")
+#                         return True
+                    print("waited for equal period {0}:{1} never reached target price {2}".format(first_loc_diff, 
+                                                                                                  current_loc_diff, 
+                                                                                                  top_chan_p))
+                    return True
 #             else:
 
 
@@ -959,7 +959,7 @@ class Short_Chan(Sell_stocks):
                                                   periods=[self.sub_period],
                                                   count=2000,
                                                   direction=TopBotType.bot2top,
-                                                  chan_types=[Chan_Type.I],
+                                                  chan_types=[Chan_Type.I, Chan_Type.INVALID],
                                                   isdebug=self.isdebug,
                                                   is_description=self.isDescription,
                                                   is_anal=False,
