@@ -835,7 +835,7 @@ class Equilibrium():
         
         all_zs = [zs.isBenZouStyle() for zs in zoushi if zs.isZhongShu]
         all_zs = all_zs if self.check_full_zoushi else all_zs[-2:]
-        if np.any(all_zs) and not at_bi_level:
+        if np.any(all_zs) : # and not at_bi_level
             if self.isdebug:
                 print("BenZou Zhongshu detected, We can't analyze this type of zoushi")
             return False
@@ -848,21 +848,33 @@ class Equilibrium():
                 # make the composite and update the zoushi
                 start_idx = None
                 i = -1
-                while -(i-2) <= len(self.analytic_result):
+                while -i <= len(self.analytic_result):
                     current_zs = self.analytic_result[i]
                     if current_zs.isZhongShu:
-                        if start_idx is not None and (not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
-                            (i+2 < 0 and not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i+2]))):
-                            end_idx = start_idx+1
-                            zs = CompositeZhongShu(self.analytic_result[i:(end_idx if end_idx!=0 else None)], current_zs.original_df)
-                            new_zoushi.insert(0, zs)
-                            start_idx = None
-                            i = i - 1
-                            continue
-                        elif self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]):
-                            start_idx = i if start_idx is None else start_idx
-                            i = i - 2
-                            continue
+                        if -(i-2) > len(self.analytic_result):
+                            if start_idx is not None:
+                                end_idx = start_idx+1
+                                zs = CompositeZhongShu(self.analytic_result[i:(end_idx if end_idx!=0 else None)], current_zs.original_df)
+                                new_zoushi.insert(0, zs)
+                                start_idx = None
+                                i = i - 1
+                                continue
+                        else:
+                            if start_idx is not None and\
+                                (
+                                    not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
+                                    (i+2 < 0 and not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i+2]))
+                                ):
+                                end_idx = start_idx+1
+                                zs = CompositeZhongShu(self.analytic_result[i:(end_idx if end_idx!=0 else None)], current_zs.original_df)
+                                new_zoushi.insert(0, zs)
+                                start_idx = None
+                                i = i - 1
+                                continue
+                            elif self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]):
+                                start_idx = i if start_idx is None else start_idx
+                                i = i - 2
+                                continue
                     new_zoushi.insert(0, current_zs)
                     i = i - 1
             
