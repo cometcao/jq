@@ -572,19 +572,23 @@ class Equilibrium():
                 return (self.analytic_result[-3], self.analytic_result[-2], self.analytic_result[-1], self.analytic_result[-2].get_amplitude_region_original())
         
         else: # PANBEI
-            if type(self.analytic_result[-1]) is ZhongShu:
+            if self.analytic_result[-1].isZhongShu:
                 zs = self.analytic_result[-1]
                 last_xd = zs.take_last_xd_as_zslx()
-#                 if last_xd.direction != direction:
-#                     return None, None, None, None
-                if zs.is_complex_type():
+                
+                if type(self.analytic_result[-1]) is CompositeZhongShu:
+                    if len(self.analytic_result) > 1:
+                        first_xd = self.analytic_result[-2]
+                    else:
+                        first_xd = zs.take_split_xd_as_zslx(direction) 
+                elif zs.is_complex_type():
                     if len(self.analytic_result) >= 3 and\
                         type(self.analytic_result[-2]) is ZouShiLeiXing and\
                         type(self.analytic_result[-3]) is ZhongShu and\
                         self.two_zslx_interact_original(self.analytic_result[-1], self.analytic_result[-3]):
     #                     return None, None, None, None
                         # Zhongshu KUOZHAN ###############################
-                        ## zhong shu combination use CompositeZhongshu class
+                        ## zhong shu combination use CompositeZhongShu class
                         if enable_composite:
                             i = -1
                             while -(i-2) <= len(self.analytic_result):
@@ -592,7 +596,7 @@ class Equilibrium():
                                     (i+2 < 0 and not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i+2])):
                                     break
                                 i = i - 2
-                            zs = CompositeZhongshu(self.analytic_result[i:], zs.original_df)
+                            zs = CompositeZhongShu(self.analytic_result[i:], zs.original_df)
                             if -(i-1) <= len(self.analytic_result) and self.analytic_result[i-1].direction == direction:
                                 first_xd = self.analytic_result[i-1]
                             else:
@@ -616,10 +620,12 @@ class Equilibrium():
             elif type(self.analytic_result[-1]) is ZouShiLeiXing:
                 last_xd = self.analytic_result[-1]
                 zs = None
-#                 if last_xd.direction != direction:
-#                     return None, None, None, None
-                
-                if len(self.analytic_result) >= 4 and\
+                if type(self.analytic_result[-2]) is CompositeZhongShu:
+                    if len(self.analytic_result) > 2:
+                        first_xd = self.analytic_result[-3]
+                    else:
+                        first_xd = zs.take_split_xd_as_zslx(direction) 
+                elif len(self.analytic_result) >= 4 and\
                     type(self.analytic_result[-2]) is ZhongShu and\
                     type(self.analytic_result[-4]) is ZhongShu and\
                     self.two_zslx_interact_original(self.analytic_result[-4], self.analytic_result[-2]):
@@ -633,19 +639,13 @@ class Equilibrium():
                                 (i+2 < 0 and not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i+2])):
                                 break
                             i = i - 2
-                        zs = CompositeZhongshu(self.analytic_result[i:-1], zs.original_df)
+                        zs = CompositeZhongShu(self.analytic_result[i:-1], zs.original_df)
                         if -(i-1) <= len(self.analytic_result) and self.analytic_result[i-1].direction == direction:
                             first_xd = self.analytic_result[i-1]
                         else:
                             first_xd = zs.take_split_xd_as_zslx(direction)
                     else: 
                         return None, None, None, None
-                        # method below won't be able to represent the full zoushi
-                        # normal case we only consider the last Zhongshu
-#                         if self.analytic_result[-3].direction != last_xd.direction:
-#                             first_xd = zs.take_split_xd_as_zslx(direction)
-#                         else:
-#                             first_xd = self.analytic_result[-3]
                         
                 elif len(self.analytic_result) < 3 or self.analytic_result[-3].direction != direction:
                     if len(self.analytic_result) > 1:
@@ -853,7 +853,7 @@ class Equilibrium():
                     if current_zs.isZhongShu:
                         if start_idx != 0 and (not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
                             (i+2 < 0 and not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i+2]))):
-                            zs = CompositeZhongshu(self.analytic_result[i:start_idx+1], current_zs.original_df)
+                            zs = CompositeZhongShu(self.analytic_result[i:start_idx+1], current_zs.original_df)
                             new_zoushi.insert(0, zs)
                             start_idx = 0
                             i = i - 1
@@ -877,22 +877,26 @@ class Equilibrium():
                 if len(max_level_idx) >= 2:
                     new_zoushi = new_zoushi[max_level_idx[-2]+1:]
     
-                zslx1 = CompositeZouShiLeiXing(new_zoushi[:max_level_idx[-1]], new_zoushi[-1].original_df)
-                zslx2 = CompositeZouShiLeiXing(new_zoushi[max_level_idx[-1]+1:], new_zoushi[-1].original_df)
-    
-    #             if self.isExtension:
-    #             if self.isdebug:
-    #                 print("check full zoushi, found ZhongShu composite:{0} extension:{1}".format(self.isComposite,self.isExtension))
-                exhausted, _, _ = self.two_zoushi_exhausted(zslx1, zslx2, True)
-                if not exhausted:
-                    if self.isdebug:
-                        print("high level ZhongShu found in Zoushi, it failed the exhaustion check")
-                    return False
-                else:
-                    self.analytic_result = zslx2.zslx_list
-                    self.force_zhongshu = zslx2.get_level().value >= ZhongShuLevel.current.value
-                    if self.isdebug:
-                        print("self.analytic_result updated to zoushileixing (current level or below): {0}, force zhongshu: {1}".format(zslx2, self.force_zhongshu))
+                zoushi_1 = new_zoushi[:max_level_idx[-1]]
+                zoushi_2 = new_zoushi[max_level_idx[-1]+1:]
+                
+                if zoushi_1 and zoushi_2:
+                    zslx1 = CompositeZouShiLeiXing(zoushi_1, new_zoushi[-1].original_df)
+                    zslx2 = CompositeZouShiLeiXing(zoushi_2, new_zoushi[-1].original_df)
+        
+        #             if self.isExtension:
+        #             if self.isdebug:
+        #                 print("check full zoushi, found ZhongShu composite:{0} extension:{1}".format(self.isComposite,self.isExtension))
+                    exhausted, _, _ = self.two_zoushi_exhausted(zslx1, zslx2, True)
+                    if not exhausted:
+                        if self.isdebug:
+                            print("high level ZhongShu found in Zoushi, it failed the exhaustion check")
+                        return False
+                    else:
+                        self.analytic_result = zslx2.zslx_list
+                        self.force_zhongshu = zslx2.get_level().value >= ZhongShuLevel.current.value
+                        if self.isdebug:
+                            print("self.analytic_result updated to zoushileixing (current level or below): {0}, force zhongshu: {1}".format(zslx2, self.force_zhongshu))
         return True
     
     def define_equilibrium(self, direction, 

@@ -667,7 +667,9 @@ class CompositeZouShiLeiXing(ZouShiLeiXing):
         
         return price_delta * total_money / time_delta ** 2
 
-class CompositeZhongshu(ZouShiLeiXing):
+
+
+class CompositeZhongShu(ZouShiLeiXing):
     '''
     This class contains a list of ZouShiLeiXing and Zhongshu which match certain rules and forms combined Zhongshu
     ZhongShu KUOZHAN
@@ -676,7 +678,7 @@ class CompositeZhongshu(ZouShiLeiXing):
         return  'Composite ZhongShu:\n' + '\n'.join([zs.__repr__() for zs in self.all_zs])
     
     def __init__(self, zslx_list, original_df):
-        super(CompositeZhongshu, self).__init__(zslx_list[0].direction, original_df, None)
+        super(CompositeZhongShu, self).__init__(zslx_list[0].direction, original_df, None)
         self.zslx_list = zslx_list
         self.all_zs = [zs for zs in self.zslx_list if type(zs) is ZhongShu]
         self.isZhongShu = True
