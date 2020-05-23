@@ -336,7 +336,7 @@ def check_stock_full(stock,
                                                                                 force_zhongshu=sub_force_zhongshu,
                                                                                 force_bi_zhongshu=True,
                                                                                 ignore_sub_xd=ignore_sub_xd,
-                                                                                check_full_zoushi=False)
+                                                                                check_full_zoushi=True)
         chan_profile = chan_profile + sub_profile
         return exhausted and (xd_exhausted or ignore_top_xd) and sub_exhausted and (ignore_sub_xd or sub_xd_exhausted), chan_profile, zhongshu_completed
     else:
@@ -530,15 +530,24 @@ class Equilibrium():
     This class use ZouShi analytic results to check BeiChi
     '''
     
-    def __init__(self, df_all, zslx_result, isdebug=False, isDescription=True):
+    def __init__(self, 
+                 df_all, 
+                 anal_zoushi, 
+                 force_zhongshu=True, 
+                 check_full_zoushi=True,
+                 isdebug=False, 
+                 isDescription=True):
         self.original_df = df_all
-        self.analytic_result = zslx_result
+        self.analytic_result = anal_zoushi.zslx_result
+        self.analytic_nodes = anal_zoushi.zslx_all_nodes
         self.isdebug = isdebug
         self.isDescription = isDescription
         self.isQvShi = False
         self.isQvShi_simple = False # used for only checking zhongshu core range
         self.isComposite = False # check full zoushi of current
         self.isExtension = False # check full zoushi of current
+        self.check_full_zoushi = check_full_zoushi
+        self.force_zhongshu = force_zhongshu
         self.check_zoushi_status()
         pass
     
@@ -558,9 +567,9 @@ class Equilibrium():
                 zs = self.analytic_result[-1]
                 first_zslx = self.analytic_result[-2]
                 last_xd = zs.take_last_xd_as_zslx()
-                return (first_zslx, self.analytic_result[-1], last_xd, self.analytic_result[-1].get_amplitude_region_original_without_last_xd()) if last_xd.direction == direction else (None, None, None, None)
+                return (first_zslx, self.analytic_result[-1], last_xd, self.analytic_result[-1].get_amplitude_region_original_without_last_xd())
             elif type(self.analytic_result[-1]) is ZouShiLeiXing:
-                return (self.analytic_result[-3], self.analytic_result[-2], self.analytic_result[-1], self.analytic_result[-2].get_amplitude_region_original()) if self.analytic_result[-1].direction == direction else (None, None, None, None)
+                return (self.analytic_result[-3], self.analytic_result[-2], self.analytic_result[-1], self.analytic_result[-2].get_amplitude_region_original())
         
         else: # PANBEI
             if type(self.analytic_result[-1]) is ZhongShu:
@@ -657,13 +666,7 @@ class Equilibrium():
                 print("INVALID Zou Shi type")
                 return None, None, None, None
     
-    def two_zhongshu_form_qvshi(self, zs1, zs2, zs_level=ZhongShuLevel.current):
-        '''
-        We are only dealing with current level of QV SHI by default, and the first ZS can be higher level 
-        due to the rule of connectivity:
-        two adjacent ZhongShu going in the same direction, or the first ZhongShu is complex(can be both direction)
-        '''
-        strict_result = False
+    def standard_qvshi_check(self, zs1, zs2, zs_level=ZhongShuLevel.current):
         if zs1.get_level().value == zs2.get_level().value == zs_level.value and\
             zs1.direction == zs2.direction:
             [l1, u1] = zs1.get_amplitude_region_original()
@@ -671,7 +674,19 @@ class Equilibrium():
             if float_more(l1, u2) or float_more(l2, u1): # two Zhong Shu without intersection
                 if self.isdebug:
                     print("1 current Zou Shi is QV SHI \n{0} \n{1}".format(zs1, zs2))
-                strict_result = True 
+                return True
+        return False
+    
+    def two_zhongshu_form_qvshi(self, zs1, zs2, all_nodes_after_zs1):
+        '''
+        We are only dealing with current level of QV SHI by default, and the first ZS can be higher level 
+        due to the rule of connectivity:
+        two adjacent ZhongShu going in the same direction, or the first ZhongShu is complex(can be both direction)
+        '''
+        strict_result = False
+        new_zoushi = None
+        if self.standard_qvshi_check(zs1, zs2):
+            strict_result = True 
             
         
         # LETS NOT IGNORE COMPLEX CASES
@@ -680,19 +695,17 @@ class Equilibrium():
         # with the same structure after split as the next zhongshu
         if not strict_result and zs1.is_complex_type():
             # split first node will be the max node
-            split_nodes = zs1.get_split_zs(zs2.direction, contain_zs=True)
+            split_nodes = zs1.get_split_zs(zs2.direction, contain_zs=True) + all_nodes_after_zs1[1:]
             if len(split_nodes) >= 5:
-                new_zs = ZhongShu(split_nodes[1], split_nodes[2], split_nodes[3], split_nodes[4], zs2.direction, zs2.original_df)
-                new_zs.add_new_nodes(split_nodes[5:])
-                if new_zs.get_level().value == zs2.get_level().value == zs_level.value:
-                    [l1, u1] = new_zs.get_amplitude_region_original()
-                    [l2, u2] = zs2.get_amplitude_region_original()
-                    if float_more(l1, u2) or float_more(l2, u1): # two Zhong Shu without intersection
-                        if self.isdebug:
-                            print("2 current Zou Shi is QV SHI \n{0} \n{1}".format(new_zs, zs2))
+                new_zoushi = ZouShi.analyze_api(zs2.direction, split_nodes, zs1.original_df, self.isdebug)
+                new_zss = [zs for zs in new_zoushi if zs.isZhongShu]
+                if len(new_zss) > 1:
+                    new_zs1 = new_zss[-2]
+                    new_zs2 = new_zss[-1]
+                    if self.standard_qvshi_check(new_zs1, new_zs2):
                         strict_result = True 
         
-        return strict_result
+        return strict_result, new_zoushi
     
     def two_zhongshu_form_qvshi_simple(self, zs1, zs2, zslx, zs_level=ZhongShuLevel.current):
         
@@ -751,7 +764,7 @@ class Equilibrium():
         recent_zoushi = self.analytic_result
         recent_zhongshu = []
         for zs in recent_zoushi:
-            if type(zs) is ZhongShu:
+            if zs.isZhongShu:
                 recent_zhongshu.append(zs)
         
         if len(recent_zhongshu) < 2:
@@ -760,32 +773,44 @@ class Equilibrium():
                 print("less than two zhong shu")
             return
         
+        # there should be at least 3 zoushi elem by now
+        zoushi_idx_after_zs2 = -2 if recent_zoushi[-1].isZhongShu else -3
+        all_nodes_after_zs1 = ZouShi.get_all_zoushi_nodes(recent_zoushi[zoushi_idx_after_zs2:], 
+                                                          self.analytic_nodes)
+        
         # QV SHI
-        self.isQvShi = self.two_zhongshu_form_qvshi(recent_zhongshu[-2], recent_zhongshu[-1]) 
+        self.isQvShi, new_zoushi = self.two_zhongshu_form_qvshi(recent_zhongshu[-2], recent_zhongshu[-1], all_nodes_after_zs1) 
         if self.isQvShi and self.isdebug:
             print("QU SHI 1")
         
-        # simple QVSHI
-        if type(recent_zoushi[-1]) is ZouShiLeiXing:
-            self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-2], recent_zhongshu[-1], self.analytic_result[-3])
-        elif len(recent_zhongshu) > 2 and not recent_zhongshu[-1].is_complex_type(): # This is the case of TYPE III
-            self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-3], recent_zhongshu[-2], self.analytic_result[-4])
+#         # simple QVSHI
+#         if type(recent_zoushi[-1]) is ZouShiLeiXing:
+#             self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-2], recent_zhongshu[-1], self.analytic_result[-3])
+#         elif len(recent_zhongshu) > 2 and not recent_zhongshu[-1].is_complex_type(): # This is the case of TYPE III
+#             self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-3], recent_zhongshu[-2], self.analytic_result[-4])
             
-        # mark if curent zoushi contain ZhongShu extension or composition
-        # This is needed if we need to have full picture of current zoushi, in which case we avoid them
-        # e.g. sub level or bi level
-        for zs in recent_zhongshu:
-            if zs.get_level().value > ZhongShuLevel.current.value:
-                self.isExtension = True
-                break
         
-        i = 0
-        while i + 1 < len(recent_zhongshu):
-            if self.two_zslx_interact(recent_zhongshu[i], recent_zhongshu[i+1]):
-                self.isComposite = True
-                break
-            i += 1
-        # mark if curent zoushi contain ZhongShu extension or composition
+        if self.check_full_zoushi:
+            # mark if curent zoushi contain ZhongShu extension or composition
+            # This is needed if we need to have full picture of current zoushi, in which case we avoid them
+            # e.g. sub level or bi level
+            for zs in recent_zhongshu:
+                if zs.get_level().value > ZhongShuLevel.current.value:
+                    self.isExtension = True
+                    break
+            
+            i = 0
+            while i + 1 < len(recent_zhongshu):
+                if self.two_zslx_interact(recent_zhongshu[i], recent_zhongshu[i+1]):
+                    self.isComposite = True
+                    break
+                i += 1
+            # mark if curent zoushi contain ZhongShu extension or composition
+        else: # This should only happen at top level where we don't need full zoushi check
+            if self.isQvShi and new_zoushi is not None:
+                if self.isdebug:
+                    print("Analyic results updated to suit QVSHI")
+                self.analytic_result = new_zoushi
         
 #         # TWO ZHONG SHU followed by ZHONGYIN ZHONGSHU
 #         # first two zhong shu no interaction
@@ -801,16 +826,82 @@ class Equilibrium():
 #         else:
 #             self.isQvShi = False
 
+    def check_zoushi_structure(self, zoushi, at_bi_level):
+        '''
+        This method checks the whole zoushi structure under evaluation, make ZhongShu Composite if necessary.
+        check if it's structurally balanced. 
+        This is necessary in sub level for exhaustion check
+        '''
         
+        all_zs = [zs.isBenZouStyle() for zs in zoushi if zs.isZhongShu]
+        all_zs = all_zs if self.check_full_zoushi else all_zs[-2:]
+        if np.any(all_zs) and not at_bi_level:
+            if self.isdebug:
+                print("BenZou Zhongshu detected, We can't analyze this type of zoushi")
+            return False
+        
+        # TODO check zoushi structure by finding the zhongshus with the highest level. 
+        # the Zoushi before and after that Zhongshu should have the same level
+        if self.check_full_zoushi:
+            new_zoushi = []
+            if self.isComposite:
+                # make the composite and update the zoushi
+                start_idx = 0
+                i = -1
+                while -(i-2) <= len(self.analytic_result):
+                    current_zs = self.analytic_result[i]
+                    if current_zs.isZhongShu:
+                        if start_idx != 0 and (not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
+                            (i+2 < 0 and not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i+2]))):
+                            zs = CompositeZhongshu(self.analytic_result[i:start_idx+1], current_zs.original_df)
+                            new_zoushi.insert(0, zs)
+                            start_idx = 0
+                            i = i - 1
+                            continue
+                        elif self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]):
+                            start_idx = i if start_idx == 0 else start_idx
+                            i = i - 2
+                            continue
+                    new_zoushi.insert(0, current_zs)
+                    i = i - 1
+            
+            if not new_zoushi:
+                new_zoushi = self.analytic_result
+            
+            # find zhongshu with highest level
+            all_zs_level_value = [zs.get_level().value for zs in new_zoushi]
+            max_level_value = max(all_zs_level_value)
+            if max_level_value > ZhongShuLevel.current.value:
+                max_level_idx = np.where(np.array(all_zs_level_value)==max_level_value)[0]
+                
+                if len(max_level_idx) >= 2:
+                    new_zoushi = new_zoushi[max_level_idx[-2]+1:]
+    
+                zslx1 = CompositeZouShiLeiXing(new_zoushi[:max_level_idx[-1]], new_zoushi[-1].original_df)
+                zslx2 = CompositeZouShiLeiXing(new_zoushi[max_level_idx[-1]+1:], new_zoushi[-1].original_df)
+    
+    #             if self.isExtension:
+    #             if self.isdebug:
+    #                 print("check full zoushi, found ZhongShu composite:{0} extension:{1}".format(self.isComposite,self.isExtension))
+                exhausted, _, _ = self.two_zoushi_exhausted(zslx1, zslx2, True)
+                if not exhausted:
+                    if self.isdebug:
+                        print("high level ZhongShu found in Zoushi, it failed the exhaustion check")
+                    return False
+                else:
+                    self.analytic_result = zslx2.zslx_list
+                    self.force_zhongshu = zslx2.get_level().value >= ZhongShuLevel.current.value
+                    if self.isdebug:
+                        print("self.analytic_result updated to zoushileixing (current level or below): {0}, force zhongshu: {1}".format(zslx2, self.force_zhongshu))
+        return True
+    
     def define_equilibrium(self, direction, 
                            guide_price=0, 
                            check_tb_structure=False, 
                            check_balance_structure=False, 
-                           force_zhongshu=False, 
                            current_chan_type=Chan_Type.INVALID,
                            at_bi_level=False, # True currently at bi level
                            allow_simple_zslx=True, # allow simple zoushileixing to be true
-                           check_full_zoushi=False,
                            enable_composite=False): # allow composite zs, currently only at bi level
         '''
         We are dealing type III differently at top level
@@ -822,9 +913,7 @@ class Equilibrium():
         slope
         force
         '''
-        if check_full_zoushi and (self.isComposite or self.isExtension):
-            if self.isdebug:
-                print("check full zoushi, found ZhongShu composite:{0} extension:{1}".format(self.isComposite,self.isExtension))
+        if not self.check_zoushi_structure(self.analytic_result, at_bi_level):
             return False, False, None, None, 0, 0
         
         # We shouldn't have III at BI level, only PB or BC
@@ -848,7 +937,7 @@ class Equilibrium():
         # if we only have one zhongshu / ZSLX we can only rely on the xd level check
         if len(self.analytic_result) < 2:
             if type(self.analytic_result[-1]) is ZouShiLeiXing: 
-                if force_zhongshu:
+                if self.force_zhongshu:
                     if self.isdebug:
                         print("ZhongShu not yet formed, force zhongshu return False")
                     return False, False, None, None, 0, 0
@@ -873,7 +962,7 @@ class Equilibrium():
         
         new_high_low = self.reached_new_high_low(guide_price, direction, c, central_region)
         
-        if self.check_zoushi_structure(a, 
+        if self.check_equilibrium_structure(a, 
                                        central_B, 
                                        c, 
                                        central_region, 
@@ -886,7 +975,7 @@ class Equilibrium():
         else:
             return False, False, None, None, 0, 0
     
-    def check_zoushi_structure(self, 
+    def check_equilibrium_structure(self, 
                                zslx_a, 
                                central_B, 
                                zslx_c, 
@@ -908,6 +997,7 @@ class Equilibrium():
         if zslx_c.direction != direction:
             if self.isdebug:
                 print("Invalid last XD direction: {0}".format(zslx_c.direction))
+            return False
         
         a_s = zslx_a.get_tb_structure() 
         c_s =zslx_c.get_tb_structure()
@@ -946,10 +1036,10 @@ class Equilibrium():
                 return False
             
             # detect benzou style Zhongshu
-            if central_B.isBenZouStyle() and not at_bi_level:
-                if self.isdebug:
-                    print("Avoid benzou style zhongshu for PanZheng")
-                return False
+#             if central_B.isBenZouStyle() and not at_bi_level:
+#                 if self.isdebug:
+#                     print("Avoid benzou style zhongshu for PanZheng")
+#                 return False
             
             
         structure_result = True
@@ -988,7 +1078,7 @@ class Equilibrium():
         
         return float_less_equal(zslx_range[0], guide_price) if direction == TopBotType.top2bot else float_more_equal(zslx_range[1], guide_price)
     
-    def check_exhaustion(self, zslx_a, zslx_c, new_high_low):
+    def two_zoushi_exhausted(self, zslx_a, zslx_c, new_high_low):
         exhaustion_result = False
         
         zslx_slope = zslx_a.work_out_slope()
@@ -997,7 +1087,7 @@ class Equilibrium():
         if np.sign(latest_slope) == 0 or np.sign(zslx_slope) == 0:
             if self.isdebug:
                 print("Invalid slope {0}, {1}".format(zslx_slope, latest_slope))
-            return exhaustion_result, False, None, None, 0, 0
+            return False, 0, 0
         
         if np.sign(latest_slope) == np.sign(zslx_slope) and float_less(abs(latest_slope), abs(zslx_slope)):
             if self.isdebug:
@@ -1026,7 +1116,10 @@ class Equilibrium():
             exhaustion_result = float_more(abs(zslx_a_force), abs(zslx_force))
             if self.isdebug:
                 print("{0} found by force: {1}, {2}".format("exhaustion" if exhaustion_result else "exhaustion not", zslx_a_force, zslx_force))
+        return exhaustion_result, zslx_slope, zslx_force
 
+    def check_exhaustion(self, zslx_a, zslx_c, new_high_low):
+        exhaustion_result, zslx_slope, zslx_force = self.two_zoushi_exhausted(zslx_a, zslx_c, new_high_low)
         #################################################################################################################
         # try to see if there is xd level zslx exhaustion
         check_xd_exhaustion, sub_split_time = zslx_c.check_exhaustion()
@@ -1366,7 +1459,12 @@ class NestedInterval():
         kb_chan, anal_zoushi = self.df_zoushi_tuple_list[self.periods[0]]
         if anal_zoushi is None:
             return False, False, []
-        eq = Equilibrium(kb_chan.getOriginal_df(), anal_zoushi.zslx_result, isdebug=self.isdebug, isDescription=self.isDescription)
+        eq = Equilibrium(kb_chan.getOriginal_df(), 
+                         anal_zoushi, 
+                         force_zhongshu=False,
+                         isdebug=self.isdebug, 
+                         isDescription=self.isDescription,
+                         check_full_zoushi=check_full_zoushi)
         chan_types = eq.check_chan_type(check_end_tb=check_end_tb)
         if not chan_types:
             return False, False, []
@@ -1388,7 +1486,6 @@ class NestedInterval():
                                                                                                     check_balance_structure=False,
                                                                                                     current_chan_type=chan_t,
                                                                                                     at_bi_level=False,
-                                                                                                    check_full_zoushi=check_full_zoushi,
                                                                                                     allow_simple_zslx=True)
             if self.isDescription or self.isdebug:
                 print("Top level {0} {1} {2} {3} {4} with price level: {5}".format(self.periods[0], 
@@ -1447,17 +1544,19 @@ class NestedInterval():
             if anal_zoushi_bi is None:
                 return False, False, None, []
             
-            split_anal_zoushi_bi_result = anal_zoushi_bi.zslx_result
+#             split_anal_zoushi_bi_result = anal_zoushi_bi.zslx_result
         else:
-            kb_chan, split_anal_zoushi_bi = self.df_zoushi_tuple_list[period]
-            if split_anal_zoushi_bi is None:
+            kb_chan, anal_zoushi_bi = self.df_zoushi_tuple_list[period]
+            if anal_zoushi_bi is None:
                 return False, False, None, []
-            split_anal_zoushi_bi_result = split_anal_zoushi_bi.zslx_result
+#             split_anal_zoushi_bi_result = anal_zoushi_bi.zslx_result
         
         eq = Equilibrium(kb_chan.getOriginal_df(), 
-                         split_anal_zoushi_bi_result, 
+                         anal_zoushi_bi, 
                          isdebug=self.isdebug, 
-                         isDescription=self.isDescription)
+                         isDescription=self.isDescription,
+                         check_full_zoushi=check_full_zoushi,
+                         force_zhongshu=force_zhongshu)
         all_types = eq.check_chan_type(check_end_tb=False)
         if not all_types:
             all_types = [(Chan_Type.INVALID, TopBotType.noTopBot, 0)]
@@ -1466,11 +1565,9 @@ class NestedInterval():
                                                                                          check_tb_structure=True,
                                                                                          check_balance_structure=False,
                                                                                          current_chan_type=all_types[0][0],
-                                                                                         force_zhongshu=force_zhongshu,
                                                                                          at_bi_level=True,
                                                                                          allow_simple_zslx=True,
-                                                                                         enable_composite=True,
-                                                                                         check_full_zoushi=check_full_zoushi)
+                                                                                         enable_composite=True)
         if (self.isdebug):
             print("BI level {0}, {1}".format(bi_exhausted, bi_check_exhaustion))
         
@@ -1503,9 +1600,11 @@ class NestedInterval():
             return False, False, default_chan_type_result
         
         eq = Equilibrium(kb_chan.getOriginal_df(), 
-                         anal_zoushi.zslx_result, 
+                         anal_zoushi, 
                          isdebug=self.isdebug, 
-                         isDescription=self.isDescription)
+                         isDescription=self.isDescription,
+                         force_zhongshu=force_zhongshu, 
+                         check_full_zoushi=check_full_zoushi)
         chan_type_result = eq.check_chan_type(check_end_tb=check_end_tb)
         if not chan_type_result:
             chan_type_result = [(Chan_Type.INVALID, TopBotType.noTopBot, 0)]
@@ -1531,14 +1630,12 @@ class NestedInterval():
         guide_price = (chan_p[0] if direction == TopBotType.top2bot else chan_p[1]) if type(chan_p) is list else chan_p
         exhausted, check_xd_exhaustion, sub_start_time, sub_split_time, a_slope, a_macd = eq.define_equilibrium(direction, 
                                                                                                    guide_price, 
-                                                                                                   force_zhongshu=force_zhongshu, 
                                                                                                    check_tb_structure=check_tb_structure,
                                                                                                    check_balance_structure=False,
                                                                                                    current_chan_type=chan_t,
                                                                                                    at_bi_level=False,
                                                                                                    allow_simple_zslx=allow_simple_zslx,
-                                                                                                   enable_composite=True,
-                                                                                                   check_full_zoushi=check_full_zoushi)
+                                                                                                   enable_composite=True)
         if self.isDescription or self.isdebug:
             print("current level {0} {1} {2} {3} {4} with price:{5}".format(period, 
                                                                         chan_d, 
@@ -1576,7 +1673,7 @@ class NestedInterval():
 #         kb_chan, anal_zoushi = self.df_zoushi_tuple_list[self.periods[0]]
 #         if anal_zoushi is None:
 #             return False, []
-#         eq = Equilibrium(kb_chan.getOriginal_df(), anal_zoushi.zslx_result, isdebug=self.isdebug, isDescription=self.isDescription)
+#         eq = Equilibrium(kb_chan.getOriginal_df(), anal_zoushi, isdebug=self.isdebug, isDescription=self.isDescription)
 #         chan_types = eq.check_chan_type(check_end_tb=check_end_tb)
 #         if not chan_types:
 #             return False, chan_types

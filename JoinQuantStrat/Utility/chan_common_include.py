@@ -39,6 +39,21 @@ class ZhongShuLevel(Enum):
     current = 0
     next = 1
     nextnext = 2
+    @classmethod
+    def value2type(cls, val):
+        if val == -2:
+            return cls.previousprevious
+        elif val == -1:
+            return cls.previous
+        elif val == 0:
+            return cls.current
+        elif val == 1:
+            return cls.next
+        elif val == 2:
+            return cls.nextnext
+        else:
+            return cls.current
+    
     
 class Chan_Type(Enum):
     INVALID = 0

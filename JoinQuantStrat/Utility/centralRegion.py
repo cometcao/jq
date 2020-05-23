@@ -19,6 +19,13 @@ def take_start_price(elem):
         return elem.zoushi_nodes[-1].chan_price
     else:
         return 0
+    
+def slope_calculation(first_elem, second_elem):
+    off_set = second_elem.loc - first_elem.loc
+    if np.isclose(off_set, 0.0):
+        print("0 offset, INVALID")
+        return 0
+    return 100 * (second_elem.chan_price - first_elem.chan_price) / first_elem.chan_price / off_set
 
 class Chan_Node(object):
     def __init__(self, df_node):
@@ -80,7 +87,8 @@ class Double_Nodes(object):
         return self.start.time, self.end.time
 
     def work_out_slope(self):
-        return (self.end.chan_price - self.start.chan_price) / (self.end.loc - self.start.loc)
+#         return 100 * (self.end.chan_price - self.start.chan_price) / self.start.chan_price / (self.end.loc - self.start.loc)
+        return slope_calculation(self.start, self.end)
     
     def work_out_force(self):
         price_delta = (self.end.chan_price - self.start.chan_price) / self.start.chan_price
@@ -121,6 +129,9 @@ class ZouShiLeiXing(object):
         self.time_region = []
         self.isZhongShu = False
     
+    def get_level(self):
+        return ZhongShuLevel.previous
+    
     def isEmpty(self):
         return not bool(self.zoushi_nodes)
     
@@ -147,6 +158,9 @@ class ZouShiLeiXing(object):
             return "Empty Zou Shi Lei Xing!"
         [s, e] = self.get_time_region()
         return "\nZou Shi Lei Xing: {0} {1}->{2}\n[\n".format(self.direction, s, e) + '\n'.join([node.__repr__() for node in self.zoushi_nodes]) + '\n]'
+
+    def get_all_nodes(self):
+        return self.zoushi_nodes
 
     @classmethod
     def is_valid_central_region(cls, direction, first, second, third, forth):
@@ -204,6 +218,34 @@ class ZouShiLeiXing(object):
         max_price_loc = self.zoushi_nodes[all_node_price.index(max(all_node_price))].loc
         return min_price_loc, max_price_loc
     
+    def get_first_node_by_direction(self, direction):
+        all_nodes = self.get_all_nodes()
+        
+        if direction == TopBotType.top2bot:
+            if all_nodes[0].tb == TopBotType.top:
+                return all_nodes[0]
+            else:
+                return all_nodes[1]
+        elif direction == TopBotType.bot2top:
+            if all_nodes[0].tb == TopBotType.bot:
+                return all_nodes[0]
+            else:
+                return all_nodes[1]
+        
+    def get_last_node_by_direction(self, direction):
+        all_nodes = self.get_all_nodes()
+        if direction == TopBotType.top2bot:
+            if all_nodes[-1].tb == TopBotType.bot:
+                return all_nodes[-1]
+            else:
+                return all_nodes[-2]
+        elif direction == TopBotType.bot2top:
+            if all_nodes[-1].tb == TopBotType.top:
+                return all_nodes[-1]
+            else:
+                return all_nodes[-2]
+            
+            
     def work_out_slope(self):
         '''
         negative slope meaning price going down
@@ -219,24 +261,19 @@ class ZouShiLeiXing(object):
 #         
 #         [min_price, max_price] = self.get_amplitude_region()
 #         delta = 100 * (((max_price - min_price) / max_price) if self.direction == TopBotType.top2bot else ((max_price-min_price) / min_price))
+            
+        first_elem = self.get_first_node_by_direction(self.direction)
+        last_elem = self.get_last_node_by_direction(self.direction)
 
-        bot_nodes = [bn for bn in self.zoushi_nodes if bn.tb == TopBotType.bot]
-        top_nodes = [bn for bn in self.zoushi_nodes if bn.tb == TopBotType.top]
-        if self.direction == TopBotType.top2bot:
-            first_elem = top_nodes[0]
-            last_elem = bot_nodes[-1]
-        else: # bot2top
-            first_elem = bot_nodes[0]
-            last_elem = top_nodes[-1]
-
-        off_set = last_elem.loc - first_elem.loc 
-        if np.isclose(off_set, 0.0):
-            print("0 offset, INVALID")
-            return 0
-        
-        delta = 100 * (last_elem.chan_price - first_elem.chan_price) / first_elem.chan_price
-                
-        return delta / off_set
+#         off_set = last_elem.loc - first_elem.loc 
+#         if np.isclose(off_set, 0.0):
+#             print("0 offset, INVALID")
+#             return 0
+#         
+#         delta = 100 * (last_elem.chan_price - first_elem.chan_price) / first_elem.chan_price
+#                 
+#         return delta / off_set
+        return slope_calculation(first_elem, last_elem)
     
     def work_out_force(self):
         '''
@@ -262,7 +299,8 @@ class ZouShiLeiXing(object):
     
     def get_money_acc(self):
         # avoid taking the first node
-        return sum([node.money_acc for node in self.zoushi_nodes[1:]])
+        all_nodes = self.get_all_nodes()
+        return sum([node.money_acc for node in all_nodes[1:]])
     
     def get_tb_structure(self):
         return [node.tb for node in self.zoushi_nodes]
@@ -371,6 +409,9 @@ class ZhongShu(ZouShiLeiXing):
     def __repr__(self):
         [s, e] = self.get_time_region()
         return "\nZhong Shu {0}:{1}-{2}-{3}-{4} {5}->{6} level@{7}\n[".format(self.direction, self.first.chan_price, self.second.chan_price, self.third.chan_price, self.forth.chan_price, s, e, self.get_level()) + '\n'.join([node.__repr__() for node in self.extra_nodes]) + ']'        
+    
+    def get_all_nodes(self):
+        return self.get_ending_nodes(N=0)
     
     def add_new_nodes(self, tb_nodes, added = False):
         if type(tb_nodes) is list:
@@ -572,19 +613,73 @@ class ZhongShu(ZouShiLeiXing):
                             float_more(last_xd.zoushi_nodes[-1].chan_price, core_region[1]) and\
                             float_more(abs(first_xd.work_out_force()), abs(last_xd.work_out_force()))
         return exhausted, last_xd.zoushi_nodes[0].time if exhausted else first_xd.zoushi_nodes[0].time
+
+
+class CompositeZouShiLeiXing(ZouShiLeiXing):
+    '''
+    This class contains a combination of XD and zhongshu. We only expect the ZhongShu to be at the 
+    same level for this class as precondition
+    '''
+    def __repr__(self):
+        return  'Composite ZSLX:\n' + '\n'.join([zslx.__repr__() for zslx in self.zslx_list])
+    
+    def __init__(self, zslx_list, original_df):
+        super(CompositeZouShiLeiXing, self).__init__(zslx_list[0].direction, original_df, None)
+        self.zslx_list = zslx_list
+        self.all_zs = [zs for zs in self.zslx_list if type(zs) is ZhongShu]
+        self.direction = self.zslx_list[-1].direction
+
+    def get_level(self):
+        all_level_value = [zs.get_level().value for zs in self.zslx_list]
+        return ZhongShuLevel.value2type(max(all_level_value))
         
+
+    def work_out_slope(self):
+        if not self.zslx_list:
+            return 0
+        
+        start_node = self.zslx_list[0].get_first_node_by_direction(self.direction)
+        end_node = self.zslx_list[-1].get_last_node_by_direction(self.direction)
+        
+        return slope_calculation(start_node, end_node)
+        
+    
+    def work_out_force(self):
+        if not self.zslx_list:
+            return 0
+        
+        # money
+        total_money = sum([zs.get_money_acc() for zs in self.zslx_list])
+        
+        # amplitude
+        all_amplitude = [zs.get_amplitude_region_original() for zs in self.zslx_list]
+        min_price = min(list(zip(*all_amplitude))[0])
+        max_price = max(list(zip(*all_amplitude))[1])
+        
+        price_delta = (max_price-min_price) / max_price if self.direction == TopBotType.top2bot else\
+                      (max_price-min_price) / min_price
+        price_delta *= 100
+        
+        # time
+        start_node = self.zslx_list[0].get_first_node_by_direction(self.direction)
+        end_node = self.zslx_list[-1].get_last_node_by_direction(self.direction)
+        time_delta = (end_node.loc - start_node.loc) / 1200 * 100
+        
+        return price_delta * total_money / time_delta ** 2
+
 class CompositeZhongshu(ZouShiLeiXing):
     '''
     This class contains a list of ZouShiLeiXing and Zhongshu which match certain rules and forms combined Zhongshu
     ZhongShu KUOZHAN
     '''
     def __repr__(self):
-        return '\n'.join([zs.__repr__() for zs in self.all_zs])
+        return  'Composite ZhongShu:\n' + '\n'.join([zs.__repr__() for zs in self.all_zs])
     
     def __init__(self, zslx_list, original_df):
         super(CompositeZhongshu, self).__init__(zslx_list[0].direction, original_df, None)
         self.zslx_list = zslx_list
         self.all_zs = [zs for zs in self.zslx_list if type(zs) is ZhongShu]
+        self.isZhongShu = True
         
     def take_split_xd_as_zslx(self, direction):
         all_first_xd = [zs.take_split_xd_as_zslx(direction) for zs in self.all_zs]
@@ -763,3 +858,87 @@ class ZouShi(object):
             print("Zou Shi disassembled: {0}".format(self.zslx_result))
 
         return self.zslx_result
+    
+#     @classmethod
+#     def get_all_zoushi_nodes(cls, zoushi):
+#         if len(zoushi) == 1:
+#             return zoushi[0].get_all_nodes()
+#         
+#         all_nodes = []
+#         i = 0
+#         while i < len(zoushi):
+#             zs = zoushi[i]
+#             current_nodes = zs.get_all_nodes()
+#             if i == 0:
+#                 all_nodes += current_nodes
+#             else:
+#                 all_nodes += current_nodes[1:]
+#             i += 1
+#         return all_nodes
+    
+    @classmethod
+    def get_all_zoushi_nodes(cls, zoushi, all_nodes):
+        first_node = zoushi[0].get_all_nodes()[0]
+        last_node = zoushi[-1].get_all_nodes()[-1]
+        first_idx = all_nodes.index(first_node)
+        last_idx = all_nodes.index(last_node)
+        return all_nodes[first_idx:last_idx+1]
+    
+    @classmethod
+    def analyze_api(cls, initial_direction, zslx_all_nodes, original_df, isdebug=False):
+        zslx_result = []
+        i = 0
+        temp_zslx = ZouShiLeiXing(initial_direction, original_df, [])
+        previous_node = None
+        while i < len(zslx_all_nodes) - 1:
+            first = zslx_all_nodes[i]
+            second = zslx_all_nodes[i+1]
+
+            third = zslx_all_nodes[i+2] if i+2 < len(zslx_all_nodes) else None
+            forth = zslx_all_nodes[i+3] if i+3 < len(zslx_all_nodes) else None
+            
+            if type(temp_zslx) is ZouShiLeiXing:
+                if third is not None and forth is not None and ZouShiLeiXing.is_valid_central_region(temp_zslx.direction, first, second, third, forth):
+                    # new zs found end previous zslx
+                    if not temp_zslx.isEmpty():
+                        temp_zslx.add_new_nodes(first)
+                        zslx_result.append(temp_zslx)
+                    # use previous zslx direction for new sz direction
+                    temp_zslx = ZhongShu(first, second, third, forth, temp_zslx.direction, original_df)
+                    if isdebug:
+                        print("start new Zhong Shu, end previous zslx")
+                    previous_node = forth
+                    i = i + 2 # use to be 3, but we accept the case where last XD of ZhongShu can be zslx
+                else:
+                    # continue in zslx
+                    temp_zslx.add_new_nodes(first)
+                    if isdebug:
+                        print("continue current zou shi lei xing: {0}".format(temp_zslx))
+                    previous_node = first
+                    i = i + 1
+            else:
+                if type(temp_zslx) is ZhongShu: 
+                    ed = temp_zslx.out_of_zhongshu(first, second)
+                    if ed != TopBotType.noTopBot:
+                        # new zsxl going out of zs
+                        zslx_result.append(temp_zslx)
+                        temp_zslx = ZouShiLeiXing(ed, original_df, [previous_node])
+                        if isdebug:
+                            print("start new zou shi lei xing, end previous zhong shu")
+                    else:
+                        # continue in the zs
+                        if first != temp_zslx.first and first != temp_zslx.second and first != temp_zslx.third and first != temp_zslx.forth:
+                            temp_zslx.add_new_nodes(first)
+                        if isdebug:
+                            print("continue zhong shu: {0}".format(temp_zslx))
+                        previous_node = first
+                        i = i + 1
+        
+#         # add remaining nodes
+        temp_zslx.add_new_nodes(zslx_all_nodes[i:])
+        zslx_result.append(temp_zslx)
+
+        if isdebug:
+            print("Zou Shi disassembled: {0}".format(zslx_result))
+
+        return zslx_result
