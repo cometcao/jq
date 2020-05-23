@@ -846,20 +846,21 @@ class Equilibrium():
             new_zoushi = []
             if self.isComposite:
                 # make the composite and update the zoushi
-                start_idx = 0
+                start_idx = None
                 i = -1
                 while -(i-2) <= len(self.analytic_result):
                     current_zs = self.analytic_result[i]
                     if current_zs.isZhongShu:
-                        if start_idx != 0 and (not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
+                        if start_idx is not None and (not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
                             (i+2 < 0 and not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i+2]))):
-                            zs = CompositeZhongShu(self.analytic_result[i:start_idx+1], current_zs.original_df)
+                            end_idx = start_idx+1
+                            zs = CompositeZhongShu(self.analytic_result[i:(end_idx if end_idx!=0 else None)], current_zs.original_df)
                             new_zoushi.insert(0, zs)
-                            start_idx = 0
+                            start_idx = None
                             i = i - 1
                             continue
                         elif self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]):
-                            start_idx = i if start_idx == 0 else start_idx
+                            start_idx = i if start_idx is None else start_idx
                             i = i - 2
                             continue
                     new_zoushi.insert(0, current_zs)
