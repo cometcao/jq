@@ -834,26 +834,24 @@ class Short_Chan(Sell_stocks):
                                                                                                   current_loc_diff, 
                                                                                                   top_chan_p))
                     return True
-#             else:
 
-
-#             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
-#                 result, profile, _ = check_stock_full(stock,
-#                                                      end_time=min_price_time,
-#                                                      periods=[self.top_period, self.sub_period],
-#                                                      count=6000, # needs more data!
-#                                                      direction=TopBotType.top2bot, 
-#                                                      top_chan_type=[top_chan_t],
-#                                                      sub_chan_type=[sub_chan_t],
-#                                                      isdebug=self.isdebug,
-#                                                      is_description=self.isDescription,
-#                                                      sub_force_zhongshu=True, 
-#                                                      sub_check_bi=False,
-#                                                      use_sub_split=self.use_sub_split, 
-#                                                      ignore_sub_xd=True)
-#                 if not result:
-#                     print("TYPE I long point broken")
-#                     return True
+            if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
+                result, profile, _ = check_stock_full(stock,
+                                                     end_time=min_price_time,
+                                                     periods=[self.top_period, self.sub_period],
+                                                     count=6000, # needs more data!
+                                                     direction=TopBotType.top2bot, 
+                                                     top_chan_type=[top_chan_t],
+                                                     sub_chan_type=[sub_chan_t],
+                                                     isdebug=self.isdebug,
+                                                     is_description=self.isDescription,
+                                                     sub_force_zhongshu=True, 
+                                                     sub_check_bi=False,
+                                                     use_sub_split=self.use_sub_split, 
+                                                     ignore_sub_xd=True)
+                if not result:
+                    print("BeiChi long point broken")
+                    return True
                 
 #             elif (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
 #                 # check slope
