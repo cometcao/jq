@@ -835,7 +835,7 @@ class Equilibrium():
         
         all_zs = [zs.isBenZouStyle() for zs in zoushi if zs.isZhongShu]
         all_zs = all_zs if self.check_full_zoushi else all_zs[-2:] if self.isQvShi else all_zs[-1:]
-        if np.any(all_zs): # and not at_bi_level
+        if np.any(all_zs) and not at_bi_level:
             if self.isdebug:
                 print("BenZou Zhongshu detected, We can't analyze this type of zoushi")
             return False
