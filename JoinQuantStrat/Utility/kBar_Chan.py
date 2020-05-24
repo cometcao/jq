@@ -973,20 +973,20 @@ class KBarChan(object):
             next_range = gap_regions[i+1]
             
             if temp_range is None:
-                if np.isclose(current_range[1], next_range[0]):
+                if float_more_equal(current_range[1], next_range[0]):
                     temp_range = (current_range[0], next_range[1])
                 else:
                     new_gaps.append(current_range)
                     temp_range = next_range
             else:
-                if np.isclose(temp_range[1], next_range[0]):
+                if float_more_equal(temp_range[1], next_range[0]):
                     temp_range = (temp_range[0], next_range[1])
                 else:
                     new_gaps.append(temp_range)
                     temp_range = next_range
             i = i + 1
         new_gaps.append(temp_range)
-        
+                
         return new_gaps
 
     def kbar_gap_as_xd(self, working_df, first_idx, second_idx, compare_idx):
@@ -995,7 +995,7 @@ class KBarChan(object):
         '''
         firstElem = working_df[first_idx]
         secondElem = working_df[second_idx]
-        compareElem = working_df[compare_idx]
+        compareElem = working_df[compare_idx] if compare_idx is not None else None
         item_price_covered = False
         gap_range_in_portion = False
         if first_idx + 1 == second_idx and\
@@ -1005,13 +1005,30 @@ class KBarChan(object):
                             TopBotType.noTopBot
             regions = self.gap_region(firstElem['date'], secondElem['date'], gap_direction)
             regions = self.combine_gaps(regions)
-            for re in regions:
-#                 if float_less_equal(re[0], compareElem['chan_price']) and float_less_equal(compareElem['chan_price'], re[1]):
-#                     item_price_covered = True
-                if float_more_equal((re[1]-re[0])/abs(firstElem['chan_price']-secondElem['chan_price']), GOLDEN_RATIO):
-                    gap_range_in_portion = True
-                if gap_range_in_portion:
-                    return gap_range_in_portion
+#             for re in regions:
+# #                 if float_less_equal(re[0], compareElem['chan_price']) and float_less_equal(compareElem['chan_price'], re[1]):
+# #                     item_price_covered = True
+#                 if float_more_equal((re[1]-re[0])/abs(firstElem['chan_price']-secondElem['chan_price']), GOLDEN_RATIO):
+#                     gap_range_in_portion = True
+#                 if gap_range_in_portion:
+#                     return gap_range_in_portion
+                
+            gap_range = sum([(b-a) for a, b in regions])
+            if float_more_equal(gap_range/abs(firstElem['chan_price']-secondElem['chan_price']), 1-GOLDEN_RATIO):
+                gap_range_in_portion = True
+            
+            if compareElem is None:
+                item_price_covered = True
+            else:
+                if gap_direction == TopBotType.top2bot:
+                    item_price_covered = float_less_equal(regions[0][0], compareElem['chan_price'])
+                elif gap_direction == TopBotType.bot2top:
+                    item_price_covered = float_more_equal(regions[-1][1], compareElem['chan_price'])
+                else:
+                    item_price_covered = False
+            
+            if gap_range_in_portion and item_price_covered:
+                return True
         return False
     
 
@@ -1050,10 +1067,9 @@ class KBarChan(object):
         if self.xd_inclusion(firstElem, secondElem, thirdElem, forthElem):  
             ############################## special case of kline gap as XD ##############################
             # only checking if any one node is in pure gap range. The same logic as gap for XD
-            if self.kbar_gap_as_xd(working_df, next_valid_elems[0], next_valid_elems[1], next_valid_elems[2]) or\
-                self.kbar_gap_as_xd(working_df, next_valid_elems[2], next_valid_elems[3], next_valid_elems[1]) or\
-                self.kbar_gap_as_xd(working_df, next_valid_elems[1], next_valid_elems[2], next_valid_elems[0]) or\
-                self.kbar_gap_as_xd(working_df, next_valid_elems[1], next_valid_elems[2], next_valid_elems[3]):
+            if self.kbar_gap_as_xd(working_df, next_valid_elems[0], next_valid_elems[1], None) or\
+                self.kbar_gap_as_xd(working_df, next_valid_elems[2], next_valid_elems[3], None) or\
+                self.kbar_gap_as_xd(working_df, next_valid_elems[1], next_valid_elems[2], None):
                 if self.isdebug:
                     print("inclusion ignored due to kline gaps, with loc {0}@{1}, {2}@{3}, {4}@{5}, {6}@{7}".format(firstElem['date'], 
                                                                                                                   firstElem['chan_price'],
