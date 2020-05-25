@@ -889,7 +889,9 @@ class Equilibrium():
                 
                 if len(max_level_idx) >= 2:
                     new_zoushi = new_zoushi[max_level_idx[-2]+1:]
-    
+                    all_zs_level_value = [zs.get_level().value for zs in new_zoushi]
+                    max_level_idx = np.where(np.array(all_zs_level_value)==max_level_value)[0]
+                
                 zoushi_1 = new_zoushi[:max_level_idx[-1]]
                 zoushi_2 = new_zoushi[max_level_idx[-1]+1:]
                 
