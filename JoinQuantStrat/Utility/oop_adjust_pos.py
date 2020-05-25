@@ -965,7 +965,8 @@ class Short_Chan(Sell_stocks):
                                                   check_bi=False,
                                                   allow_simple_zslx=False,
                                                   force_zhongshu=True,
-                                                  check_full_zoushi=False)
+                                                  check_full_zoushi=False, 
+                                                  ignore_sub_xd=False)
             if sub_exhausted and sub_zhongshu_formed:
                 print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
                                                                             self.sub_period,
@@ -987,7 +988,8 @@ class Short_Chan(Sell_stocks):
                                                   check_bi=False,
                                                   allow_simple_zslx=False,
                                                   force_zhongshu=False,
-                                                  check_full_zoushi=False) # synch with selection
+                                                  check_full_zoushi=False, 
+                                                  ignore_sub_xd=True) # synch with selection
             
             if (exhausted and top_zhongshu_formed) or (not top_zhongshu_formed and exhausted and xd_exhausted):
                 print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
@@ -997,14 +999,37 @@ class Short_Chan(Sell_stocks):
                                                                             top_zhongshu_formed))
                 return True
 
-            if self.use_ma13 and (stock_data.loc[effective_time:, 'high'].max() >= top_chan_p or\
-                                  top_zhongshu_formed): # reached target price
+            if stock_data.loc[effective_time:, 'high'].max() >= top_chan_p: # reached target price
                 print("STOP PROFIT {0} reached target price: {1}".format(stock, top_chan_p))
-                sma13 = stock_data['close'].values[-13:].sum() / 13
-                sma5 = stock_data['close'].values[-5:].sum() / 5
-                if sma5 < sma13:
-                    print("STOP PROFIT {0} below ma13: {1}".format(stock, sma13))
-                    return True
+                
+                if self.use_ma13:
+                    sma13 = stock_data['close'].values[-13:].sum() / 13
+                    sma5 = stock_data['close'].values[-5:].sum() / 5
+                    if sma5 < sma13:
+                        print("STOP PROFIT {0} below ma13: {1}".format(stock, sma13))
+                        return True
+                
+                sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
+                                                      end_time=context.current_dt,
+                                                      periods=[self.sub_period],
+                                                      count=2000,
+                                                      direction=TopBotType.bot2top,
+                                                      chan_types=[Chan_Type.I, Chan_Type.INVALID],
+                                                      isdebug=self.isdebug,
+                                                      is_description=self.isDescription,
+                                                      is_anal=False,
+                                                      split_time=min_time,
+                                                      check_bi=False,
+                                                      allow_simple_zslx=False,
+                                                      force_zhongshu=True,
+                                                      check_full_zoushi=False,
+                                                      ignore_sub_xd=True)
+                if sub_exhausted and sub_zhongshu_formed:
+                    print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
+                                                                                self.sub_period,
+                                                                                sub_exhausted,
+                                                                                sub_xd_exhausted,
+                                                                                sub_zhongshu_formed))
             
         elif top_chan_t == Chan_Type.III or top_chan_t == Chan_Type.INVALID:
             
