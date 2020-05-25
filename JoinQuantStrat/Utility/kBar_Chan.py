@@ -1004,31 +1004,32 @@ class KBarChan(object):
                             TopBotType.top2bot if secondElem['tb'] == TopBotType.bot.value else\
                             TopBotType.noTopBot
             regions = self.gap_region(firstElem['date'], secondElem['date'], gap_direction)
-            regions = self.combine_gaps(regions)
-#             for re in regions:
-# #                 if float_less_equal(re[0], compareElem['chan_price']) and float_less_equal(compareElem['chan_price'], re[1]):
-# #                     item_price_covered = True
-#                 if float_more_equal((re[1]-re[0])/abs(firstElem['chan_price']-secondElem['chan_price']), GOLDEN_RATIO):
-#                     gap_range_in_portion = True
-#                 if gap_range_in_portion:
-#                     return gap_range_in_portion
+            if regions:
+                regions = self.combine_gaps(regions)
+    #             for re in regions:
+    # #                 if float_less_equal(re[0], compareElem['chan_price']) and float_less_equal(compareElem['chan_price'], re[1]):
+    # #                     item_price_covered = True
+    #                 if float_more_equal((re[1]-re[0])/abs(firstElem['chan_price']-secondElem['chan_price']), GOLDEN_RATIO):
+    #                     gap_range_in_portion = True
+    #                 if gap_range_in_portion:
+    #                     return gap_range_in_portion
+                    
+                gap_range = sum([(b-a) for a, b in regions])
+                if float_more_equal(gap_range/abs(firstElem['chan_price']-secondElem['chan_price']), 1-GOLDEN_RATIO):
+                    gap_range_in_portion = True
                 
-            gap_range = sum([(b-a) for a, b in regions])
-            if float_more_equal(gap_range/abs(firstElem['chan_price']-secondElem['chan_price']), 1-GOLDEN_RATIO):
-                gap_range_in_portion = True
-            
-            if compareElem is None:
-                item_price_covered = True
-            else:
-                if gap_direction == TopBotType.top2bot:
-                    item_price_covered = float_less_equal(regions[0][0], compareElem['chan_price'])
-                elif gap_direction == TopBotType.bot2top:
-                    item_price_covered = float_more_equal(regions[-1][1], compareElem['chan_price'])
+                if compareElem is None:
+                    item_price_covered = True
                 else:
-                    item_price_covered = False
-            
-            if gap_range_in_portion and item_price_covered:
-                return True
+                    if gap_direction == TopBotType.top2bot:
+                        item_price_covered = float_less_equal(regions[0][0], compareElem['chan_price'])
+                    elif gap_direction == TopBotType.bot2top:
+                        item_price_covered = float_more_equal(regions[-1][1], compareElem['chan_price'])
+                    else:
+                        item_price_covered = False
+                
+                if gap_range_in_portion and item_price_covered:
+                    return True
         return False
     
 

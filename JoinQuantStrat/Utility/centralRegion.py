@@ -560,14 +560,14 @@ class ZhongShu(ZouShiLeiXing):
         '''
         check if current Zhongshu is BenZou style
         '''
-#         if not self.is_complex_type() or len(self.extra_nodes)==1: # we don't need this condition
-        core_range = self.get_core_region()
-        amplitude_range = self.get_amplitude_region_original_without_last_xd()
-        core_gap = core_range[1] - core_range[0]
-        amplitude_gap = amplitude_range[1] - amplitude_range[0]
-        
-        if core_gap / amplitude_gap < 0.191: # (1-GOLDEN_RATIO)/2
-            return True
+        if not self.is_complex_type() or len(self.extra_nodes)==1: # we do need this condition
+            core_range = self.get_core_region()
+            amplitude_range = self.get_amplitude_region_original_without_last_xd()
+            core_gap = core_range[1] - core_range[0]
+            amplitude_gap = amplitude_range[1] - amplitude_range[0]
+            
+            if core_gap / amplitude_gap < 0.382: # (1-GOLDEN_RATIO)
+                return True
         return False
                 
     def get_time_diff(self, re_evaluate=False):
