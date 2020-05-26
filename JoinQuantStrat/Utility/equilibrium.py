@@ -834,8 +834,8 @@ class Equilibrium():
         '''
         
         all_zs = [zs.isBenZouStyle() for zs in zoushi if zs.isZhongShu]
-        all_zs = all_zs if self.check_full_zoushi else all_zs[-2:] if self.isQvShi else all_zs[-1:]
-        if np.any(all_zs) and not at_bi_level:
+        all_zs = all_zs[-2:] if self.isQvShi else all_zs[-1:]
+        if np.any(all_zs):
             if self.isdebug:
                 print("BenZou Zhongshu detected, We can't analyze this type of zoushi")
             return False
@@ -1009,14 +1009,14 @@ class Equilibrium():
                 print("Not enough DATA check_exhaustion")
             return False
         
-        # short circuit BI level avoid structural check
-#         if at_bi_level:
-#             return True
-        
         if zslx_c.direction != direction:
             if self.isdebug:
                 print("Invalid last XD direction: {0}".format(zslx_c.direction))
             return False
+        
+        # short circuit BI level avoid structural check
+        if at_bi_level:
+            return True
         
         a_s = zslx_a.get_tb_structure() 
         c_s =zslx_c.get_tb_structure()
