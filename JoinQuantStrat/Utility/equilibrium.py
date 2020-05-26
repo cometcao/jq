@@ -1009,15 +1009,6 @@ class Equilibrium():
                 print("Not enough DATA check_exhaustion")
             return False
         
-        if zslx_c.direction != direction:
-            if self.isdebug:
-                print("Invalid last XD direction: {0}".format(zslx_c.direction))
-            return False
-        
-        # short circuit BI level avoid structural check
-        if at_bi_level:
-            return True
-        
         a_s = zslx_a.get_tb_structure() 
         c_s =zslx_c.get_tb_structure()
 
@@ -1028,6 +1019,25 @@ class Equilibrium():
         a_range = zslx_a.get_amplitude_region_original()
         c_range = zslx_c.get_amplitude_region_original()
         b_range = central_B.get_core_region() # use core region
+        
+        if zslx_c.direction != direction:
+            if self.isdebug:
+                print("Invalid last XD direction: {0}".format(zslx_c.direction))
+            return False
+        
+        price_sound = True
+        if direction == TopBotType.top2bot:
+            price_sound = float_more_equal(a_range[1], b_range[1]) and float_more_equal(b_range[0], c_range[0])
+        elif direction == TopBotType.bot2top:
+            price_sound = float_less_equal(a_range[0], b_range[0]) and float_less_equal(b_range[1], c_range[1])
+        if not price_sound:
+            if self.isdebug:
+                print("price within ZhongShu range")
+            return False
+        
+        # short circuit BI level avoid structural check
+        if at_bi_level:
+            return True
         
         if check_tb_structure:
             if a_s[0] != c_s[0] or a_s[-1] != c_s[-1]:
@@ -1054,23 +1064,8 @@ class Equilibrium():
                     print("Not matching XD balane")
                 return False
             
-            # detect benzou style Zhongshu
-#             if central_B.isBenZouStyle() and not at_bi_level:
-#                 if self.isdebug:
-#                     print("Avoid benzou style zhongshu for PanZheng")
-#                 return False
-            
-            
-        structure_result = True
-        if direction == TopBotType.top2bot:
-            structure_result = float_more_equal(a_range[1], b_range[1]) and float_more_equal(b_range[0], c_range[0])
-        elif direction == TopBotType.bot2top:
-            structure_result = float_less_equal(a_range[0], b_range[0]) and float_less_equal(b_range[1], c_range[1])
-        if self.isdebug and not structure_result:
-            print("price within ZhongShu range")
-            
         
-        return structure_result
+        return True
     
     def price_balance(self, a_range, b_range, c_range):
         balance_point = (max(a_range[1], c_range[1]) + min(a_range[0], c_range[0]))/2
