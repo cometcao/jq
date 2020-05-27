@@ -306,7 +306,8 @@ class ZouShiLeiXing(object):
         return [node.tb for node in self.zoushi_nodes]
     
     def get_time_diff(self, re_evaludate=False):
-        return [self.zoushi_nodes[0].loc, self.zoushi_nodes[-1].loc]
+        return [min(self.zoushi_nodes[0].loc, self.zoushi_nodes[-1].loc), 
+                max(self.zoushi_nodes[0].loc, self.zoushi_nodes[-1].loc)]
     
     def get_loc_diff(self):
         mag = 1200 # THSI IS AN ESTIMATE! we have to upgrade one level so 240 * 5
@@ -412,6 +413,11 @@ class ZhongShu(ZouShiLeiXing):
     
     def get_all_nodes(self):
         return self.get_ending_nodes(N=0)
+    
+    def reverse_nodes(self):
+        # method used for reversal analytics
+        pass
+        
     
     def add_new_nodes(self, tb_nodes, added = False):
         if type(tb_nodes) is list:
@@ -571,7 +577,8 @@ class ZhongShu(ZouShiLeiXing):
         return False
                 
     def get_time_diff(self, re_evaluate=False):
-        return [self.first.loc, self.extra_nodes[-1].loc] if self.extra_nodes else [self.first.loc, self.forth.loc]
+        return [min(self.first.loc, self.extra_nodes[-1].loc), max(self.first.loc, self.extra_nodes[-1].loc)] if self.extra_nodes\
+            else [min(self.first.loc, self.forth.loc), max(self.first.loc, self.forth.loc)]
 
     def get_amplitude_region_between(self, start_loc, end_loc):
         price_series = self.original_df[start_loc:end_loc+1][['high', 'low']]
@@ -808,12 +815,16 @@ class ZouShi(object):
         i = 0
         temp_zslx = ZouShiLeiXing(initial_direction, self.original_df, [])
         previous_node = None
-        while i < len(self.zslx_all_nodes) - 1:
-            first = self.zslx_all_nodes[i]
-            second = self.zslx_all_nodes[i+1]
+        # reverse all nodes order
+#         working_nodes = self.zslx_all_nodes[::-1]
+        working_nodes = self.zslx_all_nodes
+        
+        while i < len(working_nodes) - 1:
+            first = working_nodes[i]
+            second = working_nodes[i+1]
 
-            third = self.zslx_all_nodes[i+2] if i+2 < len(self.zslx_all_nodes) else None
-            forth = self.zslx_all_nodes[i+3] if i+3 < len(self.zslx_all_nodes) else None
+            third = working_nodes[i+2] if i+2 < len(working_nodes) else None
+            forth = working_nodes[i+3] if i+3 < len(working_nodes) else None
             
             if type(temp_zslx) is ZouShiLeiXing:
                 if third is not None and forth is not None and ZouShiLeiXing.is_valid_central_region(temp_zslx.direction, first, second, third, forth):
@@ -853,8 +864,11 @@ class ZouShi(object):
                         i = i + 1
         
 #         # add remaining nodes
-        temp_zslx.add_new_nodes(self.zslx_all_nodes[i:])
+        temp_zslx.add_new_nodes(working_nodes[i:])
         self.zslx_result.append(temp_zslx)
+
+        # reverse back all zslx and nodes within
+#         self.zslx_result = self.zslx_result[::-1]
 
         if self.isdebug:
             print("Zou Shi disassembled: {0}".format(self.zslx_result))

@@ -826,7 +826,7 @@ class Equilibrium():
 #         else:
 #             self.isQvShi = False
 
-    def check_zoushi_structure(self, zoushi, at_bi_level):
+    def check_zoushi_structure(self, zoushi, at_bi_level, enable_composite=True):
         '''
         This method checks the whole zoushi structure under evaluation, make ZhongShu Composite if necessary.
         check if it's structurally balanced. 
@@ -834,8 +834,8 @@ class Equilibrium():
         '''
         
         all_zs = [zs.isBenZouStyle() for zs in zoushi if zs.isZhongShu]
-        all_zs = all_zs[-2:] if self.isQvShi else all_zs[-1:]
-        if np.any(all_zs):
+#         all_zs = all_zs[-2:] if self.isQvShi else all_zs[-1:]
+        if np.any(all_zs[-1:]):
             if self.isdebug:
                 print("BenZou Zhongshu detected, We can't analyze this type of zoushi")
             return False
@@ -844,7 +844,7 @@ class Equilibrium():
         # the Zoushi before and after that Zhongshu should have the same level
         if self.check_full_zoushi:
             new_zoushi = []
-            if self.isComposite:
+            if self.isComposite and enable_composite:
                 # make the composite and update the zoushi
                 start_idx = None
                 i = -1
@@ -932,7 +932,7 @@ class Equilibrium():
         slope
         force
         '''
-        if not self.check_zoushi_structure(self.analytic_result, at_bi_level):
+        if not self.check_zoushi_structure(self.analytic_result, at_bi_level, enable_composite):
             return False, False, None, None, 0, 0
         
         # We shouldn't have III at BI level, only PB or BC
