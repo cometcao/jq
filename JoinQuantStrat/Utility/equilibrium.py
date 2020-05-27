@@ -844,7 +844,11 @@ class Equilibrium():
         # the Zoushi before and after that Zhongshu should have the same level
         if self.check_full_zoushi:
             new_zoushi = []
-            if self.isComposite and enable_composite:
+            if self.isComposite:
+                if not enable_composite:
+                    if self.isdebug:
+                        print("Composite found, but we disabled it. return False")
+                    return False
                 # make the composite and update the zoushi
                 start_idx = None
                 i = -1
@@ -1500,7 +1504,8 @@ class NestedInterval():
                                                                                                     check_balance_structure=False,
                                                                                                     current_chan_type=chan_t,
                                                                                                     at_bi_level=False,
-                                                                                                    allow_simple_zslx=True)
+                                                                                                    allow_simple_zslx=True, 
+                                                                                                    enable_composite=False)
             if self.isDescription or self.isdebug:
                 print("Top level {0} {1} {2} {3} {4} with price level: {5}".format(self.periods[0], 
                                                                            chan_d, 
@@ -1581,7 +1586,7 @@ class NestedInterval():
                                                                                          current_chan_type=all_types[0][0],
                                                                                          at_bi_level=True,
                                                                                          allow_simple_zslx=True,
-                                                                                         enable_composite=True)
+                                                                                         enable_composite=False)
         if (self.isdebug):
             print("BI level {0}, {1}".format(bi_exhausted, bi_check_exhaustion))
         
@@ -1649,7 +1654,7 @@ class NestedInterval():
                                                                                                    current_chan_type=chan_t,
                                                                                                    at_bi_level=False,
                                                                                                    allow_simple_zslx=allow_simple_zslx,
-                                                                                                   enable_composite=True)
+                                                                                                   enable_composite=False)
         if self.isDescription or self.isdebug:
             print("current level {0} {1} {2} {3} {4} with price:{5}".format(period, 
                                                                         chan_d, 
