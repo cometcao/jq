@@ -699,7 +699,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.long_hour_start = params.get('long_hour_start', 13)
         self.long_min_start = params.get('long_min_start', 30)
         self.use_sub_split = params.get('sub_split', True)
-        self.ignore_xd = params.get('ignore_xd', True)
+        self.ignore_xd = params.get('ignore_xd', False)
     
     def filter(self, context, data, stock_list):
         if context.current_dt.hour < self.long_hour_start:

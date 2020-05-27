@@ -831,8 +831,7 @@ class Short_Chan(Sell_stocks):
                                                                       is_description =self.isDescription,
                                                                       is_anal=False,
                                                                       check_structure=True,
-                                                                      check_full_zoushi=False,
-                                                                      ignore_top_xd=True) # synch with selection
+                                                                      check_full_zoushi=False) # synch with selection
                 if not result:
                     print("Bei Chi long point broken")
                     return True
@@ -853,7 +852,7 @@ class Short_Chan(Sell_stocks):
 #                                                      sub_force_zhongshu=True, 
 #                                                      sub_check_bi=False,
 #                                                      use_sub_split=self.use_sub_split, 
-#                                                      ignore_sub_xd=True)
+#                                                      ignore_sub_xd=False)
 #                 if not result:
 #                     print("BeiChi long point broken")
 #                     return True
@@ -994,7 +993,7 @@ class Short_Chan(Sell_stocks):
                                                   allow_simple_zslx=False,
                                                   force_zhongshu=False,
                                                   check_full_zoushi=False, 
-                                                  ignore_sub_xd=True) # synch with selection
+                                                  ignore_sub_xd=False) # synch with selection
             
             if (exhausted and top_zhongshu_formed) or (not top_zhongshu_formed and exhausted and xd_exhausted):
                 print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
@@ -1028,7 +1027,7 @@ class Short_Chan(Sell_stocks):
                                                       allow_simple_zslx=False,
                                                       force_zhongshu=True,
                                                       check_full_zoushi=False,
-                                                      ignore_sub_xd=True)
+                                                      ignore_sub_xd=False)
                 if sub_exhausted and sub_zhongshu_formed:
                     print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
                                                                                 self.sub_period,

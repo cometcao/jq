@@ -183,8 +183,7 @@ def check_chan_by_type_exhaustion(stock,
                                   is_anal=False, 
                                   is_description=True,
                                   check_structure=False,
-                                  check_full_zoushi=False,
-                                  ignore_top_xd=True):
+                                  check_full_zoushi=False):
     if is_description:
         print("check_chan_by_type_exhaustion working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
     ni = NestedInterval(stock, 
@@ -199,8 +198,7 @@ def check_chan_by_type_exhaustion(stock,
                              chan_type, 
                              check_end_tb=check_structure, 
                              check_tb_structure=check_structure,
-                             check_full_zoushi=check_full_zoushi,
-                             ignore_top_xd=ignore_top_xd)
+                             check_full_zoushi=check_full_zoushi)
 
 def check_chan_indepth(stock, 
                        end_time, 
@@ -247,7 +245,7 @@ def check_stock_sub(stock,
                     allow_simple_zslx=True,
                     force_bi_zhongshu=True,
                     check_full_zoushi=True,
-                    ignore_sub_xd=True):
+                    ignore_sub_xd=False):
     if is_description:
         print("check_stock_sub working on stock: {0} at {1}".format(stock, periods))
     ni = NestedInterval(stock, 
@@ -296,8 +294,8 @@ def check_stock_full(stock,
                      sub_force_zhongshu=True,
                      sub_check_bi=False,
                      use_sub_split=True,
-                     ignore_top_xd=True, 
-                     ignore_sub_xd=True):
+                     ignore_top_xd=False, 
+                     ignore_sub_xd=False):
     
     if is_description:
         print("check_stock_full working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
@@ -313,12 +311,12 @@ def check_stock_full(stock,
                                                                       is_description=is_description,
                                                                       check_structure=True,
                                                                       is_anal=is_anal,
-                                                                      check_full_zoushi=False,
-                                                                      ignore_top_xd=ignore_top_xd)
+                                                                      check_full_zoushi=False)
     if not chan_profile:
         chan_profile = [(Chan_Type.INVALID, TopBotType.noTopBot, 0, 0, 0, None, None)]
 
-    splitTime = chan_profile[0][6] if use_sub_split else None# split time and force sub level with zhongshu formed
+    # use the start of beichiduan
+    splitTime = chan_profile[0][5] if use_sub_split else None# split time and force sub level with zhongshu formed
     
     if exhausted and (xd_exhausted or ignore_top_xd) and sanity_check(stock, chan_profile, end_time, top_pe, direction):
         sub_exhausted, sub_xd_exhausted, sub_profile, zhongshu_completed = check_stock_sub(stock=stock, 
@@ -1456,8 +1454,7 @@ class NestedInterval():
                        chan_type = Chan_Type.INVALID, 
                        check_end_tb=False, 
                        check_tb_structure=False,
-                       check_full_zoushi=False,
-                       ignore_top_xd=True):
+                       check_full_zoushi=False):
         ''' THIS METHOD SHOULD ONLY BE USED FOR TOP LEVEL!!
         This is due to the fact that at high level we can't be very precise
         1. check high level chan type
@@ -1519,7 +1516,7 @@ class NestedInterval():
                                                           high_slope, 
                                                           high_macd, 
                                                           last_zs_time, 
-                                                          last_zs_time if ignore_top_xd else sub_split_time)]
+                                                          sub_split_time)]
         else:
             high_exhausted, check_xd_exhaustion = False, False
             if self.isDescription or self.isdebug:
@@ -1599,7 +1596,7 @@ class NestedInterval():
                           force_zhongshu=False,
                           allow_simple_zslx=True,
                           check_full_zoushi=True,
-                          ignore_sub_xd=True):
+                          ignore_sub_xd=False):
         '''
         split done at data level
         
