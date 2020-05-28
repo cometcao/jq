@@ -313,8 +313,9 @@ class ZouShiLeiXing(object):
         return self.get_macd_acc() / self.get_loc_diff()
     
     def get_macd_acc(self):
-        top_nodes = [node for node in self.zoushi_nodes if node.tb == TopBotType.top]
-        bot_nodes = [node for node in self.zoushi_nodes if node.tb == TopBotType.bot]
+        all_nodes = self.get_all_nodes()
+        top_nodes = [node for node in all_nodes if node.tb == TopBotType.top]
+        bot_nodes = [node for node in all_nodes if node.tb == TopBotType.bot]
         macd_acc = 0.0
         if self.direction == TopBotType.bot2top:
             macd_acc = sum([node.macd_acc for node in top_nodes])
@@ -681,6 +682,18 @@ class CompositeZouShiLeiXing(ZouShiLeiXing):
         all_level_value = [zs.get_level().value for zs in self.zslx_list]
         return ZhongShuLevel.value2type(max(all_level_value))
         
+    
+    def get_macd_acc(self):
+        return sum([zs.get_macd_acc() for zs in self.zslx_list])
+    
+    def get_loc_diff(self):
+        first_loc = self.zslx_list[0].get_all_nodes()[0].loc
+        last_loc = self.zslx_list[-1].get_all_nodes()[-1].loc
+        return (last_loc - first_loc) / 1200 * 100
+        
+    def work_out_macd_strength(self):
+#         return self.get_macd_acc() / self.get_magnitude()
+        return self.get_macd_acc() / self.get_loc_diff()
 
     def work_out_slope(self):
         if not self.zslx_list:
