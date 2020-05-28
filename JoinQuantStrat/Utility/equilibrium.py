@@ -482,16 +482,19 @@ class CentralRegionProcess(object):
         working_df = self.prepare_extra(working_df, tb_name)
 
         if self.isdebug:
-            print("working_df: {0}".format(working_df[['chan_price', tb_name, 'real_loc','money_acc_'+tb_name]]))
+            print("working_df: {0}".format(working_df[['chan_price', tb_name, 'real_loc','money_acc_'+tb_name, 'macd_acc_'+tb_name]]))
         return working_df
     
     def prepare_extra(self, working_df, tb_col):
-#         self.kbar_chan.prepare_original_kdf() # add macd term
+        self.kbar_chan.prepare_original_kdf() # add macd term
         working_df = append_fields(
                                     working_df, 
-                                    'money_acc_'+tb_col,
-                                    [0]*working_df.size,
-                                    float,
+                                    ['money_acc_'+tb_col, 'macd_acc_'+tb_col],
+                                    [
+                                        [0]*working_df.size,
+                                        [0]*working_df.size,
+                                    ],
+                                    [float, float],
                                     usemask=False
                                     )
         
@@ -502,17 +505,17 @@ class CentralRegionProcess(object):
             current_real_loc = working_df[current_loc]['real_loc']
             previous_real_loc = working_df[previous_loc]['real_loc']
             
-#             # gather macd data based on real_loc, be aware of head/tail
-#             origin_macd = original_df[previous_real_loc+1 if previous_real_loc != 0 else None:current_real_loc+1]['macd']
-#             if working_df[current_loc][tb_col] == TopBotType.top.value:
-#                 # sum all previous positive macd data 
-#                 working_df[current_loc]['macd_acc_'+tb_col] = sum([pos_macd for pos_macd in origin_macd if pos_macd > 0])
-#                 
-#             elif working_df[current_loc][tb_col] == TopBotType.bot.value:
-#                 # sum all previous negative macd data 
-#                 working_df[current_loc]['macd_acc_'+tb_col] = sum([pos_macd for pos_macd in origin_macd if pos_macd < 0])
-#             else:
-#                 print("Invalid {0} data".format(tb_col))
+            # gather macd data based on real_loc, be aware of head/tail
+            origin_macd = original_df[previous_real_loc+1 if previous_real_loc != 0 else None:current_real_loc+1]['macd']
+            if working_df[current_loc][tb_col] == TopBotType.top.value:
+                # sum all previous positive macd data 
+                working_df[current_loc]['macd_acc_'+tb_col] = sum([pos_macd for pos_macd in origin_macd if pos_macd > 0])
+                 
+            elif working_df[current_loc][tb_col] == TopBotType.bot.value:
+                # sum all previous negative macd data 
+                working_df[current_loc]['macd_acc_'+tb_col] = sum([pos_macd for pos_macd in origin_macd if pos_macd < 0])
+            else:
+                print("Invalid {0} data".format(tb_col))
                 
             # gather money data based on pivot
             origin_money = original_df[previous_real_loc+1:current_real_loc+1]['money']
@@ -580,28 +583,24 @@ class Equilibrium():
                     else:
                         first_xd = zs.take_split_xd_as_zslx(direction) 
                 elif zs.is_complex_type():
-                    if len(self.analytic_result) >= 3 and\
+                    if enable_composite and len(self.analytic_result) >= 3 and\
                         type(self.analytic_result[-2]) is ZouShiLeiXing and\
                         type(self.analytic_result[-3]) is ZhongShu and\
                         self.two_zslx_interact_original(self.analytic_result[-1], self.analytic_result[-3]):
     #                     return None, None, None, None
                         # Zhongshu KUOZHAN ###############################
                         ## zhong shu combination use CompositeZhongShu class
-                        if enable_composite:
-                            i = -1
-                            while -(i-2) <= len(self.analytic_result):
-                                if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
-                                    (i+2 < 0 and not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i+2])):
-                                    break
-                                i = i - 2
-                            zs = CompositeZhongShu(self.analytic_result[i:], zs.original_df)
-                            if -(i-1) <= len(self.analytic_result) and self.analytic_result[i-1].direction == direction:
-                                first_xd = self.analytic_result[i-1]
-                            else:
-                                first_xd = zs.take_split_xd_as_zslx(direction)
-                                
-                        else: 
-                            return None, None, None, None
+                        i = -1
+                        while -(i-2) <= len(self.analytic_result):
+                            if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
+                                (i+2 < 0 and not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i+2])):
+                                break
+                            i = i - 2
+                        zs = CompositeZhongShu(self.analytic_result[i:], zs.original_df)
+                        if -(i-1) <= len(self.analytic_result) and self.analytic_result[i-1].direction == direction:
+                            first_xd = self.analytic_result[i-1]
+                        else:
+                            first_xd = zs.take_split_xd_as_zslx(direction)
                             
                     elif len(self.analytic_result) < 2 or self.analytic_result[-2].direction != direction:
                         first_xd = zs.take_split_xd_as_zslx(direction)
@@ -623,27 +622,24 @@ class Equilibrium():
                         first_xd = self.analytic_result[-3]
                     else:
                         first_xd = zs.take_split_xd_as_zslx(direction) 
-                elif len(self.analytic_result) >= 4 and\
+                elif enable_composite and len(self.analytic_result) >= 4 and\
                     type(self.analytic_result[-2]) is ZhongShu and\
                     type(self.analytic_result[-4]) is ZhongShu and\
                     self.two_zslx_interact_original(self.analytic_result[-4], self.analytic_result[-2]):
                     zs = self.analytic_result[-2]
                     # composite ZhongShu case ###############################
-                    if enable_composite:
-                        ## zhong shu combination
-                        i = -2
-                        while -(i-2) <= len(self.analytic_result):
-                            if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
-                                (i+2 < 0 and not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i+2])):
-                                break
-                            i = i - 2
-                        zs = CompositeZhongShu(self.analytic_result[i:-1], zs.original_df)
-                        if -(i-1) <= len(self.analytic_result) and self.analytic_result[i-1].direction == direction:
-                            first_xd = self.analytic_result[i-1]
-                        else:
-                            first_xd = zs.take_split_xd_as_zslx(direction)
-                    else: 
-                        return None, None, None, None
+                    ## zhong shu combination
+                    i = -2
+                    while -(i-2) <= len(self.analytic_result):
+                        if not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i]) or\
+                            (i+2 < 0 and not self.two_zslx_interact_original(self.analytic_result[i-2], self.analytic_result[i+2])):
+                            break
+                        i = i - 2
+                    zs = CompositeZhongShu(self.analytic_result[i:-1], zs.original_df)
+                    if -(i-1) <= len(self.analytic_result) and self.analytic_result[i-1].direction == direction:
+                        first_xd = self.analytic_result[i-1]
+                    else:
+                        first_xd = zs.take_split_xd_as_zslx(direction)
                         
                 elif len(self.analytic_result) < 3 or self.analytic_result[-3].direction != direction:
                     if len(self.analytic_result) > 1:
@@ -833,7 +829,8 @@ class Equilibrium():
         
         all_zs = [zs.isBenZouStyle() for zs in zoushi if zs.isZhongShu]
 #         all_zs = all_zs[-2:] if self.isQvShi else all_zs[-1:]
-        if np.any(all_zs[-1:]):
+        # benzou check only for panbei
+        if np.any(all_zs[-1:]) and not self.isQvShi and not at_bi_level:
             if self.isdebug:
                 print("BenZou Zhongshu detected, We can't analyze this type of zoushi")
             return False
@@ -1111,27 +1108,24 @@ class Equilibrium():
             exhaustion_result = True
 
         zslx_force = 0
-#         zslx_macd = 0
+        zslx_macd = 0
         if not exhaustion_result and new_high_low:
             # macd is converted by mangitude as conversion factor to 
             # work out the force per unit timeprice value <=> presure
             # macd / (price * time)
-            # DONE in the future: MONEY * PRICE / time ** 2 <=> force = kg * m / s ** 2 <=> newton
             
-#             zslx_mag = zslx_a.get_magnitude()
-#             latest_mag = zslx_c.get_magnitude() 
-# 
-#             zslx_macd = zslx_a.get_macd_acc() / zslx_mag
-#             latest_macd = zslx_c.get_macd_acc() / latest_mag
-#             exhaustion_result = float_more(abs(zslx_macd), abs(latest_macd))
-#             if self.isdebug:
-#                 print("{0} found by macd: {1}, {2}".format("exhaustion" if exhaustion_result else "exhaustion not", zslx_macd, latest_macd))
-            
-            zslx_a_force = zslx_a.work_out_force()
-            zslx_force = zslx_c.work_out_force()
-            exhaustion_result = float_more(abs(zslx_a_force), abs(zslx_force))
+            zslx_macd = zslx_a.work_out_macd_strength()
+            latest_macd = zslx_c.work_out_macd_strength()
+            exhaustion_result = float_more(abs(zslx_macd), abs(latest_macd))
             if self.isdebug:
-                print("{0} found by force: {1}, {2}".format("exhaustion" if exhaustion_result else "exhaustion not", zslx_a_force, zslx_force))
+                print("{0} found by macd: {1}, {2}".format("exhaustion" if exhaustion_result else "exhaustion not", zslx_macd, latest_macd))
+            
+            if not exhaustion_result:
+                zslx_a_force = zslx_a.work_out_force()
+                zslx_force = zslx_c.work_out_force()
+                exhaustion_result = float_more(abs(zslx_a_force), abs(zslx_force))
+                if self.isdebug:
+                    print("{0} found by force: {1}, {2}".format("exhaustion" if exhaustion_result else "exhaustion not", zslx_a_force, zslx_force))
         return exhaustion_result, zslx_slope, zslx_force
 
     def check_exhaustion(self, zslx_a, zslx_c, new_high_low):
