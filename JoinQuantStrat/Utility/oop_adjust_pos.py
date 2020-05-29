@@ -813,8 +813,8 @@ class Short_Chan(Sell_stocks):
             first_loc_diff = stock_data.loc[top_zoushi_start_time:,].shape[0] - current_loc_diff
             
             if current_loc_diff > first_loc_diff:
-                if stock_data.iloc[-1].close < top_chan_p:
-                    print("waited for equal period {0}:{1} never reached target price {2}".format(first_loc_diff, 
+                if (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
+                    print("waited for equal period {0}:{1} never reached profit {2}".format(first_loc_diff, 
                                                                                                   current_loc_diff, 
                                                                                                   top_chan_p))
                     return True
@@ -1003,7 +1003,8 @@ class Short_Chan(Sell_stocks):
                                                                             top_zhongshu_formed))
                 return True
 
-            if stock_data.loc[effective_time:, 'high'].max() >= top_chan_p: # reached target price
+            if stock_data.loc[effective_time:, 'high'].max() >= top_chan_p or\
+                top_zhongshu_formed: # reached target price
                 print("STOP PROFIT {0} reached target price: {1}".format(stock, top_chan_p))
                 
                 if self.use_ma13:
@@ -1024,8 +1025,8 @@ class Short_Chan(Sell_stocks):
                                                       is_anal=False,
                                                       split_time=min_time,
                                                       check_bi=False,
-                                                      allow_simple_zslx=False,
-                                                      force_zhongshu=True,
+                                                      allow_simple_zslx=True,
+                                                      force_zhongshu=False,
                                                       check_full_zoushi=False,
                                                       ignore_sub_xd=False)
                 if sub_exhausted and sub_zhongshu_formed:
