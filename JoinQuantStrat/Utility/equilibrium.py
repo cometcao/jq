@@ -12,113 +12,57 @@ import datetime
 import numpy as np
 import pandas as pd
 
-# def check_top_chan(stock, 
-#                    end_time, 
-#                    periods, 
-#                    count, 
-#                    direction, 
-#                    chan_type, 
-#                    isdebug=False, 
-#                    is_anal=False,
-#                    is_description=True,
-#                    check_structure=False, 
-#                    not_check_bi_exhaustion=False):
-#     if is_description:
-#         print("check_top_chan working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
-#     ni = NestedInterval(stock, 
-#                         end_dt=end_time, 
-#                         periods=periods, 
-#                         count=count, 
-#                         isdebug=isdebug, 
-#                         isDescription=is_description,
-#                         isAnal=is_anal)
-#     
-#     return ni.One_period_full_check(direction, 
-#                                     chan_type,
-#                                     check_end_tb=check_structure, 
-#                                     check_tb_structure=check_structure, 
-#                                     not_check_bi_exhaustion=not_check_bi_exhaustion)
-#     
-# def check_sub_chan(stock, 
-#                     end_time, 
-#                     periods, 
-#                     count=2000, 
-#                     direction=TopBotType.top2bot, 
-#                     chan_type=Chan_Type.INVALID, 
-#                     isdebug=False, 
-#                     is_anal=False, 
-#                     is_description=True,
-#                     split_time=None,
-#                     not_check_bi_exhaustion=False,
-#                     force_zhongshu=False):
-#     if is_description:
-#         print("check_sub_chan working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
-#     ni = NestedInterval(stock, 
-#                         end_dt=end_time, 
-#                         periods=periods, 
-#                         count=count, 
-#                         isdebug=isdebug, 
-#                         isDescription=is_description,
-#                         isAnal=is_anal,
-#                         initial_pe_prep=periods[0], 
-#                         initial_split_time=split_time, 
-#                         initial_direction=direction)
-#     return ni.One_period_full_check(direction, 
-#                                      chan_type=chan_type,
-#                                      check_end_tb=True, 
-#                                      check_tb_structure=True,
-#                                      not_check_bi_exhaustion=not_check_bi_exhaustion,
-#                                      force_zhongshu=force_zhongshu) # data split at retrieval time
-# 
-# def check_full_chan(stock, 
-#                     end_time, 
-#                     periods=['5m', '1m'], 
-#                     count=2000, 
-#                     direction=TopBotType.top2bot, 
-#                     isdebug=False, 
-#                     is_anal=False, 
-#                     is_description=True,
-#                     bi_level_precision=True):
-#     if is_description:
-#         print("check_full_chan working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
-#     top_pe = periods[0]
-#     sub_pe = periods[1]
-#     exhausted, chan_profile = check_top_chan(stock=stock, 
-#                                               end_time=end_time, 
-#                                               periods = [top_pe], 
-#                                               count=count, 
-#                                               direction=direction, 
-#                                               chan_type=[Chan_Type.I, Chan_Type.III], 
-#                                               isdebug=isdebug, 
-#                                               is_anal=is_anal,
-#                                               is_description=is_description,
-#                                               check_structure=True,
-#                                               not_check_bi_exhaustion=not bi_level_precision)
-#     if not chan_profile:
-#         chan_profile = [(Chan_Type.INVALID, TopBotType.noTopBot, 0, 0, 0, None, None)]
-#     
-#     stock_profile = chan_profile
-# 
-#     if exhausted:
-#         if chan_profile[0][0] == Chan_Type.I:
-#             return exhausted, stock_profile
-#         elif chan_profile[0][0] == Chan_Type.III:
-#             splitTime = chan_profile[0][5]
-#             exhausted, sub_chan_types = check_sub_chan(stock=stock, 
-#                                                         end_time=end_time, 
-#                                                         periods=[sub_pe], 
-#                                                         count=2000, 
-#                                                         direction=direction, 
-#                                                         chan_type=[Chan_Type.INVALID, Chan_Type.I], 
-#                                                         isdebug=isdebug, 
-#                                                         is_anal=is_anal, 
-#                                                         is_description=is_description,
-#                                                         split_time=splitTime,
-#                                                         not_check_bi_exhaustion=not bi_level_precision)
-#             stock_profile = stock_profile + sub_chan_types
-#             return exhausted, stock_profile
-#     else:
-#         return exhausted, stock_profile
+def work_out_count(start_dt, end_dt, unit):
+    if type(start_dt) is str:
+        start_dt = datetime.datetime.strptime(start_dt, "%Y-%m-%d %H:%M:%S")
+    if type(end_dt) is str:
+        end_dt = datetime.datetime.strptime(end_dt, "%Y-%m-%d %H:%M:%S")
+        if end_dt.hour < 9:
+            end_dt = (end_dt - datetime.timedelta(days = 1)).replace(hour=15, minute=0)
+        elif end_dt.hour > 14:
+            end_dt = end_dt.replace(hour=15, minute=0)
+
+    start_time_delta = start_dt.replace(hour=15, minute=0) - start_dt if start_dt.hour >= 13 else start_dt.replace(hour=13, minute=30) - start_dt
+    end_time_delta = end_dt - end_dt.replace(hour=9, minute=30) if end_dt.hour <= 11 else end_dt - end_dt.replace(hour=11, minute=0)
+    
+    trade_days = get_trade_days(start_date=start_dt.date(), end_date=end_dt.date())
+    day_diff = len(trade_days) - 2
+    time_delta_seconds = start_time_delta.total_seconds() + end_time_delta.total_seconds() + day_diff * 4 * 60 * 60
+
+    if unit == '1d':
+        count = np.ceil(time_delta_seconds / (60*30*8))
+    elif unit == '30m':
+        count = np.ceil(time_delta_seconds / (60*30))
+    elif unit == '5m':
+        count = np.ceil(time_delta_seconds / (60*5))
+    elif unit == '1m':
+        count = np.ceil(time_delta_seconds / 60)
+    else:
+        print("Unconventional unit, return 1000 for count")
+        count = 1000
+    count = count + 1 # inclusion for end_dt
+    return count
+
+def get_bars_new(security, 
+                 unit='1d',
+                 fields=['date', 'open','high','low','close'],
+                 include_now=True, 
+                 end_dt=None, 
+                 start_dt=None, 
+                 fq_ref_date=None, 
+                 df=False):
+    
+    count = work_out_count(start_dt, end_dt, unit)
+
+    return get_bars(security, 
+                    count=int(count), 
+                    unit=unit,
+                    fields=fields,
+                    include_now=include_now, 
+                    end_dt=end_dt, 
+                    fq_ref_date=fq_ref_date, 
+                    df=df)
+
 
 ##############################################################################################################################
 
@@ -1609,80 +1553,3 @@ class NestedInterval():
                                                  a_macd, 
                                                  sub_start_time if ignore_sub_xd else sub_split_time, 
                                                  eq.get_effective_time())] 
-    
-
-#     def One_period_full_check(self, 
-#                               direction, 
-#                               chan_type = Chan_Type.INVALID, 
-#                               check_end_tb=False, 
-#                               check_tb_structure=False, 
-#                               not_check_bi_exhaustion=False, 
-#                               force_zhongshu=False):
-#         ''' THIS METHOD SHOULD ONLY BE USED FOR ANALYZING LEVEL!!
-#         We only check one period with the following stages: current level => xd => bi
-#         This check should only be used for TYPE I, 
-#         We have to go to lower level to check TYPE III
-#         '''
-#         
-#         if self.isdebug:
-#             print("looking for {0} at current level {1} point with type:{2}".format("long" if direction == TopBotType.top2bot else "short",
-#                                                                       self.periods[0],
-#                                                                       chan_type))
-#         # high level
-#         kb_chan, anal_zoushi = self.df_zoushi_tuple_list[self.periods[0]]
-#         if anal_zoushi is None:
-#             return False, []
-#         eq = Equilibrium(kb_chan.getOriginal_df(), anal_zoushi, isdebug=self.isdebug, isDescription=self.isDescription)
-#         chan_types = eq.check_chan_type(check_end_tb=check_end_tb)
-#         if not chan_types:
-#             return False, chan_types
-#         for _, chan_d,_ in chan_types: # early checks if we have any types found with opposite direction, no need to go further
-#             if chan_d == TopBotType.reverse(direction):
-#                 if self.isdebug:
-#                     print("opposite direction chan type found")
-#                 return False, chan_types
-#         
-#         chan_t, chan_d, chan_p = chan_types[0]
-#         chan_type_check = (chan_t in chan_type) if (type(chan_type) is list) else (chan_t == chan_type)
-#         
-#         guide_price = (chan_p[0] if direction == TopBotType.top2bot else chan_p[1]) if type(chan_p) is list else chan_p
-#         if chan_type_check: # there is no need to do current level check if it's type III
-#             high_exhausted, check_xd_exhaustion, last_zs_time, sub_split_time, high_slope, high_macd = eq.define_equilibrium(direction, 
-#                                                                                                                              guide_price,
-#                                                                                                                              check_tb_structure=check_tb_structure,
-#                                                                                                                              type_III=(chan_t==Chan_Type.III),
-#                                                                                                                              check_balance_structure=True,
-#                                                                                                                              force_zhongshu=force_zhongshu)
-#         else:
-#             return False, [(chan_t, chan_d, chan_p, 0, 0, None, None)]
-# 
-#         if chan_t == Chan_Type.I:
-#             if not high_exhausted or not check_xd_exhaustion:
-#                 return high_exhausted and check_xd_exhaustion, [(chan_t, chan_d, chan_p, 0, 0, None, None)]
-#             
-#             bi_exhaustion, bi_check_exhaustion, effective_time = self.indepth_analyze_zoushi(direction, 
-#                                                                                              sub_split_time, 
-#                                                                                              self.periods[0], 
-#                                                                                              return_effective_time=True,
-#                                                                                              force_zhongshu=False)
-#     
-#             if self.isDescription or self.isdebug:
-#                 print("Top level {0} {1} {2} {3} \n{4} {5} {6} {7}".format(self.periods[0], 
-#                                                                            chan_d, 
-#                                                                            chan_t,
-#                                                                            chan_p,
-#                                                                            "current level {0}".format("ready" if high_exhausted else "continue"),
-#                                                                            "xd level {0}".format("ready" if check_xd_exhaustion else "continue"),
-#                                                                            "bi level {0}".format("ready" if bi_exhaustion else "continue"),
-#                                                                            "bi level exhaustion {0}".format("ready" if bi_check_exhaustion else "continue")
-#                                                                            ))
-#             return high_exhausted and check_xd_exhaustion and bi_exhaustion and (not_check_bi_exhaustion or bi_check_exhaustion),\
-#                 [(chan_t, chan_d, chan_p, high_slope, high_macd, last_zs_time, effective_time)]
-#                 
-#         elif chan_t == Chan_Type.III:
-#             split_time = anal_zoushi.sub_zoushi_time(chan_t, chan_d, False)
-#             return high_exhausted and check_xd_exhaustion, [(chan_t, chan_d, chan_p, high_slope, high_macd, split_time, None)]
-#         else:
-#             bi_exhaustion, bi_check_exhaustion, effective_time = self.indepth_analyze_zoushi(direction, sub_split_time, self.periods[0], return_effective_time=True)
-#             return high_exhausted and check_xd_exhaustion and bi_exhaustion and (not_check_bi_exhaustion or bi_check_exhaustion),\
-#                 [(chan_t, chan_d, chan_p, high_slope, high_macd, last_zs_time, effective_time)]
