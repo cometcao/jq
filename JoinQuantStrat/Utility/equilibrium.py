@@ -1040,8 +1040,7 @@ class Equilibrium():
         This method determines potential TYPE of trade point under CHAN
         '''
         all_types = []
-        if len(self.analytic_result) < 2:
-#             all_types.append((Chan_Type.INVALID, TopBotType.noTopBot, 0))
+        if len(self.analytic_result) < 2 and not self.analytic_result[0].isZhongShu:
             return all_types
         
         # we can't supply the Zhongshu amplitude range as it is considered part of Zhongshu
