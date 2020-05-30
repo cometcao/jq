@@ -22,10 +22,26 @@ def filter_high_level_by_index(direction=TopBotType.top2bot,
                                end_dt=pd.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                chan_types=[Chan_Type.I, Chan_Type.III]):
     all_stocks = get_index_stocks(stock_index, end_dt)
+    return filter_high_level_by_stocks(
+                                        direction,
+                                        all_stocks,
+                                        df=df,
+                                        periods=periods,
+                                        end_dt=end_dt,
+                                        chan_types=chan_types
+                                        )
+
+def filter_high_level_by_stocks(direction, 
+                               stock_list, 
+                               df=False, 
+                               periods = ['30m'],
+                               end_dt=pd.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                               chan_types=[Chan_Type.I, Chan_Type.III]):
+    
     result_stocks_I = set()
     result_stocks_III = set()
     result_stocks_PB = set()
-    for stock in all_stocks:
+    for stock in stock_list:
         for p in periods:
             result_stocks_I, result_stocks_III, result_stocks_PB = filter_high_level_by_stock(stock, 
                                                                             p, 
