@@ -208,28 +208,31 @@ class KBar(object):
             return False
         
         start_idx = -6
-        steps = -3
-        first = kbar_list[start_idx]
-        second = kbar_list[start_idx+1] 
-        third = kbar_list[start_idx+2]
+        end_idx = -4
+        
+        aa = kbar_list[start_idx]
+        bb = kbar_list[start_idx+1] 
+        cc = kbar_list[start_idx+2]
         last = kbar_list[-1]
         result = False
         if (last.close < last.open) or ((last.close-last.low)/(last.high-last.low) <= (1-GOLDEN_RATIO)):
             
-            while start_idx < steps:
-                check_result, k_m, k_l = cls.contain_zhongshu(first, second, third, return_core_range=False)
+            while start_idx < end_idx:
+                check_result, k_m, k_l = cls.contain_zhongshu(aa, bb, cc, return_core_range=False)
                 
                 if check_result:
-                    result = (float_less_equal(last.low, k_l) and float_more_equal(first.high, k_m))\
+                    first_max = max([kbar.high for kbar in kbar_list[:start_idx]])
+                    first_min = min([kbar.low for kbar in kbar_list[:start_idx]])
+                    result = (float_less_equal(last.low, k_l) and float_more_equal(first_max, k_m))\
                               if direction == TopBotType.top2bot else\
-                              (float_more_equal(last.high, k_m) and float_less_equal(first.low, k_l))
+                              (float_more_equal(last.high, k_m) and float_less_equal(first_min, k_l))
                 if result:
                     return result
                 else:
                     start_idx = start_idx + 1
-                    first = kbar_list[start_idx]
-                    second = kbar_list[start_idx+1] 
-                    third = kbar_list[start_idx+2]
+                    aa = kbar_list[start_idx]
+                    bb = kbar_list[start_idx+1] 
+                    cc = kbar_list[start_idx+2]
         
         return result
         
