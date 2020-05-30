@@ -623,7 +623,7 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
     def __init__(self, params):
         Pick_Chan_Stocks.__init__(self, params)
         self.filename = params.get('filename', None)
-        self.top_chan_types = params.get('top_chan_types', [Chan_Type.I, Chan_Type.III, Chan_Type.INVALID])
+        self.current_chan_types = params.get('current_chan_types', [Chan_Type.I, Chan_Type.III, Chan_Type.INVALID])
         self.sub_chan_types = params.get('sub_chan_types', [Chan_Type.I, Chan_Type.INVALID])
         self.enable_on_demand = params.get('on_demand', False)
         
@@ -656,7 +656,7 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                 if stock in context.portfolio.positions.keys():
                     print("{0} already in position".format(stock))
                     continue
-                if self.top_chan_types and (Chan_Type.value2type(c_type_value) not in self.top_chan_types):
+                if self.current_chan_types and (Chan_Type.value2type(c_type_value) not in self.current_chan_types):
                     continue
                 if self.sub_chan_types and (Chan_Type.value2type(sub_type_value) not in self.sub_chan_types):
                     continue
