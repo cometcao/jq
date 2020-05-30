@@ -207,8 +207,8 @@ class KBar(object):
             ):
             return False
         
-        start_idx = -4
-        steps = -2
+        start_idx = -6
+        steps = -3
         first = kbar_list[start_idx]
         second = kbar_list[start_idx+1] 
         third = kbar_list[start_idx+2]

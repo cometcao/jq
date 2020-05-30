@@ -359,6 +359,8 @@ class CentralRegionProcess(object):
         '''
         x_axis = []
         y_axis = []
+        if self.zoushi is None:
+            return x_axis, y_axis
         for zs in self.zoushi.zslx_result:
             if type(zs) is ZhongShu:
 #                 print(zs)
