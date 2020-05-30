@@ -207,7 +207,7 @@ class KBar(object):
             ):
             return False
         
-        start_idx = -6
+        start_idx = -5
         end_idx = -4
         
         aa = kbar_list[start_idx]
