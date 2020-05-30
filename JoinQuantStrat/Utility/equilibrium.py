@@ -179,7 +179,7 @@ def check_stock_full(stock,
                      periods=['5m', '1m'], 
                      count=2000, 
                      direction=TopBotType.top2bot, 
-                     top_chan_type=[Chan_Type.I, Chan_Type.III],
+                     current_chan_type=[Chan_Type.I, Chan_Type.III],
                      sub_chan_type=[Chan_Type.INVALID, Chan_Type.I],
                      isdebug=False, 
                      is_anal=False,
@@ -187,19 +187,19 @@ def check_stock_full(stock,
                      sub_force_zhongshu=True,
                      sub_check_bi=False,
                      use_sub_split=True,
-                     ignore_top_xd=False, 
+                     ignore_cur_xd=False, 
                      ignore_sub_xd=False):
     
     if is_description:
         print("check_stock_full working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
-    top_pe = periods[0]
+    cur_pe = periods[0]
     sub_pe = periods[1]
     exhausted, xd_exhausted, chan_profile = check_chan_by_type_exhaustion(stock=stock, 
                                                                       end_time=end_time, 
-                                                                      periods = [top_pe], 
+                                                                      periods = [cur_pe], 
                                                                       count=count, 
                                                                       direction=direction, 
-                                                                      chan_type=top_chan_type, 
+                                                                      chan_type=current_chan_type, 
                                                                       isdebug=isdebug, 
                                                                       is_description=is_description,
                                                                       check_structure=True,
@@ -211,7 +211,7 @@ def check_stock_full(stock,
     # use the start of beichiduan
     splitTime = chan_profile[0][5] if use_sub_split else None# split time and force sub level with zhongshu formed
     
-    if exhausted and (xd_exhausted or ignore_top_xd) and sanity_check(stock, chan_profile, end_time, top_pe, direction):
+    if exhausted and (xd_exhausted or ignore_cur_xd) and sanity_check(stock, chan_profile, end_time, cur_pe, direction):
         sub_exhausted, sub_xd_exhausted, sub_profile, zhongshu_completed = check_stock_sub(stock=stock, 
                                                                                 end_time=end_time, 
                                                                                 periods=[sub_pe], 
@@ -229,7 +229,7 @@ def check_stock_full(stock,
                                                                                 ignore_sub_xd=ignore_sub_xd,
                                                                                 check_full_zoushi=False)
         chan_profile = chan_profile + sub_profile
-        return exhausted and (xd_exhausted or ignore_top_xd) and sub_exhausted and (ignore_sub_xd or sub_xd_exhausted), chan_profile, zhongshu_completed
+        return exhausted and (xd_exhausted or ignore_cur_xd) and sub_exhausted and (ignore_sub_xd or sub_xd_exhausted), chan_profile, zhongshu_completed
     else:
         return False, chan_profile, False
 

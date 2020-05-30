@@ -763,7 +763,8 @@ class Buy_stocks_pair(Buy_stocks_var):
 class Short_Chan(Sell_stocks):
     def __init__(self, params):
         Sell_stocks.__init__(self, params)
-        self.top_period = params.get('top_period', '5m')
+        self.sup_period = params.get('sup_period' ,'30m')
+        self.current_period = params.get('current_period', '5m')
         self.sub_period = params.get('sub_period', '1m')
         self.isdebug = params.get('isdebug', False)
         self.isDescription = params.get('isDescription', True)
@@ -778,14 +779,14 @@ class Short_Chan(Sell_stocks):
         if context.portfolio.positions[stock].avg_cost < context.portfolio.positions[stock].price:
             return False
         
-        top_profile = self.g.stock_chan_type[stock][0]
+        current_profile = self.g.stock_chan_type[stock][0]
         sub_profile = self.g.stock_chan_type[stock][1]
-        top_chan_t = top_profile[0]
-        top_chan_p = top_profile[2]
-        top_chan_slope = top_profile[3]
-        top_chan_force = top_profile[4]
-        top_zoushi_start_time = top_profile[5]
-        splitTime = top_profile[6]
+        current_chan_t = current_profile[0]
+        current_chan_p = current_profile[2]
+        current_chan_slope = current_profile[3]
+        current_chan_force = current_profile[4]
+        current_zoushi_start_time = current_profile[5]
+        splitTime = current_profile[6]
         sub_chan_t = sub_profile[0]
         sub_chan_p = sub_profile[2]
         sub_chan_slope = sub_profile[3]
@@ -793,40 +794,40 @@ class Short_Chan(Sell_stocks):
         sub_zoushi_start_time = sub_profile[5]
         effective_time = sub_profile[6]
         
-        if top_chan_t == Chan_Type.I:
+        if current_chan_t == Chan_Type.I:
             # This is to make sure we have enough data for MACD and MA
-            data_start_time = top_zoushi_start_time - pd.Timedelta(minutes=250)
+            data_start_time = current_zoushi_start_time - pd.Timedelta(minutes=250)
             stock_data = get_price(stock,
                                    start_date=data_start_time, 
                                    end_date=context.current_dt, 
-                                   frequency=self.top_period, 
+                                   frequency=self.current_period, 
                                    fields=('high', 'low', 'close', 'money'), 
                                    skip_paused=False)
 
-            max_price = stock_data.loc[top_zoushi_start_time:, 'high'].max()
-            min_price = stock_data.loc[top_zoushi_start_time:, 'low'].min()
-            max_price_time = stock_data.loc[top_zoushi_start_time:, 'high'].idxmax()
+            max_price = stock_data.loc[current_zoushi_start_time:, 'high'].max()
+            min_price = stock_data.loc[current_zoushi_start_time:, 'low'].min()
+            max_price_time = stock_data.loc[current_zoushi_start_time:, 'high'].idxmax()
             min_price_time = stock_data.loc[effective_time:, 'low'].idxmin()
             max_loc = stock_data.index.get_loc(max_price_time)
             min_loc = stock_data.index.get_loc(min_price_time)
             current_loc_diff = stock_data.loc[effective_time:,].shape[0]
-            first_loc_diff = stock_data.loc[top_zoushi_start_time:,].shape[0] - current_loc_diff
+            first_loc_diff = stock_data.loc[current_zoushi_start_time:,].shape[0] - current_loc_diff
             
             if current_loc_diff > first_loc_diff:
                 if (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
                     print("waited for equal period {0}:{1} never reached profit {2}".format(first_loc_diff, 
                                                                                                   current_loc_diff, 
-                                                                                                  top_chan_p))
+                                                                                                  current_chan_p))
                     return True
 
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
                 # check if original long point still holds
                 result, xd_result, _ = check_chan_by_type_exhaustion(stock,
                                                                       end_time=min_price_time,
-                                                                      periods=[self.top_period],
+                                                                      periods=[self.current_period],
                                                                       count=4800,
                                                                       direction=TopBotType.top2bot,
-                                                                      chan_type=[top_chan_t],
+                                                                      chan_type=[current_chan_t],
                                                                       isdebug=self.isdebug,
                                                                       is_description =self.isDescription,
                                                                       is_anal=False,
@@ -842,10 +843,10 @@ class Short_Chan(Sell_stocks):
 
 #                 result, profile, _ = check_stock_full(stock,
 #                                                      end_time=min_price_time,
-#                                                      periods=[self.top_period, self.sub_period],
+#                                                      periods=[self.current_period, self.sub_period],
 #                                                      count=6000, # needs more data!
 #                                                      direction=TopBotType.top2bot, 
-#                                                      top_chan_type=[top_chan_t],
+#                                                      current_chan_type=[current_chan_t],
 #                                                      sub_chan_type=[sub_chan_t],
 #                                                      isdebug=self.isdebug,
 #                                                      is_description=self.isDescription,
@@ -860,21 +861,21 @@ class Short_Chan(Sell_stocks):
 #             elif (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
 #                 # check slope
 #                 latest_slope = (max_price-min_price)/(max_loc-min_loc)
-#                 if latest_slope < 0 and abs(latest_slope) >= abs(top_chan_slope):
-#                     print("slope gets deeper! STOPLOSS {0},{1}".format(top_chan_slope, latest_slope))
+#                 if latest_slope < 0 and abs(latest_slope) >= abs(current_chan_slope):
+#                     print("slope gets deeper! STOPLOSS {0},{1}".format(current_chan_slope, latest_slope))
 #                     return True
 #                   
 #                 # check force
-#                 money_sum = stock_data.loc[top_zoushi_start_time:, 'money'].sum() / 1e8
+#                 money_sum = stock_data.loc[current_zoushi_start_time:, 'money'].sum() / 1e8
 #                 price_delta = (min_price - max_price) / max_price * 100
-#                 time_delta = stock_data.loc[top_zoushi_start_time:,:].shape[0] / 1200 * 100
+#                 time_delta = stock_data.loc[current_zoushi_start_time:,:].shape[0] / 1200 * 100
 #                 latest_force = money_sum * price_delta / time_delta ** 2
-#                 if top_chan_force != 0 and latest_force < 0 and abs(latest_force) > abs(top_chan_force):
-#                     print("force gets deeper! STOPLOSS {0},{1}".format(top_chan_force, latest_force))
+#                 if current_chan_force != 0 and latest_force < 0 and abs(latest_force) > abs(current_chan_force):
+#                     print("force gets deeper! STOPLOSS {0},{1}".format(current_chan_force, latest_force))
 #                     return True
                 
             return False
-        elif top_chan_t == Chan_Type.III or top_chan_t == Chan_Type.INVALID:
+        elif current_chan_t == Chan_Type.III or current_chan_t == Chan_Type.INVALID:
             # This is to make sure we have enough data for MACD and MA
             data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=120)
             stock_data = get_price(stock,
@@ -894,7 +895,7 @@ class Short_Chan(Sell_stocks):
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss: # reached stop loss mark
                 exhausted, xd_exhausted, _, _ = check_stock_sub(stock,
                                                               end_time=min_price_time,
-                                                              periods=[self.sub_period],
+                                                              periods=['1m' if self.sub_period == 'bi' else self.sub_period],
                                                               count=2500,
                                                               direction=TopBotType.top2bot,
                                                               chan_types=[Chan_Type.I, Chan_Type.INVALID],
@@ -902,7 +903,7 @@ class Short_Chan(Sell_stocks):
                                                               is_description =self.isDescription,
                                                               is_anal=False,
                                                               split_time=splitTime,
-                                                              check_bi=False,
+                                                              check_bi=(self.sub_period=='bi'),
                                                               force_zhongshu=True,
                                                               check_full_zoushi=False) # synch with selection
                 if not exhausted or not xd_exhausted:
@@ -923,8 +924,8 @@ class Short_Chan(Sell_stocks):
                     print("force gets deeper! STOPLOSS {0},{1}".format(sub_chan_force, latest_force))
                     return True
 
-            if top_chan_t == Chan_Type.III and stock_data.loc[effective_time:,'low'].min() <= top_chan_p:
-                print("TYPE III invalidated {0}, {1}".format(stock_data.loc[effective_time:,'low'].min(), top_chan_p))
+            if current_chan_t == Chan_Type.III and stock_data.loc[effective_time:,'low'].min() <= current_chan_p:
+                print("TYPE III invalidated {0}, {1}".format(stock_data.loc[effective_time:,'low'].min(), current_chan_p))
                 return True
             
             return False
@@ -935,53 +936,30 @@ class Short_Chan(Sell_stocks):
             return False
         
         position_time = context.portfolio.positions[stock].transact_time
-        top_profile = self.g.stock_chan_type[stock][0]
+        current_profile = self.g.stock_chan_type[stock][0]
         sub_profile = self.g.stock_chan_type[stock][1]
-        top_chan_t = top_profile[0]
-        top_chan_p = top_profile[2]
-        top_zoushi_start_time = top_profile[5]
-        top_split_time = top_profile[6]
+        current_chan_t = current_profile[0]
+        current_chan_p = current_profile[2]
+        current_zoushi_start_time = current_profile[5]
+        current_split_time = current_profile[6]
         sub_chan_t = sub_profile[0]
         sub_chan_p = sub_profile[2]
         sub_zoushi_start_time = sub_profile[5]
         effective_time = sub_profile[6]
         
-        if top_chan_t == Chan_Type.I:
-            data_start_time = top_zoushi_start_time - pd.Timedelta(minutes=200)
+        if current_chan_t == Chan_Type.I:
+            data_start_time = current_zoushi_start_time - pd.Timedelta(minutes=200)
             stock_data = get_price(stock,
                                    start_date=data_start_time, 
                                    end_date=context.current_dt, 
-                                   frequency=self.top_period, 
+                                   frequency=self.current_period, 
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
-            min_time = stock_data.loc[top_split_time:, 'low'].idxmin()
+            min_time = stock_data.loc[current_split_time:, 'low'].idxmin()
             
-            sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
+            current_exhausted, current_xd_exhausted, _, current_zhongshu_formed = check_stock_sub(stock,
                                                   end_time=context.current_dt,
-                                                  periods=[self.sub_period],
-                                                  count=2000,
-                                                  direction=TopBotType.bot2top,
-                                                  chan_types=[Chan_Type.I],
-                                                  isdebug=self.isdebug,
-                                                  is_description=self.isDescription,
-                                                  is_anal=False,
-                                                  split_time=min_time,
-                                                  check_bi=False,
-                                                  allow_simple_zslx=False,
-                                                  force_zhongshu=True,
-                                                  check_full_zoushi=False, 
-                                                  ignore_sub_xd=False)
-            if sub_exhausted and sub_zhongshu_formed:
-                print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
-                                                                            self.sub_period,
-                                                                            sub_exhausted,
-                                                                            sub_xd_exhausted,
-                                                                            sub_zhongshu_formed))
-                return True
-            
-            exhausted, xd_exhausted, _, top_zhongshu_formed = check_stock_sub(stock,
-                                                  end_time=context.current_dt,
-                                                  periods=[self.top_period],
+                                                  periods=[self.current_period],
                                                   count=2000,
                                                   direction=TopBotType.bot2top,
                                                   chan_types=[Chan_Type.I, Chan_Type.INVALID],
@@ -993,19 +971,42 @@ class Short_Chan(Sell_stocks):
                                                   allow_simple_zslx=False,
                                                   force_zhongshu=True,
                                                   check_full_zoushi=False, 
+                                                  ignore_sub_xd=False)
+            if current_exhausted and current_zhongshu_formed:
+                print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
+                                                                            self.current_period,
+                                                                            current_exhausted,
+                                                                            current_xd_exhausted,
+                                                                            current_zhongshu_formed))
+                return True
+            
+            sup_exhausted, sup_xd_exhausted, _, sup_zhongshu_formed = check_stock_sub(stock,
+                                                  end_time=context.current_dt,
+                                                  periods=[self.sup_period],
+                                                  count=2000,
+                                                  direction=TopBotType.bot2top,
+                                                  chan_types=[Chan_Type.I, Chan_Type.INVALID],
+                                                  isdebug=self.isdebug,
+                                                  is_description=self.isDescription,
+                                                  is_anal=False,
+                                                  split_time=min_time,
+                                                  check_bi=False,
+                                                  allow_simple_zslx=False,
+                                                  force_zhongshu=False,
+                                                  check_full_zoushi=False, 
                                                   ignore_sub_xd=False) # synch with selection
             
-            if (exhausted and top_zhongshu_formed) or (not top_zhongshu_formed and exhausted and xd_exhausted):
+            if (sup_exhausted and sup_zhongshu_formed) or (not sup_zhongshu_formed and sup_exhausted and sup_xd_exhausted):
                 print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
-                                                                            self.top_period,
+                                                                            self.current_period,
                                                                             exhausted,
                                                                             xd_exhausted,
                                                                             top_zhongshu_formed))
                 return True
 
-            if stock_data.loc[effective_time:, 'high'].max() >= top_chan_p or\
+            if stock_data.loc[effective_time:, 'high'].max() >= current_chan_p or\
                 top_zhongshu_formed: # reached target price
-                print("STOP PROFIT {0} reached target price: {1}".format(stock, top_chan_p))
+                print("STOP PROFIT {0} reached target price: {1}".format(stock, current_chan_p))
                 
                 if self.use_ma13:
                     sma13 = stock_data['close'].values[-13:].sum() / 13
@@ -1016,7 +1017,7 @@ class Short_Chan(Sell_stocks):
                 
                 sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
                                                       end_time=context.current_dt,
-                                                      periods=[self.sub_period],
+                                                      periods=['1m' if self.sub_period == 'bi' else self.sub_period],
                                                       count=2000,
                                                       direction=TopBotType.bot2top,
                                                       chan_types=[Chan_Type.I, Chan_Type.INVALID],
@@ -1024,7 +1025,7 @@ class Short_Chan(Sell_stocks):
                                                       is_description=self.isDescription,
                                                       is_anal=False,
                                                       split_time=min_time,
-                                                      check_bi=False,
+                                                      check_bi=(self.sub_period == 'bi'),
                                                       allow_simple_zslx=True,
                                                       force_zhongshu=False,
                                                       check_full_zoushi=False,
@@ -1036,14 +1037,14 @@ class Short_Chan(Sell_stocks):
                                                                                 sub_xd_exhausted,
                                                                                 sub_zhongshu_formed))
             
-        elif top_chan_t == Chan_Type.III or top_chan_t == Chan_Type.INVALID:
+        elif current_chan_t == Chan_Type.III or current_chan_t == Chan_Type.INVALID:
             
             # extra data for SMA calculation
             data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=200)
             stock_data = get_price(stock,
                                    start_date=data_start_time, 
                                    end_date=context.current_dt, 
-                                   frequency=self.top_period, 
+                                   frequency=self.current_period, 
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
 
@@ -1060,7 +1061,7 @@ class Short_Chan(Sell_stocks):
 
             bi_exhausted, bi_check_exhaustion, _, bi_all_types = check_chan_indepth(stock, 
                                                                                    end_time=context.current_dt, 
-                                                                                   period=self.sub_period, 
+                                                                                   period=('1m' if self.sub_period == 'bi' else self.sub_period), 
                                                                                    count=2000, 
                                                                                    direction=TopBotType.bot2top, 
                                                                                    isdebug=self.isdebug, 
@@ -1076,7 +1077,7 @@ class Short_Chan(Sell_stocks):
                 
             exhausted, xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
                                                           end_time=context.current_dt,
-                                                          periods=[self.sub_period],
+                                                          periods=['1m' if self.sub_period == 'bi' else self.sub_period],
                                                           count=2000,
                                                           direction=TopBotType.bot2top,
                                                           chan_types=[Chan_Type.I, Chan_Type.INVALID],
@@ -1099,7 +1100,7 @@ class Short_Chan(Sell_stocks):
                 # for TYPE III of 5m, we don't want to hold a stock for too long
                 top_result, top_xd_result,_, top_zhongshu_formed = check_stock_sub(stock,
                                                               end_time=context.current_dt,
-                                                              periods=[self.top_period],
+                                                              periods=[self.current_period],
                                                               count=2000,
                                                               direction=TopBotType.bot2top,
                                                               chan_types=[Chan_Type.I, Chan_Type.INVALID],

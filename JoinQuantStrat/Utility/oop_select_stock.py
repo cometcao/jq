@@ -690,7 +690,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.isdebug = params.get('isdebug', False)
         self.isDescription= params.get('isDescription', False)
         self.long_stock_num = params.get('long_stock_num', 0)
-        self.top_chan_type = params.get('top_chan_type', [Chan_Type.I, Chan_Type.III])
+        self.sup_chan_type = params.get('sup_chan_type', [Chan_Type.I, Chan_Type.INVALID])
+        self.curent_chan_type = params.get('current_chan_type', [Chan_Type.I])
         self.sub_chan_type = params.get('sub_chan_type', [Chan_Type.INVALID, Chan_Type.I])
         self.periods = params.get('periods', ['5m', '1m'])
         self.num_of_data = params.get('num_of_data', 2500)
@@ -732,14 +733,14 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                  periods=self.periods,
                                                  count=self.num_of_data,
                                                  direction=TopBotType.top2bot, 
-                                                 top_chan_type=self.top_chan_type,
+                                                 current_chan_type=self.curent_chan_type,
                                                  sub_chan_type=self.sub_chan_type,
                                                  isdebug=self.isdebug,
                                                  is_description=self.isDescription,
                                                  sub_force_zhongshu=self.sub_force_zhongshu, 
                                                  sub_check_bi=self.bi_level_precision,
                                                  use_sub_split=self.use_sub_split,
-                                                 ignore_top_xd=self.ignore_xd,
+                                                 ignore_cur_xd=self.ignore_xd,
                                                  ignore_sub_xd=self.ignore_xd)
             
             if result:
