@@ -1001,11 +1001,11 @@ class Short_Chan(Sell_stocks):
                                                                             self.current_period,
                                                                             exhausted,
                                                                             xd_exhausted,
-                                                                            top_zhongshu_formed))
+                                                                            sup_zhongshu_formed))
                 return True
 
             if stock_data.loc[effective_time:, 'high'].max() >= current_chan_p or\
-                top_zhongshu_formed: # reached target price
+                sup_zhongshu_formed: # reached target price
                 print("STOP PROFIT {0} reached target price: {1}".format(stock, current_chan_p))
                 
                 if self.use_ma13:
