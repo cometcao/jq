@@ -999,8 +999,8 @@ class Short_Chan(Sell_stocks):
             if (sup_exhausted and sup_zhongshu_formed) or (not sup_zhongshu_formed and sup_exhausted and sup_xd_exhausted):
                 print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
                                                                             self.sup_period,
-                                                                            exhausted,
-                                                                            xd_exhausted,
+                                                                            sup_exhausted,
+                                                                            sup_xd_exhausted,
                                                                             sup_zhongshu_formed))
                 return True
 
@@ -1088,7 +1088,8 @@ class Short_Chan(Sell_stocks):
                                                           force_zhongshu=False,
                                                           allow_simple_zslx=False,
                                                           check_bi=False,
-                                                          force_bi_zhongshu=True) # relax rule
+                                                          force_bi_zhongshu=True, 
+                                                          check_full_zoushi=False) # relax rule
             if bi_exhausted and ((exhausted and sub_zhongshu_formed) or (not sub_zhongshu_formed and exhausted and xd_exhausted)):
                 print("STOP PROFIT {0} sub exhausted: {1}, {2} Zhongshu formed: {3}".format(stock,
                                                                                    exhausted,
