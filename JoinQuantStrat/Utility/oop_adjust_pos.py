@@ -998,7 +998,7 @@ class Short_Chan(Sell_stocks):
             
             if (sup_exhausted and sup_zhongshu_formed) or (not sup_zhongshu_formed and sup_exhausted and sup_xd_exhausted):
                 print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
-                                                                            self.current_period,
+                                                                            self.sup_period,
                                                                             exhausted,
                                                                             xd_exhausted,
                                                                             sup_zhongshu_formed))
@@ -1027,7 +1027,7 @@ class Short_Chan(Sell_stocks):
                                                       split_time=min_time,
                                                       check_bi=(self.sub_period == 'bi'),
                                                       allow_simple_zslx=True,
-                                                      force_zhongshu=False,
+                                                      force_zhongshu=True,
                                                       check_full_zoushi=False,
                                                       ignore_sub_xd=False)
                 if sub_exhausted and sub_zhongshu_formed:
