@@ -1006,7 +1006,8 @@ class Short_Chan(Sell_stocks):
 
             if stock_data.loc[effective_time:, 'high'].max() >= current_chan_p or\
                 sup_zhongshu_formed: # reached target price
-                print("STOP PROFIT {0} reached target price: {1}".format(stock, current_chan_p))
+                print("STOP PROFIT {0} target price: {1}, now max: {2}".format(stock, current_chan_p, stock_data.loc[effective_time:, 'high'].max()))
+                print("STOP PROFIT sup zhongshu {0}".format("formed" if sup_zhongshu_formed else "not formed"))
                 
                 if self.use_ma13:
                     sma13 = stock_data['close'].values[-13:].sum() / 13
