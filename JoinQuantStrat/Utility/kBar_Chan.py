@@ -1652,8 +1652,8 @@ class KBarChan(object):
 
         # + 3 to make sure we have 3 BI at least in XD
         previous_xd_tb_locs = self.get_previous_N_elem(working_df.shape[0]-1, working_df, N=0, single_direction=False)
-        pre_pre_xd_tb_locs = self.get_previous_N_elem(previous_xd_tb_locs[0], working_df, N=0, single_direction=False)
         if previous_xd_tb_locs:
+            pre_pre_xd_tb_locs = self.get_previous_N_elem(previous_xd_tb_locs[0], working_df, N=0, single_direction=False)
             columns = ['date', chan_price, tb, original_tb]
             previous_xd_tb_loc = previous_xd_tb_locs[0]+3
             
