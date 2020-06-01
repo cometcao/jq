@@ -105,7 +105,10 @@ def check_chan_indepth(stock,
                        check_full_zoushi=True,
                        ignore_bi_xd=True):
     if is_description:
-        print("check_chan_indepth working on stock: {0} at {1}".format(stock, period))
+        print("check_chan_indepth working on stock: {0} at {1} from {2} to {3}".format(stock, 
+                                                                                       period,
+                                                                                       split_time,
+                                                                                       end_time))
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
                         periods=[period], 
@@ -140,7 +143,7 @@ def check_stock_sub(stock,
                     check_full_zoushi=True,
                     ignore_sub_xd=False):
     if is_description:
-        print("check_stock_sub working on stock: {0} at {1}".format(stock, periods))
+        print("check_stock_sub working on stock: {0} at {1} from {2} to {3}".format(stock, periods, split_time, end_time))
     ni = NestedInterval(stock, 
                         end_dt=end_time, 
                         periods=periods, 
@@ -568,7 +571,7 @@ class Equilibrium():
     
     def two_zhongshu_form_qvshi(self, zs1, zs2, all_nodes_after_zs1):
         '''
-        We are only dealing with current level of QV SHI by default, and the first ZS can be higher level 
+        We are only dealing with working level of QV SHI by default, and the first ZS can be higher level 
         due to the rule of connectivity:
         two adjacent ZhongShu going in the same direction, or the first ZhongShu is complex(can be both direction)
         '''
@@ -805,7 +808,7 @@ class Equilibrium():
                         self.analytic_result = zslx2.zslx_list
                         self.force_zhongshu = zslx2.get_level().value >= ZhongShuLevel.current.value
                         if self.isdebug:
-                            print("self.analytic_result updated to zoushileixing (current level or below): {0}, force zhongshu: {1}".format(zslx2, self.force_zhongshu))
+                            print("self.analytic_result updated to zoushileixing (working level or below): {0}, force zhongshu: {1}".format(zslx2, self.force_zhongshu))
         return True
     
     def define_equilibrium(self, direction, 
@@ -1488,8 +1491,8 @@ class NestedInterval():
         '''
         split done at data level
         
-        return current level:
-        a current level exhaustion
+        return working level:
+        a working level exhaustion
         b xd level exhaustion
         c chan type/price level
         d split time
@@ -1541,7 +1544,7 @@ class NestedInterval():
                                                                                                    allow_simple_zslx=allow_simple_zslx,
                                                                                                    enable_composite=False)
         if self.isDescription or self.isdebug:
-            print("current level {0} {1} {2} {3} {4} with price:{5}".format(period, 
+            print("working level {0} {1} {2} {3} {4} with price:{5}".format(period, 
                                                                         chan_d, 
                                                                         "exhausted" if exhausted else "continue",
                                                                         "xd exhausted" if check_xd_exhaustion else "xd continues",
