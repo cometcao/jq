@@ -1652,6 +1652,7 @@ class KBarChan(object):
 
         # + 3 to make sure we have 3 BI at least in XD
         previous_xd_tb_locs = self.get_previous_N_elem(working_df.shape[0]-1, working_df, N=0, single_direction=False)
+        pre_pre_xd_tb_locs = self.get_previous_N_elem(previous_xd_tb_locs[0], working_df, N=0, single_direction=False)
         if previous_xd_tb_locs:
             columns = ['date', chan_price, tb, original_tb]
             previous_xd_tb_loc = previous_xd_tb_locs[0]+3
@@ -1695,10 +1696,13 @@ class KBarChan(object):
                         
                     # We could make an assumption based on assumption. 
                     if temp_df.size > 0:
+                        max_price = temp_df[chan_price].max()
+                        min_price = temp_df[chan_price].min()
+                        
                         if current_direction == TopBotType.top2bot:
                             # only make guess if previous xd ding is the highest so far
-                            max_price = temp_df[chan_price].max()
-                            if float_more(working_df[previous_xd_tb_locs[0]][chan_price], max_price):
+                            if float_more(working_df[previous_xd_tb_locs[0]][chan_price], max_price) or\
+                                (pre_pre_xd_tb_locs and float_more(working_df[pre_pre_xd_tb_locs[0]][chan_price], min_price)):
                                 min_loc = temp_df[chan_price].argmin()
                                 min_date = temp_df[min_loc][date]
                                 working_loc = np.where(working_df[date]==min_date)[0][0]
@@ -1706,9 +1710,9 @@ class KBarChan(object):
                                 if self.isdebug:
                                     print("final xd_tb located from {0} for {1}".format(min_date, TopBotType.bot))
                         elif current_direction == TopBotType.bot2top:
-                            min_price = temp_df[chan_price].min()
                             # only make guess if previous xd di is the lowest so far
-                            if float_less(working_df[previous_xd_tb_locs[0]][chan_price], min_price):
+                            if float_less(working_df[previous_xd_tb_locs[0]][chan_price], min_price) or\
+                                (pre_pre_xd_tb_locs and float_less(working_df[pre_pre_xd_tb_locs[0]][chan_price], max_price)):
                                 max_loc = temp_df[chan_price].argmax()
                                 max_date = temp_df[max_loc][date]
                                 working_loc = np.where(working_df[date]==max_date)[0][0]
