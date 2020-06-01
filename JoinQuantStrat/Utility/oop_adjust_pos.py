@@ -1036,6 +1036,7 @@ class Short_Chan(Sell_stocks):
                                                                                 sub_exhausted,
                                                                                 sub_xd_exhausted,
                                                                                 sub_zhongshu_formed))
+                    return True
             
         elif current_chan_t == Chan_Type.III or current_chan_t == Chan_Type.INVALID:
             
