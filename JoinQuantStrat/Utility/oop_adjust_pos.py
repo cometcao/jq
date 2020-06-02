@@ -837,7 +837,7 @@ class Short_Chan(Sell_stocks):
                     print("Bei Chi long point broken")
                     return True
             
-            if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss * 2:
+            if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss * 3:
                 print("HARDCORE stop loss")
                 return True
 
