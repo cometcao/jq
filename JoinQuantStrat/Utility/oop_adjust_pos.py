@@ -1028,19 +1028,21 @@ class Short_Chan(Sell_stocks):
                 return True
             
 
-            if stock_data.loc[effective_time:, 'high'].max() >= current_chan_p:
-                pass
-            else:
-                if current_zhongshu_formed: # reached target price
-                    print("STOP PROFIT working level zhongshu {0}".format("formed" if current_zhongshu_formed else "not formed"))
-                    
+            if stock_data.loc[effective_time:, 'high'].max() >= current_chan_p:# reached target price
+                print("STOP PROFIT {0} target price: {1}, now max: {2}".format(stock, current_chan_p, stock_data.loc[effective_time:, 'high'].max()))
+                if context.portfolio.positions[stock].price < current_chan_p:
                     if self.use_ma13:
                         sma13 = stock_data['close'].values[-13:].sum() / 13
                         sma5 = stock_data['close'].values[-5:].sum() / 5
                         if sma5 < sma13:
                             print("STOP PROFIT {0} below ma13: {1}".format(stock, sma13))
                             return True
-                print("STOP PROFIT {0} target price: {1}, now max: {2}".format(stock, current_chan_p, stock_data.loc[effective_time:, 'high'].max()))
+            else:
+                if current_zhongshu_formed: 
+                    print("STOP PROFIT working level zhongshu {0}".format("formed" if current_zhongshu_formed else "not formed"))
+                    if sma5 < sma13:
+                        print("STOP PROFIT {0} below ma13: {1}".format(stock, sma13))
+                        return True
                 
                 sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
                                                       end_time=context.current_dt,
