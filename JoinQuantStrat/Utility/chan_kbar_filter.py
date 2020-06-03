@@ -213,7 +213,7 @@ class KBar(object):
             ):
             return False
         
-        start_idx = -5
+        start_idx = -6
         end_idx = -4
         
         aa = kbar_list[start_idx]
@@ -223,7 +223,7 @@ class KBar(object):
         result = False
         if (last.close < last.open) or ((last.close-last.low)/(last.high-last.low) <= (1-GOLDEN_RATIO)):
             
-            while start_idx < end_idx:
+            while start_idx <= end_idx:
                 check_result, k_m, k_l = cls.contain_zhongshu(aa, bb, cc, return_core_range=False)
                 
                 if check_result:
