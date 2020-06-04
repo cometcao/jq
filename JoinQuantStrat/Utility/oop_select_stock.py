@@ -327,7 +327,7 @@ class Pick_Chan_Stocks(Create_stock_list):
     
     def before_trading_start(self, context):
         stock_list = filter_high_level_by_index(direction=TopBotType.top2bot, 
-                                   stock_index=self.index, 
+                                   stock_index=[self.index], 
                                    df=False, 
                                    periods = self.periods,
                                    end_dt=context.current_dt, #strftime("%Y-%m-%d %H:%M:%S")
@@ -639,8 +639,8 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                 if self.enable_on_demand:
                     print("{0} not in chan file, get stocks on demand".format(today_date))
                     check_stocks = filter_high_level_by_index(
-                                                            direction=TopBotType.top2bot, 
-                                                            stock_index='000985.XSHG',
+                                                            direction=TopBotType.top2bot,
+                                                            stock_index=['000985.XSHG'],
                                                             end_dt=yesterday,
                                                             df=False,
                                                             periods = ['1w'],
