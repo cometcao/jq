@@ -726,13 +726,17 @@ class Equilibrium():
         '''
         
         all_zs = [zs.isBenZouStyle() for zs in zoushi if zs.isZhongShu]
+        all_zs_strong = [zs.isStrongBenZouStyle() for zs in zoushi if zs.isZhongShu]
 #         all_zs = all_zs[-2:] if self.isQvShi else all_zs[-1:]
         # benzou check only for panbei
         if np.any(all_zs[-1:]) and not self.isQvShi and not at_bi_level:
             if self.isdebug:
-                print("BenZou Zhongshu detected, We can't analyze this type of zoushi")
+                print("BenZou Zhongshu detected for PanBei, We can't analyze this type of zoushi")
             return False
-        
+        elif np.any(all_zs_strong[-1:]) and self.isQvShi and not at_bi_level:
+            if self.isdebug:
+                print("Strong BenZou Zhongshu detected for BeiChi, We can't analyze this type of zoushi")
+            return False
         # TODO check zoushi structure by finding the zhongshus with the highest level. 
         # the Zoushi before and after that Zhongshu should have the same level
         if self.check_full_zoushi:
