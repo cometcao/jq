@@ -189,8 +189,10 @@ class Filter_financial_data2(Early_Filter_stock_list):
         limit = self._params.get('limit', None)
         if limit is not None and not is_by_sector:
             q = q.limit(limit)
-        # print get_fundamentals(q)
-        stock_list = list(get_fundamentals(q)['code'])
+        df_data = get_fundamentals(q)
+        stock_list = list(df_data['code'])
+        if self._params.get('isdebug', False):
+            print(df_data)
         print("after filter: {0}".format(stock_list))
         return stock_list    
     
