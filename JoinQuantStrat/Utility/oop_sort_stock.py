@@ -43,6 +43,7 @@ class Sort_By_Financial_Data(Early_Filter_stock_list):
     def __init__(self, params):
         self.limit = params.get('limit', 10)
         self.f_type = params.get('f_type', "evs")
+        self.force_positive = params.get('force_positive', True)
         self.isdebug= params.get('isdebug', False)
     
     def filter(self, context, stock_list):
@@ -74,6 +75,10 @@ class Sort_By_Financial_Data(Early_Filter_stock_list):
             df['income_tax_expense'] +
             df['interest_expense']
             )
+            
+            if self.force_positive:
+                df = df[df['evs'] > 0]
+            
             df.sort_values(by=['evs'], inplace=True)
             if self.isdebug:
                 print(df.head(10))
