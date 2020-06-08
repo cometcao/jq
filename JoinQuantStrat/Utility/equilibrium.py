@@ -1174,7 +1174,7 @@ class Equilibrium():
                     (zslx.direction == TopBotType.top2bot and zslx.zoushi_nodes[-1].tb == TopBotType.top) or\
                    (zslx.direction == TopBotType.bot2top and zslx.zoushi_nodes[-1].tb == TopBotType.bot):                
                     type_direction = TopBotType.top2bot if zslx.zoushi_nodes[-1].tb == TopBotType.bot else TopBotType.bot2top
-                    all_types.append((Chan_Type.III_weak,
+                    all_types.append((Chan_Type.III_strong if zs.get_level().value > ZhongShuLevel.current.value else Chan_Type.III_weak,
                                       type_direction,
                                       core_region[1] if type_direction == TopBotType.top2bot else core_region[0]))
                     if self.isdebug:
@@ -1184,6 +1184,7 @@ class Equilibrium():
             if len(zslx.zoushi_nodes) > 3:
                 split_direction, split_nodes = zslx.get_reverse_split_zslx()
                 pure_zslx = ZouShiLeiXing(split_direction, self.original_df, split_nodes)
+                
                 # at least two split nodes required to form a zslx
                 if len(split_nodes) >= 2 and not self.two_zslx_interact_original(zs, pure_zslx):
                     if not check_end_tb or\
@@ -1194,6 +1195,16 @@ class Equilibrium():
                                           amplitude_region_original[1] if pure_zslx.direction == TopBotType.top2bot else amplitude_region_original[0]))
                         if self.isdebug:
                             print("TYPE III trade point 7")
+                elif len(split_nodes) >= 2 and\
+                    (float_less(pure_zslx.zoushi_nodes[-1].chan_price, core_region[0]) or float_more(zslx.zoushi_nodes[-1].chan_price, core_region[1])):
+                    if not check_end_tb or\
+                    ((pure_zslx.direction == TopBotType.top2bot and pure_zslx.zoushi_nodes[-1].tb == TopBotType.bot) or\
+                    (pure_zslx.direction == TopBotType.bot2top and pure_zslx.zoushi_nodes[-1].tb == TopBotType.top)):
+                        all_types.append((Chan_Type.III_strong if zs.get_level().value > ZhongShuLevel.current.value else Chan_Type.III_weak,
+                                          pure_zslx.direction,
+                                          core_region[1] if pure_zslx.direction == TopBotType.top2bot else core_region[0]))
+                        if self.isdebug:
+                            print("TYPE III trade point 8")
         
         # We do check panbei if it's Zhongshu this case is not considered as TYPE III
         # TYPE III where zslx form reverse direction zhongshu, and last XD of new zhong shu didn't go back 
