@@ -76,7 +76,8 @@ def check_chan_by_type_exhaustion(stock,
                                   is_anal=False, 
                                   is_description=True,
                                   check_structure=False,
-                                  check_full_zoushi=False):
+                                  check_full_zoushi=False,
+                                  enable_composite=False):
     if is_description:
         print("check_chan_by_type_exhaustion working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
     ni = NestedInterval(stock, 
@@ -91,7 +92,8 @@ def check_chan_by_type_exhaustion(stock,
                              chan_type, 
                              check_end_tb=check_structure, 
                              check_tb_structure=check_structure,
-                             check_full_zoushi=check_full_zoushi)
+                             check_full_zoushi=check_full_zoushi,
+                             enable_composite=enable_composite)
 
 def check_chan_indepth(stock, 
                        end_time, 
@@ -1157,11 +1159,13 @@ class Equilibrium():
                     (zslx.direction == TopBotType.top2bot and zslx.zoushi_nodes[-1].tb == TopBotType.top) or\
                    (zslx.direction == TopBotType.bot2top and zslx.zoushi_nodes[-1].tb == TopBotType.bot):
                     type_direction = TopBotType.top2bot if zslx.zoushi_nodes[-1].tb == TopBotType.bot else TopBotType.bot2top
-                    all_types.append((Chan_Type.III, 
+                    
+                    all_types.append((Chan_Type.III_strong if zs.get_level().value > ZhongShuLevel.current.value else Chan_Type.III, 
                                       type_direction,
                                       amplitude_region_original[1] if type_direction == TopBotType.top2bot else amplitude_region_original[0]))
                     if self.isdebug:
                         print("TYPE III trade point 1")
+                        
             elif len(zslx.zoushi_nodes) == 3 and\
                 (float_less(zslx.zoushi_nodes[-1].chan_price, core_region[0]) or float_more(zslx.zoushi_nodes[-1].chan_price, core_region[1])):
                 if not check_end_tb or\
@@ -1183,7 +1187,7 @@ class Equilibrium():
                     if not check_end_tb or\
                     ((pure_zslx.direction == TopBotType.top2bot and pure_zslx.zoushi_nodes[-1].tb == TopBotType.bot) or\
                     (pure_zslx.direction == TopBotType.bot2top and pure_zslx.zoushi_nodes[-1].tb == TopBotType.top)):
-                        all_types.append((Chan_Type.III,
+                        all_types.append((Chan_Type.III_strong if zs.get_level().value > ZhongShuLevel.current.value else Chan_Type.III,
                                           pure_zslx.direction,
                                           amplitude_region_original[1] if pure_zslx.direction == TopBotType.top2bot else amplitude_region_original[0]))
                         if self.isdebug:
@@ -1349,7 +1353,8 @@ class NestedInterval():
                        chan_type = Chan_Type.INVALID, 
                        check_end_tb=False, 
                        check_tb_structure=False,
-                       check_full_zoushi=False):
+                       check_full_zoushi=False, 
+                       enable_composite=False):
         ''' THIS METHOD SHOULD ONLY BE USED FOR TOP LEVEL!!
         This is due to the fact that at high level we can't be very precise
         1. check high level chan type
@@ -1397,7 +1402,7 @@ class NestedInterval():
                                                                                                     current_chan_type=chan_t,
                                                                                                     at_bi_level=False,
                                                                                                     allow_simple_zslx=True, 
-                                                                                                    enable_composite=False)
+                                                                                                    enable_composite=enable_composite)
             if self.isDescription or self.isdebug:
                 print("Top level {0} {1} {2} {3} {4} with price level: {5}".format(self.periods[0], 
                                                                            chan_d, 
