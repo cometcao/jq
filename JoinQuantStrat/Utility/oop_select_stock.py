@@ -743,7 +743,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                  sub_check_bi=self.bi_level_precision,
                                                  use_sub_split=self.use_sub_split,
                                                  ignore_cur_xd=self.ignore_xd,
-                                                 ignore_sub_xd=self.ignore_xd)
+                                                 ignore_sub_xd=self.bi_level_precision)
             
             if result:
                 filter_stock_list.append(stock)
