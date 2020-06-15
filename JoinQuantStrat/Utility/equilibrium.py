@@ -958,16 +958,17 @@ class Equilibrium():
         else: # PAN BEI #
 #             if abs(len(a_s) - len(c_s)) >= 4:
             if len(a_s) != len(c_s):
-                if self.isdebug:
-                    print("Not matching XD structure")
-                return False
-            
-            if check_balance_structure and\
-                (not self.price_balance(a_range, central_region, c_range) or\
-                 not self.time_balance(a_time, b_time, c_time)):
-                if self.isdebug:
-                    print("Not matching XD balane")
-                return False
+                if check_balance_structure:
+                    if not self.price_balance(a_range, central_region, c_range):
+#                     (not self.price_balance(a_range, central_region, c_range) or\
+#                      not self.time_balance(a_time, b_time, c_time)):
+                        if self.isdebug:
+                            print("Not matching XD balane")
+                        return False
+                else:
+                    if self.isdebug:
+                        print("Not matching XD structure")
+                    return False
             
         
         return True
@@ -1411,7 +1412,7 @@ class NestedInterval():
             high_exhausted, check_xd_exhaustion, last_zs_time, sub_split_time, high_slope, high_macd = eq.define_equilibrium(direction, 
                                                                                                     guide_price,
                                                                                                     check_tb_structure=check_tb_structure, 
-                                                                                                    check_balance_structure=False,
+                                                                                                    check_balance_structure=True,
                                                                                                     current_chan_type=chan_t,
                                                                                                     at_bi_level=False,
                                                                                                     allow_simple_zslx=True, 
