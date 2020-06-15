@@ -502,16 +502,16 @@ class Equilibrium():
                         else:
                             first_xd = zs.take_split_xd_as_zslx(direction)
                             
-                    elif len(self.analytic_result) < 2: #  or self.analytic_result[-2].direction != direction
-                        first_xd = zs.take_split_xd_as_zslx(direction)
+                    elif len(self.analytic_result) < 2 or self.analytic_result[-2].direction != direction:
+                        first_xd = zs.take_split_xd_as_zslx(direction, contain_zs=True, force_remaining_zs=True)
                     else:
                         first_xd = self.analytic_result[-2]
                     return first_xd, zs, last_xd, zs.get_amplitude_region_original_without_last_xd()
                 else:
                     # allow same direction zs
-#                     if zs.direction != direction:
-#                         return None, None, None, None
-                    first_xd = zs.take_first_xd_as_zslx() if len(self.analytic_result) < 2 else self.analytic_result[-2] #zs.direction != direction or 
+                    if zs.direction != direction:
+                        return None, None, None, None
+                    first_xd = zs.take_first_xd_as_zslx() if zs.direction != direction or len(self.analytic_result) < 2 else self.analytic_result[-2]
                     return first_xd, zs, last_xd, zs.get_amplitude_region_original_without_last_xd()
     
             elif type(self.analytic_result[-1]) is ZouShiLeiXing:
@@ -541,10 +541,10 @@ class Equilibrium():
                     else:
                         first_xd = zs.take_split_xd_as_zslx(direction)
                         
-                elif len(self.analytic_result) < 3: #  or self.analytic_result[-3].direction != direction
+                elif len(self.analytic_result) < 3 or self.analytic_result[-3].direction != direction:
                     if len(self.analytic_result) > 1:
                         zs = self.analytic_result[-2]
-                        first_xd = zs.take_split_xd_as_zslx(direction)
+                        first_xd = zs.take_split_xd_as_zslx(direction, contain_zs=True, force_remaining_zs=True)
                     else: # no ZhongShu found
                         return None, None, None, None
                 else:
@@ -552,8 +552,8 @@ class Equilibrium():
                     first_xd = self.analytic_result[-3]
                     
                 # only allow same direction zs
-#                 if zs.direction != direction:
-#                     return None, None, None, None
+                if zs.direction != direction:
+                    return None, None, None, None
                 return first_xd, zs, last_xd, zs.get_amplitude_region_original(),
                 
             else:
@@ -943,9 +943,9 @@ class Equilibrium():
             return True
         
         if check_tb_structure:
-#             if a_s[0] != c_s[0] or a_s[-1] != c_s[-1]:
-            if not ((a_s[0] == c_s[0] and a_s[-1] == c_s[-1]) or\
-                (a_s[0] == TopBotType.reverse(c_s[0]) and a_s[-1] == TopBotType.reverse(c_s[-1]))):
+             if a_s[0] != c_s[0] or a_s[-1] != c_s[-1]:
+#            if not ((a_s[0] == c_s[0] and a_s[-1] == c_s[-1]) or\
+#               (a_s[0] == TopBotType.reverse(c_s[0]) and a_s[-1] == TopBotType.reverse(c_s[-1]))):
                 if self.isdebug:
                     print("Not matching tb structure")
                 return False

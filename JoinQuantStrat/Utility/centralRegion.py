@@ -584,10 +584,10 @@ class ZhongShu(ZouShiLeiXing):
     def take_first_xd_as_zslx(self):
         return ZouShiLeiXing(TopBotType.reverse(self.direction), self.original_df, [self.first, self.second])
 
-    def take_split_xd_as_zslx(self, split_direction):
+    def take_split_xd_as_zslx(self, split_direction, contain_zs=True, force_remaining_zs=False):
         # as we are trying to find a max/min point for the zhongshu we need to take the all nodes
-        remaining_nodes = self.get_split_zs(split_direction, contain_zs=True)
-        if len(remaining_nodes) < 2:
+        remaining_nodes = self.get_split_zs(split_direction, contain_zs=contain_zs)
+        if len(remaining_nodes) < 2 or (force_remaining_zs and len(remaining_nodes) < 6):
             return ZouShiLeiXing(TopBotType.noTopBot, self.original_df, [])
         else:
             xd = XianDuan(remaining_nodes[0], remaining_nodes[1])
