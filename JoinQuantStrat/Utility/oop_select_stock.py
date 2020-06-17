@@ -645,8 +645,15 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                                                             stock_index=['000985.XSHG'],
                                                             end_dt=yesterday,
                                                             df=False,
-                                                            periods = ['1w'],
-                                                            chan_types=[Chan_Type.I, Chan_Type.III])
+                                                            periods = ['1M'],
+                                                            chan_types=self.top_chan_types)
+                    check_stocks = filter_high_level_by_stocks(
+                                                        direction=TopBotType.top2bot, 
+                                                        stock_list=check_stocks,  
+                                                        df=False,
+                                                        end_dt= yesterday, 
+                                                        periods = ['1w'],
+                                                        chan_types=self.current_chan_types)
                     return check_stocks
                 else:
                     print("{0} not in chan file".format(today_date))
