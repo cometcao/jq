@@ -817,6 +817,12 @@ class Short_Chan(Sell_stocks):
                 if (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
                     print("waited for equal period {0}:{1} never reached profit {2}".format(first_loc_diff, 
                                                                                                   current_loc_diff, 
+                                                                                                  stock_data.iloc[-1].close))
+                    return True
+            elif current_loc_diff > first_loc_diff:
+                if max_price < current_chan_p:
+                    print("waited for equal period {0}:{1} never reached guiding price {2}".format(first_loc_diff, 
+                                                                                                  current_loc_diff, 
                                                                                                   current_chan_p))
                     return True
 
@@ -1032,14 +1038,13 @@ class Short_Chan(Sell_stocks):
             if stock_data.loc[effective_time:, 'high'].max() >= current_chan_p:# reached target price
                 print("STOP PROFIT {0} target price: {1}, now max: {2}".format(stock, current_chan_p, stock_data.loc[effective_time:, 'high'].max()))
                 if context.portfolio.positions[stock].price < current_chan_p:
-                    if self.use_ma13:
-                        if sma5 < sma13:
-                            print("STOP PROFIT {0} below ma13: {1}".format(stock, sma13))
-                            return True
+                    if self.use_ma13 and sma5 < sma13:
+                        print("STOP PROFIT {0} below ma13: {1}".format(stock, sma13))
+                        return True
             else:
                 if current_zhongshu_formed: 
                     print("STOP PROFIT working level zhongshu {0}".format("formed" if current_zhongshu_formed else "not formed"))
-                    if sma5 < sma13:
+                    if self.use_ma13 and sma5 < sma13:
                         print("STOP PROFIT {0} below ma13: {1}".format(stock, sma13))
                         return True
                 
