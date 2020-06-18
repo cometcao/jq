@@ -754,7 +754,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             
             if result:
                 filter_stock_list.append(stock)
-                self.g.stock_chan_type[stock] = profile
+            self.g.stock_chan_type[stock] = profile
             
 #             top_profile = self.g.stock_chan_type[stock]
 #             splitTime = top_profile[0][6]
