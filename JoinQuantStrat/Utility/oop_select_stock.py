@@ -662,9 +662,9 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
             chan_list = chan_dict[str(today_date)]
             self.log.info("data read from file: {0} stocks info".format(len(chan_list)))
             for stock, top_type_value, c_type_value, top_period, cur_period, c_direc_value, c_price, c_slope, c_force, z_time, s_time in chan_list:
-                if stock in context.portfolio.positions.keys():
-                    print("{0} already in position".format(stock))
-                    continue
+#                 if stock in context.portfolio.positions.keys():
+#                     print("{0} already in position".format(stock))
+#                     continue
                 if self.current_chan_types and (Chan_Type.value2type(c_type_value) not in self.current_chan_types):
                     continue
                 if self.top_chan_types and (Chan_Type.value2type(top_type_value) not in self.top_chan_types):
