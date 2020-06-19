@@ -175,8 +175,8 @@ def check_stock_sub(stock,
                                                                         pe, 
                                                                         force_zhongshu=force_bi_zhongshu,
                                                                         check_full_zoushi=check_full_zoushi,
-                                                                        ignore_bi_xd=ignore_sub_xd)
-        return exhausted and bi_exhausted, xd_exhausted, sub_profile, ni.completed_zhongshu()
+                                                                        ignore_bi_xd=False) # never ignore bi level xd check
+        return exhausted and bi_exhausted, (ignore_sub_xd or xd_exhausted) and bi_xd_exhausted, sub_profile, ni.completed_zhongshu()
     return exhausted, xd_exhausted, sub_profile, ni.completed_zhongshu()
 
 def check_stock_full(stock, 
@@ -234,7 +234,7 @@ def check_stock_full(stock,
                                                                                 ignore_sub_xd=ignore_sub_xd,
                                                                                 check_full_zoushi=False)
         chan_profile = chan_profile + sub_profile
-        return exhausted and (xd_exhausted or ignore_cur_xd) and sub_exhausted and (ignore_sub_xd or sub_xd_exhausted), chan_profile, zhongshu_completed
+        return exhausted and (xd_exhausted or ignore_cur_xd) and sub_exhausted and sub_xd_exhausted, chan_profile, zhongshu_completed
     else:
         return False, chan_profile, False
 
