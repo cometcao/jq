@@ -885,14 +885,13 @@ class Equilibrium():
         new_high_low = self.reached_new_high_low(guide_price, direction, c, central_region)
         
         if self.check_equilibrium_structure(a, 
-                                       central_B, 
-                                       c, 
-                                       central_region, 
-                                       direction, 
-                                       check_tb_structure=check_tb_structure,
-                                       check_balance_structure=check_balance_structure,
-                                       current_chan_type=current_chan_type,
-                                       at_bi_level=at_bi_level):
+                                           central_B, 
+                                           c, 
+                                           direction, 
+                                           check_tb_structure=check_tb_structure,
+                                           check_balance_structure=check_balance_structure,
+                                           current_chan_type=current_chan_type,
+                                           at_bi_level=at_bi_level):
             return self.check_exhaustion(a, c, new_high_low)
         else:
             return False, False, None, None, 0, 0
@@ -901,7 +900,6 @@ class Equilibrium():
                                zslx_a, 
                                central_B, 
                                zslx_c, 
-                               central_region, 
                                direction, 
                                check_tb_structure=False,
                                check_balance_structure=False, 
@@ -959,8 +957,8 @@ class Equilibrium():
 #             if abs(len(a_s) - len(c_s)) >= 4:
             if len(a_s) != len(c_s):
                 if check_balance_structure:
-                    if not self.price_balance(a_range, central_region, c_range):
-#                     (not self.price_balance(a_range, central_region, c_range) or\
+                    if not self.price_balance(a_range, b_range, c_range):
+#                     (not self.price_balance(a_range, b_range, c_range) or\
 #                      not self.time_balance(a_time, b_time, c_time)):
                         if self.isdebug:
                             print("Not matching XD balane")
