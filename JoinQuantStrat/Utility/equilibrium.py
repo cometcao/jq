@@ -677,11 +677,11 @@ class Equilibrium():
         if self.isQvShi and self.isdebug:
             print("QU SHI 1")
         
-#         # simple QVSHI
-#         if type(recent_zoushi[-1]) is ZouShiLeiXing:
-#             self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-2], recent_zhongshu[-1], self.analytic_result[-3])
-#         elif len(recent_zhongshu) > 2 and not recent_zhongshu[-1].is_complex_type(): # This is the case of TYPE III
-#             self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-3], recent_zhongshu[-2], self.analytic_result[-4])
+        # simple QVSHI
+        if type(recent_zoushi[-1]) is ZouShiLeiXing:
+            self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-2], recent_zhongshu[-1], self.analytic_result[-3])
+        elif len(recent_zhongshu) > 2: #  and not recent_zhongshu[-1].is_complex_type()
+            self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-3], recent_zhongshu[-2], self.analytic_result[-4])
             
         
         if self.check_full_zoushi:
@@ -1096,7 +1096,46 @@ class Equilibrium():
                         all_types.append((Chan_Type.I, TopBotType.bot2top, uc))
                         if self.isdebug:
                             print("TYPE I trade point 4")
-
+        elif self.isQvShi_simple: # I_weak case
+            if type(self.analytic_result[-1]) is ZouShiLeiXing: # last zslx escape last zhong shu
+                zslx = self.analytic_result[-1]
+                zs = self.analytic_result[-2]
+                zslx2= self.analytic_result[-3]
+                [lc, uc] = zs.get_core_region()
+                if zslx.direction == zslx2.direction:
+                    if zslx.direction == TopBotType.top2bot and\
+                        (not check_end_tb or\
+                         (zslx.zoushi_nodes[-1].tb == TopBotType.bot and\
+                        float_less(zslx.zoushi_nodes[-1].chan_price, lc))):
+                            if self.isdebug:
+                                print("TYPE I trade point 1-1")
+                            all_types.append((Chan_Type.I_weak, TopBotType.top2bot, lc))
+                    elif zslx.direction == TopBotType.bot2top and\
+                        (not check_end_tb or\
+                         (zslx.zoushi_nodes[-1].tb == TopBotType.top and\
+                        float_more(zslx.zoushi_nodes[-1].chan_price, uc))):
+                            if self.isdebug:
+                                print("TYPE I trade point 2-1")
+                            all_types.append((Chan_Type.I_weak, TopBotType.bot2top, uc))
+            
+            if type(self.analytic_result[-1]) is ZhongShu: # last XD in zhong shu must make top or bot
+                zs = self.analytic_result[-1]
+                [lc, uc] = zs.get_core_region()
+                if zs.is_complex_type() and len(zs.extra_nodes) >= 1:
+                    if zs.direction == TopBotType.top2bot and\
+                        (not check_end_tb or\
+                         (zs.extra_nodes[-1].tb == TopBotType.bot and\
+                        float_less(zs.extra_nodes[-1].chan_price, lc))):
+                        if self.isdebug:
+                            print("TYPE I trade point 3-1")
+                        all_types.append((Chan_Type.I_weak, TopBotType.top2bot, lc))
+                    elif zs.direction == TopBotType.bot2top and\
+                        (not check_end_tb or\
+                         (zs.extra_nodes[-1].tb == TopBotType.top and\
+                        float_more(zs.extra_nodes[-1].chan_price, uc))):
+                        all_types.append((Chan_Type.I_weak, TopBotType.bot2top, uc))
+                        if self.isdebug:
+                            print("TYPE I trade point 4-1")
 #             # II Zhong Yin Zhong Shu must form
 #             # case of return into last QV shi Zhong shu
 #             if type(self.analytic_result[-1]) is ZhongShu: # Type I return into core region

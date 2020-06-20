@@ -63,6 +63,7 @@ class Chan_Type(Enum):
     III_weak = 4
     II_weak = 5
     III_strong = 6
+    I_weak = 7
     
     @classmethod
     def value2type(cls, val):
@@ -80,5 +81,7 @@ class Chan_Type(Enum):
             return cls.II_weak
         elif val == 6:
             return cls.III_strong
+        elif val == 7:
+            return cls.I_weak
         else:
             return cls.INVALID
