@@ -509,8 +509,8 @@ class Equilibrium():
                     return first_xd, zs, last_xd, zs.get_amplitude_region_original_without_last_xd()
                 else:
                     # allow same direction zs
-                    if zs.direction != direction:
-                        return None, None, None, None
+#                     if zs.direction != direction:
+#                         return None, None, None, None
                     first_xd = zs.take_first_xd_as_zslx() if zs.direction != direction or len(self.analytic_result) < 2 else self.analytic_result[-2]
                     return first_xd, zs, last_xd, zs.get_amplitude_region_original_without_last_xd()
     
@@ -552,8 +552,8 @@ class Equilibrium():
                     first_xd = self.analytic_result[-3]
                     
                 # only allow same direction zs
-                if zs.direction != direction:
-                    return None, None, None, None
+#                 if zs.direction != direction:
+#                     return None, None, None, None
                 return first_xd, zs, last_xd, zs.get_amplitude_region_original(),
                 
             else:
