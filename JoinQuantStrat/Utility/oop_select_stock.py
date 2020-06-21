@@ -725,7 +725,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             return filter_stock_list
         stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
         for stock in stock_list:
-            if self.long_stock_num == len(filter_stock_list)+1:
+            if self.long_stock_num + 1 == len(filter_stock_list):
                 # we don't need to look further, we have enough candidates for long position + 1 backup
                 break
 #             stock_data = get_bars(stock, 
