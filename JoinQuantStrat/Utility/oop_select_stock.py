@@ -667,8 +667,10 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                     chan_stock_list.append(stock)
                     continue
                 if self.current_chan_types and (Chan_Type.value2type(c_type_value) not in self.current_chan_types):
+                    print("{0} has invalid current chan type".format(stock))
                     continue
                 if self.top_chan_types and (Chan_Type.value2type(top_type_value) not in self.top_chan_types):
+                    print("{0} has invalid top chan type".format(stock))
                     continue
                 
                 chan_stock_list.append(stock)
@@ -723,8 +725,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             return filter_stock_list
         stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
         for stock in stock_list:
-            if self.long_stock_num == len(filter_stock_list):
-                # we don't need to look further, we have enough candidates for long position
+            if self.long_stock_num == len(filter_stock_list)+1:
+                # we don't need to look further, we have enough candidates for long position + 1 backup
                 break
 #             stock_data = get_bars(stock, 
 #                                 count=20, 

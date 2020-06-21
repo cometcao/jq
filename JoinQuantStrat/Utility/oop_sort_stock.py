@@ -81,7 +81,7 @@ class Sort_By_Financial_Data(Early_Filter_stock_list):
             
             df.sort_values(by=['evs'], inplace=True)
             if self.isdebug:
-                print(df.head(10))
+                print(df)
             
             return df['code'].head(self.limit).tolist()
             
