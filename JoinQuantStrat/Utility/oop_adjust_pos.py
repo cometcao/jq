@@ -1262,7 +1262,7 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
         self.to_buy = type_I_stocks + self.to_buy
         
         if to_ignore:
-            print("stocks: {0} ignored due to price over target value".format(to_ignore)) 
+            self.log.info("stocks: {0} ignored due to price over target value".format(to_ignore)) 
         self.to_buy = [stock for stock in self.to_buy if stock not in to_ignore]
         
         self.adjust(context, data, self.to_buy)
