@@ -780,7 +780,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #                 top_profile = top_profile + sub_profile
 #                 self.g.stock_chan_type[stock] = top_profile
                 
-        if self.isdebug:
+        if self.isDescription:
             print("Stocks ready: {0}".format(filter_stock_list))
         return filter_stock_list
 
