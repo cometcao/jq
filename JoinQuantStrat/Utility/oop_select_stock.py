@@ -628,6 +628,7 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
         self.current_chan_types = params.get('current_chan_types', [Chan_Type.I, Chan_Type.III, Chan_Type.INVALID])
         self.top_chan_types = params.get('top_chan_types', [Chan_Type.I, Chan_Type.INVALID])
         self.enable_on_demand = params.get('on_demand', False)
+        self.isdebug = params.get('isdebug', False)
         
     def before_trading_start(self, context):
         chan_stock_list = []
@@ -660,17 +661,21 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                     return []
             
             chan_list = chan_dict[str(today_date)]
-            self.log.info("data read from file: {0} stocks info".format(len(chan_list)))
+            if self.isdebug:
+                self.log.info("data read from file: {0} stocks info".format(len(chan_list)))
             for stock, top_type_value, c_type_value, top_period, cur_period, c_direc_value, c_price, c_slope, c_force, z_time, s_time in chan_list:
                 if stock in context.portfolio.positions.keys():
-                    print("{0} already in position".format(stock))
+                    if self.isdebug:
+                        self.log.info("{0} already in position".format(stock))
                     chan_stock_list.append(stock)
                     continue
                 if self.current_chan_types and (Chan_Type.value2type(c_type_value) not in self.current_chan_types):
-                    print("{0} has invalid current chan type".format(stock))
+                    if self.isdebug:
+                        self.log.info("{0} has invalid current chan type".format(stock))
                     continue
                 if self.top_chan_types and (Chan_Type.value2type(top_type_value) not in self.top_chan_types):
-                    print("{0} has invalid top chan type".format(stock))
+                    if self.isdebug:
+                        self.log.info("{0} has invalid top chan type".format(stock))
                     continue
                 
                 chan_stock_list.append(stock)
