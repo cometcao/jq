@@ -445,6 +445,7 @@ class Equilibrium():
         self.isDescription = isDescription
         self.isQvShi = False
         self.isQvShi_simple = False # used for only checking zhongshu core range
+        self.QvShi_direction = TopBotType.noTopBot
         self.isComposite = False # check full zoushi of current
         self.isExtension = False # check full zoushi of current
         self.check_full_zoushi = check_full_zoushi
@@ -615,22 +616,12 @@ class Equilibrium():
             if self.isdebug:
                 print("1 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(zs1, zs2))
             relax_result = True
-    
-#         if not relax_result and zs1.get_level().value > zs2.get_level().value == zs_level.value and\
-#             (zs1.direction == zs2.direction or zs1.is_complex_type()):
-# #             split_nodes = zs1.get_ending_nodes(N=5)
-#             split_nodes = zs1.get_split_zs(zs2.direction, contain_zs=False)
-#             if len(split_nodes) >= 5 and -1<=(len(split_nodes) - 1 - (4+len(zs2.extra_nodes)))<=0:
-#                 new_zs = ZhongShu(split_nodes[1], split_nodes[2], split_nodes[3], split_nodes[4], zs2.direction, zs2.original_df)
-#                 new_zs.add_new_nodes(split_nodes[5:])
-#      
-#                 [lr1, ur1] = new_zs.get_core_region()
-#                 [lr2, ur2] = zs2.get_core_region()
-#                 if (float_more(lr1, ur2) or float_more(lr2, ur1)) and\
-#                     (not (self.two_zslx_interact(zs1, zs2) and zslx.isSimple())): # two Zhong Shu without intersection
-#                     if self.isdebug:
-#                         print("2 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(new_zs, zs2))
-#                     relax_result = True
+
+            if float_more(lr1, ur2):
+                self.QvShi_direction = TopBotType.top2bot
+            elif float_more(lr2, ur1):
+                self.QvShi_direction = TopBotType.bot2top
+
         return relax_result
     
     def two_zslx_interact(self, zs1, zs2):
@@ -1051,7 +1042,7 @@ class Equilibrium():
         # from sub to bi level, we use precise cut therefore zslx_c.zoushi_nodes[0].time
         return exhaustion_result, check_xd_exhaustion, zslx_c.zoushi_nodes[0].time, sub_split_time, zslx_slope, zslx_force
         
-    def check_chan_type(self, check_end_tb=False):
+    def check_chan_type(self, check_end_tb=False, check_direction=TopBotType.noTopBot):
         '''
         This method determines potential TYPE of trade point under CHAN
         '''
@@ -1061,7 +1052,7 @@ class Equilibrium():
         
         # we can't supply the Zhongshu amplitude range as it is considered part of Zhongshu
         # SIMPLE CASE
-        if self.isQvShi:
+        if self.isQvShi and check_direction == self.QvShi_direction:
             # I current Zou Shi must end
             if type(self.analytic_result[-1]) is ZouShiLeiXing: # last zslx escape last zhong shu
                 zslx = self.analytic_result[-1]
@@ -1102,7 +1093,7 @@ class Equilibrium():
                         all_types.append((Chan_Type.I, TopBotType.bot2top, uc))
                         if self.isdebug:
                             print("TYPE I trade point 4")
-        elif self.isQvShi_simple: # I_weak case
+        elif self.isQvShi_simple and check_direction == self.QvShi_direction: # I_weak case
             if type(self.analytic_result[-1]) is ZouShiLeiXing: # last zslx escape last zhong shu
                 zslx = self.analytic_result[-1]
                 zs = self.analytic_result[-2]
@@ -1437,7 +1428,7 @@ class NestedInterval():
                          isdebug=self.isdebug, 
                          isDescription=self.isDescription,
                          check_full_zoushi=check_full_zoushi)
-        chan_types = eq.check_chan_type(check_end_tb=check_end_tb)
+        chan_types = eq.check_chan_type(check_end_tb=check_end_tb, check_direction=direction)
         if not chan_types:
             return False, False, []
         for chan_t, chan_d, chan_p in chan_types: # early checks if we have any types found with opposite direction, no need to go further
@@ -1530,7 +1521,7 @@ class NestedInterval():
                          isDescription=self.isDescription,
                          check_full_zoushi=check_full_zoushi,
                          force_zhongshu=force_zhongshu)
-        all_types = eq.check_chan_type(check_end_tb=False)
+        all_types = eq.check_chan_type(check_end_tb=False, check_direction=direction)
         if not all_types:
             all_types = [(Chan_Type.INVALID, TopBotType.noTopBot, 0)]
         
@@ -1578,7 +1569,7 @@ class NestedInterval():
                          isDescription=self.isDescription,
                          force_zhongshu=force_zhongshu, 
                          check_full_zoushi=check_full_zoushi)
-        chan_type_result = eq.check_chan_type(check_end_tb=check_end_tb)
+        chan_type_result = eq.check_chan_type(check_end_tb=check_end_tb, check_direction=direction)
         if not chan_type_result:
             chan_type_result = [(Chan_Type.INVALID, TopBotType.noTopBot, 0)]
         
