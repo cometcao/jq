@@ -588,8 +588,11 @@ class Equilibrium():
         # if the first ZhongShu is complex and can be split to form QvShi with second ZhongShu
         # with the same structure after split as the next zhongshu
         if not strict_result and zs1.is_complex_type():
-            # split first node will be the max node
-            split_nodes = zs1.get_split_zs(zs2.direction, contain_zs=True) + all_nodes_after_zs1[1:]
+            # split first node will be the max node : 
+            # zs1.get_split_zs(zs2.direction, contain_zs=True)
+            # split last 5 nodes instead
+            # zs1.get_ending_nodes(N=5)
+            split_nodes = zs1.get_ending_nodes(N=5) + all_nodes_after_zs1[1:]
             if len(split_nodes) >= 5:
                 new_zoushi = ZouShi.analyze_api(zs2.direction, split_nodes, zs1.original_df, self.isdebug)
                 new_zss = [zs for zs in new_zoushi if zs.isZhongShu]
@@ -608,8 +611,7 @@ class Equilibrium():
         [lr1, ur1] = zs1.get_core_region()
         [lr2, ur2] = zs2.get_core_region()
         if (float_more(lr1, ur2) or float_more(lr2, ur1)) and\
-            ((not (self.two_zslx_interact(zs1, zs2) and zslx.isSimple())) or\
-            (not zs1.is_complex_type() and self.two_zslx_interact(zs1, zs2) and zslx.isSimple())): # two Zhong Shu without intersection
+            zs2.get_level() == ZhongShuLevel.current: # two Zhong Shu without intersection
             if self.isdebug:
                 print("1 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(zs1, zs2))
             relax_result = True
@@ -672,16 +674,20 @@ class Equilibrium():
         all_nodes_after_zs1 = ZouShi.get_all_zoushi_nodes(recent_zoushi[zoushi_idx_after_zs2:], 
                                                           self.analytic_nodes)
         
+        # simple QVSHI
+        if recent_zoushi[-1].isZhongShu:
+            self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-2], recent_zhongshu[-1], self.analytic_result[-2])
+        else:
+            self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-2], recent_zhongshu[-1], self.analytic_result[-3])
+#         if type(recent_zoushi[-1]) is ZouShiLeiXing:
+#             self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-2], recent_zhongshu[-1], self.analytic_result[-3])
+#         elif len(recent_zhongshu) > 2: #  and not recent_zhongshu[-1].is_complex_type()
+#             self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-3], recent_zhongshu[-2], self.analytic_result[-4])
+        
         # QV SHI
         self.isQvShi, new_zoushi = self.two_zhongshu_form_qvshi(recent_zhongshu[-2], recent_zhongshu[-1], all_nodes_after_zs1) 
         if self.isQvShi and self.isdebug:
             print("QU SHI 1")
-        
-        # simple QVSHI
-        if type(recent_zoushi[-1]) is ZouShiLeiXing:
-            self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-2], recent_zhongshu[-1], self.analytic_result[-3])
-        elif len(recent_zhongshu) > 2: #  and not recent_zhongshu[-1].is_complex_type()
-            self.isQvShi_simple = self.two_zhongshu_form_qvshi_simple(recent_zhongshu[-3], recent_zhongshu[-2], self.analytic_result[-4])
             
         
         if self.check_full_zoushi:
