@@ -951,7 +951,9 @@ class Equilibrium():
                 return False
         
         if self.isQvShi and current_chan_type==Chan_Type.I: # BEI CHI
-            if abs(len(a_s) - len(c_s)) >= 4:
+#             abs(len(a_s) - len(c_s)) >= 4:
+            # exhaustion also shows up in number of xianduan
+            if len(a_s) - len(c_s) > 2 or len(a_s) - len(c_s) < 0:
                 if self.isdebug:
                     print("Not matching XD structure")
                 return False
