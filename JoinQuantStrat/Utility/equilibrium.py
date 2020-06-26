@@ -436,6 +436,7 @@ class Equilibrium():
                  anal_zoushi, 
                  force_zhongshu=True, 
                  check_full_zoushi=True,
+                 slope_only = False,
                  isdebug=False, 
                  isDescription=True):
         self.original_df = df_all
@@ -448,6 +449,7 @@ class Equilibrium():
         self.QvShi_direction = TopBotType.noTopBot
         self.isComposite = False # check full zoushi of current
         self.isExtension = False # check full zoushi of current
+        self.slope_only = slope_only
         self.check_full_zoushi = check_full_zoushi
         self.force_zhongshu = force_zhongshu
         self.check_zoushi_status()
@@ -847,10 +849,10 @@ class Equilibrium():
                 split_direction, split_nodes = last_zoushi.get_reverse_split_zslx()
                 pure_zslx = ZouShiLeiXing(split_direction, last_zoushi.original_df, split_nodes)
                 
-                xd_exhaustion, ts = pure_zslx.check_exhaustion() 
+                xd_exhaustion, ts = pure_zslx.check_exhaustion(slope_only=self.slope_only) 
                 return True, xd_exhaustion, last_zoushi.zoushi_nodes[0].time, ts, 0, 0
             else: # ZhongShu case 
-                xd_exhaustion, ts = last_zoushi.check_exhaustion()
+                xd_exhaustion, ts = last_zoushi.check_exhaustion(slope_only=self.slope_only)
                 return True, xd_exhaustion, last_zoushi.first.time, ts, 0, 0
         
         # if we only have one zhongshu / ZSLX we can only rely on the xd level check
@@ -864,7 +866,7 @@ class Equilibrium():
                 zslx = self.analytic_result[-1]
                 if self.isdebug:
                     print("ZhongShu not yet formed, only check ZSLX exhaustion")
-                xd_exhaustion, ts = zslx.check_exhaustion(allow_simple_zslx) # only used if we want to avoid one xd
+                xd_exhaustion, ts = zslx.check_exhaustion(allow_simple_zslx=allow_simple_zslx, slope_only=self.slope_only) # only used if we want to avoid one xd
                 return True, xd_exhaustion, zslx.zoushi_nodes[0].time, ts, 0, 0
             elif type(self.analytic_result[-1]) is ZhongShu:
                 zs = self.analytic_result[-1]
@@ -874,7 +876,7 @@ class Equilibrium():
 #                     return False, False, zs.first.time, ts, 0, 0
                 if self.isdebug:
                     print("only one zhongshu, check zhongshu exhaustion")
-                xd_exhaustion, ts = zs.check_exhaustion()
+                xd_exhaustion, ts = zs.check_exhaustion(slope_only=self.slope_only)
                 return True, xd_exhaustion, zs.first.time, ts, 0, 0
         
         a, central_B, c, central_region = self.find_most_recent_zoushi(direction, current_chan_type, enable_composite=enable_composite)
@@ -1011,7 +1013,7 @@ class Equilibrium():
 
         zslx_force = 0
         zslx_macd = 0
-        if not exhaustion_result and new_high_low:
+        if not self.slope_only and not exhaustion_result and new_high_low:
             # macd is converted by mangitude as conversion factor to 
             # work out the force per unit timeprice value <=> presure
             # macd / (price * time)
@@ -1034,7 +1036,7 @@ class Equilibrium():
         exhaustion_result, zslx_slope, zslx_force = self.two_zoushi_exhausted(zslx_a, zslx_c, new_high_low)
         #################################################################################################################
         # try to see if there is xd level zslx exhaustion
-        check_xd_exhaustion, sub_split_time = zslx_c.check_exhaustion()
+        check_xd_exhaustion, sub_split_time = zslx_c.check_exhaustion(slope_only=self.slope_only)
         if self.isdebug:
             print("{0} found at XD level".format("exhaustion" if check_xd_exhaustion else "exhaustion not"))
         
@@ -1425,6 +1427,7 @@ class NestedInterval():
         eq = Equilibrium(kb_chan.getOriginal_df(), 
                          anal_zoushi, 
                          force_zhongshu=False,
+                         slope_only=True,
                          isdebug=self.isdebug, 
                          isDescription=self.isDescription,
                          check_full_zoushi=check_full_zoushi)
@@ -1517,6 +1520,7 @@ class NestedInterval():
         
         eq = Equilibrium(kb_chan.getOriginal_df(), 
                          anal_zoushi_bi, 
+                         slope_only=False,
                          isdebug=self.isdebug, 
                          isDescription=self.isDescription,
                          check_full_zoushi=check_full_zoushi,
@@ -1565,6 +1569,7 @@ class NestedInterval():
         
         eq = Equilibrium(kb_chan.getOriginal_df(), 
                          anal_zoushi, 
+                         slope_only=False,
                          isdebug=self.isdebug, 
                          isDescription=self.isDescription,
                          force_zhongshu=force_zhongshu, 
