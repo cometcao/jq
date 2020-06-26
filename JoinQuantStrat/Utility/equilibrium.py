@@ -77,7 +77,8 @@ def check_chan_by_type_exhaustion(stock,
                                   is_description=True,
                                   check_structure=False,
                                   check_full_zoushi=False,
-                                  enable_composite=False):
+                                  enable_composite=False,
+                                  slope_only=True):
     if is_description:
         print("check_chan_by_type_exhaustion working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
     ni = NestedInterval(stock, 
@@ -93,7 +94,8 @@ def check_chan_by_type_exhaustion(stock,
                              check_end_tb=check_structure, 
                              check_tb_structure=check_structure,
                              check_full_zoushi=check_full_zoushi,
-                             enable_composite=enable_composite)
+                             enable_composite=enable_composite,
+                             slope_only=slope_only)
 
 def check_chan_indepth(stock, 
                        end_time, 
@@ -209,7 +211,8 @@ def check_stock_full(stock,
                                                                       is_description=is_description,
                                                                       check_structure=True,
                                                                       is_anal=is_anal,
-                                                                      check_full_zoushi=False)
+                                                                      check_full_zoushi=False,
+                                                                      slope_only=False)
     if not chan_profile:
         chan_profile = [(Chan_Type.INVALID, TopBotType.noTopBot, 0, 0, 0, None, None)]
 
@@ -1404,7 +1407,8 @@ class NestedInterval():
                        check_end_tb=False, 
                        check_tb_structure=False,
                        check_full_zoushi=False, 
-                       enable_composite=False):
+                       enable_composite=False,
+                       slope_only=True):
         ''' THIS METHOD SHOULD ONLY BE USED FOR TOP LEVEL!!
         This is due to the fact that at high level we can't be very precise
         1. check high level chan type
@@ -1427,7 +1431,7 @@ class NestedInterval():
         eq = Equilibrium(kb_chan.getOriginal_df(), 
                          anal_zoushi, 
                          force_zhongshu=False,
-                         slope_only=True,
+                         slope_only=slope_only,
                          isdebug=self.isdebug, 
                          isDescription=self.isDescription,
                          check_full_zoushi=check_full_zoushi)
