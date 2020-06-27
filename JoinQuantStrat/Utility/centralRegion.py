@@ -509,6 +509,7 @@ class ZhongShu(ZouShiLeiXing):
     def get_core_amplitude_region(self):
         price_list = [self.first.chan_price, self.second.chan_price, self.third.chan_price, self.forth.chan_price]
         self.core_amplitude_region = [min(price_list), max(price_list)]
+        return self.core_amplitude_region
     
     def get_core_time_region(self, re_evaluate=False):
         if not self.core_time_region or re_evaluate:
@@ -604,7 +605,7 @@ class ZhongShu(ZouShiLeiXing):
         '''
         if not self.is_complex_type() or len(self.extra_nodes)==1: # we do need this condition
             core_range = self.get_core_region()
-            amplitude_range = self.get_amplitude_region_original_without_last_xd()
+            amplitude_range = self.get_core_amplitude_region()
             core_gap = core_range[1] - core_range[0]
             amplitude_gap = amplitude_range[1] - amplitude_range[0]
             
@@ -615,11 +616,11 @@ class ZhongShu(ZouShiLeiXing):
     def isStrongBenZouStyle(self):
 #         if not self.is_complex_type() or len(self.extra_nodes)==1: # we do need this condition
         core_range = self.get_core_region()
-        amplitude_range = self.get_amplitude_region_original_without_last_xd()
+        amplitude_range = self.get_core_amplitude_region()
         core_gap = core_range[1] - core_range[0]
         amplitude_gap = amplitude_range[1] - amplitude_range[0]
         
-        if core_gap / amplitude_gap < 0.191: # 0.0618
+        if core_gap / amplitude_gap < 0.0618: # 0.0618
             return True
         return False
                 
