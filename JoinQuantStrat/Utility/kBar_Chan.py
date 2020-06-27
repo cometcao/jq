@@ -1709,6 +1709,16 @@ class KBarChan(object):
                                 working_df[working_loc][xd_tb] = TopBotType.bot.value
                                 if self.isdebug:
                                     print("final xd_tb located from {0} for {1}".format(min_date, TopBotType.bot))
+                            elif float_less(working_df[previous_xd_tb_locs[0]][chan_price], max_price):
+                                max_loc = temp_df[chan_price].argmax()
+                                max_date = temp_df[max_loc][date]
+                                working_loc = np.where(working_df[date]==max_date)[0][0]
+                                working_df[working_loc][xd_tb] = TopBotType.top.value
+                                working_df[previous_xd_tb_locs[0]][xd_tb] = TopBotType.noTopBot.value
+                                if self.isdebug:
+                                    print("final xd_tb located from {0} for {1}, replacing {2}".format(max_date, 
+                                                                                                   TopBotType.top,
+                                                                                                   working_df[previous_xd_tb_locs[0]][date]))
                         elif current_direction == TopBotType.bot2top:
                             # only make guess if previous xd di is the lowest so far
                             if float_less(working_df[previous_xd_tb_locs[0]][chan_price], min_price) or\
@@ -1719,6 +1729,16 @@ class KBarChan(object):
                                 working_df[working_loc][xd_tb] = TopBotType.top.value
                                 if self.isdebug:
                                     print("final xd_tb located from {0} for {1}".format(max_date, TopBotType.top))
+                            elif float_more(working_df[previous_xd_tb_locs[0]][chan_price], min_price):
+                                min_loc = temp_df[chan_price].argmin()
+                                min_date = temp_df[min_loc][date]
+                                working_loc = np.where(working_df[date]==min_date)[0][0]
+                                working_df[working_loc][xd_tb] = TopBotType.bot.value
+                                working_df[previous_xd_tb_locs[0]][xd_tb] = TopBotType.noTopBot.value
+                                if self.isdebug:
+                                    print("final xd_tb located from {0} for {1}, replacing {2}".format(min_date, 
+                                                                                                   TopBotType.bot,
+                                                                                                   working_df[previous_xd_tb_locs[0]][date]))
                         else:
                             print("Invalid direction")
                 else:
