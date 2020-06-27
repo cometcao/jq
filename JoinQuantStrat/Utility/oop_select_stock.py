@@ -865,6 +865,46 @@ class Filter_Rank_Sector(Early_Filter_stock_list):
             return '强势板块股票 %s%% 阈值 %s' % (self.sector_limit_pct, self.strength_threthold)
         else:
             return '弱势板块股票 %s%% 阈值 %s' % (self.sector_limit_pct, self.strength_threthold)
+    
+class Filter_Industry_Sector(Early_Filter_stock_list):
+    def __init__(self, params):
+        Early_Filter_stock_list.__init__(self, params)
+        self.strong_sector = params.get('strong_sector', False)
+        self.sector_limit_pct = params.get('sector_limit_pct', 5)
+        self.strength_threthold = params.get('strength_threthold', 4)
+        self.isDaily = params.get('isDaily', False)
+        self.useIntradayData = params.get('useIntradayData', False)
+        self.useAvg = params.get('useAvg', True)
+        self.avgPeriod = params.get('avgPeriod', 5)
+        self.period_frequency = params.get('period_frequency', 'W')
+        self.isWeighted = params.get('isWeighted', True)
+        self.new_list = []
+    
+    def update_params(self, context, params):
+        pass
+    
+    def filter(self, context, stock_list):
+        # keep sector strength order
+        return [stock for stock in self.new_list if stock in stock_list]
+
+    def before_trading_start(self, context):
+        if self.g.isFirstNTradingDayOfPeriod(context, num_of_day=1, period=self.period_frequency) or not self.new_list or self.isDaily:
+            self.log.info("选取前 %s%% 板块" % str(self.sector_limit_pct))
+            ss = SectorSelection(limit_pct=self.sector_limit_pct, 
+                    isStrong=self.strong_sector, 
+                    min_max_strength=self.strength_threthold, 
+                    useIntradayData=self.useIntradayData,
+                    useAvg=self.useAvg,
+                    avgPeriod=self.avgPeriod,
+                    isWeighted=self.isWeighted,
+                    effective_date=context.previous_date)
+            self.new_list = ss.processAllIndustrySectorStocks()
+            
+    def __str__(self):
+        if self.strong_sector:
+            return '强势板块股票 %s%% 阈值 %s' % (self.sector_limit_pct, self.strength_threthold)
+        else:
+            return '弱势板块股票 %s%% 阈值 %s' % (self.sector_limit_pct, self.strength_threthold)
 
 class Filter_Week_Day_Long_Pivot_Stocks(Filter_stock_list):
     def __init__(self, params):

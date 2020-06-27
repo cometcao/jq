@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import talib
 import datetime
+from collections import OrderedDict
 from sector_spider import *
 
 def get_data(stock, count, level, fields, skip_paused=False, df_flag=True, isAnal=False):
@@ -92,6 +93,17 @@ class SectorSelection(object):
             message += '***'
         send_message(message, channel='weixin')      
 
+    def processAllIndustrySectors(self):
+        if self.filtered_industry:
+            return self.filtered_industry
+        
+        industryStrength = self.processIndustrySectors()
+        industry_limit_value = int(self.top_limit * len(self.jqIndustry))
+        
+        self.filtered_industry = [sector for sector, strength in industryStrength[:industry_limit_value] if (strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)] 
+        
+        return self.filtered_industry
+
     def processAllSectors(self, sendMsg=False, display=False, byName=True):
         if self.filtered_concept and self.filtered_industry:
             print ("use cached sectors")
@@ -113,6 +125,16 @@ class SectorSelection(object):
             return (self.ss.getSectorCodeName('sw2', self.filtered_industry).tolist(), self.ss.getSectorCodeName('gn', self.filtered_concept).tolist())
         else:
             return (self.filtered_industry, self.filtered_concept)
+    
+    def processAllIndustrySectorStocks(self):
+        industry = self.processAllIndustrySectors()
+        allstocks = []
+        for idu in industry:
+            allstocks += get_industry_stocks(idu)
+            
+        allstocks = list(OrderedDict.fromkeys(allstocks)) # keep order remove duplicates
+        return allstocks
+        
     
     def processAllSectorStocks(self, isDisplay=False):
         industry, concept = self.processAllSectors(display=isDisplay, byName=False)
