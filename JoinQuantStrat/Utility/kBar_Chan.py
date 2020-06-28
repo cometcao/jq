@@ -1673,7 +1673,7 @@ class KBarChan(object):
                             max_price = temp_df[max_loc][chan_price]
                             working_loc = np.where(working_df[date]==max_date)[0][0]
                             if float_more(max_price, working_df[previous_xd_tb_locs[0]][chan_price]):
-                                working_df[previous_xd_tb_locs[0]] = TopBotType.noTopBot.value
+                                working_df[previous_xd_tb_locs[0]][xd_tb] = TopBotType.noTopBot.value
                                 working_df[working_loc][xd_tb] = TopBotType.top.value
                                 gapped_change = True
                             if self.isdebug:
@@ -1684,7 +1684,7 @@ class KBarChan(object):
                             min_price = temp_df[min_loc][chan_price]
                             working_loc = np.where(working_df[date]==min_date)[0][0]
                             if float_less(min_price, working_df[previous_xd_tb_locs[0]][chan_price]):
-                                working_df[previous_xd_tb_locs[0]] = TopBotType.noTopBot.value
+                                working_df[previous_xd_tb_locs[0]][xd_tb] = TopBotType.noTopBot.value
                                 working_df[working_loc][xd_tb] = TopBotType.bot.value
                                 gapped_change = True
                             if self.isdebug:
