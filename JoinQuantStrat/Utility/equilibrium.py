@@ -170,8 +170,8 @@ def check_stock_sub(stock,
                                                                  allow_simple_zslx=allow_simple_zslx,
                                                                  check_full_zoushi=check_full_zoushi, 
                                                                  ignore_sub_xd=ignore_sub_xd) # data split at retrieval time
-    bi_split_time = sub_profile[0][5] # split time is the xd start time
     if exhausted and (ignore_sub_xd or xd_exhausted) and check_bi:
+        bi_split_time = sub_profile[0][5] # split time is the xd start time
         bi_exhausted, bi_xd_exhausted, _, _ = ni.indepth_analyze_zoushi(direction, 
                                                                         bi_split_time, 
                                                                         pe, 
@@ -474,7 +474,7 @@ class Equilibrium():
                 zs = self.analytic_result[-1]
                 first_zslx = self.analytic_result[-2]
                 last_xd = zs.take_last_xd_as_zslx()
-                return (first_zslx, self.analytic_result[-1], last_xd, self.analytic_result[-1].get_amplitude_region_original_without_last_xd())
+                return (first_zslx, self.analytic_result[-1], last_xd, self.analytic_result[-1].get_amplitude_region_original())
             elif type(self.analytic_result[-1]) is ZouShiLeiXing:
                 return (self.analytic_result[-3], self.analytic_result[-2], self.analytic_result[-1], self.analytic_result[-2].get_amplitude_region_original())
         
@@ -512,13 +512,13 @@ class Equilibrium():
                         first_xd = zs.take_split_xd_as_zslx(direction, contain_zs=True, force_remaining_zs=True)
                     else:
                         first_xd = self.analytic_result[-2]
-                    return first_xd, zs, last_xd, zs.get_amplitude_region_original_without_last_xd()
+                    return first_xd, zs, last_xd, zs.get_amplitude_region_original()
                 else:
                     # allow same direction zs
 #                     if zs.direction != direction:
 #                         return None, None, None, None
                     first_xd = zs.take_first_xd_as_zslx() if zs.direction != direction or len(self.analytic_result) < 2 else self.analytic_result[-2]
-                    return first_xd, zs, last_xd, zs.get_amplitude_region_original_without_last_xd()
+                    return first_xd, zs, last_xd, zs.get_amplitude_region_original()
     
             elif type(self.analytic_result[-1]) is ZouShiLeiXing:
                 last_xd = self.analytic_result[-1]
@@ -616,17 +616,25 @@ class Equilibrium():
 #         if zs1.get_level().value >= zs2.get_level().value == zs_level.value:
         [lr1, ur1] = zs1.get_core_region()
         [lr2, ur2] = zs2.get_core_region()
+        
+        [la1, ua1] = zs1.get_core_amplitude_region()
+        [la2, ua2] = zs2.get_core_amplitude_region()
+
         if (float_more(lr1, ur2) or float_more(lr2, ur1)) and\
             zs2.get_level() == ZhongShuLevel.current: # two Zhong Shu without intersection
-            if self.isdebug:
-                print("1 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(zs1, zs2))
-            relax_result = True
 
             if float_more(lr1, ur2):
                 self.QvShi_direction = TopBotType.top2bot
             elif float_more(lr2, ur1):
                 self.QvShi_direction = TopBotType.bot2top
 
+            ma1 = (ua1 + la1) / 2
+            ma2 = (ua2 + la2) / 2
+            if (float_more(ma1, ua2) or float_less(ma1, la2)) and\
+                (float_more(ma2, ua1) or float_less(ma2, la1)):
+                if self.isdebug:
+                    print("1 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(zs1, zs2))
+                relax_result = True
         return relax_result
     
     def two_zslx_interact(self, zs1, zs2):
@@ -1057,6 +1065,12 @@ class Equilibrium():
         if len(self.analytic_result) < 2 and not self.analytic_result[0].isZhongShu:
             return all_types
         
+        if self.analytic_result[-1].get_final_direction() != check_direction:
+            if self.isdebug:
+                print("Invalid ending direction {0} against checking direction {1}".format(self.analytic_result[-1].get_final_direction(), 
+                                                                                           check_direction))
+            return all_types
+        
         # we can't supply the Zhongshu amplitude range as it is considered part of Zhongshu
         # SIMPLE CASE
         if self.isQvShi and check_direction == self.QvShi_direction:
@@ -1084,7 +1098,7 @@ class Equilibrium():
             
             if type(self.analytic_result[-1]) is ZhongShu: # last XD in zhong shu must make top or bot
                 zs = self.analytic_result[-1]
-                [lc, uc] = zs.get_amplitude_region_original_without_last_xd()
+                [lc, uc] = zs.get_amplitude_region_original()
                 if zs.is_complex_type() and len(zs.extra_nodes) >= 1:
                     if zs.direction == TopBotType.top2bot and\
                         (not check_end_tb or\
@@ -1310,7 +1324,7 @@ class Equilibrium():
                 final_zs = self.analytic_result[-1]
                 all_types.append((Chan_Type.INVALID,
                                   TopBotType.noTopBot,
-                                  final_zs.get_amplitude_region_original_without_last_xd()))
+                                  final_zs.get_amplitude_region_original()))
             elif len(self.analytic_result) > 1 and type(self.analytic_result[-2]) is ZhongShu:
                 final_zs = self.analytic_result[-2]
                 all_types.append((Chan_Type.INVALID,
@@ -1517,12 +1531,10 @@ class NestedInterval():
             if anal_zoushi_bi is None:
                 return False, False, None, []
             
-#             split_anal_zoushi_bi_result = anal_zoushi_bi.zslx_result
         else:
             kb_chan, anal_zoushi_bi = self.df_zoushi_tuple_list[period]
             if anal_zoushi_bi is None:
                 return False, False, None, []
-#             split_anal_zoushi_bi_result = anal_zoushi_bi.zslx_result
         
         eq = Equilibrium(kb_chan.getOriginal_df(), 
                          anal_zoushi_bi, 
@@ -1533,7 +1545,7 @@ class NestedInterval():
                          force_zhongshu=force_zhongshu)
         all_types = eq.check_chan_type(check_end_tb=False, check_direction=direction)
         if not all_types:
-            all_types = [(Chan_Type.INVALID, TopBotType.noTopBot, 0)]
+            return False, False, None, []
         
         bi_exhausted, bi_check_exhaustion, _,bi_split_time, _, _ = eq.define_equilibrium(direction, 
                                                                                          check_tb_structure=True,
@@ -1569,9 +1581,9 @@ class NestedInterval():
             print("looking for {0} at top level {1}".format("long" if direction == TopBotType.top2bot else "short",
                                                             period))
         kb_chan, anal_zoushi = self.df_zoushi_tuple_list[period]
-        default_chan_type_result = [(Chan_Type.INVALID, TopBotType.noTopBot, 0, 0, 0, None, None)]# default value
+#         default_chan_type_result = [(Chan_Type.INVALID, TopBotType.noTopBot, 0, 0, 0, None, None)]# default value
         if anal_zoushi is None:
-            return False, False, default_chan_type_result
+            return False, False, []
         
         eq = Equilibrium(kb_chan.getOriginal_df(), 
                          anal_zoushi, 
@@ -1582,14 +1594,14 @@ class NestedInterval():
                          check_full_zoushi=check_full_zoushi)
         chan_type_result = eq.check_chan_type(check_end_tb=check_end_tb, check_direction=direction)
         if not chan_type_result:
-            chan_type_result = [(Chan_Type.INVALID, TopBotType.noTopBot, 0)]
+            return False, False, []
         
         found_chan_type = False
         for chan_t, chan_d, _ in chan_type_result: # early checks if we have any types found with opposite direction, no need to go further
             if chan_d == TopBotType.reverse(direction):
                 if self.isdebug:
                     print("opposite direction chan type found")
-                return False, False, default_chan_type_result
+                return False, False, []
             
             if chan_t in chan_types:
                 found_chan_type = True
@@ -1597,7 +1609,7 @@ class NestedInterval():
         if not found_chan_type:
             if self.isdebug:
                 print("chan type {0} not found".format(chan_type_result))
-            return False, False, default_chan_type_result
+            return False, False, []
 
         # only type II and III can coexist, only need to check the first one
         # reverse direction case are dealt above

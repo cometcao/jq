@@ -1655,13 +1655,14 @@ class KBarChan(object):
         if previous_xd_tb_locs:
             pre_pre_xd_tb_locs = self.get_previous_N_elem(previous_xd_tb_locs[0], working_df, N=0, single_direction=False)
             columns = ['date', chan_price, tb, original_tb]
-            previous_xd_tb_loc = previous_xd_tb_locs[0]+3
+            previous_xd_tb_loc = previous_xd_tb_locs[0]
+            working_xd_tb_loc = previous_xd_tb_loc+3
             
-            if previous_xd_tb_loc < working_df.shape[0]:
+            if working_xd_tb_loc < working_df.shape[0]:
                 # restore tb info from loc found from original_tb as we don't need them?
-#                 self.restore_tb_data(working_df, previous_xd_tb_loc, None)
+#                 self.restore_tb_data(working_df, working_xd_tb_loc, None)
                 
-                temp_df = working_df[previous_xd_tb_loc:][columns]
+                temp_df = working_df[working_xd_tb_loc:][columns]
                 if temp_df.size > 0:
                     temp_df = temp_df[temp_df[tb] != TopBotType.noTopBot.value]
                     gapped_change = False
@@ -1672,8 +1673,8 @@ class KBarChan(object):
                             max_date = temp_df[max_loc][date]
                             max_price = temp_df[max_loc][chan_price]
                             working_loc = np.where(working_df[date]==max_date)[0][0]
-                            if float_more(max_price, working_df[previous_xd_tb_locs[0]][chan_price]):
-                                working_df[previous_xd_tb_locs[0]][xd_tb] = TopBotType.noTopBot.value
+                            if float_more(max_price, working_df[previous_xd_tb_loc][chan_price]):
+                                working_df[previous_xd_tb_loc][xd_tb] = TopBotType.noTopBot.value
                                 working_df[working_loc][xd_tb] = TopBotType.top.value
                                 gapped_change = True
                             if self.isdebug:
@@ -1683,16 +1684,17 @@ class KBarChan(object):
                             min_date = temp_df[min_loc][date]
                             min_price = temp_df[min_loc][chan_price]
                             working_loc = np.where(working_df[date]==min_date)[0][0]
-                            if float_less(min_price, working_df[previous_xd_tb_locs[0]][chan_price]):
-                                working_df[previous_xd_tb_locs[0]][xd_tb] = TopBotType.noTopBot.value
+                            if float_less(min_price, working_df[previous_xd_tb_loc][chan_price]):
+                                working_df[previous_xd_tb_loc][xd_tb] = TopBotType.noTopBot.value
                                 working_df[working_loc][xd_tb] = TopBotType.bot.value
                                 gapped_change = True
                             if self.isdebug:
                                 print("final gapped xd_tb located from {0} for {1}".format(min_date, TopBotType.bot))
                     
                         if gapped_change:
-                            previous_xd_tb_loc = working_loc+3
-                            temp_df = working_df[previous_xd_tb_loc:][columns]
+                            working_xd_tb_loc = working_loc+3
+                            previous_xd_tb_loc = working_loc
+                            temp_df = working_df[working_xd_tb_loc:][columns]
                         
                     # We could make an assumption based on assumption. 
                     if temp_df.size > 0:
@@ -1701,7 +1703,7 @@ class KBarChan(object):
                         
                         if current_direction == TopBotType.top2bot:
                             # only make guess if previous xd ding is the highest so far
-                            if float_more(working_df[previous_xd_tb_locs[0]][chan_price], max_price) or\
+                            if float_more(working_df[previous_xd_tb_loc][chan_price], max_price) or\
                                 (pre_pre_xd_tb_locs and float_more(working_df[pre_pre_xd_tb_locs[0]][chan_price], min_price)):
                                 min_loc = temp_df[chan_price].argmin()
                                 min_date = temp_df[min_loc][date]
@@ -1709,19 +1711,19 @@ class KBarChan(object):
                                 working_df[working_loc][xd_tb] = TopBotType.bot.value
                                 if self.isdebug:
                                     print("final xd_tb located from {0} for {1}".format(min_date, TopBotType.bot))
-                            elif float_less(working_df[previous_xd_tb_locs[0]][chan_price], max_price):
+                            elif float_less(working_df[previous_xd_tb_loc][chan_price], max_price):
                                 max_loc = temp_df[chan_price].argmax()
                                 max_date = temp_df[max_loc][date]
                                 working_loc = np.where(working_df[date]==max_date)[0][0]
                                 working_df[working_loc][xd_tb] = TopBotType.top.value
-                                working_df[previous_xd_tb_locs[0]][xd_tb] = TopBotType.noTopBot.value
+                                working_df[previous_xd_tb_loc][xd_tb] = TopBotType.noTopBot.value
                                 if self.isdebug:
                                     print("final xd_tb located from {0} for {1}, replacing {2}".format(max_date, 
                                                                                                    TopBotType.top,
-                                                                                                   working_df[previous_xd_tb_locs[0]][date]))
+                                                                                                   working_df[previous_xd_tb_loc][date]))
                         elif current_direction == TopBotType.bot2top:
                             # only make guess if previous xd di is the lowest so far
-                            if float_less(working_df[previous_xd_tb_locs[0]][chan_price], min_price) or\
+                            if float_less(working_df[previous_xd_tb_loc][chan_price], min_price) or\
                                 (pre_pre_xd_tb_locs and float_less(working_df[pre_pre_xd_tb_locs[0]][chan_price], max_price)):
                                 max_loc = temp_df[chan_price].argmax()
                                 max_date = temp_df[max_loc][date]
@@ -1729,16 +1731,16 @@ class KBarChan(object):
                                 working_df[working_loc][xd_tb] = TopBotType.top.value
                                 if self.isdebug:
                                     print("final xd_tb located from {0} for {1}".format(max_date, TopBotType.top))
-                            elif float_more(working_df[previous_xd_tb_locs[0]][chan_price], min_price):
+                            elif float_more(working_df[previous_xd_tb_loc][chan_price], min_price):
                                 min_loc = temp_df[chan_price].argmin()
                                 min_date = temp_df[min_loc][date]
                                 working_loc = np.where(working_df[date]==min_date)[0][0]
                                 working_df[working_loc][xd_tb] = TopBotType.bot.value
-                                working_df[previous_xd_tb_locs[0]][xd_tb] = TopBotType.noTopBot.value
+                                working_df[previous_xd_tb_loc][xd_tb] = TopBotType.noTopBot.value
                                 if self.isdebug:
                                     print("final xd_tb located from {0} for {1}, replacing {2}".format(min_date, 
                                                                                                    TopBotType.bot,
-                                                                                                   working_df[previous_xd_tb_locs[0]][date]))
+                                                                                                   working_df[previous_xd_tb_loc][date]))
                         else:
                             print("Invalid direction")
                 else:

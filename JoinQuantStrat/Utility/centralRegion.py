@@ -146,6 +146,7 @@ class ZouShiLeiXing(object):
         self.amplitude_region_origin = []
         self.time_region = []
         self.isZhongShu = False
+        self.isLastZslx = False
     
     def get_level(self):
         return ZhongShuLevel.previous
@@ -184,6 +185,11 @@ class ZouShiLeiXing(object):
         # method used for reversal analytics
 #         self.zoushi_nodes = self.zoushi_nodes[::-1]
         pass
+    
+    def get_final_direction(self):
+        last_xd = self.take_last_xd_as_zslx()
+        return last_xd.direction
+        
 
     @classmethod
     def is_valid_central_region(cls, direction, first, second, third, forth):
@@ -519,26 +525,34 @@ class ZhongShu(ZouShiLeiXing):
     
     def get_amplitude_region(self, re_evaluate=False):
         if not self.amplitude_region or re_evaluate:
-            all_price_list = [self.first.chan_price, self.second.chan_price, self.third.chan_price, self.forth.chan_price] + [node.chan_price for node in self.extra_nodes]
-            self.amplitude_region = [min(all_price_list), max(all_price_list)]
-        return self.amplitude_region    
+            if not self.isLastZslx:
+                all_price_list = [self.first.chan_price, self.second.chan_price, self.third.chan_price, self.forth.chan_price] + [node.chan_price for node in self.extra_nodes]
+                self.amplitude_region = [min(all_price_list), max(all_price_list)]
+            else:
+                self.amplitude_region = get_amplitude_region_without_last_xd()
+        return self.amplitude_region
+    
+    def get_amplitude_region_without_last_xd(self):
+        all_nodes = self.get_all_nodes()
+        checking_nodes = all_nodes[:-1]
+        all_price = [n.chan_price for n in checking_nodes]
+        return [min(all_price), max(all_price)]
     
     def get_amplitude_region_original(self, re_evaluate=False):
         if not self.amplitude_region_origin or re_evaluate:
-            [s, e] = self.get_time_diff(re_evaluate)
-            region_price_series = self.original_df[s:e+1][['high','low']]
-            self.amplitude_region_origin = [region_price_series['low'].min(), region_price_series['high'].max()]
+            if not self.isLastZslx:
+                [s, e] = self.get_time_diff(re_evaluate)
+                region_price_series = self.original_df[s:e+1][['high','low']]
+                self.amplitude_region_origin = [region_price_series['low'].min(), region_price_series['high'].max()]
+            else:
+                self.amplitude_region_origin = get_amplitude_region_original_without_last_xd()
         return self.amplitude_region_origin
         
     def get_amplitude_region_original_without_last_xd(self):
-        # used for TYPE I when ZhongShu is the last zoushi
-        if self.is_complex_type():
-            s_loc = self.first.loc
-            e_loc = self.forth.loc if len(self.extra_nodes) == 1 else self.extra_nodes[-2].loc
-            region_price_series = self.original_df[s_loc:e_loc+1][['high','low']]
-            return [region_price_series['low'].min(), region_price_series['high'].max()]
-        else:
-            return self.get_amplitude_region_original(re_evaluate=False)
+        s_loc = self.first.loc
+        e_loc = self.forth.loc if len(self.extra_nodes) <= 1 else self.extra_nodes[-2].loc
+        region_price_series = self.original_df[s_loc:e_loc+1][['high','low']]
+        return [region_price_series['low'].min(), region_price_series['high'].max()]
     
     def get_split_zs(self, split_direction, contain_zs=True):
         '''
@@ -932,6 +946,7 @@ class ZouShi(object):
         
 #         # add remaining nodes
         temp_zslx.add_new_nodes(working_nodes[i:])
+        temp_zslx.isLastZslx = True
         self.zslx_result.append(temp_zslx)
 
         # reverse back all zslx and nodes within
@@ -1028,6 +1043,7 @@ class ZouShi(object):
         
 #         # add remaining nodes
         temp_zslx.add_new_nodes(zslx_all_nodes[i:])
+        temp_zslx.isLastZslx = True
         zslx_result.append(temp_zslx)
 
         if isdebug:
