@@ -529,7 +529,7 @@ class ZhongShu(ZouShiLeiXing):
                 all_price_list = [self.first.chan_price, self.second.chan_price, self.third.chan_price, self.forth.chan_price] + [node.chan_price for node in self.extra_nodes]
                 self.amplitude_region = [min(all_price_list), max(all_price_list)]
             else:
-                self.amplitude_region = get_amplitude_region_without_last_xd()
+                self.amplitude_region = self.get_amplitude_region_without_last_xd()
         return self.amplitude_region
     
     def get_amplitude_region_without_last_xd(self):
@@ -545,7 +545,7 @@ class ZhongShu(ZouShiLeiXing):
                 region_price_series = self.original_df[s:e+1][['high','low']]
                 self.amplitude_region_origin = [region_price_series['low'].min(), region_price_series['high'].max()]
             else:
-                self.amplitude_region_origin = get_amplitude_region_original_without_last_xd()
+                self.amplitude_region_origin = self.get_amplitude_region_original_without_last_xd()
         return self.amplitude_region_origin
         
     def get_amplitude_region_original_without_last_xd(self):

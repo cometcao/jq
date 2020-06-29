@@ -474,7 +474,7 @@ class Equilibrium():
                 zs = self.analytic_result[-1]
                 first_zslx = self.analytic_result[-2]
                 last_xd = zs.take_last_xd_as_zslx()
-                return (first_zslx, self.analytic_result[-1], last_xd, self.analytic_result[-1].get_amplitude_region_original())
+                return (first_zslx, self.analytic_result[-1], last_xd, self.analytic_result[-1].get_amplitude_region_original(re_evaluate=True))
             elif type(self.analytic_result[-1]) is ZouShiLeiXing:
                 return (self.analytic_result[-3], self.analytic_result[-2], self.analytic_result[-1], self.analytic_result[-2].get_amplitude_region_original())
         
@@ -512,13 +512,13 @@ class Equilibrium():
                         first_xd = zs.take_split_xd_as_zslx(direction, contain_zs=True, force_remaining_zs=True)
                     else:
                         first_xd = self.analytic_result[-2]
-                    return first_xd, zs, last_xd, zs.get_amplitude_region_original()
+                    return first_xd, zs, last_xd, zs.get_amplitude_region_original(re_evaluate=True)
                 else:
                     # allow same direction zs
 #                     if zs.direction != direction:
 #                         return None, None, None, None
                     first_xd = zs.take_first_xd_as_zslx() if zs.direction != direction or len(self.analytic_result) < 2 else self.analytic_result[-2]
-                    return first_xd, zs, last_xd, zs.get_amplitude_region_original()
+                    return first_xd, zs, last_xd, zs.get_amplitude_region_original(re_evaluate=True)
     
             elif type(self.analytic_result[-1]) is ZouShiLeiXing:
                 last_xd = self.analytic_result[-1]
@@ -570,7 +570,7 @@ class Equilibrium():
         if zs1.get_level().value == zs2.get_level().value == zs_level.value and\
             zs1.direction == zs2.direction:
             [l1, u1] = zs1.get_amplitude_region_original()
-            [l2, u2] = zs2.get_amplitude_region_original()
+            [l2, u2] = zs2.get_amplitude_region_original(re_evaluate=True)
             if float_more(l1, u2) or float_more(l2, u1): # two Zhong Shu without intersection
                 if self.isdebug:
                     print("1 current Zou Shi is QV SHI \n{0} \n{1}".format(zs1, zs2))
@@ -649,7 +649,7 @@ class Equilibrium():
     def two_zslx_interact_original(self, zs1, zs2):
         result = False
         [l1, u1] = zs1.get_amplitude_region_original()
-        [l2, u2] = zs2.get_amplitude_region_original()
+        [l2, u2] = zs2.get_amplitude_region_original(re_evaluate=True)
         return (float_less_equal(l1,l2) and float_less_equal(l2, u1)) or\
                 (float_less_equal(l1,u2) and float_less_equal(u2, u1)) or\
                 (float_less_equal(l2,l1) and float_less_equal(l1, u2)) or\
@@ -1004,7 +1004,7 @@ class Equilibrium():
         if guide_price == 0: # This happens at BI level
             guide_price = central_region[0] if direction == TopBotType.top2bot else central_region[1]
             
-        zslx_range = zslx.get_amplitude_region_original()
+        zslx_range = zslx.get_amplitude_region_original(re_evaluate=True)
         
         return float_less_equal(zslx_range[0], guide_price) if direction == TopBotType.top2bot else float_more_equal(zslx_range[1], guide_price)
     
@@ -1098,7 +1098,7 @@ class Equilibrium():
             
             if type(self.analytic_result[-1]) is ZhongShu: # last XD in zhong shu must make top or bot
                 zs = self.analytic_result[-1]
-                [lc, uc] = zs.get_amplitude_region_original()
+                [lc, uc] = zs.get_amplitude_region_original(re_evaluate=True)
                 if zs.is_complex_type() and len(zs.extra_nodes) >= 1:
                     if zs.direction == TopBotType.top2bot and\
                         (not check_end_tb or\
@@ -1324,7 +1324,7 @@ class Equilibrium():
                 final_zs = self.analytic_result[-1]
                 all_types.append((Chan_Type.INVALID,
                                   TopBotType.noTopBot,
-                                  final_zs.get_amplitude_region_original()))
+                                  final_zs.get_amplitude_region_original(re_evaluate=True)))
             elif len(self.analytic_result) > 1 and type(self.analytic_result[-2]) is ZhongShu:
                 final_zs = self.analytic_result[-2]
                 all_types.append((Chan_Type.INVALID,
