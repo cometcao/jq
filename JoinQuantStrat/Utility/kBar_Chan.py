@@ -1015,7 +1015,7 @@ class KBarChan(object):
     #                     return gap_range_in_portion
                     
                 gap_range = sum([(b-a) for a, b in regions])
-                if float_more_equal(gap_range/abs(firstElem['chan_price']-secondElem['chan_price']), 1-GOLDEN_RATIO):
+                if float_more_equal(gap_range/abs(firstElem['chan_price']-secondElem['chan_price']), GOLDEN_RATIO):
                     gap_range_in_portion = True
                 
                 if compareElem is None:
