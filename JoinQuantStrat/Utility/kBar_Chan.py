@@ -1458,17 +1458,16 @@ class KBarChan(object):
         real_loc='real_loc'
         i = None
         #################### pop gap_XD ##########################
-        secondElem = working_df[next_valid_elems[1]]
+        checking_elems_price = working_df[next_valid_elems[0]:next_valid_elems[-1]+1][chan_price]
+        
         previous_gap_elem = working_df[self.gap_XD[-1]]
         if current_direction == TopBotType.top2bot:
-            if float_more(secondElem[chan_price], previous_gap_elem[chan_price]):
+            if float_more(max(checking_elems_price), previous_gap_elem[chan_price]):
                 previous_gap_loc = self.gap_XD.pop()
                 if self.isdebug:
                     print("xd_tb cancelled due to new high found: {0} {1}".format(working_df[previous_gap_loc][date], working_df[previous_gap_loc][real_loc]))
                 working_df[previous_gap_loc][xd_tb] = TopBotType.noTopBot.value
                 
-                # restore any combined bi due to the gapped XD
-#                 working_df[previous_gap_loc:next_valid_elems[-1]][tb] = working_df[previous_gap_loc:next_valid_elems[-1]][original_tb]
                 self.restore_tb_data(working_df, previous_gap_loc, next_valid_elems[-1])
                 current_direction = TopBotType.reverse(current_direction)
                 if self.isdebug:
@@ -1477,14 +1476,12 @@ class KBarChan(object):
                 i = previous_gap_loc
                 
         elif current_direction == TopBotType.bot2top:
-            if float_less(secondElem['chan_price'], previous_gap_elem[chan_price]):
+            if float_less(min(checking_elems_price), previous_gap_elem[chan_price]):
                 previous_gap_loc = self.gap_XD.pop()
                 if self.isdebug:
                     print("xd_tb cancelled due to new low found: {0} {1}".format(working_df[previous_gap_loc][date], working_df[previous_gap_loc][real_loc]))
                 working_df[previous_gap_loc][xd_tb] = TopBotType.noTopBot.value
                 
-                # restore any combined bi due to the gapped XD
-#                 working_df[previous_gap_loc:next_valid_elems[-1]][tb] = working_df[previous_gap_loc:next_valid_elems[-1]][original_tb]
                 self.restore_tb_data(working_df, previous_gap_loc, next_valid_elems[-1])
                 current_direction = TopBotType.reverse(current_direction)
                 if self.isdebug:
