@@ -635,6 +635,10 @@ class Equilibrium():
                 if self.isdebug:
                     print("1 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(zs1, zs2))
                 relax_result = True
+            elif ZouShi.check_joint_zhongshu(zs1, zs2, zslx):
+                if self.isdebug:
+                    print("2 current Zou Shi is QV SHI relaxed \n{0} \n{1}".format(zs1, zs2))
+                relax_result = True
         return relax_result
     
     def two_zslx_interact(self, zs1, zs2):

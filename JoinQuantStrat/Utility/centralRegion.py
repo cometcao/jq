@@ -960,9 +960,9 @@ class ZouShi(object):
     @classmethod
     def check_joint_zhongshu(cls, zs1, zs2, zslx):
         if ((not zs1.is_complex_type() or not zs1.is_complex_type()) and zslx.isSimple()):
-            if zslx.get_all_nodes()[-1] == zs1.get_all_nodes[-1]:
+            if zslx.get_all_nodes()[-1] == zs1.get_all_nodes()[-1]:
                 return True
-            elif zslx.get_all_nodes()[0] == zs2.get_all_nodes[0]:
+            elif zslx.get_all_nodes()[0] == zs2.get_all_nodes()[0]:
                 return True
         return False
     
