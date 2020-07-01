@@ -779,8 +779,8 @@ class Short_Chan(Sell_stocks):
         if context.portfolio.positions[stock].avg_cost < context.portfolio.positions[stock].price:
             return False
         
-        current_profile = self.g.stock_chan_type[stock][0]
-        sub_profile = self.g.stock_chan_type[stock][1]
+        current_profile = self.g.stock_chan_type[stock][1]
+        sub_profile = self.g.stock_chan_type[stock][2]
         current_chan_t = current_profile[0]
         current_chan_p = current_profile[2]
         current_chan_slope = current_profile[3]
@@ -943,8 +943,8 @@ class Short_Chan(Sell_stocks):
             return False
         
         position_time = context.portfolio.positions[stock].transact_time
-        current_profile = self.g.stock_chan_type[stock][0]
-        sub_profile = self.g.stock_chan_type[stock][1]
+        current_profile = self.g.stock_chan_type[stock][1]
+        sub_profile = self.g.stock_chan_type[stock][2]
         current_chan_t = current_profile[0]
         current_chan_p = current_profile[2]
         current_zoushi_start_time = current_profile[5]
@@ -1193,7 +1193,13 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
         Buy_stocks.__init__(self, params)
         self.buy_count = params.get('buy_count', 3)
         self.type_III_threthold = params.get('threthold', 1.2)
-        self.force_chan_type = params.get('force_chan_type', [Chan_Type.I])
+        self.force_chan_type = params.get('force_chan_type', [
+                                                              [Chan_Type.I, Chan_Type.I, Chan_Type.I],
+                                                              [Chan_Type.INVALID, Chan_Type.I, Chan_Type.I],
+                                                              [Chan_Type.INVALID, Chan_Type.I, Chan_Type.I_weak],
+                                                              [Chan_Type.INVALID, Chan_Type.I, Chan_Type.INVALID],
+                                                              [Chan_Type.I_weak, Chan_Type.I, Chan_Type.I]
+                                                              ])
         self.force_price_check = params.get('force_price_check', True)
         self.expected_profit = params.get('expected_profit', 0.03)
         self.to_buy = []
@@ -1208,17 +1214,20 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
         to_ignore = []
         for stock in self.to_buy:
             top_profile = self.g.stock_chan_type[stock][0]
-            sub_profile = self.g.stock_chan_type[stock][1]
-            
-            if self.force_chan_type and (top_profile[0] not in self.force_chan_type) and (sub_profile[0] not in self.force_chan_type):
-                print("stock {0} ignored due to force {1}".format(stock, self.force_chan_type))
-                to_ignore.append(stock)
+            current_profile = self.g.stock_chan_type[stock][1]
+            sub_profile = self.g.stock_chan_type[stock][2]
             
             top_chan_t = top_profile[0]
-            top_chan_p = top_profile[2]
+            cur_chan_t = current_profile[0]
+            cur_chan_p = current_profile[2]
             sub_chan_t = sub_profile[0]
             sub_chan_p = sub_profile[2]
             effective_time = sub_profile[6]
+            
+            if self.force_chan_type and ([top_chan_t, cur_chan_t, sub_chan_t] not in self.force_chan_type):
+                print("stock {0} ignored due to force {1}".format(stock, [top_chan_t, cur_chan_t, sub_chan_t]))
+                to_ignore.append(stock)
+            
             latest_data = get_price(stock,
                                    start_date=effective_time, 
                                    end_date=context.current_dt, 
@@ -1230,26 +1239,26 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
             latest_price = latest_data.iloc[-1].close
             # check current price of the stock ignore the ones not suitable
             # sort the stocks prioritize TYPE I stocks
-            if Chan_Type.I == top_chan_t:
+            if Chan_Type.I == cur_chan_t:
                 type_I_stocks.append(stock)
                 self.to_buy.remove(stock)
                 
-                if self.force_price_check and (latest_high_price >= top_chan_p or top_chan_p/latest_price - 1 < self.expected_profit):
+                if self.force_price_check and (latest_high_price >= cur_chan_p or cur_chan_p/latest_price - 1 < self.expected_profit):
                     to_ignore.append(stock)
                     
             elif self.force_price_check:
-                if top_chan_t == Chan_Type.III:
-                    if latest_min_price <= top_chan_p:
+                if cur_chan_t == Chan_Type.III:
+                    if latest_min_price <= cur_chan_p:
                         # if TYPE III not valid anymore
                         to_ignore.append(stock)
-#                     if sub_chan_p / top_chan_p > self.type_III_threthold:
+#                     if sub_chan_p / cur_chan_p > self.type_III_threthold:
 #                         to_ignore.append(stock)
-                if top_chan_t == Chan_Type.INVALID:
-                    if type(top_chan_p) is list:
-                        if latest_high_price >= top_chan_p[0] or top_chan_p[0]/latest_price - 1 < self.expected_profit:
+                if cur_chan_t == Chan_Type.INVALID:
+                    if type(cur_chan_p) is list:
+                        if latest_high_price >= cur_chan_p[0] or cur_chan_p[0]/latest_price - 1 < self.expected_profit:
                             to_ignore.append(stock)
                     else: # can only be actual price here
-                        if latest_high_price >= top_chan_p or top_chan_p/latest_price - 1 < self.expected_profit:
+                        if latest_high_price >= cur_chan_p or cur_chan_p/latest_price - 1 < self.expected_profit:
                             to_ignore.append(stock)
 
                 if sub_chan_t == Chan_Type.INVALID:

@@ -680,13 +680,13 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                 
                 chan_stock_list.append(stock)
                 
-                self.g.stock_chan_type[stock] = [(Chan_Type.value2type(c_type_value), 
-                                                  TopBotType.value2type(c_direc_value),
-                                                  c_price, 
-                                                  c_slope,
-                                                  c_force,
-                                                  pd.Timestamp(z_time),
-                                                  pd.Timestamp(s_time))]
+                self.g.stock_chan_type[stock] = [(Chan_Type.value2type(top_type_value), 
+                                                  TopBotType.top2bot,
+                                                  0, 
+                                                  0,
+                                                  0,
+                                                  None,
+                                                  None)]
             self.log.info("filtered data read from file: {0} stocks info".format(len(chan_stock_list)))
         return chan_stock_list
     
@@ -762,7 +762,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             
             if result:
                 filter_stock_list.append(stock)
-                self.g.stock_chan_type[stock] = profile
+                self.g.stock_chan_type[stock] = self.g.stock_chan_type[stock] + profile
             
 #             top_profile = self.g.stock_chan_type[stock]
 #             splitTime = top_profile[0][6]
