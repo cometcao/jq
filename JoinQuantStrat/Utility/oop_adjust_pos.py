@@ -1202,10 +1202,10 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
                                                               ])
         self.force_price_check = params.get('force_price_check', True)
         self.expected_profit = params.get('expected_profit', 0.03)
-        self.tentative_chan_type = [
+        self.tentative_chan_type = params.get('tentative_chan_type', [
                                     [Chan_Type.I, self.working_chan_type, Chan_Type.I],
                                     [Chan_Type.I_weak, self.working_chan_type, Chan_Type.I],
-                                    ]
+                                    ])
         self.tentative_to_buy = set() # list to hold stocks waiting to be operated
         self.to_buy = []
         
@@ -1279,7 +1279,7 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
                             to_ignore.append(stock)
         
         if to_ignore:
-            self.log.info("stocks: {0} ignored due to price over target value".format(to_ignore)) 
+            self.log.info("stocks: {0} ignored due to conditions".format(to_ignore)) 
             self.to_buy = [stock for stock in self.to_buy if stock not in to_ignore]
         
         self.to_buy = [stock for stock in self.to_buy if stock not in self.tentative_to_buy]
