@@ -1331,7 +1331,7 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
             current_zoushi_start_time = current_profile[5]
 
             stock_data = get_bars(stock, 
-                                count=1000, 
+                                count=2000, 
                                 unit=self.working_period,
                                 fields=['date','money'],
                                 include_now=True, 
