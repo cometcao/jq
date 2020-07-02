@@ -1233,7 +1233,7 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
             chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
             
             if self.tentative_chan_type and (chan_type_list in self.tentative_chan_type):
-                self.log.info("stock {0} saved for later!")
+                self.log.info("stock {0} saved for later!".format(stock))
                 self.tentative_to_buy.add(stock)
                 continue
             
