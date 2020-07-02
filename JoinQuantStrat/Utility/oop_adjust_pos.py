@@ -1205,6 +1205,7 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
         self.tentative_chan_type = params.get('tentative_chan_type', [
                                     [Chan_Type.I, self.working_chan_type, Chan_Type.I],
                                     [Chan_Type.I_weak, self.working_chan_type, Chan_Type.I],
+                                    [Chan_Type.I, self.working_chan_type, Chan_Type.I_weak]
                                     ])
         self.tentative_to_buy = set() # list to hold stocks waiting to be operated
         self.to_buy = []
@@ -1214,7 +1215,7 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
             self.log_warn('无法执行买入!! self.is_to_return 未开启')
             return
 
-        self.to_buy = self.g.monitor_buy_list
+        self.to_buy = [stock for stock in self.g.monitor_buy_list if stock not in self.tentative_to_buy]
         self.log.info("Candidate stocks: {0} tentative stocks: {1}".format(self.to_buy, self.tentative_to_buy))
         type_I_stocks = []
         to_ignore = []
