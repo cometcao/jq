@@ -1344,12 +1344,12 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
             latest_money = sum(stock_data['money'][cutting_loc:])
             past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
             
-            print(stock_data)
-            print(current_zoushi_start_time)
-            print(cutting_loc)
-            print(cutting_offset)
-            print(latest_money)
-            print(past_money)
+#             print(stock_data)
+#             print(current_zoushi_start_time)
+#             print(cutting_loc)
+#             print(cutting_offset)
+#             print(latest_money)
+#             print(past_money)
             
             if float_more_equal(latest_money / past_money, 2):
                 self.log.info("candiate stock {0} money active, qualify for long condition")
