@@ -1215,7 +1215,7 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
             return
 
         self.to_buy = self.g.monitor_buy_list
-        self.log.info("Candidate stocks: {0}".format(self.to_buy))
+        self.log.info("Candidate stocks: {0} tentative stocks: {1}".format(self.to_buy, self.tentative_to_buy))
         type_I_stocks = []
         to_ignore = []
         for stock in self.to_buy:
