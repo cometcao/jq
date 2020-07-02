@@ -1322,7 +1322,7 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
                                                   0,
                                                   0,
                                                   None,
-                                                  None)]
+                                                  context.current_dt)]
         self.tentative_to_buy = self.tentative_to_buy.difference(stocks_to_remove)
         
         # check volume/money
@@ -1343,6 +1343,14 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
             cutting_offset = stock_data.size - cutting_loc
             latest_money = sum(stock_data['money'][cutting_loc:])
             past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
+            
+            print(stock_data)
+            print(current_zoushi_start_time)
+            print(cutting_loc)
+            print(cutting_offset)
+            print(latest_money)
+            print(past_money)
+            
             if float_more_equal(latest_money / past_money, 2):
                 self.log.info("candiate stock {0} money active, qualify for long condition")
                 stocks_to_long.append(stock)
