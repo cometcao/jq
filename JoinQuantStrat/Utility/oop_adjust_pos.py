@@ -1314,8 +1314,8 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
                                                   0,
                                                   0,
                                                   None,
-                                                  None)] +
-                                                c_profile +
+                                                  None)] +\
+                                                c_profile +\
                                                 [(Chan_Type.I, 
                                                   TopBotType.top2bot,
                                                   0, 
