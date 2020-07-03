@@ -1239,7 +1239,7 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
                 continue
             
             if self.force_chan_type and (chan_type_list not in self.force_chan_type):
-                self.log.info("stock {0} ignored due to force {1}".format(stock, [top_chan_t, cur_chan_t, sub_chan_t]))
+#                 self.log.info("stock {0} ignored due to force {1}".format(stock, [top_chan_t, cur_chan_t, sub_chan_t]))
                 to_ignore.append(stock)
             
             latest_data = get_price(stock,
