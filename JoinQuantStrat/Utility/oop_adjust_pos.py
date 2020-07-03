@@ -14,7 +14,7 @@ from ta_analysis import *
 from oop_strategy_frame import *
 from position_control_analysis import *
 from rsrs_timing import *
-from chan_common_include import Chan_Type, float_more_equal
+from chan_common_include import Chan_Type, float_more_equal, GOLDEN_RATIO
 from equilibrium import check_chan_indepth, check_stock_sub, check_chan_by_type_exhaustion, check_stock_full
 from biaoLiStatus import TopBotType
 import json
@@ -1358,7 +1358,7 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
         latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
         past_money = sum(stock_data['money'][cutting_loc:][:int(cutting_offset/2)])
         
-        if float_more_equal(latest_money / past_money, 2):
+        if float_more_equal(latest_money / past_money, 1+GOLDEN_RATIO):
             self.log.info("candiate stock {0} money active: {1} <-> {2}".format(stock, past_money, latest_money))
             return True
         return False
