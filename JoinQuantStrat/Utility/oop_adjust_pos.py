@@ -1339,7 +1339,7 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
         current_zoushi_start_time = current_profile[5]
 
         stock_data = get_bars(stock, 
-                            count=2000, 
+                            count=240, # 5d
                             unit=self.working_period,
                             fields=['date','money'],
                             include_now=True, 
@@ -1347,16 +1347,19 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
                             fq_ref_date=context.current_dt.date(), 
                             df=False)
         
-        cutting_loc = np.where(stock_data['date']>=current_zoushi_start_time)[0][0]
-        cutting_offset = stock_data.size - cutting_loc
+#         cutting_loc = np.where(stock_data['date']>=current_zoushi_start_time)[0][0]
+#         cutting_offset = stock_data.size - cutting_loc
         
 #         # current zslx money compare to zs money
 #         latest_money = sum(stock_data['money'][cutting_loc:])
 #         past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
 
         # current zslx money split by mid term
-        latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
-        past_money = sum(stock_data['money'][cutting_loc:][:int(cutting_offset/2)])
+#         latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
+#         past_money = sum(stock_data['money'][cutting_loc:][:int(cutting_offset/2)])
+
+        latest_money = sum(stock_data['money'][-120:])
+        past_money = sum(stock_data['money'][:120])
         
         if float_more_equal(latest_money / past_money, 1+GOLDEN_RATIO):
             self.log.info("candiate stock {0} money active: {1} <-> {2}".format(stock, past_money, latest_money))
