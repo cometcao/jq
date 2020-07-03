@@ -1328,13 +1328,13 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
         
         # check volume/money
         for stock in self.tentative_to_buy:
-            if self.check_vol_money(stock):
+            if self.check_vol_money(stock, context):
                 stocks_to_long.append(stock)
         
         return stocks_to_long
         # check TYPE III at sub level??
         
-    def check_vol_money(self, stock):
+    def check_vol_money(self, stock, context):
         current_profile = self.g.stock_chan_type[stock][1]
         current_zoushi_start_time = current_profile[5]
 
