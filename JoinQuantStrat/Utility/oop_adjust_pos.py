@@ -1328,7 +1328,7 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
         
         # check volume/money
         for stock in self.tentative_to_buy:
-            if check_vol_money(stock):
+            if self.check_vol_money(stock):
                 stocks_to_long.append(stock)
         
         return stocks_to_long
