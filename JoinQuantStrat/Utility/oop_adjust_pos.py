@@ -1330,6 +1330,8 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
         for stock in self.tentative_to_buy:
             if self.check_vol_money(stock, context):
                 stocks_to_long.append(stock)
+                
+        stocks_to_long = [stock for stock in stocks_to_long if stock not in context.portfolio.positions.keys()]
         
         return stocks_to_long
         # check TYPE III at sub level??
