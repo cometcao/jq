@@ -813,13 +813,13 @@ class Short_Chan(Sell_stocks):
             current_loc_diff = stock_data.loc[effective_time:,].shape[0]
             first_loc_diff = stock_data.loc[current_zoushi_start_time:,].shape[0] - current_loc_diff
             
-            if current_loc_diff > first_loc_diff/2:
-                if (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
-                    print("waited for equal period {0}:{1} never reached profit {2}".format(first_loc_diff, 
-                                                                                                  current_loc_diff, 
-                                                                                                  stock_data.iloc[-1].close))
-                    return True
-            elif current_loc_diff > first_loc_diff:
+#             if current_loc_diff > first_loc_diff/2:
+#                 if (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
+#                     print("waited for equal period {0}:{1} never reached profit {2}".format(first_loc_diff, 
+#                                                                                                   current_loc_diff, 
+#                                                                                                   stock_data.iloc[-1].close))
+#                     return True
+            if current_loc_diff > first_loc_diff:
                 if max_price < current_chan_p:
                     print("waited for equal period {0}:{1} never reached guiding price {2}".format(first_loc_diff, 
                                                                                                   current_loc_diff, 
@@ -1049,28 +1049,28 @@ class Short_Chan(Sell_stocks):
                         print("STOP PROFIT {0} below ma13: {1}".format(stock, sma13))
                         return True
                 
-                sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
-                                                      end_time=context.current_dt,
-                                                      periods=['1m' if self.sub_period == 'bi' else self.sub_period],
-                                                      count=2000,
-                                                      direction=TopBotType.bot2top,
-                                                      chan_types=[Chan_Type.I, Chan_Type.INVALID],
-                                                      isdebug=self.isdebug,
-                                                      is_description=self.isDescription,
-                                                      is_anal=False,
-                                                      split_time=min_time,
-                                                      check_bi=True,
-                                                      allow_simple_zslx=False,
-                                                      force_zhongshu=True,
-                                                      check_full_zoushi=False,
-                                                      ignore_sub_xd=False)
-                if sub_exhausted:
-                    print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
-                                                                                self.sub_period,
-                                                                                sub_exhausted,
-                                                                                sub_xd_exhausted,
-                                                                                sub_zhongshu_formed))
-                    return True
+#                 sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
+#                                                       end_time=context.current_dt,
+#                                                       periods=['1m' if self.sub_period == 'bi' else self.sub_period],
+#                                                       count=2000,
+#                                                       direction=TopBotType.bot2top,
+#                                                       chan_types=[Chan_Type.I, Chan_Type.INVALID],
+#                                                       isdebug=self.isdebug,
+#                                                       is_description=self.isDescription,
+#                                                       is_anal=False,
+#                                                       split_time=min_time,
+#                                                       check_bi=True,
+#                                                       allow_simple_zslx=False,
+#                                                       force_zhongshu=True,
+#                                                       check_full_zoushi=False,
+#                                                       ignore_sub_xd=False)
+#                 if sub_exhausted:
+#                     print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
+#                                                                                 self.sub_period,
+#                                                                                 sub_exhausted,
+#                                                                                 sub_xd_exhausted,
+#                                                                                 sub_zhongshu_formed))
+#                     return True
 
             
         elif current_chan_t == Chan_Type.III or current_chan_t == Chan_Type.INVALID:
