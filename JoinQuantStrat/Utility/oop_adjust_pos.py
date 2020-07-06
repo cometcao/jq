@@ -1366,7 +1366,7 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
         latest_money = sum(stock_data['money'][-120:])
         past_money = sum(stock_data['money'][:120])
         
-        if float_more_equal(latest_money / past_money, 1+GOLDEN_RATIO):
+        if float_more_equal(latest_money / past_money, 1.191):
             self.log.info("candiate stock {0} money active: {1} <-> {2}".format(stock, past_money, latest_money))
             return True
         return False
