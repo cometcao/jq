@@ -15,7 +15,7 @@ from oop_strategy_frame import *
 from position_control_analysis import *
 from rsrs_timing import *
 from chan_common_include import Chan_Type, float_more_equal, GOLDEN_RATIO
-from equilibrium import check_chan_indepth, check_stock_sub, check_chan_by_type_exhaustion, check_stock_full
+from equilibrium import check_chan_indepth, check_stock_sub, check_chan_by_type_exhaustion, check_stock_full, sanity_check
 from biaoLiStatus import TopBotType
 import json
 
@@ -1307,6 +1307,9 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
                                                                   slope_only=False) # synch with selection
             if not result:
                 self.log.info("Bei Chi long point broken for stock: {0}".format(stock))
+                stocks_to_remove.add(stock)
+            elif sanity_check(stock, c_profile, context.current_dt, self.working_period, TopBotType.top2bot):
+                self.log.info("Sanity check failed for stock: {0}".format(stock))
                 stocks_to_remove.add(stock)
             else:
                 self.g.stock_chan_type[stock] = [(Chan_Type.I, 
