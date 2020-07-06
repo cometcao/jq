@@ -1308,7 +1308,7 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
             if not result:
                 self.log.info("Bei Chi long point broken for stock: {0}".format(stock))
                 stocks_to_remove.add(stock)
-            elif sanity_check(stock, c_profile, context.current_dt, self.working_period, TopBotType.top2bot):
+            elif not sanity_check(stock, c_profile, context.current_dt, self.working_period, TopBotType.top2bot):
                 self.log.info("Sanity check failed for stock: {0}".format(stock))
                 stocks_to_remove.add(stock)
             else:
