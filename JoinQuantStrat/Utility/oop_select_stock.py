@@ -720,16 +720,16 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.ignore_xd = params.get('ignore_xd', False)
         
         self.force_chan_type = params.get('force_chan_type', [
-                                                              [Chan_Type.I, self.working_chan_type, Chan_Type.I],
-                                                              [Chan_Type.I_weak, self.working_chan_type, Chan_Type.I],
-                                                              [Chan_Type.INVALID, self.working_chan_type, Chan_Type.I]
+                                                              [Chan_Type.I, self.curent_chan_type[0], Chan_Type.I],
+                                                              [Chan_Type.I_weak, self.curent_chan_type[0], Chan_Type.I],
+                                                              [Chan_Type.INVALID, self.curent_chan_type[0], Chan_Type.I]
                                                               ])
         self.tentative_chan_type = params.get('tentative_chan_type', [
-                                    [Chan_Type.I, self.working_chan_type, Chan_Type.I],
-                                    [Chan_Type.I_weak, self.working_chan_type, Chan_Type.I],
-                                    [Chan_Type.INVALID, self.working_chan_type, Chan_Type.I]
+                                    [Chan_Type.I, self.curent_chan_type[0], Chan_Type.I],
+                                    [Chan_Type.I_weak, self.curent_chan_type[0], Chan_Type.I],
+                                    [Chan_Type.INVALID, self.curent_chan_type[0], Chan_Type.I]
                                     ])
-        self.tentative_to_buy = [] # list to hold stocks waiting to be operated
+        self.tentative_to_buy = set() # list to hold stocks waiting to be operated
         
     def check_tentative_stocks(self, context):
         stocks_to_long = []
@@ -769,7 +769,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                   0,
                                                   None,
                                                   context.current_dt)]
-        self.tentative_to_buy = [stock for stock in self.tentative_to_buy if stock not in stocks_to_remove]
+        self.tentative_to_buy = self.tentative_to_buy.difference(stocks_to_remove)
         
         # check volume/money
         for stock in self.tentative_to_buy:
@@ -787,7 +787,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 
         stock_data = get_bars(stock, 
                             count=2000, # 5d
-                            unit=self.working_period,
+                            unit=self.periods[0],
                             fields=['date','money'],
                             include_now=True, 
                             end_dt=context.current_dt, 
@@ -847,6 +847,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 filter_stock_list.append(stock)
                 self.g.stock_chan_type[stock] = self.g.stock_chan_type[stock] + profile
         
+        
+        self.log.info("Qualified stocks: {0}".format(filter_stock_list))
         to_ignore = set()
         
         # deal with tentative stocks
@@ -866,7 +868,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             
             if self.tentative_chan_type and (chan_type_list in self.tentative_chan_type):
 #                 self.log.info("stock {0} saved in tentative!".format(stock))
-                self.tentative_to_buy.append(stock)
+                self.tentative_to_buy.add(stock)
         
         self.log.info("Stocks {0} ignored".format(to_ignore))
         filter_stock_list = [stock for stock in filter_stock_list if stock not in to_ignore]
@@ -880,16 +882,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
         stock_industry_pair = [(stock, get_industry(stock)['sw_l2']['industry_code']) for stock in filter_stock_list]
         
         print(stock_industry_pair)
-        print(self.g.industry_sector_list)
-        
         stock_industry_pair.sort(key=lambda tup: self.g.industry_sector_list.index(tup[1]))
-        
         print(stock_industry_pair)
         
         filter_stock_list=[pair[0] for pair in stock_industry_pair]
                 
-        if self.isDescription:
-            print("Stocks ready: {0}, tentative: {1}".format(filter_stock_list, self.tentative_to_buy))
+        self.log.info("Stocks ready: {0}, tentative: {1}".format(filter_stock_list, self.tentative_to_buy))
         return filter_stock_list
 
     def __str__(self):
