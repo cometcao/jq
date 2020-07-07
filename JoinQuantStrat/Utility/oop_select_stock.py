@@ -798,18 +798,18 @@ class Filter_Chan_Stocks(Filter_stock_list):
         cutting_offset = stock_data.size - cutting_loc
         
 #         # current zslx money compare to zs money
-#         latest_money = sum(stock_data['money'][cutting_loc:])
-#         past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
+        latest_money = sum(stock_data['money'][cutting_loc:])
+        past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
 
         # current zslx money split by mid term
-        latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
-        past_money = sum(stock_data['money'][cutting_loc:][:int(cutting_offset/2)])
+#         latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
+#         past_money = sum(stock_data['money'][cutting_loc:][:int(cutting_offset/2)])
 
 #         latest_money = sum(stock_data['money'][-120:])
 #         past_money = sum(stock_data['money'][:120])
         
         if float_more_equal(latest_money / past_money, 1.191):
-            self.log.info("candiate stock {0} money active: {1} <-> {2}".format(stock, past_money, latest_money))
+            self.log.info("candiate stock {0} money active: {1} -> {2}".format(stock, past_money, latest_money))
             return True
         return False
     
@@ -879,7 +879,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         filter_stock_list = self.check_tentative_stocks(context) + filter_stock_list
         
         # sort resulting stocks
-        stock_industry_pair = [(stock, get_industry(stock)['sw_l2']['industry_code']) for stock in filter_stock_list]
+        stock_industry_pair = [(stock, get_industry(stock)[stock]['sw_l2']['industry_code']) for stock in filter_stock_list]
         
         print(stock_industry_pair)
         stock_industry_pair.sort(key=lambda tup: self.g.industry_sector_list.index(tup[1]))

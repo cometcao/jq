@@ -837,11 +837,11 @@ class Short_Chan(Sell_stocks):
                                                                       isdebug=self.isdebug,
                                                                       is_description =self.isDescription,
                                                                       is_anal=False,
-                                                                      check_structure=True,
+                                                                      check_structure=False,
                                                                       check_full_zoushi=False,
                                                                       slope_only=False) # synch with selection
                 if not result:
-                    print("Bei Chi long point broken")
+                    print("Bei Chi long point broken: {0}".format(stock))
                     return True
             
 #             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss * 2:
@@ -1207,6 +1207,11 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
         
         # check stocks UPTONOW
         for stock in self.to_buy:
+            current_profile = self.g.stock_chan_type[stock][1]
+            cur_chan_t = current_profile[0]
+            cur_chan_p = current_profile[2]
+            current_effective_time = current_profile[6]
+            
             latest_data = get_price(stock,
                                    start_date=current_effective_time, 
                                    end_date=context.current_dt, 
