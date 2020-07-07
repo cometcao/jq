@@ -807,7 +807,7 @@ class Short_Chan(Sell_stocks):
             max_price_after_long = stock_data.loc[effective_time:, 'high'].max()
 #             min_price = stock_data.loc[current_zoushi_start_time:, 'low'].min()
 #             max_price_time = stock_data.loc[effective_time:, 'high'].idxmax()
-#             min_price_time = stock_data.loc[effective_time:, 'low'].idxmin()
+            min_price_time = stock_data.loc[current_zoushi_start_time:, 'low'].idxmin()
 #             max_loc = stock_data.index.get_loc(max_price_time)
 #             min_loc = stock_data.index.get_loc(min_price_time)
             current_loc_diff = stock_data.loc[effective_time:,].shape[0]
