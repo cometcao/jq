@@ -245,10 +245,10 @@ def sanity_check(stock, profile, end_time, pe, direction):
     # This method is used in case we provide the sub level check with initial direction while actual zoushi goes opposite
     # This will end up with invalid XD analysis in sub level
     # case: stock = '300760.XSHE' end_dt = '2019-07-01 14:30:00' period = ['5m', '1m']
-    splitTime = profile[0][6]
+    zoushi_start = profile[0][5]
     result = False
     stock_data = get_price(stock,
-                          start_date=splitTime,
+                          start_date=zoushi_start,
                           end_date=end_time, 
                           frequency='1m',
                           fields= ['close', 'low','low_limit'])
