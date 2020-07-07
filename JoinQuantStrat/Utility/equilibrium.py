@@ -1491,7 +1491,7 @@ class NestedInterval():
                                                           high_slope, 
                                                           high_macd, 
                                                           last_zs_time, 
-                                                          sub_split_time)]
+                                                          eq.get_effective_time())] 
         else:
             high_exhausted, check_xd_exhaustion = False, False
             if self.isDescription or self.isdebug:

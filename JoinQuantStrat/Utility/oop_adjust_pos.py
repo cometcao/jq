@@ -786,7 +786,7 @@ class Short_Chan(Sell_stocks):
         current_chan_slope = current_profile[3]
         current_chan_force = current_profile[4]
         current_zoushi_start_time = current_profile[5]
-        splitTime = current_profile[6]
+        current_effective_time = current_profile[6]
         sub_chan_t = sub_profile[0]
         sub_chan_p = sub_profile[2]
         sub_chan_slope = sub_profile[3]
@@ -804,12 +804,12 @@ class Short_Chan(Sell_stocks):
                                    fields=('high', 'low', 'close', 'money'), 
                                    skip_paused=False)
 
-            max_price = stock_data.loc[current_zoushi_start_time:, 'high'].max()
-            min_price = stock_data.loc[current_zoushi_start_time:, 'low'].min()
-            max_price_time = stock_data.loc[current_zoushi_start_time:, 'high'].idxmax()
-            min_price_time = stock_data.loc[effective_time:, 'low'].idxmin()
-            max_loc = stock_data.index.get_loc(max_price_time)
-            min_loc = stock_data.index.get_loc(min_price_time)
+            max_price_after_long = stock_data.loc[effective_time:, 'high'].max()
+#             min_price = stock_data.loc[current_zoushi_start_time:, 'low'].min()
+#             max_price_time = stock_data.loc[effective_time:, 'high'].idxmax()
+#             min_price_time = stock_data.loc[effective_time:, 'low'].idxmin()
+#             max_loc = stock_data.index.get_loc(max_price_time)
+#             min_loc = stock_data.index.get_loc(min_price_time)
             current_loc_diff = stock_data.loc[effective_time:,].shape[0]
             first_loc_diff = stock_data.loc[current_zoushi_start_time:,].shape[0] - current_loc_diff
             
@@ -820,7 +820,7 @@ class Short_Chan(Sell_stocks):
 #                                                                                                   stock_data.iloc[-1].close))
 #                     return True
             if current_loc_diff > first_loc_diff:
-                if max_price < current_chan_p:
+                if max_price_after_long < current_chan_p:
                     print("waited for equal period {0}:{1} never reached guiding price {2}".format(first_loc_diff, 
                                                                                                   current_loc_diff, 
                                                                                                   current_chan_p))
@@ -867,14 +867,14 @@ class Short_Chan(Sell_stocks):
 
 #             elif (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
 #                 # check slope
-#                 latest_slope = (max_price-min_price)/(max_loc-min_loc)
+#                 latest_slope = (max_price_after_long-min_price)/(max_loc-min_loc)
 #                 if latest_slope < 0 and abs(latest_slope) >= abs(current_chan_slope):
 #                     print("slope gets deeper! STOPLOSS {0},{1}".format(current_chan_slope, latest_slope))
 #                     return True
 #                   
 #                 # check force
 #                 money_sum = stock_data.loc[current_zoushi_start_time:, 'money'].sum() / 1e8
-#                 price_delta = (min_price - max_price) / max_price * 100
+#                 price_delta = (min_price - max_price_after_long) / max_price_after_long * 100
 #                 time_delta = stock_data.loc[current_zoushi_start_time:,:].shape[0] / 1200 * 100
 #                 latest_force = money_sum * price_delta / time_delta ** 2
 #                 if current_chan_force != 0 and latest_force < 0 and abs(latest_force) > abs(current_chan_force):
@@ -892,7 +892,7 @@ class Short_Chan(Sell_stocks):
                                    fields=('high', 'low', 'close', 'money'), 
                                    skip_paused=False)
             # check slope
-            max_price = stock_data.loc[sub_zoushi_start_time:, 'high'].max()
+            max_price_after_long = stock_data.loc[sub_zoushi_start_time:, 'high'].max()
             min_price = stock_data.loc[sub_zoushi_start_time:, 'low'].min()
             max_price_time = stock_data.loc[sub_zoushi_start_time:, 'high'].idxmax()
             min_price_time = stock_data.loc[sub_zoushi_start_time:, 'low'].idxmin()
@@ -909,7 +909,7 @@ class Short_Chan(Sell_stocks):
                                                               isdebug=self.isdebug,
                                                               is_description =self.isDescription,
                                                               is_anal=False,
-                                                              split_time=splitTime,
+                                                              split_time=current_zoushi_start_time,
                                                               check_bi=(self.sub_period=='bi'),
                                                               force_zhongshu=True,
                                                               check_full_zoushi=False) # synch with selection
@@ -917,14 +917,14 @@ class Short_Chan(Sell_stocks):
                     print("sub long point broken")
                     return True
             elif (1 - stock_data.iloc[-1].close / avg_cost) >= 0: # negative return
-                latest_slope = (max_price-min_price)/(max_loc-min_loc)
+                latest_slope = (max_price_after_long-min_price)/(max_loc-min_loc)
                 if latest_slope < 0 and abs(latest_slope) >= abs(sub_chan_slope):
                     print("slope gets deeper! STOPLOSS {0},{1}".format(sub_chan_slope, latest_slope))
                     return True
                 
                 # use force instead
                 money_sum = stock_data.loc[sub_zoushi_start_time:, 'money'].sum() / 1e8
-                price_delta = (min_price - max_price) / max_price * 100
+                price_delta = (min_price - max_price_after_long) / max_price_after_long * 100
                 time_delta = stock_data.loc[sub_zoushi_start_time:, :].shape[0] / 1200 * 100
                 latest_force = money_sum * price_delta / time_delta ** 2
                 if sub_chan_force != 0 and latest_force < 0 and abs(latest_force) > abs(sub_chan_force):
@@ -948,7 +948,7 @@ class Short_Chan(Sell_stocks):
         current_chan_t = current_profile[0]
         current_chan_p = current_profile[2]
         current_zoushi_start_time = current_profile[5]
-        current_split_time = current_profile[6]
+        current_effective_time = current_profile[6]
         sub_chan_t = sub_profile[0]
         sub_chan_p = sub_profile[2]
         sub_zoushi_start_time = sub_profile[5]
@@ -962,7 +962,7 @@ class Short_Chan(Sell_stocks):
                                    frequency=self.current_period, 
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
-            min_time = stock_data.loc[current_split_time:, 'low'].idxmin()
+            min_time = stock_data.loc[current_zoushi_start_time:, 'low'].idxmin()
             
             sup_exhausted, sup_xd_exhausted, _, sup_zhongshu_formed = check_stock_sub(stock,
                                                   end_time=context.current_dt,
@@ -1227,10 +1227,7 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
             
             top_chan_t = top_profile[0]
             cur_chan_t = current_profile[0]
-            cur_chan_p = current_profile[2]
             sub_chan_t = sub_profile[0]
-            sub_chan_p = sub_profile[2]
-            effective_time = sub_profile[6]
             
             chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
             if self.tentative_chan_type and (chan_type_list in self.tentative_chan_type):
@@ -1250,9 +1247,10 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
             top_chan_t = top_profile[0]
             cur_chan_t = current_profile[0]
             cur_chan_p = current_profile[2]
+            current_effective_time = current_profile[6]
             sub_chan_t = sub_profile[0]
             sub_chan_p = sub_profile[2]
-            effective_time = sub_profile[6]
+            sub_effective_time = sub_profile[6]
             
             chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
             
@@ -1261,13 +1259,13 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
                 to_ignore.add(stock)
             
             latest_data = get_price(stock,
-                                   start_date=effective_time, 
+                                   start_date=current_effective_time, 
                                    end_date=context.current_dt, 
                                    frequency='1m', 
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=True)
-            latest_high_price = latest_data['high'].max()
             latest_min_price = latest_data['low'].min()
+            latest_high_price = latest_data['high'].max()
             latest_price = latest_data.iloc[-1].close
             # check current price of the stock ignore the ones not suitable
             # sort the stocks prioritize TYPE I stocks
