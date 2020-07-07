@@ -1207,7 +1207,7 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
                                     [Chan_Type.I_weak, self.working_chan_type, Chan_Type.I],
                                     [Chan_Type.I, self.working_chan_type, Chan_Type.I_weak]
                                     ])
-        self.tentative_to_buy = set() # list to hold stocks waiting to be operated
+        self.tentative_to_buy = [] # list to hold stocks waiting to be operated
         self.to_buy = []
         
     def handle_data(self, context, data):
@@ -1217,8 +1217,19 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
 
         self.to_buy = [stock for stock in self.g.monitor_buy_list if stock not in self.tentative_to_buy]
         self.log.info("Candidate stocks: {0} tentative stocks: {1}".format(self.to_buy, self.tentative_to_buy))
-        type_I_stocks = []
-        to_ignore = []
+        to_ignore = set()
+        
+        # deal with tentative stocks
+        for stock in self.to_buy:
+            if self.tentative_chan_type and (chan_type_list in self.tentative_chan_type):
+                self.log.info("stock {0} saved for later!".format(stock))
+                self.tentative_to_buy.append(stock)
+        
+        self.to_buy = [stock for stock in self.to_buy if stock not in self.tentative_to_buy]
+        
+        self.to_buy = self.check_tentative_stocks(context) + self.to_buy
+        
+        # check stocks UPTONOW
         for stock in self.to_buy:
             top_profile = self.g.stock_chan_type[stock][0]
             current_profile = self.g.stock_chan_type[stock][1]
@@ -1233,14 +1244,9 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
             
             chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
             
-            if self.tentative_chan_type and (chan_type_list in self.tentative_chan_type):
-                self.log.info("stock {0} saved for later!".format(stock))
-                self.tentative_to_buy.add(stock)
-                continue
-            
             if self.force_chan_type and (chan_type_list not in self.force_chan_type):
 #                 self.log.info("stock {0} ignored due to force {1}".format(stock, [top_chan_t, cur_chan_t, sub_chan_t]))
-                to_ignore.append(stock)
+                to_ignore.add(stock)
             
             latest_data = get_price(stock,
                                    start_date=effective_time, 
@@ -1256,36 +1262,32 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
             if Chan_Type.I == cur_chan_t:
                 
                 if self.force_price_check and (latest_high_price >= cur_chan_p or cur_chan_p/latest_price - 1 < self.expected_profit):
-                    to_ignore.append(stock)
+                    to_ignore.add(stock)
                     
             elif self.force_price_check:
                 if cur_chan_t == Chan_Type.III:
                     if latest_min_price <= cur_chan_p:
                         # if TYPE III not valid anymore
-                        to_ignore.append(stock)
+                        to_ignore.add(stock)
                 if cur_chan_t == Chan_Type.INVALID:
                     if type(cur_chan_p) is list:
                         if latest_high_price >= cur_chan_p[0] or cur_chan_p[0]/latest_price - 1 < self.expected_profit:
-                            to_ignore.append(stock)
+                            to_ignore.add(stock)
                     else: # can only be actual price here
                         if latest_high_price >= cur_chan_p or cur_chan_p/latest_price - 1 < self.expected_profit:
-                            to_ignore.append(stock)
+                            to_ignore.add(stock)
 
                 if sub_chan_t == Chan_Type.INVALID:
                     if type(sub_chan_p) is list:
                         if latest_high_price >= sub_chan_p[0] or sub_chan_p[0]/latest_price - 1 < self.expected_profit:
-                            to_ignore.append(stock)
+                            to_ignore.add(stock)
                     else: # can only be actual price here
                         if latest_high_price >= sub_chan_p or sub_chan_p/latest_price - 1 < self.expected_profit:
-                            to_ignore.append(stock)
+                            to_ignore.add(stock)
         
         if to_ignore:
             self.log.info("stocks: {0} ignored due to conditions".format(to_ignore)) 
             self.to_buy = [stock for stock in self.to_buy if stock not in to_ignore]
-        
-        self.to_buy = [stock for stock in self.to_buy if stock not in self.tentative_to_buy]
-        
-        self.to_buy = self.check_tentative_stocks(context) + self.to_buy
         
         self.adjust(context, data, self.to_buy)
         
@@ -1327,7 +1329,7 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
                                                   0,
                                                   None,
                                                   context.current_dt)]
-        self.tentative_to_buy = self.tentative_to_buy.difference(stocks_to_remove)
+        self.tentative_to_buy = [stock for stock in self.tentative_to_buy if stock not in stocks_to_remove]
         
         # check volume/money
         for stock in self.tentative_to_buy:
