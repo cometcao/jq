@@ -1192,22 +1192,8 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
     def __init__(self, params):
         Buy_stocks.__init__(self, params)
         self.buy_count = params.get('buy_count', 3)
-        self.working_chan_type = params.get('working_chan_type', Chan_Type.I)
-        self.working_period = params.get('working_period', '5m')
-        self.money_check_period = params.get('money_check_period', '1d')
-        self.force_chan_type = params.get('force_chan_type', [
-                                                              [Chan_Type.INVALID, self.working_chan_type, Chan_Type.I],
-                                                              [Chan_Type.INVALID, self.working_chan_type, Chan_Type.I_weak],
-                                                              [Chan_Type.INVALID, self.working_chan_type, Chan_Type.INVALID]
-                                                              ])
         self.force_price_check = params.get('force_price_check', True)
         self.expected_profit = params.get('expected_profit', 0.03)
-        self.tentative_chan_type = params.get('tentative_chan_type', [
-                                    [Chan_Type.I, self.working_chan_type, Chan_Type.I],
-                                    [Chan_Type.I_weak, self.working_chan_type, Chan_Type.I],
-                                    [Chan_Type.I, self.working_chan_type, Chan_Type.I_weak]
-                                    ])
-        self.tentative_to_buy = [] # list to hold stocks waiting to be operated
         self.to_buy = []
         
     def handle_data(self, context, data):
@@ -1215,49 +1201,12 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
             self.log_warn('无法执行买入!! self.is_to_return 未开启')
             return
 
-        self.to_buy = [stock for stock in self.g.monitor_buy_list if stock not in self.tentative_to_buy]
-        self.log.info("Candidate stocks: {0} tentative stocks: {1}".format(self.to_buy, self.tentative_to_buy))
+        self.to_buy = self.g.monitor_buy_list
+        self.log.info("Candidate stocks: {0}".format(self.to_buy))
         to_ignore = set()
-        
-        # deal with tentative stocks
-        for stock in self.to_buy:
-            top_profile = self.g.stock_chan_type[stock][0]
-            current_profile = self.g.stock_chan_type[stock][1]
-            sub_profile = self.g.stock_chan_type[stock][2]
-            
-            top_chan_t = top_profile[0]
-            cur_chan_t = current_profile[0]
-            sub_chan_t = sub_profile[0]
-            
-            chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
-            if self.tentative_chan_type and (chan_type_list in self.tentative_chan_type):
-                self.log.info("stock {0} saved for later!".format(stock))
-                self.tentative_to_buy.append(stock)
-        
-        self.to_buy = [stock for stock in self.to_buy if stock not in self.tentative_to_buy]
-        
-        self.to_buy = self.check_tentative_stocks(context) + self.to_buy
         
         # check stocks UPTONOW
         for stock in self.to_buy:
-            top_profile = self.g.stock_chan_type[stock][0]
-            current_profile = self.g.stock_chan_type[stock][1]
-            sub_profile = self.g.stock_chan_type[stock][2]
-            
-            top_chan_t = top_profile[0]
-            cur_chan_t = current_profile[0]
-            cur_chan_p = current_profile[2]
-            current_effective_time = current_profile[6]
-            sub_chan_t = sub_profile[0]
-            sub_chan_p = sub_profile[2]
-            sub_effective_time = sub_profile[6]
-            
-            chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
-            
-            if self.force_chan_type and (chan_type_list not in self.force_chan_type):
-#                 self.log.info("stock {0} ignored due to force {1}".format(stock, [top_chan_t, cur_chan_t, sub_chan_t]))
-                to_ignore.add(stock)
-            
             latest_data = get_price(stock,
                                    start_date=current_effective_time, 
                                    end_date=context.current_dt, 
@@ -1300,88 +1249,6 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
             self.to_buy = [stock for stock in self.to_buy if stock not in to_ignore]
         
         self.adjust(context, data, self.to_buy)
-        
-    def check_tentative_stocks(self, context):
-        stocks_to_long = []
-        stocks_to_remove = set()
-        for stock in self.tentative_to_buy:
-            result, xd_result, c_profile = check_chan_by_type_exhaustion(stock,
-                                                                  end_time=context.current_dt,
-                                                                  periods=[self.working_period],
-                                                                  count=4800,
-                                                                  direction=TopBotType.top2bot,
-                                                                  chan_type=[self.working_chan_type],
-                                                                  isdebug=False,
-                                                                  is_description =False,
-                                                                  is_anal=False,
-                                                                  check_structure=True,
-                                                                  check_full_zoushi=False,
-                                                                  slope_only=False) # synch with selection
-            if not result:
-                self.log.info("Bei Chi long point broken for stock: {0}".format(stock))
-                stocks_to_remove.add(stock)
-            elif not sanity_check(stock, c_profile, context.current_dt, self.working_period, TopBotType.top2bot):
-                self.log.info("Sanity check failed for stock: {0}".format(stock))
-                stocks_to_remove.add(stock)
-            else:
-                self.g.stock_chan_type[stock] = [(Chan_Type.I, 
-                                                  TopBotType.top2bot,
-                                                  0, 
-                                                  0,
-                                                  0,
-                                                  None,
-                                                  None)] +\
-                                                c_profile +\
-                                                [(Chan_Type.I, 
-                                                  TopBotType.top2bot,
-                                                  0, 
-                                                  0,
-                                                  0,
-                                                  None,
-                                                  context.current_dt)]
-        self.tentative_to_buy = [stock for stock in self.tentative_to_buy if stock not in stocks_to_remove]
-        
-        # check volume/money
-        for stock in self.tentative_to_buy:
-            if self.check_vol_money(stock, context):
-                stocks_to_long.append(stock)
-                
-        stocks_to_long = [stock for stock in stocks_to_long if stock not in context.portfolio.positions.keys()]
-        
-        return stocks_to_long
-        # check TYPE III at sub level??
-        
-    def check_vol_money(self, stock, context):
-        current_profile = self.g.stock_chan_type[stock][1]
-        current_zoushi_start_time = current_profile[5]
-
-        stock_data = get_bars(stock, 
-                            count=240, # 5d
-                            unit=self.working_period,
-                            fields=['date','money'],
-                            include_now=True, 
-                            end_dt=context.current_dt, 
-                            fq_ref_date=context.current_dt.date(), 
-                            df=False)
-        
-#         cutting_loc = np.where(stock_data['date']>=current_zoushi_start_time)[0][0]
-#         cutting_offset = stock_data.size - cutting_loc
-        
-#         # current zslx money compare to zs money
-#         latest_money = sum(stock_data['money'][cutting_loc:])
-#         past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
-
-        # current zslx money split by mid term
-#         latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
-#         past_money = sum(stock_data['money'][cutting_loc:][:int(cutting_offset/2)])
-
-        latest_money = sum(stock_data['money'][-120:])
-        past_money = sum(stock_data['money'][:120])
-        
-        if float_more_equal(latest_money / past_money, 1.191):
-            self.log.info("candiate stock {0} money active: {1} <-> {2}".format(stock, past_money, latest_money))
-            return True
-        return False
         
     def __str__(self):
         return '缠论调仓买入规则'
