@@ -1221,6 +1221,18 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
         
         # deal with tentative stocks
         for stock in self.to_buy:
+            top_profile = self.g.stock_chan_type[stock][0]
+            current_profile = self.g.stock_chan_type[stock][1]
+            sub_profile = self.g.stock_chan_type[stock][2]
+            
+            top_chan_t = top_profile[0]
+            cur_chan_t = current_profile[0]
+            cur_chan_p = current_profile[2]
+            sub_chan_t = sub_profile[0]
+            sub_chan_p = sub_profile[2]
+            effective_time = sub_profile[6]
+            
+            chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
             if self.tentative_chan_type and (chan_type_list in self.tentative_chan_type):
                 self.log.info("stock {0} saved for later!".format(stock))
                 self.tentative_to_buy.append(stock)
