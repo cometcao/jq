@@ -678,14 +678,14 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                     continue
                 
                 chan_stock_list.append(stock)
-                
-                self.g.stock_chan_type[stock] = [(Chan_Type.value2type(top_type_value), 
-                                                  TopBotType.top2bot,
-                                                  0, 
-                                                  0,
-                                                  0,
-                                                  None,
-                                                  None)]
+                if stock not in self.g.stock_chan_type:
+                    self.g.stock_chan_type[stock] = [(Chan_Type.value2type(top_type_value), 
+                                                      TopBotType.top2bot,
+                                                      0, 
+                                                      0,
+                                                      0,
+                                                      None,
+                                                      None)]
             self.log.info("filtered data read from file: {0} stocks info".format(len(chan_stock_list)))
         return chan_stock_list
     
@@ -751,8 +751,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 stocks_to_remove.add(stock)
             else:
                 old_current_profile = self.g.stock_chan_type[stock][1]
-                stock_changed_record[stock] = old_current_profile[2] != c_profile[2]
-                self.log.debug("stock {0}, zhongshu changed: {1}".format(stock, old_current_profile[2] != c_profile[2]))
+                stock_changed_record[stock] = old_current_profile[2] != c_profile[0][2]
+                self.log.debug("stock {0}, zhongshu changed: {1}".format(stock, old_current_profile[2] != c_profile[0][2]))
                 self.g.stock_chan_type[stock] = [(Chan_Type.I, 
                                                   TopBotType.top2bot,
                                                   0, 
@@ -879,9 +879,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
         # sort resulting stocks
         stock_industry_pair = [(stock, get_industry(stock)[stock]['sw_l2']['industry_code']) for stock in filter_stock_list]
         
-        self.log.debug("before: {0}".format(stock_industry_pair))
+#         self.log.debug("before: {0}".format(stock_industry_pair))
         stock_industry_pair.sort(key=lambda tup: sort_by_sector_try(self.g.industry_sector_list, tup[1]))
-        self.log.debug("after: {0}".format(stock_industry_pair))
+#         self.log.debug("after: {0}".format(stock_industry_pair))
         
         filter_stock_list=[pair[0] for pair in stock_industry_pair]
                 
