@@ -806,8 +806,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #             latest_money = sum(stock_data['money'][-120:])
 #             past_money = sum(stock_data['money'][-240:][:120])
         
-            latest_money = sum(stock_data['money'][-48:])
-            past_money = sum(stock_data['money'][:48])
+        latest_money = sum(stock_data['money'][-48:])
+        past_money = sum(stock_data['money'][:48])
         if float_more_equal(latest_money / past_money, 1.382):
             self.log.info("candiate stock {0} money active: {1} -> {2}".format(stock, past_money, latest_money))
             return True
