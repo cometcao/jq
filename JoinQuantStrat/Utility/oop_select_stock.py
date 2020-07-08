@@ -753,21 +753,21 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 old_current_profile = self.g.stock_chan_type[stock][1]
                 stock_changed_record[stock] = old_current_profile[2] != c_profile[2]
                 self.log.debug("stock {0}, zhongshu changed: {1}".format(stock, old_current_profile[2] != c_profile[2]))
-#                 self.g.stock_chan_type[stock] = [(Chan_Type.I, 
-#                                                   TopBotType.top2bot,
-#                                                   0, 
-#                                                   0,
-#                                                   0,
-#                                                   None,
-#                                                   None)] +\
-#                                                 c_profile +\
-#                                                 [(Chan_Type.I, 
-#                                                   TopBotType.top2bot,
-#                                                   0, 
-#                                                   0,
-#                                                   0,
-#                                                   None,
-#                                                   context.current_dt)]
+                self.g.stock_chan_type[stock] = [(Chan_Type.I, 
+                                                  TopBotType.top2bot,
+                                                  0, 
+                                                  0,
+                                                  0,
+                                                  None,
+                                                  None)] +\
+                                                c_profile +\
+                                                [(Chan_Type.I, 
+                                                  TopBotType.top2bot,
+                                                  0, 
+                                                  0,
+                                                  0,
+                                                  None,
+                                                  context.current_dt)]
         self.tentative_to_buy = self.tentative_to_buy.difference(stocks_to_remove)
         
         # check volume/money
