@@ -725,7 +725,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
     def check_tentative_stocks(self, context):
         stocks_to_long = []
-        stock_changed_record = {}
+#         stock_changed_record = {}
         stocks_to_remove = set()
         
         self.tentative_to_buy = self.tentative_to_buy.difference(set(context.portfolio.positions.keys()))
@@ -751,7 +751,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 stocks_to_remove.add(stock)
             else:
                 old_current_profile = self.g.stock_chan_type[stock][1]
-                stock_changed_record[stock] = old_current_profile[2] != c_profile[0][2]
+#                 stock_changed_record[stock] = old_current_profile[2] != c_profile[0][2]
                 self.log.debug("stock {0}, zhongshu changed: {1}".format(stock, old_current_profile[2] != c_profile[0][2]))
                 self.g.stock_chan_type[stock] = [(Chan_Type.I, 
                                                   TopBotType.top2bot,
@@ -772,18 +772,18 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         # check volume/money
         for stock in self.tentative_to_buy:
-            if self.check_vol_money(stock, context, stock_changed_record):
+            if self.check_vol_money(stock, context):
                 stocks_to_long.append(stock)
                 
         return stocks_to_long
         # check TYPE III at sub level??
         
-    def check_vol_money(self, stock, context, stock_changed_record):
+    def check_vol_money(self, stock, context):
         current_profile = self.g.stock_chan_type[stock][1]
         current_zoushi_start_time = current_profile[5]
 
         stock_data = get_bars(stock, 
-                            count=2000, # 5d
+                            count=96, # 5d
                             unit=self.periods[0],
                             fields=['date','money'],
                             include_now=True, 
@@ -791,22 +791,24 @@ class Filter_Chan_Stocks(Filter_stock_list):
                             fq_ref_date=context.current_dt.date(), 
                             df=False)
         
-        if not stock_changed_record[stock]: # Zhongshu unchanged
-            cutting_loc = np.where(stock_data['date']>=current_zoushi_start_time)[0][0]
-            cutting_offset = stock_data.size - cutting_loc
-            
-    #         # current zslx money compare to zs money
-            latest_money = sum(stock_data['money'][cutting_loc:])
-            past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
-
-        # current zslx money split by mid term
-#         latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
-#         past_money = sum(stock_data['money'][cutting_loc:][:int(cutting_offset/2)])
-        else:
-            latest_money = sum(stock_data['money'][-120:])
-            past_money = sum(stock_data['money'][-240:][:120])
+#         if not stock_changed_record[stock]: # Zhongshu unchanged
+#             cutting_loc = np.where(stock_data['date']>=current_zoushi_start_time)[0][0]
+#             cutting_offset = stock_data.size - cutting_loc
+#             
+#     #         # current zslx money compare to zs money
+#             latest_money = sum(stock_data['money'][cutting_loc:])
+#             past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
+# 
+#         # current zslx money split by mid term
+# #         latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
+# #         past_money = sum(stock_data['money'][cutting_loc:][:int(cutting_offset/2)])
+#         else:
+#             latest_money = sum(stock_data['money'][-120:])
+#             past_money = sum(stock_data['money'][-240:][:120])
         
-        if float_more_equal(latest_money / past_money, 1.191):
+            latest_money = sum(stock_data['money'][-48:])
+            past_money = sum(stock_data['money'][:48])
+        if float_more_equal(latest_money / past_money, 1.382):
             self.log.info("candiate stock {0} money active: {1} -> {2}".format(stock, past_money, latest_money))
             return True
         return False
@@ -822,6 +824,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         if len(context.portfolio.positions) == self.long_stock_num != 0:
             return filter_stock_list
         stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
+        stock_list = self.sort_by_sector_order(stock_list)
         for stock in stock_list:
             if self.long_stock_num + 1 == len(filter_stock_list):
                 # we don't need to look further, we have enough candidates for long position + 1 backup
@@ -873,20 +876,23 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         # deal with all tentative stocks
         filter_stock_list = [stock for stock in filter_stock_list if stock not in self.tentative_to_buy]
-        
         filter_stock_list = self.check_tentative_stocks(context) + filter_stock_list
         
+        # sort by sectors again
+        filter_stock_list = self.sort_by_sector_order(filter_stock_list)
+                
+        self.log.info("Stocks ready: {0}, tentative: {1}".format(filter_stock_list, self.tentative_to_buy))
+        return filter_stock_list
+
+    def sort_by_sector_order(self, stock_list):
         # sort resulting stocks
-        stock_industry_pair = [(stock, get_industry(stock)[stock]['sw_l2']['industry_code']) for stock in filter_stock_list]
+        stock_industry_pair = [(stock, get_industry(stock)[stock]['sw_l2']['industry_code']) for stock in stock_list]
         
 #         self.log.debug("before: {0}".format(stock_industry_pair))
         stock_industry_pair.sort(key=lambda tup: sort_by_sector_try(self.g.industry_sector_list, tup[1]))
 #         self.log.debug("after: {0}".format(stock_industry_pair))
         
-        filter_stock_list=[pair[0] for pair in stock_industry_pair]
-                
-        self.log.info("Stocks ready: {0}, tentative: {1}".format(filter_stock_list, self.tentative_to_buy))
-        return filter_stock_list
+        return [pair[0] for pair in stock_industry_pair]
 
     def __str__(self):
         return "Chan Filter Params: {0} \n{1}".format(self.long_stock_num, self.sub_chan_type)
