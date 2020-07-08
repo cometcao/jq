@@ -752,7 +752,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             else:
                 old_current_profile = self.g.stock_chan_type[stock][1]
 #                 stock_changed_record[stock] = old_current_profile[2] != c_profile[0][2]
-                self.log.debug("stock {0}, zhongshu changed: {1}".format(stock, old_current_profile[2] != c_profile[0][2]))
+#                 self.log.debug("stock {0}, zhongshu changed: {1}".format(stock, old_current_profile[2] != c_profile[0][2]))
                 self.g.stock_chan_type[stock] = [(Chan_Type.I, 
                                                   TopBotType.top2bot,
                                                   0, 
