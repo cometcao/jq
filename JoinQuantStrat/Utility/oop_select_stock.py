@@ -750,7 +750,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                   isdebug=False,
                                                                   is_description =False,
                                                                   is_anal=False,
-                                                                  check_structure=False,
+                                                                  check_structure=True,
                                                                   check_full_zoushi=False,
                                                                   slope_only=False) # synch with selection
             if not result:

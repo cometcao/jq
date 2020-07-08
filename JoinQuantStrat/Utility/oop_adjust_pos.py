@@ -837,7 +837,7 @@ class Short_Chan(Sell_stocks):
                                                                       isdebug=self.isdebug,
                                                                       is_description =self.isDescription,
                                                                       is_anal=False,
-                                                                      check_structure=False,
+                                                                      check_structure=True,
                                                                       check_full_zoushi=False,
                                                                       slope_only=False) # synch with selection
                 if not result:
