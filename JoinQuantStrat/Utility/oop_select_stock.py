@@ -356,13 +356,6 @@ class Pick_Chan_Stocks(Create_stock_list):
         if self.is_debug:
             print(str(self.g.stock_chan_type))
         return list(self.g.stock_chan_type.keys())
-
-    def after_trading_end(self, context):
-        holding_pos = context.portfolio.positions.keys()
-        stored_stocks = list(self.g.stock_chan_type.keys())
-        to_be_removed = [stock for stock in stored_stocks if stock not in holding_pos]
-        [self.g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
-        print("position chan info: {0}".format(self.g.stock_chan_type))
     
     def __str__(self):
         return "Chan Selection Params: {0}, {1}, {2}".format(self.index, self.periods, self.chan_types)
@@ -696,13 +689,6 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
             self.log.info("filtered data read from file: {0} stocks info".format(len(chan_stock_list)))
         return chan_stock_list
     
-    def after_trading_end(self, context):
-        holding_pos = context.portfolio.positions.keys()
-        stored_stocks = list(self.g.stock_chan_type.keys())
-        to_be_removed = [stock for stock in stored_stocks if stock not in holding_pos]
-        [self.g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
-        self.log.info("position chan info: {0}".format(self.g.stock_chan_type))
-    
     def __str__(self):
         return "从文件中读取根据缠论已经写好的股票列表以及数据"
 
@@ -739,6 +725,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
     def check_tentative_stocks(self, context):
         stocks_to_long = []
+        stock_changed_record = {}
         stocks_to_remove = set()
         
         self.tentative_to_buy = self.tentative_to_buy.difference(set(context.portfolio.positions.keys()))
@@ -763,32 +750,35 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 self.log.info("Sanity check failed for stock: {0}".format(stock))
                 stocks_to_remove.add(stock)
             else:
-                self.g.stock_chan_type[stock] = [(Chan_Type.I, 
-                                                  TopBotType.top2bot,
-                                                  0, 
-                                                  0,
-                                                  0,
-                                                  None,
-                                                  None)] +\
-                                                c_profile +\
-                                                [(Chan_Type.I, 
-                                                  TopBotType.top2bot,
-                                                  0, 
-                                                  0,
-                                                  0,
-                                                  None,
-                                                  context.current_dt)]
+                old_current_profile = self.g.stock_chan_type[stock][1]
+                stock_changed_record[stock] = old_current_profile[2] != c_profile[2]
+                self.log.debug("stock {0}, zhongshu changed: {1}".format(stock, old_current_profile[2] != c_profile[2]))
+#                 self.g.stock_chan_type[stock] = [(Chan_Type.I, 
+#                                                   TopBotType.top2bot,
+#                                                   0, 
+#                                                   0,
+#                                                   0,
+#                                                   None,
+#                                                   None)] +\
+#                                                 c_profile +\
+#                                                 [(Chan_Type.I, 
+#                                                   TopBotType.top2bot,
+#                                                   0, 
+#                                                   0,
+#                                                   0,
+#                                                   None,
+#                                                   context.current_dt)]
         self.tentative_to_buy = self.tentative_to_buy.difference(stocks_to_remove)
         
         # check volume/money
         for stock in self.tentative_to_buy:
-            if self.check_vol_money(stock, context):
+            if self.check_vol_money(stock, context, stock_changed_record):
                 stocks_to_long.append(stock)
                 
         return stocks_to_long
         # check TYPE III at sub level??
         
-    def check_vol_money(self, stock, context):
+    def check_vol_money(self, stock, context, stock_changed_record):
         current_profile = self.g.stock_chan_type[stock][1]
         current_zoushi_start_time = current_profile[5]
 
@@ -801,19 +791,20 @@ class Filter_Chan_Stocks(Filter_stock_list):
                             fq_ref_date=context.current_dt.date(), 
                             df=False)
         
-        cutting_loc = np.where(stock_data['date']>=current_zoushi_start_time)[0][0]
-        cutting_offset = stock_data.size - cutting_loc
-        
-#         # current zslx money compare to zs money
-        latest_money = sum(stock_data['money'][cutting_loc:])
-        past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
+        if not stock_changed_record[stock]: # Zhongshu unchanged
+            cutting_loc = np.where(stock_data['date']>=current_zoushi_start_time)[0][0]
+            cutting_offset = stock_data.size - cutting_loc
+            
+    #         # current zslx money compare to zs money
+            latest_money = sum(stock_data['money'][cutting_loc:])
+            past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
 
         # current zslx money split by mid term
 #         latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
 #         past_money = sum(stock_data['money'][cutting_loc:][:int(cutting_offset/2)])
-
-#         latest_money = sum(stock_data['money'][-120:])
-#         past_money = sum(stock_data['money'][:120])
+        else:
+            latest_money = sum(stock_data['money'][-120:])
+            past_money = sum(stock_data['money'][-240:][:120])
         
         if float_more_equal(latest_money / past_money, 1.191):
             self.log.info("candiate stock {0} money active: {1} -> {2}".format(stock, past_money, latest_money))
@@ -900,7 +891,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
     def __str__(self):
         return "Chan Filter Params: {0} \n{1}".format(self.long_stock_num, self.sub_chan_type)
 
-
+    def after_trading_end(self, context):
+        holding_pos = context.portfolio.positions.keys()
+        stored_stocks = list(self.g.stock_chan_type.keys())
+        to_be_removed = [stock for stock in stored_stocks if (stock not in holding_pos and stock not in self.tentative_to_buy)]
+        [self.g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
+        self.log.info("position chan info: {0}".format(self.g.stock_chan_type))
 
 class Filter_Pair_Trading(Filter_stock_list):
     def __init__(self, params):
