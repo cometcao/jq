@@ -740,6 +740,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
     def check_tentative_stocks(self, context):
         stocks_to_long = []
         stocks_to_remove = set()
+        
+        self.tentative_to_buy = self.tentative_to_buy.difference(set(context.portfolio.positions.keys()))
+        
         for stock in self.tentative_to_buy:
             result, xd_result, c_profile = check_chan_by_type_exhaustion(stock,
                                                                   end_time=context.current_dt,
@@ -782,8 +785,6 @@ class Filter_Chan_Stocks(Filter_stock_list):
             if self.check_vol_money(stock, context):
                 stocks_to_long.append(stock)
                 
-        stocks_to_long = [stock for stock in stocks_to_long if stock not in context.portfolio.positions.keys()]
-        
         return stocks_to_long
         # check TYPE III at sub level??
         
@@ -887,9 +888,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
         # sort resulting stocks
         stock_industry_pair = [(stock, get_industry(stock)[stock]['sw_l2']['industry_code']) for stock in filter_stock_list]
         
-        print(stock_industry_pair)
+        self.log.debug(stock_industry_pair)
         stock_industry_pair.sort(key=lambda tup: sort_by_sector_try(self.g.industry_sector_list, tup[1]))
-        print(stock_industry_pair)
+        self.log.debug(stock_industry_pair)
         
         filter_stock_list=[pair[0] for pair in stock_industry_pair]
                 
