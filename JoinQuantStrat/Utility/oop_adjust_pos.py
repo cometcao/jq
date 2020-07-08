@@ -821,7 +821,9 @@ class Short_Chan(Sell_stocks):
 #                     return True
             if current_loc_diff > first_loc_diff:
                 if max_price_after_long < current_chan_p:
-                    print("waited for equal period {0}:{1} never reached guiding price {2}".format(first_loc_diff, 
+                    print("{0} waited for equal period {1}:{2} never reached guiding price {3}".format(
+                                                                                                  stock,
+                                                                                                  first_loc_diff, 
                                                                                                   current_loc_diff, 
                                                                                                   current_chan_p))
                     return True
