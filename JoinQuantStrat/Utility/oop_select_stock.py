@@ -888,9 +888,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
         # sort resulting stocks
         stock_industry_pair = [(stock, get_industry(stock)[stock]['sw_l2']['industry_code']) for stock in filter_stock_list]
         
-        self.log.debug(stock_industry_pair)
+        self.log.debug("before: {0}".format(stock_industry_pair))
         stock_industry_pair.sort(key=lambda tup: sort_by_sector_try(self.g.industry_sector_list, tup[1]))
-        self.log.debug(stock_industry_pair)
+        self.log.debug("after: {0}".format(stock_industry_pair))
         
         filter_stock_list=[pair[0] for pair in stock_industry_pair]
                 
