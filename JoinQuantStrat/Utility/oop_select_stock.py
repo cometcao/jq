@@ -28,6 +28,12 @@ from equilibrium import *
 
 '''=========================选股规则相关==================================='''
 
+def sort_by_sector_try(sector_list, value):
+    try:
+        return sector_list.index(value)
+    except:
+        return 999
+
 # '''-----------------选股组合器2-----------------------'''
 class Pick_stocks2(Group_rules):
     def __init__(self, params):
@@ -744,7 +750,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                   isdebug=False,
                                                                   is_description =False,
                                                                   is_anal=False,
-                                                                  check_structure=True,
+                                                                  check_structure=False,
                                                                   check_full_zoushi=False,
                                                                   slope_only=False) # synch with selection
             if not result:
@@ -882,7 +888,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         stock_industry_pair = [(stock, get_industry(stock)[stock]['sw_l2']['industry_code']) for stock in filter_stock_list]
         
         print(stock_industry_pair)
-        stock_industry_pair.sort(key=lambda tup: self.g.industry_sector_list.index(tup[1]))
+        stock_industry_pair.sort(key=lambda tup: sort_by_sector_try(self.g.industry_sector_list, tup[1]))
         print(stock_industry_pair)
         
         filter_stock_list=[pair[0] for pair in stock_industry_pair]
@@ -892,6 +898,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
 
     def __str__(self):
         return "Chan Filter Params: {0} \n{1}".format(self.long_stock_num, self.sub_chan_type)
+
+
 
 class Filter_Pair_Trading(Filter_stock_list):
     def __init__(self, params):
