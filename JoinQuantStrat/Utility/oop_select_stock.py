@@ -721,16 +721,17 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                     [Chan_Type.I_weak, self.curent_chan_type[0], Chan_Type.I],
                                     [Chan_Type.INVALID, self.curent_chan_type[0], Chan_Type.I]
                                     ])
-        self.tentative_to_buy = set() # list to hold stocks waiting to be operated
+        self.tentative_stage_I = set() # list to hold stocks waiting to be operated
+        self.tentative_stage_II = set()
         
-    def check_tentative_stocks(self, context):
+    def check_tentative_stocks_money(self, context):
         stocks_to_long = []
 #         stock_changed_record = {}
         stocks_to_remove = set()
         
-        self.tentative_to_buy = self.tentative_to_buy.difference(set(context.portfolio.positions.keys()))
+        self.tentative_stage_I = self.tentative_stage_I.difference(set(context.portfolio.positions.keys()))
         
-        for stock in self.tentative_to_buy:
+        for stock in self.tentative_stage_I:
             result, xd_result, c_profile = check_chan_by_type_exhaustion(stock,
                                                                   end_time=context.current_dt,
                                                                   periods=[self.periods[0]],
@@ -768,15 +769,20 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                   0,
                                                   None,
                                                   context.current_dt)]
-        self.tentative_to_buy = self.tentative_to_buy.difference(stocks_to_remove)
+        self.tentative_stage_I = self.tentative_stage_I.difference(stocks_to_remove)
         
         # check volume/money
-        for stock in self.tentative_to_buy:
+        for stock in self.tentative_stage_I:
             if self.check_vol_money(stock, context):
+                self.tentative_stage_II.add(stock)
+        
+        self.tentative_stage_I = self.tentative_stage_I.difference(self.tentative_stage_II)
+                
+        for stock in self.tentative_stage_II:
+            if self.check_type_III_sub(stock, context):
                 stocks_to_long.append(stock)
                 
         return stocks_to_long
-        # check TYPE III at sub level??
         
     def check_vol_money(self, stock, context):
         current_profile = self.g.stock_chan_type[stock][1]
@@ -813,6 +819,23 @@ class Filter_Chan_Stocks(Filter_stock_list):
             return True
         return False
     
+    def check_type_III_sub(self, stock, context):
+        exhausted, _, _, _ = check_stock_sub(stock, 
+                                        end_time=context.current_dt,
+                                        periods=[self.periods[1]], 
+                                        count=1000, 
+                                        direction=TopBotType.top2bot, 
+                                        chan_types=[Chan_Type.III, Chan_Type.III_weak], 
+                                        isdebug=False, 
+                                        is_anal=False, 
+                                        split_time=None,
+                                        check_bi=True,
+                                        force_zhongshu=True,
+                                        force_bi_zhongshu=True,
+                                        check_full_zoushi=False
+                                        )
+        return exhausted
+        
     
     def filter(self, context, data, stock_list):
         if context.current_dt.hour < self.long_hour_start:
@@ -869,19 +892,21 @@ class Filter_Chan_Stocks(Filter_stock_list):
             
             if self.tentative_chan_type and (chan_type_list in self.tentative_chan_type):
 #                 self.log.info("stock {0} saved in tentative!".format(stock))
-                self.tentative_to_buy.add(stock)
+                self.tentative_stage_I.add(stock)
         
         self.log.info("Stocks {0} ignored".format(to_ignore))
         filter_stock_list = [stock for stock in filter_stock_list if stock not in to_ignore]
         
         # deal with all tentative stocks
-        filter_stock_list = [stock for stock in filter_stock_list if stock not in self.tentative_to_buy]
-        filter_stock_list = self.check_tentative_stocks(context) + filter_stock_list
+        filter_stock_list = [stock for stock in filter_stock_list if stock not in self.tentative_stage_I]
+        filter_stock_list = self.check_tentative_stocks_money(context) + filter_stock_list
         
         # sort by sectors again
         filter_stock_list = self.sort_by_sector_order(filter_stock_list)
                 
-        self.log.info("Stocks ready: {0}, tentative: {1}".format(filter_stock_list, self.tentative_to_buy))
+        self.log.info("Stocks ready: {0}, tentative: {1}, {2}".format(filter_stock_list, 
+                                                                      self.tentative_stage_I,
+                                                                      self.tentative_stage_II))
         return filter_stock_list
 
     def sort_by_sector_order(self, stock_list):
@@ -900,7 +925,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
     def after_trading_end(self, context):
         holding_pos = context.portfolio.positions.keys()
         stored_stocks = list(self.g.stock_chan_type.keys())
-        to_be_removed = [stock for stock in stored_stocks if (stock not in holding_pos and stock not in self.tentative_to_buy)]
+        to_be_removed = [stock for stock in stored_stocks if (stock not in holding_pos and stock not in self.tentative_stage_I)]
         [self.g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
         self.log.info("position chan info: {0}".format(self.g.stock_chan_type))
 
