@@ -925,7 +925,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
     def after_trading_end(self, context):
         holding_pos = context.portfolio.positions.keys()
         stored_stocks = list(self.g.stock_chan_type.keys())
-        to_be_removed = [stock for stock in stored_stocks if (stock not in holding_pos and stock not in self.tentative_stage_I)]
+        to_be_removed = [stock for stock in stored_stocks if (stock not in holding_pos and stock not in self.tentative_stage_I and stock not in self.tentative_stage_II)]
         [self.g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
         self.log.info("position chan info: {0}".format(self.g.stock_chan_type))
 
