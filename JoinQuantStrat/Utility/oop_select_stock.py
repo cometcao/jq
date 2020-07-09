@@ -849,7 +849,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
         stock_list = self.sort_by_sector_order(stock_list)
         for stock in stock_list:
-            if self.long_stock_num + 1 == len(filter_stock_list):
+            if self.long_stock_num + 1 <= len(self.tentative_stage_II):
                 # we don't need to look further, we have enough candidates for long position + 1 backup
                 break
             result, profile, _ = check_stock_full(stock,
@@ -887,7 +887,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             
             chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
             if self.force_chan_type and (chan_type_list not in self.force_chan_type):
-                self.log.debug("stock chan type: {0}".format(chan_type_list))
+                self.log.debug("stock chan type: {0} ignored".format(chan_type_list))
                 to_ignore.add(stock)
                 continue
             
@@ -899,7 +899,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         filter_stock_list = [stock for stock in filter_stock_list if stock not in to_ignore]
         
         # deal with all tentative stocks
-        filter_stock_list = [stock for stock in filter_stock_list if stock not in self.tentative_stage_I]
+        filter_stock_list = [stock for stock in filter_stock_list if stock not in self.tentative_stage_I and stock not in self.tentative_stage_II]
         filter_stock_list = self.check_tentative_stocks_money(context) + filter_stock_list
         
         # sort by sectors again
