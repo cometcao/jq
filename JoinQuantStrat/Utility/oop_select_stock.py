@@ -826,7 +826,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                         count=1000, 
                                         direction=TopBotType.top2bot, 
                                         chan_types=[Chan_Type.III, Chan_Type.III_weak], 
-                                        isdebug=False, 
+                                        isdebug=self.isdebug, 
                                         is_anal=False, 
                                         split_time=None,
                                         check_bi=True,
@@ -887,6 +887,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             
             chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
             if self.force_chan_type and (chan_type_list not in self.force_chan_type):
+                self.log.debug("stock chan type: {0}".format(chan_type_list))
                 to_ignore.add(stock)
                 continue
             
@@ -894,7 +895,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #                 self.log.info("stock {0} saved in tentative!".format(stock))
                 self.tentative_stage_I.add(stock)
         
-        self.log.info("Stocks {0} ignored".format(to_ignore))
+#         self.log.info("Stocks {0} ignored".format(to_ignore))
         filter_stock_list = [stock for stock in filter_stock_list if stock not in to_ignore]
         
         # deal with all tentative stocks
@@ -1037,7 +1038,7 @@ class Filter_Industry_Sector(Early_Filter_stock_list):
                     effective_date=context.previous_date)
             self.new_list = ss.processAllIndustrySectorStocks()
             self.g.industry_sector_list = ss.processAllIndustrySectors() # save sector order for later use
-            self.log.info("saved industry list: {0}".format(self.g.industry_sector_list))
+            self.log.info("saved industry list: {0}... (top TEN)".format(self.g.industry_sector_list[:10]))
             
     def __str__(self):
         if self.strong_sector:
