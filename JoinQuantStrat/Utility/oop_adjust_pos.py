@@ -813,20 +813,20 @@ class Short_Chan(Sell_stocks):
             current_loc_diff = stock_data.loc[effective_time:,].shape[0]
             first_loc_diff = stock_data.loc[current_zoushi_start_time:,].shape[0] - current_loc_diff
             
-            if current_loc_diff > int(first_loc_diff/4):
-                if (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
-                    print("waited for certain period {0}:{1} never reached profit {2}".format(first_loc_diff, 
-                                                                                                  current_loc_diff, 
-                                                                                                  stock_data.iloc[-1].close))
-                    return True
-#             if current_loc_diff > first_loc_diff:
-#                 if max_price_after_long < current_chan_p:
-#                     print("{0} waited for equal period {1}:{2} never reached guiding price {3}".format(
-#                                                                                                   stock,
-#                                                                                                   first_loc_diff, 
+#             if current_loc_diff > int(first_loc_diff):
+#                 if (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
+#                     print("waited for certain period {0}:{1} never reached profit {2}".format(first_loc_diff, 
 #                                                                                                   current_loc_diff, 
-#                                                                                                   current_chan_p))
+#                                                                                                   stock_data.iloc[-1].close))
 #                     return True
+            if current_loc_diff > first_loc_diff:
+                if max_price_after_long < current_chan_p:
+                    print("{0} waited for equal period {1}:{2} never reached guiding price {3}".format(
+                                                                                                  stock,
+                                                                                                  first_loc_diff, 
+                                                                                                  current_loc_diff, 
+                                                                                                  current_chan_p))
+                    return True
 
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
                 # check if original long point still holds
