@@ -1069,7 +1069,7 @@ class Short_Chan(Sell_stocks):
                 if current_zhongshu_formed: 
                     print("STOP PROFIT working level zhongshu {0}".format("formed" if current_zhongshu_formed else "not formed"))
                     if self.use_ma13 and sma5 < sma13:
-                        print("STOP PROFIT {0} sm5 below ma13: {1}, {2}".format(stock, sm5, sma13))
+                        print("STOP PROFIT {0} ma5 below ma13: {1}, {2}".format(stock, sma5, sma13))
                         return True
                 
             
