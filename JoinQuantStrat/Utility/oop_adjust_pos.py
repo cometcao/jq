@@ -813,12 +813,12 @@ class Short_Chan(Sell_stocks):
             current_loc_diff = stock_data.loc[effective_time:,].shape[0]
             first_loc_diff = stock_data.loc[current_zoushi_start_time:,].shape[0] - current_loc_diff
             
-#             if current_loc_diff > int(first_loc_diff):
-#                 if (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
-#                     print("waited for certain period {0}:{1} never reached profit {2}".format(first_loc_diff, 
-#                                                                                                   current_loc_diff, 
-#                                                                                                   stock_data.iloc[-1].close))
-#                     return True
+            if current_loc_diff > int(first_loc_diff/2):
+                if (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
+                    print("waited for certain period {0}:{1} never reached profit {2}".format(first_loc_diff, 
+                                                                                                  current_loc_diff, 
+                                                                                                  stock_data.iloc[-1].close))
+                    return True
             if current_loc_diff > first_loc_diff:
                 if max_price_after_long < current_chan_p:
                     print("{0} waited for equal period {1}:{2} never reached guiding price {3}".format(
@@ -1041,29 +1041,33 @@ class Short_Chan(Sell_stocks):
             if stock_data.loc[effective_time:, 'high'].max() >= current_chan_p:# reached target price
                 print("STOP PROFIT {0} target price: {1}, now max: {2}".format(stock, current_chan_p, stock_data.loc[effective_time:, 'high'].max()))
                 if context.portfolio.positions[stock].price < current_chan_p:
-#                     max_time = stock_data.loc[current_effective_time:, 'high'].idxmax()
-                    sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
-                                                          end_time=context.current_dt,
-                                                          periods=['1m' if self.sub_period == 'bi' else self.sub_period],
-                                                          count=2000,
-                                                          direction=TopBotType.bot2top,
-                                                          chan_types=[Chan_Type.I, Chan_Type.INVALID, Chan_Type.I_weak],
-                                                          isdebug=self.isdebug,
-                                                          is_description=self.isDescription,
-                                                          is_anal=False,
-                                                          split_time=min_time,
-                                                          check_bi=False,
-                                                          allow_simple_zslx=False,
-                                                          force_zhongshu=False,
-                                                          check_full_zoushi=False,
-                                                          ignore_sub_xd=False)
-                    if sub_exhausted:
-                        print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
-                                                                                    self.sub_period,
-                                                                                    sub_exhausted,
-                                                                                    sub_xd_exhausted,
-                                                                                    sub_zhongshu_formed))
+                    if self.use_ma13 and sma5 < sma13:
+                        print("STOP PROFIT {0} ma5 below ma13: {1}, {2}".format(stock, sma5, sma13))
                         return True
+                    
+#                     max_time = stock_data.loc[current_effective_time:, 'high'].idxmax()
+#                     sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
+#                                                           end_time=context.current_dt,
+#                                                           periods=['1m' if self.sub_period == 'bi' else self.sub_period],
+#                                                           count=2000,
+#                                                           direction=TopBotType.bot2top,
+#                                                           chan_types=[Chan_Type.I, Chan_Type.INVALID, Chan_Type.I_weak],
+#                                                           isdebug=self.isdebug,
+#                                                           is_description=self.isDescription,
+#                                                           is_anal=False,
+#                                                           split_time=min_time,
+#                                                           check_bi=False,
+#                                                           allow_simple_zslx=False,
+#                                                           force_zhongshu=False,
+#                                                           check_full_zoushi=False,
+#                                                           ignore_sub_xd=False)
+#                     if sub_exhausted:
+#                         print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
+#                                                                                     self.sub_period,
+#                                                                                     sub_exhausted,
+#                                                                                     sub_xd_exhausted,
+#                                                                                     sub_zhongshu_formed))
+#                         return True
                 
             else:
                 if current_zhongshu_formed: 
