@@ -725,7 +725,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.tentative_stage_II = set()
         
     def check_tentative_stocks(self, context):
-        stocks_to_long = []
+        stocks_to_long = set()
 #         stock_changed_record = {}
         stocks_to_remove = set()
         
@@ -785,6 +785,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             if self.check_type_III_sub(stock, context):
                 stocks_to_long.append(stock)
                 
+        self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_long)
+                
         return stocks_to_long
         
     def check_vol_money(self, stock, context):
@@ -823,29 +825,48 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return False
     
     def check_type_III_sub(self, stock, context):
-        exhausted, _, _, _ = check_stock_sub(stock, 
-                                        end_time=context.current_dt,
-                                        periods=[self.periods[1]], 
-                                        count=1000, 
-                                        direction=TopBotType.top2bot, 
-                                        chan_types=[Chan_Type.III, Chan_Type.III_weak, Chan_Type.III_strong], 
-                                        isdebug=self.isdebug, 
-                                        is_anal=False, 
-                                        split_time=None,
-                                        check_bi=False,
-                                        force_zhongshu=False,
-                                        force_bi_zhongshu=False,
-                                        check_full_zoushi=False
-                                        )
-        return exhausted
-#         stock_data = get_bars(stock, 
-#                             count=96, # 5d
-#                             unit=self.periods[0],
-#                             fields=['date','close', 'low'],
-#                             include_now=True, 
-#                             end_dt=context.current_dt, 
-#                             fq_ref_date=context.current_dt.date(), 
-#                             df=False)
+        if context.current_dt.hour != 14 or context.current_dt.minute != 30:
+            return False
+#         exhausted, _, _, _ = check_stock_sub(stock, 
+#                                         end_time=context.current_dt,
+#                                         periods=[self.periods[1]], 
+#                                         count=1000, 
+#                                         direction=TopBotType.top2bot, 
+#                                         chan_types=[Chan_Type.III, Chan_Type.III_weak, Chan_Type.III_strong], 
+#                                         isdebug=self.isdebug, 
+#                                         is_anal=False, 
+#                                         split_time=None,
+#                                         check_bi=False,
+#                                         force_zhongshu=False,
+#                                         force_bi_zhongshu=False,
+#                                         check_full_zoushi=False
+#                                         )
+#         return exhausted
+        check_num = 10
+        stock_data = get_bars(stock, 
+                            count=check_num, # 5d
+                            unit='1d',
+                            fields=['date','close', 'high', 'low', 'open'],
+                            include_now=True, 
+                            end_dt=context.current_dt, 
+                            fq_ref_date=context.current_dt.date(), 
+                            df=False)
+        
+        min_loc = stock_data['low'].argmin()
+        if min_loc < check_num-2 and min_loc > 0:
+            pre = stock_data[min_loc-1]
+            first = stock_data[min_loc]
+            second = stock_data[min_loc+1]
+            last = stock_data[-1]
+            
+            pre_oc_high = max(pre['open'], pre['close'])
+            first_oc_high = max(first['open'], first['close'])
+            second_oc_high = max(second['open'], second['close'])
+            min_bar = min(pre_oc_high, first_oc_high, second_oc_high)
+            
+            if last['close'] > min_bar: 
+                return True
+        return False
         
     
     def filter(self, context, data, stock_list):
@@ -913,7 +934,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             filter_stock_list = [stock for stock in filter_stock_list if stock not in self.tentative_stage_I and stock not in self.tentative_stage_II]
         
         # deal with all tentative stocks
-        filter_stock_list = self.check_tentative_stocks(context) + filter_stock_list
+        filter_stock_list = list(self.check_tentative_stocks(context)) + filter_stock_list
         
         # sort by sectors again
         filter_stock_list = self.sort_by_sector_order(filter_stock_list)
