@@ -813,9 +813,9 @@ class Short_Chan(Sell_stocks):
             current_loc_diff = stock_data.loc[effective_time:,].shape[0]
             first_loc_diff = stock_data.loc[current_zoushi_start_time:,].shape[0] - current_loc_diff
             
-            if current_loc_diff > first_loc_diff:
+            if current_loc_diff > int(first_loc_diff/4):
                 if (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
-                    print("waited for equal period {0}:{1} never reached profit {2}".format(first_loc_diff, 
+                    print("waited for certain period {0}:{1} never reached profit {2}".format(first_loc_diff, 
                                                                                                   current_loc_diff, 
                                                                                                   stock_data.iloc[-1].close))
                     return True

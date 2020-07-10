@@ -723,6 +723,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                     ])
         self.tentative_stage_I = set() # list to hold stocks waiting to be operated
         self.tentative_stage_II = set()
+        self.halt_check_when_enough = False
         
     def check_tentative_stocks(self, context):
         stocks_to_long = set()
@@ -883,7 +884,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
             stock_list = self.sort_by_sector_order(stock_list)
             for stock in stock_list:
-                if self.long_stock_num + 1 <= len(self.tentative_stage_II):
+                if self.halt_check_when_enough and self.long_stock_num <= len(self.tentative_stage_II):
                     # we don't need to look further, we have enough candidates for long position + 1 backup
                     break
                 result, profile, _ = check_stock_full(stock,
