@@ -971,7 +971,7 @@ class Short_Chan(Sell_stocks):
                                                   periods=[self.sup_period],
                                                   count=2000,
                                                   direction=TopBotType.bot2top,
-                                                  chan_types=[Chan_Type.I, Chan_Type.INVALID],
+                                                  chan_types=[Chan_Type.I, Chan_Type.INVALID, Chan_Type.I_weak],
                                                   isdebug=self.isdebug,
                                                   is_description=self.isDescription,
                                                   is_anal=False,
@@ -995,7 +995,7 @@ class Short_Chan(Sell_stocks):
                                                   periods=[self.current_period],
                                                   count=2000,
                                                   direction=TopBotType.bot2top,
-                                                  chan_types=[Chan_Type.I, Chan_Type.INVALID],
+                                                  chan_types=[Chan_Type.I, Chan_Type.INVALID, Chan_Type.I_weak],
                                                   isdebug=self.isdebug,
                                                   is_description=self.isDescription,
                                                   is_anal=False,
@@ -1018,7 +1018,7 @@ class Short_Chan(Sell_stocks):
                                                   periods=['1m' if self.sub_period == 'bi' else self.sub_period],
                                                   count=2000,
                                                   direction=TopBotType.bot2top,
-                                                  chan_types=[Chan_Type.I],
+                                                  chan_types=[Chan_Type.I, Chan_Type.I_weak],
                                                   isdebug=self.isdebug,
                                                   is_description=self.isDescription,
                                                   is_anal=False,
@@ -1041,13 +1041,13 @@ class Short_Chan(Sell_stocks):
             if stock_data.loc[effective_time:, 'high'].max() >= current_chan_p:# reached target price
                 print("STOP PROFIT {0} target price: {1}, now max: {2}".format(stock, current_chan_p, stock_data.loc[effective_time:, 'high'].max()))
                 if context.portfolio.positions[stock].price < current_chan_p:
-                    max_time = stock_data.loc[current_effective_time:, 'high'].idxmax()
+#                     max_time = stock_data.loc[current_effective_time:, 'high'].idxmax()
                     sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
-                                                          end_time=max_time,
+                                                          end_time=context.current_dt,
                                                           periods=['1m' if self.sub_period == 'bi' else self.sub_period],
                                                           count=2000,
                                                           direction=TopBotType.bot2top,
-                                                          chan_types=[Chan_Type.I, Chan_Type.INVALID],
+                                                          chan_types=[Chan_Type.I, Chan_Type.INVALID, Chan_Type.I_weak],
                                                           isdebug=self.isdebug,
                                                           is_description=self.isDescription,
                                                           is_anal=False,

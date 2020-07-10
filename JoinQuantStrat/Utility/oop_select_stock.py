@@ -723,7 +723,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                     ])
         self.tentative_stage_I = set() # list to hold stocks waiting to be operated
         self.tentative_stage_II = set()
-        self.halt_check_when_enough = False
+        self.halt_check_when_enough = params.get('halt_check_when_enough', True)
         
     def check_tentative_stocks(self, context):
         stocks_to_long = set()
