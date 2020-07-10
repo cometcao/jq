@@ -865,7 +865,7 @@ class Equilibrium():
                 pure_zslx = ZouShiLeiXing(split_direction, last_zoushi.original_df, split_nodes)
                 
                 xd_exhaustion, ts = pure_zslx.check_exhaustion(slope_only=self.slope_only) 
-                return True, xd_exhaustion, last_zoushi.zoushi_nodes[0].time, ts, 0, 0
+                return True, xd_exhaustion, pure_zslx.zoushi_nodes[0].time, ts, 0, 0
             else: # ZhongShu case 
                 xd_exhaustion, ts = last_zoushi.check_exhaustion(slope_only=self.slope_only)
                 return True, xd_exhaustion, last_zoushi.first.time, ts, 0, 0
@@ -1067,12 +1067,14 @@ class Equilibrium():
         '''
         all_types = []
         if len(self.analytic_result) < 2 and not self.analytic_result[0].isZhongShu:
+            all_types.append((Chan_Type.INVALID, TopBotType.noTopBot, 0))
             return all_types
         
         if self.analytic_result[-1].get_final_direction() != check_direction:
             if self.isdebug:
                 print("Invalid ending direction {0} against checking direction {1}".format(self.analytic_result[-1].get_final_direction(), 
                                                                                            check_direction))
+            all_types.append((Chan_Type.INVALID, TopBotType.noTopBot, 0))
             return all_types
         
         # we can't supply the Zhongshu amplitude range as it is considered part of Zhongshu
