@@ -724,7 +724,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.tentative_stage_I = set() # list to hold stocks waiting to be operated
         self.tentative_stage_II = set()
         
-    def check_tentative_stocks_money(self, context):
+    def check_tentative_stocks(self, context):
         stocks_to_long = []
 #         stock_changed_record = {}
         stocks_to_remove = set()
@@ -777,6 +777,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 self.tentative_stage_II.add(stock)
         
         self.tentative_stage_I = self.tentative_stage_I.difference(self.tentative_stage_II)
+        
+        # check type III
+        self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                 
         for stock in self.tentative_stage_II:
             if self.check_type_III_sub(stock, context):
@@ -825,82 +828,92 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                         periods=[self.periods[1]], 
                                         count=1000, 
                                         direction=TopBotType.top2bot, 
-                                        chan_types=[Chan_Type.III, Chan_Type.III_weak], 
+                                        chan_types=[Chan_Type.III, Chan_Type.III_weak, Chan_Type.III_strong], 
                                         isdebug=self.isdebug, 
                                         is_anal=False, 
                                         split_time=None,
-                                        check_bi=True,
-                                        force_zhongshu=True,
-                                        force_bi_zhongshu=True,
+                                        check_bi=False,
+                                        force_zhongshu=False,
+                                        force_bi_zhongshu=False,
                                         check_full_zoushi=False
                                         )
         return exhausted
+#         stock_data = get_bars(stock, 
+#                             count=96, # 5d
+#                             unit=self.periods[0],
+#                             fields=['date','close', 'low'],
+#                             include_now=True, 
+#                             end_dt=context.current_dt, 
+#                             fq_ref_date=context.current_dt.date(), 
+#                             df=False)
         
     
     def filter(self, context, data, stock_list):
+        within_processing_time = True
         if context.current_dt.hour < self.long_hour_start:
-            return []
+            within_processing_time = False
         elif context.current_dt.hour == self.long_hour_start and context.current_dt.minute < self.long_min_start: # we should only try to long in the afternoon
-            return []
+            within_processing_time = False
         
         filter_stock_list = []
-        if len(context.portfolio.positions) == self.long_stock_num != 0:
-            return filter_stock_list
-        stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
-        stock_list = self.sort_by_sector_order(stock_list)
-        for stock in stock_list:
-            if self.long_stock_num + 1 <= len(self.tentative_stage_II):
-                # we don't need to look further, we have enough candidates for long position + 1 backup
-                break
-            result, profile, _ = check_stock_full(stock,
-                                                 end_time=context.current_dt,
-                                                 periods=self.periods,
-                                                 count=self.num_of_data,
-                                                 direction=TopBotType.top2bot, 
-                                                 current_chan_type=self.curent_chan_type,
-                                                 sub_chan_type=self.sub_chan_type,
-                                                 isdebug=self.isdebug,
-                                                 is_description=self.isDescription,
-                                                 sub_force_zhongshu=self.sub_force_zhongshu, 
-                                                 sub_check_bi=self.bi_level_precision,
-                                                 use_sub_split=self.use_sub_split,
-                                                 ignore_cur_xd=self.ignore_xd,
-                                                 ignore_sub_xd=self.bi_level_precision)
+        if within_processing_time:
+            if len(context.portfolio.positions) == self.long_stock_num != 0:
+                return filter_stock_list
+            stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
+            stock_list = self.sort_by_sector_order(stock_list)
+            for stock in stock_list:
+                if self.long_stock_num + 1 <= len(self.tentative_stage_II):
+                    # we don't need to look further, we have enough candidates for long position + 1 backup
+                    break
+                result, profile, _ = check_stock_full(stock,
+                                                     end_time=context.current_dt,
+                                                     periods=self.periods,
+                                                     count=self.num_of_data,
+                                                     direction=TopBotType.top2bot, 
+                                                     current_chan_type=self.curent_chan_type,
+                                                     sub_chan_type=self.sub_chan_type,
+                                                     isdebug=self.isdebug,
+                                                     is_description=self.isDescription,
+                                                     sub_force_zhongshu=self.sub_force_zhongshu, 
+                                                     sub_check_bi=self.bi_level_precision,
+                                                     use_sub_split=self.use_sub_split,
+                                                     ignore_cur_xd=self.ignore_xd,
+                                                     ignore_sub_xd=self.bi_level_precision)
+                
+                if result:
+                    filter_stock_list.append(stock)
+                    self.g.stock_chan_type[stock] = self.g.stock_chan_type[stock] + profile
             
-            if result:
-                filter_stock_list.append(stock)
-                self.g.stock_chan_type[stock] = self.g.stock_chan_type[stock] + profile
-        
-        
-        self.log.info("Qualified stocks: {0}".format(filter_stock_list))
-        to_ignore = set()
-        
-        # deal with tentative stocks
-        for stock in filter_stock_list:
-            top_profile = self.g.stock_chan_type[stock][0]
-            current_profile = self.g.stock_chan_type[stock][1]
-            sub_profile = self.g.stock_chan_type[stock][2]
             
-            top_chan_t = top_profile[0]
-            cur_chan_t = current_profile[0]
-            sub_chan_t = sub_profile[0]
+            self.log.info("Qualified stocks: {0}".format(filter_stock_list))
+            to_ignore = set()
             
-            chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
-            if self.force_chan_type and (chan_type_list not in self.force_chan_type):
-                self.log.debug("stock chan type: {0} ignored".format(chan_type_list))
-                to_ignore.add(stock)
-                continue
+            # deal with tentative stocks
+            for stock in filter_stock_list:
+                top_profile = self.g.stock_chan_type[stock][0]
+                current_profile = self.g.stock_chan_type[stock][1]
+                sub_profile = self.g.stock_chan_type[stock][2]
+                
+                top_chan_t = top_profile[0]
+                cur_chan_t = current_profile[0]
+                sub_chan_t = sub_profile[0]
+                
+                chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
+                if self.force_chan_type and (chan_type_list not in self.force_chan_type):
+    #                 self.log.debug("{0} chan type: {1} ignored".format(stock, chan_type_list))
+                    to_ignore.add(stock)
+                    continue
+                
+                if self.tentative_chan_type and (chan_type_list in self.tentative_chan_type):
+    #                 self.log.info("stock {0} saved in tentative!".format(stock))
+                    self.tentative_stage_I.add(stock)
             
-            if self.tentative_chan_type and (chan_type_list in self.tentative_chan_type):
-#                 self.log.info("stock {0} saved in tentative!".format(stock))
-                self.tentative_stage_I.add(stock)
-        
-#         self.log.info("Stocks {0} ignored".format(to_ignore))
-        filter_stock_list = [stock for stock in filter_stock_list if stock not in to_ignore]
+            self.log.info("Stocks {0} ignored".format(to_ignore))
+            filter_stock_list = [stock for stock in filter_stock_list if stock not in to_ignore]
+            filter_stock_list = [stock for stock in filter_stock_list if stock not in self.tentative_stage_I and stock not in self.tentative_stage_II]
         
         # deal with all tentative stocks
-        filter_stock_list = [stock for stock in filter_stock_list if stock not in self.tentative_stage_I and stock not in self.tentative_stage_II]
-        filter_stock_list = self.check_tentative_stocks_money(context) + filter_stock_list
+        filter_stock_list = self.check_tentative_stocks(context) + filter_stock_list
         
         # sort by sectors again
         filter_stock_list = self.sort_by_sector_order(filter_stock_list)
