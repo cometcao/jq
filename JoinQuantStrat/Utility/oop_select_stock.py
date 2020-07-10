@@ -783,7 +783,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 
         for stock in self.tentative_stage_II:
             if self.check_type_III_sub(stock, context):
-                stocks_to_long.append(stock)
+                stocks_to_long.add(stock)
                 
         self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_long)
                 
