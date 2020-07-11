@@ -4,6 +4,7 @@ Created on 4 Dec 2017
 
 @author: MetalInvest
 '''
+from utility.chan_common_include import float_less_equal
 try:
     from kuanke.user_space_api import *
 except:
@@ -824,20 +825,25 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #         cur_latest_money = sum(stock_data['money'][-48:])
 #         cur_past_money = sum(stock_data['money'][:48])
 
-        self.log.info("candiate stock {0} cur money active: {1} -> {2}, sub money active: {3} -> {4}".format(stock, 
+        self.log.debug("candiate stock {0} cur: {1} -> {2}, sub: {3} -> {4}".format(stock, 
                                                                            cur_past_money, 
                                                                            cur_latest_money,
                                                                            sub_past_money, 
                                                                            sub_latest_money))
 
-        if float_less_equal(cur_latest_money / cur_past_money, 0.801) and\
-            float_more_equal(sub_latest_money / sub_past_money, 1.382):
+        if float_less_equal(cur_latest_money / cur_past_money, 0.809) and\
+            float_less_equal(sub_latest_money / sub_past_money, 0.809):
             self.log.info("candiate stock {0} cur money active: {1} -> {2}, sub money active: {3} -> {4}".format(stock, 
                                                                                cur_past_money, 
                                                                                cur_latest_money,
                                                                                sub_past_money, 
                                                                                sub_latest_money))
             return True
+        elif float_more_equal(cur_latest_money / cur_past_money, 1.809) and\
+            float_less_equal(sub_latest_money / sub_past_money, 0.809):
+            self.log.info("candiate stock {0} cur money active: {1} -> {2}".format(stock, 
+                                                                               cur_past_money, 
+                                                                               cur_latest_money))
         return False
     
     def check_type_III_sub(self, stock, context):
