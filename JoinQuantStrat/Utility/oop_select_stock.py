@@ -4,7 +4,6 @@ Created on 4 Dec 2017
 
 @author: MetalInvest
 '''
-from utility.chan_common_include import float_less_equal
 try:
     from kuanke.user_space_api import *
 except:
@@ -21,7 +20,7 @@ from pair_trading_ols import *
 from value_factor_lib import *
 from quant_lib import *
 from functools import reduce
-from chan_common_include import Chan_Type
+from chan_common_include import Chan_Type, float_less_equal, float_more_equal
 from biaoLiStatus import TopBotType
 from chan_kbar_filter import *
 from equilibrium import *
