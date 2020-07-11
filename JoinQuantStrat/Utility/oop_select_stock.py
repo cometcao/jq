@@ -710,6 +710,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.long_min_start = params.get('long_min_start', 30)
         self.use_sub_split = params.get('sub_split', True)
         self.ignore_xd = params.get('ignore_xd', False)
+        self.use_stage_II = params.get('use_stage_II', False)
         
         self.force_chan_type = params.get('force_chan_type', [
                                                               [Chan_Type.I, self.curent_chan_type[0], Chan_Type.I],
@@ -775,18 +776,21 @@ class Filter_Chan_Stocks(Filter_stock_list):
         # check volume/money
         for stock in self.tentative_stage_I:
             if self.check_vol_money(stock, context):
-                self.tentative_stage_II.add(stock)
-        
-        self.tentative_stage_I = self.tentative_stage_I.difference(self.tentative_stage_II)
-        
-        # check type III
-        self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
-                
-        for stock in self.tentative_stage_II:
-            if self.check_type_III_sub(stock, context):
                 stocks_to_long.add(stock)
-                
-        self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_long)
+        
+        if self.use_stage_II:
+            self.tentative_stage_II = stocks_to_long
+            stocks_to_long = set()
+            self.tentative_stage_I = self.tentative_stage_I.difference(self.tentative_stage_II)
+        
+            # check type III
+            self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
+                    
+            for stock in self.tentative_stage_II:
+                if self.check_type_III_sub(stock, context):
+                    stocks_to_long.add(stock)
+                    
+            self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_long)
                 
         return stocks_to_long
         
@@ -884,7 +888,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
             stock_list = self.sort_by_sector_order(stock_list)
             for stock in stock_list:
-                if self.halt_check_when_enough and self.long_stock_num <= len(self.tentative_stage_II):
+                if self.halt_check_when_enough and self.long_stock_num <= len(filter_stock_list):
                     # we don't need to look further, we have enough candidates for long position + 1 backup
                     break
                 result, profile, _ = check_stock_full(stock,
