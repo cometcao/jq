@@ -812,20 +812,20 @@ class Filter_Chan_Stocks(Filter_stock_list):
         cutting_offset = stock_data.size - cutting_loc
 #             
 #     #         # current zslx money compare to zs money
-        latest_money = sum(stock_data['money'][cutting_loc:])
-        past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
+        cur_latest_money = sum(stock_data['money'][cutting_loc:])
+        cur_past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
 # 
 #         # current zslx money split by mid term
-# #         latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
-# #         past_money = sum(stock_data['money'][cutting_loc:][:int(cutting_offset/2)])
-#         else:
-#         latest_money = sum(stock_data['money'][-120:])
-#         past_money = sum(stock_data['money'][-240:][:120])
+        sub_latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
+        sub_past_money = sum(stock_data['money'][cutting_loc:][:int(cutting_offset/2)])
         
-#         latest_money = sum(stock_data['money'][-48:])
-#         past_money = sum(stock_data['money'][:48])
-        if float_less_equal(latest_money / past_money, 0.618):
-            self.log.info("candiate stock {0} money active: {1} -> {2}".format(stock, past_money, latest_money))
+#         cur_latest_money = sum(stock_data['money'][-120:])
+#         cur_past_money = sum(stock_data['money'][-240:][:120])
+#         cur_latest_money = sum(stock_data['money'][-48:])
+#         cur_past_money = sum(stock_data['money'][:48])
+        if float_less_equal(cur_latest_money / cur_past_money, 0.618) and\
+            float_more_equal(sub_latest_money / sub_past_money, 1.618):
+            self.log.info("candiate stock {0} money active: {1} -> {2}".format(stock, cur_past_money, cur_latest_money))
             return True
         return False
     
