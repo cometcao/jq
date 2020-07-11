@@ -823,9 +823,20 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #         cur_past_money = sum(stock_data['money'][-240:][:120])
 #         cur_latest_money = sum(stock_data['money'][-48:])
 #         cur_past_money = sum(stock_data['money'][:48])
-        if float_less_equal(cur_latest_money / cur_past_money, 0.618) and\
-            float_more_equal(sub_latest_money / sub_past_money, 1.618):
-            self.log.info("candiate stock {0} money active: {1} -> {2}".format(stock, cur_past_money, cur_latest_money))
+
+        self.log.info("candiate stock {0} cur money active: {1} -> {2}, sub money active: {3} -> {4}".format(stock, 
+                                                                           cur_past_money, 
+                                                                           cur_latest_money,
+                                                                           sub_past_money, 
+                                                                           sub_latest_money))
+
+        if float_less_equal(cur_latest_money / cur_past_money, 0.801) and\
+            float_more_equal(sub_latest_money / sub_past_money, 1.382):
+            self.log.info("candiate stock {0} cur money active: {1} -> {2}, sub money active: {3} -> {4}".format(stock, 
+                                                                               cur_past_money, 
+                                                                               cur_latest_money,
+                                                                               sub_past_money, 
+                                                                               sub_latest_money))
             return True
         return False
     
