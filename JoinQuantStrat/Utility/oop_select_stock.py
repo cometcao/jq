@@ -753,24 +753,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 self.log.info("Sanity check failed for stock: {0}".format(stock))
                 stocks_to_remove.add(stock)
             else:
-                old_current_profile = self.g.stock_chan_type[stock][1]
+#                 old_current_profile = self.g.stock_chan_type[stock][1]
 #                 stock_changed_record[stock] = old_current_profile[2] != c_profile[0][2]
 #                 self.log.debug("stock {0}, zhongshu changed: {1}".format(stock, old_current_profile[2] != c_profile[0][2]))
-                self.g.stock_chan_type[stock] = [(Chan_Type.I, 
-                                                  TopBotType.top2bot,
-                                                  0, 
-                                                  0,
-                                                  0,
-                                                  None,
-                                                  None)] +\
+                self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] +\
                                                 c_profile +\
-                                                [(Chan_Type.I, 
-                                                  TopBotType.top2bot,
-                                                  0, 
-                                                  0,
-                                                  0,
-                                                  None,
-                                                  context.current_dt)]
+                                                [self.g.stock_chan_type[stock][2]]
         self.tentative_stage_I = self.tentative_stage_I.difference(stocks_to_remove)
         
         # check volume/money
@@ -797,6 +785,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
     def check_vol_money(self, stock, context):
         current_profile = self.g.stock_chan_type[stock][1]
         current_zoushi_start_time = current_profile[5]
+        sub_profile = self.g.stock_chan_type[stock][2]
+        sub_zoushi_start_time = sub_profile[5]
 
         stock_data = get_bars(stock, 
                             count=2000, # 5d
@@ -810,25 +800,28 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #         if not stock_changed_record[stock]: # Zhongshu unchanged
         cutting_loc = np.where(stock_data['date']>=current_zoushi_start_time)[0][0]
         cutting_offset = stock_data.size - cutting_loc
+        
+        sub_cutting_loc = np.where(stock_data['date']>=sub_zoushi_start_time)[0][0]
+        sub_cuttinng_offset = stock_data.size - sub_cutting_loc
 #             
 #     #         # current zslx money compare to zs money
         cur_latest_money = sum(stock_data['money'][cutting_loc:])
         cur_past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
 # 
 #         # current zslx money split by mid term
-        sub_latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
-        sub_past_money = sum(stock_data['money'][cutting_loc:][:int(cutting_offset/2)])
+        sub_latest_money = sum(stock_data['money'][sub_cutting_loc:])
+        sub_past_money = sum(stock_data['money'][:sub_cutting_loc][-sub_cuttinng_offset:])
         
 #         cur_latest_money = sum(stock_data['money'][-120:])
 #         cur_past_money = sum(stock_data['money'][-240:][:120])
 #         cur_latest_money = sum(stock_data['money'][-48:])
 #         cur_past_money = sum(stock_data['money'][:48])
 
-#         self.log.debug("candiate stock {0} cur: {1} -> {2}, sub: {3} -> {4}".format(stock, 
-#                                                                            cur_past_money, 
-#                                                                            cur_latest_money,
-#                                                                            sub_past_money, 
-#                                                                            sub_latest_money))
+        self.log.debug("candiate stock {0} cur: {1} -> {2}, sub: {3} -> {4}".format(stock, 
+                                                                           cur_past_money, 
+                                                                           cur_latest_money,
+                                                                           sub_past_money, 
+                                                                           sub_latest_money))
 
         if float_less_equal(cur_latest_money / cur_past_money, 0.809) and\
             float_less_equal(sub_latest_money / sub_past_money, 0.809):
