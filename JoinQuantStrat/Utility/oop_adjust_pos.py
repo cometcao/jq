@@ -775,6 +775,7 @@ class Short_Chan(Sell_stocks):
     
     def check_stop_loss(self, stock, context):
         avg_cost = context.portfolio.positions[stock].avg_cost
+#         position_time = context.portfolio.positions[stock].transact_time
         # short circuit
         if context.portfolio.positions[stock].avg_cost < context.portfolio.positions[stock].price:
             return False
@@ -820,13 +821,14 @@ class Short_Chan(Sell_stocks):
 #                                                                                                   stock_data.iloc[-1].close))
 #                     return True
             if current_loc_diff > first_loc_diff:
-                if max_price_after_long < current_chan_p:
-                    print("{0} waited for equal period {1}:{2} never reached guiding price {3}".format(
-                                                                                                  stock,
-                                                                                                  first_loc_diff, 
-                                                                                                  current_loc_diff, 
-                                                                                                  current_chan_p))
-                    return True
+#                 if max_price_after_long < current_chan_p:
+                self.log.info("{0} waited for equal period {1}:{2} never reached guiding price {3}".format(
+                                                                                              stock,
+                                                                                              first_loc_diff, 
+                                                                                              current_loc_diff, 
+                                                                                              current_chan_p))
+                return True
+    
 
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
                 # check if original long point still holds
