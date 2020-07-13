@@ -4,6 +4,7 @@ Created on 4 Dec 2017
 
 @author: MetalInvest
 '''
+from utility.chan_common_include import Chan_Type
 try:
     from kuanke.user_space_api import *
 except:
@@ -785,7 +786,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
     def check_vol_money(self, stock, context):
         current_profile = self.g.stock_chan_type[stock][1]
         current_zoushi_start_time = current_profile[5]
+        cur_chan_type = current_profile[0]
         sub_profile = self.g.stock_chan_type[stock][2]
+        sub_chan_type = sub_profile[0]
         sub_zoushi_start_time = sub_profile[5]
 
         stock_data = get_bars(stock, 
@@ -822,39 +825,23 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                            cur_latest_money,
                                                                            sub_past_money, 
                                                                            sub_latest_money))
-
-        if float_less_equal(cur_latest_money / cur_past_money, 0.809) and\
-            float_more_equal(sub_latest_money / sub_past_money, 1.191):
-            self.log.info("candiate stock {0} cur money active: {1} -> {2}, sub money active: {3} -> {4}".format(stock, 
-                                                                               cur_past_money, 
-                                                                               cur_latest_money,
-                                                                               sub_past_money, 
-                                                                               sub_latest_money))
-            return True
-        elif float_more_equal(cur_latest_money / cur_past_money, 1.809) and\
-            float_less_equal(sub_latest_money / sub_past_money, 0.809):
-            self.log.info("candiate stock {0} cur money active: {1} -> {2}, sub money active: {3} -> {4}".format(stock, 
-                                                                               cur_past_money, 
-                                                                               cur_latest_money,
-                                                                               sub_past_money, 
-                                                                               sub_latest_money))        
-            return True
-        if float_less_equal(cur_latest_money / cur_past_money, 0.809) and\
-            float_less_equal(sub_latest_money / sub_past_money, 0.809):
-            self.log.info("candiate stock {0} cur money active: {1} -> {2}, sub money active: {3} -> {4}".format(stock, 
-                                                                               cur_past_money, 
-                                                                               cur_latest_money,
-                                                                               sub_past_money, 
-                                                                               sub_latest_money))
-            return True
-        elif float_more_equal(cur_latest_money / cur_past_money, 1.191) and\
-            float_more_equal(sub_latest_money / sub_past_money, 1.191):
-            self.log.info("candiate stock {0} cur money active: {1} -> {2}, sub money active: {3} -> {4}".format(stock, 
-                                                                               cur_past_money, 
-                                                                               cur_latest_money,
-                                                                               sub_past_money, 
-                                                                               sub_latest_money))
-            return True
+        if (cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak) and\
+            (sub_chan_type == Chan_Type.I or sub_chan_type == Chan_Type.I_weak):
+            if float_less_equal(cur_latest_money / cur_past_money, 0.809) and\
+                float_more_equal(sub_latest_money / sub_past_money, 1.191):
+                return True
+            elif float_less_equal(cur_latest_money / cur_past_money, 0.809) and\
+                float_less_equal(sub_latest_money / sub_past_money, 0.809):
+                return True
+        
+        if (cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak) and\
+            sub_chan_type == Chan_Type.INVLID:
+            if float_more_equal(cur_latest_money / cur_past_money, 1.809) and\
+                float_less_equal(sub_latest_money / sub_past_money, 0.809):
+                return True
+            elif float_more_equal(cur_latest_money / cur_past_money, 1.191) and\
+                float_more_equal(sub_latest_money / sub_past_money, 1.191):
+                return True
         return False
     
     def check_type_III_sub(self, stock, context):
