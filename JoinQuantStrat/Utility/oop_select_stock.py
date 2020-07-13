@@ -824,7 +824,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                            sub_latest_money))
 
         if float_less_equal(cur_latest_money / cur_past_money, 0.809) and\
-            float_more_equal(sub_latest_money / sub_past_money, 1.809):
+            float_more_equal(sub_latest_money / sub_past_money, 1.191):
             self.log.info("candiate stock {0} cur money active: {1} -> {2}, sub money active: {3} -> {4}".format(stock, 
                                                                                cur_past_money, 
                                                                                cur_latest_money,
@@ -838,6 +838,14 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                                cur_latest_money,
                                                                                sub_past_money, 
                                                                                sub_latest_money))        
+            return True
+        if float_less_equal(cur_latest_money / cur_past_money, 0.89) and\
+            float_less_equal(sub_latest_money / sub_past_money, 0.89):
+            self.log.info("candiate stock {0} cur money active: {1} -> {2}, sub money active: {3} -> {4}".format(stock, 
+                                                                               cur_past_money, 
+                                                                               cur_latest_money,
+                                                                               sub_past_money, 
+                                                                               sub_latest_money))
             return True
         return False
     
