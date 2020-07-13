@@ -4,7 +4,6 @@ Created on 4 Dec 2017
 
 @author: MetalInvest
 '''
-from utility.chan_common_include import Chan_Type
 try:
     from kuanke.user_space_api import *
 except:
