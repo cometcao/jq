@@ -4,7 +4,6 @@ Created on 4 Dec 2017
 
 @author: MetalInvest
 '''
-from utility.chan_common_include import Chan_Type
 try:
     from kuanke.user_space_api import *
 except:
@@ -835,7 +834,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 return True
         
         if (cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak) and\
-            sub_chan_type == Chan_Type.INVLID:
+            sub_chan_type == Chan_Type.INVALID:
             if float_more_equal(cur_latest_money / cur_past_money, 1.809) and\
                 float_less_equal(sub_latest_money / sub_past_money, 0.809):
                 return True
