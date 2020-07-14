@@ -634,7 +634,7 @@ class ZhongShu(ZouShiLeiXing):
         core_gap = core_range[1] - core_range[0]
         amplitude_gap = amplitude_range[1] - amplitude_range[0]
         
-        if core_gap / amplitude_gap < 0.0618: # 0.0618
+        if core_gap / amplitude_gap < 0.191: # 0.0618
             return True
         return False
                 
