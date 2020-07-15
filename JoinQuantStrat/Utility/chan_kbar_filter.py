@@ -92,7 +92,7 @@ def filter_high_level_by_stock(stock,
                                    direction=direction, 
                                    df=df, 
                                    chan_types=chan_types)
-    if Chan_Type.I in chan_type_results:
+    if Chan_Type.I in chan_type_results or Chan_Type.I_weak in chan_type_results:
         result_stocks_I.add(stock)
     elif Chan_Type.III in chan_type_results:
         result_stocks_III.add(stock)
