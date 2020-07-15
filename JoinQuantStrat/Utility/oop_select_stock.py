@@ -826,10 +826,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                            sub_latest_money))
         if (cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak) and\
             (sub_chan_type == Chan_Type.I or sub_chan_type == Chan_Type.I_weak):
+#             if float_less_equal(cur_latest_money / cur_past_money, 0.809) and\
+#                 float_more_equal(sub_latest_money / sub_past_money, 1.191):
+#                 return True
             if float_less_equal(cur_latest_money / cur_past_money, 0.809) and\
-                float_more_equal(sub_latest_money / sub_past_money, 1.191):
-                return True
-            elif float_less_equal(cur_latest_money / cur_past_money, 0.809) and\
                 float_less_equal(sub_latest_money / sub_past_money, 0.809):
                 return True
         
