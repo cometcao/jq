@@ -829,16 +829,13 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #             if float_less_equal(cur_latest_money / cur_past_money, 0.809) and\
 #                 float_more_equal(sub_latest_money / sub_past_money, 1.191):
 #                 return True
-            if float_less_equal(cur_latest_money / cur_past_money, 0.809) and\
-                float_less_equal(sub_latest_money / sub_past_money, 0.809):
+            if float_less_equal(cur_latest_money / cur_past_money, 0.89) and\
+                float_less_equal(sub_latest_money / sub_past_money, 0.89):
                 return True
         
         if (cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak) and\
             sub_chan_type == Chan_Type.INVALID:
-            if float_more_equal(cur_latest_money / cur_past_money, 1.809) and\
-                float_less_equal(sub_latest_money / sub_past_money, 0.809):
-                return True
-            elif float_more_equal(cur_latest_money / cur_past_money, 1.191) and\
+            if float_more_equal(cur_latest_money / cur_past_money, 1.191) or\
                 float_more_equal(sub_latest_money / sub_past_money, 1.191):
                 return True
         return False
