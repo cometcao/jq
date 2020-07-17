@@ -819,24 +819,33 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #         cur_latest_money = sum(stock_data['money'][-48:])
 #         cur_past_money = sum(stock_data['money'][:48])
 
-        self.log.debug("candidate stock {0} cur: {1} -> {2}, sub: {3} -> {4}".format(stock, 
-                                                                           cur_past_money, 
-                                                                           cur_latest_money,
-                                                                           sub_past_money, 
-                                                                           sub_latest_money))
+        cur_ratio = cur_latest_money/cur_past_money
+        sub_ratio = sub_latest_money/sub_past_money
+
+        self.log.debug("candidate stock {0} cur: {1}, sub: {2}".format(stock, 
+                                                                    cur_ratio, 
+                                                                    sub_ratio))
         if (cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak) and\
             (sub_chan_type == Chan_Type.I or sub_chan_type == Chan_Type.I_weak):
-#             if float_less_equal(cur_latest_money / cur_past_money, 0.809) and\
-#                 float_more_equal(sub_latest_money / sub_past_money, 1.191):
-#                 return True
-            if float_less_equal(cur_latest_money / cur_past_money, 0.89) and\
-                float_less_equal(sub_latest_money / sub_past_money, 0.89):
+            if float_less_equal(cur_ratio, 0.89) and\
+                float_more_equal(sub_ratio, 1.191):
+                return True
+            if float_less_equal(cur_ratio, 0.89) and\
+                float_less_equal(sub_ratio, 0.89):
+                return True
+            if float_more_equal(cur_ratio, 1.191) and\
+                float_less_equal(sub_ratio, 0.809):
                 return True
         
         if (cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak) and\
             sub_chan_type == Chan_Type.INVALID:
-            if float_more_equal(cur_latest_money / cur_past_money, 1.191) or\
-                float_more_equal(sub_latest_money / sub_past_money, 1.191):
+            if float_more_equal(cur_ratio, 1.191) and\
+                float_less_equal(sub_ratio, 0.809):
+                return True
+            elif float_more_equal(cur_ratio, 1) and\
+                float_more_equal(sub_ratio, 1):
+                return True
+            elif float_less_equal(cur_ratio, 0.618):
                 return True
         return False
     
