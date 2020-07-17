@@ -819,7 +819,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #         cur_latest_money = sum(stock_data['money'][-48:])
 #         cur_past_money = sum(stock_data['money'][:48])
 
-        self.log.debug("candiate stock {0} cur: {1} -> {2}, sub: {3} -> {4}".format(stock, 
+        self.log.debug("candidate stock {0} cur: {1} -> {2}, sub: {3} -> {4}".format(stock, 
                                                                            cur_past_money, 
                                                                            cur_latest_money,
                                                                            sub_past_money, 
