@@ -795,7 +795,7 @@ class Short_Chan(Sell_stocks):
         sub_zoushi_start_time = sub_profile[5]
         effective_time = sub_profile[6]
         
-        if current_chan_t == Chan_Type.I:
+        if current_chan_t == Chan_Type.I or current_chan_t == Chan_Type.I_weak:
             # This is to make sure we have enough data for MACD and MA
             data_start_time = current_zoushi_start_time - pd.Timedelta(minutes=250)
             stock_data = get_price(stock,
@@ -958,7 +958,7 @@ class Short_Chan(Sell_stocks):
         sub_zoushi_start_time = sub_profile[5]
         effective_time = sub_profile[6]
         
-        if current_chan_t == Chan_Type.I:
+        if current_chan_t == Chan_Type.I or current_chan_t == Chan_Type.I_weak:
             data_start_time = current_zoushi_start_time - pd.Timedelta(minutes=200)
             stock_data = get_price(stock,
                                    start_date=data_start_time, 
@@ -1218,6 +1218,11 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
             cur_chan_p = current_profile[2]
             current_effective_time = current_profile[6]
             
+            sub_profile = self.g.stock_chan_type[stock][2]
+            sub_chan_t = sub_profile[0]
+            sub_chan_p = sub_profile[2]
+            sub_effective_time = sub_profile[6]
+            
             latest_data = get_price(stock,
                                    start_date=current_effective_time, 
                                    end_date=context.current_dt, 
@@ -1229,7 +1234,7 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
             latest_price = latest_data.iloc[-1].close
             # check current price of the stock ignore the ones not suitable
             # sort the stocks prioritize TYPE I stocks
-            if Chan_Type.I == cur_chan_t:
+            if Chan_Type.I == cur_chan_t or Chan_Type.I_weak == cur_chan_t:
                 
                 if self.force_price_check and (latest_high_price >= cur_chan_p or cur_chan_p/latest_price - 1 < self.expected_profit):
                     to_ignore.add(stock)

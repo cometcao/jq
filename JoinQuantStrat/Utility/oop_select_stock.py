@@ -827,26 +827,26 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                     sub_ratio))
         if (cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak) and\
             (sub_chan_type == Chan_Type.I or sub_chan_type == Chan_Type.I_weak):
-            if float_less_equal(cur_ratio, 0.89) and\
+            if float_less_equal(cur_ratio, 0.809) and\
                 float_more_equal(sub_ratio, 1.191):
                 return True
-            if float_less_equal(cur_ratio, 0.89) and\
-                float_less_equal(sub_ratio, 0.89):
-                return True
-            if float_more_equal(cur_ratio, 1.191) and\
+            if float_less_equal(cur_ratio, 0.809) and\
                 float_less_equal(sub_ratio, 0.809):
                 return True
+#             if float_more_equal(cur_ratio, 1.191) and\
+#                 float_less_equal(sub_ratio, 0.809):
+#                 return True
         
         if (cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak) and\
             sub_chan_type == Chan_Type.INVALID:
             if float_more_equal(cur_ratio, 1.191) and\
                 float_less_equal(sub_ratio, 0.809):
                 return True
-            elif float_more_equal(cur_ratio, 1) and\
-                float_more_equal(sub_ratio, 1):
+            elif (float_more_equal(cur_ratio, 1.191) and float_more_equal(sub_ratio, 1)) or\
+                (float_more_equal(cur_ratio, 1) and float_more_equal(sub_ratio, 1.191)):
                 return True
-            elif float_less_equal(cur_ratio, 0.618):
-                return True
+#             elif float_less_equal(cur_ratio, 0.618):
+#                 return True
         return False
     
     def check_type_III_sub(self, stock, context):
