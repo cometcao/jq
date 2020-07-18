@@ -908,7 +908,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
             stock_list = self.sort_by_sector_order(stock_list)
             for stock in stock_list:
-                if self.halt_check_when_enough and self.long_stock_num <= len(filter_stock_list):
+                if self.halt_check_when_enough and self.long_stock_num * 2 <= (len(filter_stock_list) + len(self.tentative_stage_I):
                     # we don't need to look further, we have enough candidates for long position + 1 backup
                     break
                 result, profile, _ = check_stock_full(stock,
