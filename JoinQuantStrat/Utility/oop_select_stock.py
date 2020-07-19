@@ -24,6 +24,7 @@ from chan_common_include import Chan_Type, float_less_equal, float_more_equal
 from biaoLiStatus import TopBotType
 from chan_kbar_filter import *
 from equilibrium import *
+from kBar_Chan import *
 
 
 '''=========================选股规则相关==================================='''
@@ -850,25 +851,28 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return False
     
     def check_bot_shape(self, stock, context):
-        check_num = 144
+        sub_profile = self.g.stock_chan_type[stock][2]
+        sub_zoushi_start_time = sub_profile[5]
         stock_data = get_bars(stock, 
-                            count=check_num, # 5d
-                            unit='5m',
-                            fields=['date','close', 'high', 'low', 'open'],
+                            count=200, # 5d
+                            unit='30m',
+                            fields=['high', 'low'],
                             include_now=True, 
                             end_dt=context.current_dt, 
                             fq_ref_date=context.current_dt.date(), 
-                            df=False)
+                            df=True)
+        stock_data = stock_data[stock_data>=sub_zoushi_start_time]
+        #resample
+        stock_data.set_index('date', inplace=True)
+        stock_data = stock_data.resample('240Min').agg({
+                                                     'high': 'max', 
+                                                     'low': 'min'
+                                                    })#
+        stock_data_np = stock_data.to_records()
         
-        min_loc = stock_data['low'].argmin()
-        first = stock_data[:48]
-        second = stock_data[48:96]
-        third = stock_data[96:]
+        kb_chan = KBarChan(stock_data_np, isdebug=False)
         
-        if min(second['low']) < min(first['low']) and min(second['low']) < min(third['low']) and\
-            max(second['high']) < max(first['high']) and max(second['high']) < max(third['high']):
-            return True
-        return False
+        return kb_chan.formed_tb(tb=TopBotType.bot)
     
     def check_type_III_sub(self, stock, context):
         if context.current_dt.hour != 14 or context.current_dt.minute != 30:
