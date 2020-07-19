@@ -768,7 +768,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 stocks_to_long.add(stock)
         
         if self.use_stage_II:
-            self.tentative_stage_II = stocks_to_long + self.tentative_stage_II
+            self.tentative_stage_II = stocks_to_long.union(self.tentative_stage_II)
             stocks_to_long = set()
             self.tentative_stage_I = self.tentative_stage_I.difference(self.tentative_stage_II)
         
