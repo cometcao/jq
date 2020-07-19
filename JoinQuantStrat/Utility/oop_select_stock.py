@@ -853,23 +853,37 @@ class Filter_Chan_Stocks(Filter_stock_list):
     def check_bot_shape(self, stock, context):
         sub_profile = self.g.stock_chan_type[stock][2]
         sub_zoushi_start_time = sub_profile[5]
-        stock_data = get_bars(stock, 
-                            count=2000, # 5d
-                            unit='1m',
-                            fields=['date', 'high', 'low'],
-                            include_now=True, 
-                            end_dt=context.current_dt, 
-                            fq_ref_date=context.current_dt.date(), 
-                            df=True)
-        #resample
-        stock_data.set_index('date', inplace=True)
-        working_data = stock_data[stock_data['date']>=sub_zoushi_start_time]
-        if working_data.shape[0] < 1200:
-            working_data = stock_data.iloc[:1200, ]
-        working_data = working_data.resample('240Min').agg({
-                                                     'high': 'max', 
-                                                     'low': 'min'
-                                                    })#
+        
+        stock_data = get_price(security=stock, 
+                      end_date=context.current_dt, 
+                      count=10, 
+                      frequency='240m', 
+                      skip_paused=True, 
+                      panel=False, 
+                      fields=['high', 'low', 'close'])
+        
+        stock_data['date'] = stock_data.index
+#         stock_data = get_bars(stock, 
+#                             count=20, # 5d
+#                             unit='120m',
+#                             fields=['date', 'high', 'low', 'close'],
+#                             include_now=True, 
+#                             end_dt=context.current_dt, 
+#                             fq_ref_date=context.current_dt.date(), 
+#                             df=True)
+#         #resample
+#         stock_data.set_index('date', inplace=True)
+#         working_data = stock_data.loc[sub_zoushi_start_time:]
+#         if working_data.shape[0] < 10:
+#             working_data = stock_data.iloc[-10:, ]
+#         working_data = working_data.resample('240Min').agg({
+#                                                      'high': 'max', 
+#                                                      'low': 'min',
+#                                                      'close': 'last'
+#                                                     })
+#         working_data=working_data[working_data['high'].notnull()]
+
+        working_data = stock_data.loc[sub_zoushi_start_time:]
         working_data_np = working_data.to_records()
                 
         kb_chan = KBarChan(working_data_np, isdebug=False)

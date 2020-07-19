@@ -871,8 +871,8 @@ class KBarChan(object):
     def formed_tb(self, tb = TopBotType.bot):
         self.standardize()
         self.markTopBot()
-        found_idx = np.where(self.kDataFrame_standardized['tb']==tb)[0]
-        if found_idx and found_idx[0] != self.kDataFrame_standardized.size-1:
+        found_idx = np.where(self.kDataFrame_standardized['tb']==tb.value)[0]
+        if len(found_idx) > 0 and found_idx[-1] != self.kDataFrame_standardized.size-1:
             return True
         return False
         
