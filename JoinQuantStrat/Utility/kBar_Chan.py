@@ -868,6 +868,15 @@ class KBarChan(object):
         self.getPureBi()
         return self.kDataFrame_marked
     
+    def formed_tb(self, tb = TopBotType.bot):
+        self.standardize()
+        self.markTopBot()
+        found_idx = np.where(self.kDataFrame_standardized['tb']==tb)[0]
+        if found_idx and found_idx[0] != self.kDataFrame_standardized.size-1:
+            return True
+        return False
+        
+    
     def getPureBi(self):
         # only use the price relavent
         self.kDataFrame_marked = append_fields(self.kDataFrame_marked,

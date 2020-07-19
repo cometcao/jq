@@ -854,23 +854,25 @@ class Filter_Chan_Stocks(Filter_stock_list):
         sub_profile = self.g.stock_chan_type[stock][2]
         sub_zoushi_start_time = sub_profile[5]
         stock_data = get_bars(stock, 
-                            count=200, # 5d
-                            unit='30m',
-                            fields=['high', 'low'],
+                            count=2000, # 5d
+                            unit='1m',
+                            fields=['date', 'high', 'low'],
                             include_now=True, 
                             end_dt=context.current_dt, 
                             fq_ref_date=context.current_dt.date(), 
                             df=True)
-        stock_data = stock_data[stock_data>=sub_zoushi_start_time]
         #resample
         stock_data.set_index('date', inplace=True)
-        stock_data = stock_data.resample('240Min').agg({
+        working_data = stock_data[stock_data['date']>=sub_zoushi_start_time]
+        if working_data.shape[0] < 1200:
+            working_data = stock_data.iloc[:1200, ]
+        working_data = working_data.resample('240Min').agg({
                                                      'high': 'max', 
                                                      'low': 'min'
                                                     })#
-        stock_data_np = stock_data.to_records()
-        
-        kb_chan = KBarChan(stock_data_np, isdebug=False)
+        working_data_np = working_data.to_records()
+                
+        kb_chan = KBarChan(working_data_np, isdebug=False)
         
         return kb_chan.formed_tb(tb=TopBotType.bot)
     
