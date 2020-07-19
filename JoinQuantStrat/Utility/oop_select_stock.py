@@ -775,7 +775,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                     
             for stock in self.tentative_stage_II:
-                if self.check_type_III_sub(stock, context):
+                if self.check_bot_shape(stock, context):
                     stocks_to_long.add(stock)
                     
             self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_long)
@@ -847,6 +847,27 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 return True
 #             elif float_less_equal(cur_ratio, 0.618):
 #                 return True
+        return False
+    
+    def check_bot_shape(self, stock, context):
+        check_num = 144
+        stock_data = get_bars(stock, 
+                            count=check_num, # 5d
+                            unit='5m',
+                            fields=['date','close', 'high', 'low', 'open'],
+                            include_now=True, 
+                            end_dt=context.current_dt, 
+                            fq_ref_date=context.current_dt.date(), 
+                            df=False)
+        
+        min_loc = stock_data['low'].argmin()
+        first = stock_data[:48]
+        second = stock_data[48:96]
+        third = stock_data[96:]
+        
+        if min(second['low']) < min(first['low']) and min(second['low']) < min(third['low']) and\
+            max(second['high']) < max(first['high']) and max(second['high']) < max(third['high']):
+            return True
         return False
     
     def check_type_III_sub(self, stock, context):
