@@ -777,9 +777,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                     
             for stock in self.tentative_stage_II:
-                if context.current_dt.hour == self.stage_II_timing[0] and\
-                    context.current_dt.minute == self.stage_II_timing[1] and\
-                    self.check_bot_shape(stock, context):
+                if self.check_bot_shape(stock, context) or\
+                    self.check_structure_sub(stock, context):
                     stocks_to_long.add(stock)
                     
             self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_long)
@@ -854,8 +853,14 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return False
     
     def check_bot_shape(self, stock, context):
-        cur_profile = self.g.stock_chan_type[stock][1]
-        cur_zoushi_start_time = cur_profile[5]
+        
+        if self.stage_II_timing and\
+            (context.current_dt.hour != self.stage_II_timing[0] or\
+            context.current_dt.minute != self.stage_II_timing[1]):
+            return False
+        
+        sub_profile = self.g.stock_chan_type[stock][2]
+        sub_zoushi_start_time = sub_profile[5]
         
         stock_data = get_price(security=stock, 
                       end_date=context.current_dt, 
@@ -886,55 +891,60 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #                                                     })
 #         working_data=working_data[working_data['high'].notnull()]
 
-        working_data = stock_data.loc[cur_zoushi_start_time:]
+        working_data = stock_data.loc[sub_zoushi_start_time:]
         working_data_np = working_data.to_records()
         kb_chan = KBarChan(working_data_np, isdebug=False)
         
         return kb_chan.formed_tb(tb=TopBotType.bot)
     
-    def check_type_III_sub(self, stock, context):
-        if context.current_dt.hour != 14 or context.current_dt.minute != 30:
-            return False
-#         exhausted, _, _, _ = check_stock_sub(stock, 
-#                                         end_time=context.current_dt,
-#                                         periods=[self.periods[1]], 
-#                                         count=1000, 
-#                                         direction=TopBotType.top2bot, 
-#                                         chan_types=[Chan_Type.III, Chan_Type.III_weak, Chan_Type.III_strong], 
-#                                         isdebug=self.isdebug, 
-#                                         is_anal=False, 
-#                                         split_time=None,
-#                                         check_bi=False,
-#                                         force_zhongshu=False,
-#                                         force_bi_zhongshu=False,
-#                                         check_full_zoushi=False
-#                                         )
-#         return exhausted
-        check_num = 10
-        stock_data = get_bars(stock, 
-                            count=check_num, # 5d
-                            unit='1d',
-                            fields=['date','close', 'high', 'low', 'open'],
-                            include_now=True, 
-                            end_dt=context.current_dt, 
-                            fq_ref_date=context.current_dt.date(), 
-                            df=False)
-        
-        min_loc = stock_data['low'].argmin()
-        if min_loc < check_num-2 and min_loc > 0:
-            pre = stock_data[min_loc-1]
-            first = stock_data[min_loc]
-            second = stock_data[min_loc+1]
-            last = stock_data[-1]
-            
-            pre_oc_high = max(pre['open'], pre['close'])
-            first_oc_high = max(first['open'], first['close'])
-            second_oc_high = max(second['open'], second['close'])
-            min_bar = min(pre_oc_high, first_oc_high, second_oc_high)
-            
-            if last['close'] > min_bar: 
-                return True
-        return False
+    def check_structure_sub(self, stock, context):
+        exhausted, _, _, _ = check_stock_sub(stock, 
+                                        end_time=context.current_dt,
+                                        periods=[self.periods[1]], 
+                                        count=self.num_of_data, 
+                                        direction=TopBotType.top2bot, 
+                                        chan_types=[Chan_Type.III, 
+                                                    Chan_Type.III_weak, 
+                                                    Chan_Type.III_strong, 
+                                                    Chan_Type.I, 
+                                                    Chan_Type.I_weak,
+                                                    Chan_Type.INVALID], 
+                                        isdebug=self.isdebug, 
+                                        is_anal=False, 
+                                        split_time=None,
+                                        check_bi=False,
+                                        force_zhongshu=True,
+                                        force_bi_zhongshu=False,
+                                        check_full_zoushi=False
+                                        )
+        return exhausted
+
+
+#         check_num = 10
+#         stock_data = get_bars(stock, 
+#                             count=check_num, # 5d
+#                             unit='1d',
+#                             fields=['date','close', 'high', 'low', 'open'],
+#                             include_now=True, 
+#                             end_dt=context.current_dt, 
+#                             fq_ref_date=context.current_dt.date(), 
+#                             df=False)
+#         
+#         min_loc = stock_data['low'].argmin()
+#         if min_loc < check_num-2 and min_loc > 0:
+#             pre = stock_data[min_loc-1]
+#             first = stock_data[min_loc]
+#             second = stock_data[min_loc+1]
+#             last = stock_data[-1]
+#             
+#             pre_oc_high = max(pre['open'], pre['close'])
+#             first_oc_high = max(first['open'], first['close'])
+#             second_oc_high = max(second['open'], second['close'])
+#             min_bar = min(pre_oc_high, first_oc_high, second_oc_high)
+#             
+#             if last['close'] > min_bar: 
+#                 return True
+#         return False
         
     
     def filter(self, context, data, stock_list):
