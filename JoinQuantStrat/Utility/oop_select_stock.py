@@ -712,6 +712,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.use_sub_split = params.get('sub_split', True)
         self.ignore_xd = params.get('ignore_xd', False)
         self.use_stage_II = params.get('use_stage_II', False)
+        self.stage_II_timing = params.get('stage_II_timing', [14, 50])
         
         self.force_chan_type = params.get('force_chan_type', [
                                                               [Chan_Type.I, self.curent_chan_type[0], Chan_Type.I],
@@ -776,7 +777,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                     
             for stock in self.tentative_stage_II:
-                if self.check_bot_shape(stock, context):
+                if context.current_dt.hour == self.stage_II_timing[0] and\
+                    context.current_dt.minute == self.stage_II_timing[1] and\
+                    self.check_bot_shape(stock, context):
                     stocks_to_long.add(stock)
                     
             self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_long)
@@ -998,6 +1001,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             filter_stock_list = [stock for stock in filter_stock_list if stock not in to_ignore]
             filter_stock_list = [stock for stock in filter_stock_list if stock not in self.tentative_stage_I and stock not in self.tentative_stage_II]
         
+        # other stages also follows time constrains
         # deal with all tentative stocks
         filter_stock_list = list(self.check_tentative_stocks(context)) + filter_stock_list
         
