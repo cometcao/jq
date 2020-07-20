@@ -851,8 +851,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return False
     
     def check_bot_shape(self, stock, context):
-        sub_profile = self.g.stock_chan_type[stock][2]
-        sub_zoushi_start_time = sub_profile[5]
+        cur_profile = self.g.stock_chan_type[stock][1]
+        cur_zoushi_start_time = cur_profile[5]
         
         stock_data = get_price(security=stock, 
                       end_date=context.current_dt, 
@@ -883,9 +883,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #                                                     })
 #         working_data=working_data[working_data['high'].notnull()]
 
-        working_data = stock_data.loc[sub_zoushi_start_time:]
+        working_data = stock_data.loc[cur_zoushi_start_time:]
         working_data_np = working_data.to_records()
-                
         kb_chan = KBarChan(working_data_np, isdebug=False)
         
         return kb_chan.formed_tb(tb=TopBotType.bot)
