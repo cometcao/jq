@@ -935,7 +935,7 @@ class Equilibrium():
         c_range = zslx_c.get_amplitude_region_original()
         b_range = central_B.get_core_region() # use core region
         
-        if zslx_c.direction != direction:
+        if check_tb_structure and zslx_c.direction != direction:
             if self.isdebug:
                 print("Invalid last XD direction: {0}".format(zslx_c.direction))
             return False
