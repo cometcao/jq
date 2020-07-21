@@ -716,14 +716,14 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.long_candidate_num = params.get('long_candiate_num', self.long_stock_num)
         
         self.force_chan_type = params.get('force_chan_type', [
-                                                              [Chan_Type.I, self.curent_chan_type[0], Chan_Type.I],
-                                                              [Chan_Type.I_weak, self.curent_chan_type[0], Chan_Type.I],
-                                                              [Chan_Type.INVALID, self.curent_chan_type[0], Chan_Type.I]
+                                                              [Chan_Type.I, self.curent_chan_type[0]],
+                                                              [Chan_Type.I_weak, self.curent_chan_type[0]],
+                                                              [Chan_Type.INVALID, self.curent_chan_type[0]]
                                                               ])
         self.tentative_chan_type = params.get('tentative_chan_type', [
-                                    [Chan_Type.I, self.curent_chan_type[0], Chan_Type.I],
-                                    [Chan_Type.I_weak, self.curent_chan_type[0], Chan_Type.I],
-                                    [Chan_Type.INVALID, self.curent_chan_type[0], Chan_Type.I]
+                                    [Chan_Type.I, self.curent_chan_type[0]],
+                                    [Chan_Type.I_weak, self.curent_chan_type[0]],
+                                    [Chan_Type.INVALID, self.curent_chan_type[0]]
                                     ])
         self.tentative_stage_I = set() # list to hold stocks waiting to be operated
         self.tentative_stage_II = set()
@@ -769,7 +769,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         # check volume/money
         for stock in self.tentative_stage_I:
-            if self.check_vol_money(stock, context):
+            if self.check_internal_vol_money(stock, context):
                 stocks_to_long.add(stock)
         
         if self.use_stage_II:
@@ -781,14 +781,43 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                     
             for stock in self.tentative_stage_II:
-                if self.check_bot_shape(stock, context) or\
-                    self.check_structure_sub(stock, context):
+                if self.check_structure_sub(stock, context):
+#                     self.check_bot_shape(stock, context):
                     stocks_to_long.add(stock)
                     
             self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_long)
                 
         return stocks_to_long
+    
+    def check_internal_vol_money(self, stock, context):
+        current_profile = self.g.stock_chan_type[stock][1]
+        current_zoushi_start_time = current_profile[5]
+        cur_chan_type = current_profile[0]
+
+        stock_data = get_bars(stock, 
+                            count=2000, # 5d
+                            unit=self.periods[0],
+                            fields=['date','money'],
+                            include_now=True, 
+                            end_dt=context.current_dt, 
+                            fq_ref_date=context.current_dt.date(), 
+                            df=False)
         
+#         if not stock_changed_record[stock]: # Zhongshu unchanged
+        cutting_loc = np.where(stock_data['date']>=current_zoushi_start_time)[0][0]
+        cutting_offset = stock_data.size - cutting_loc
+
+        cur_latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
+        cur_past_money = sum(stock_data['money'][cutting_loc:][:-int(cutting_offset/2)])
+# 
+        cur_ratio = cur_latest_money/cur_past_money
+
+        self.log.debug("candidate stock {0} cur: {1}".format(stock, cur_ratio))
+        if cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak:
+            if float_less_equal(cur_ratio, 0.809):
+                return True
+        return False
+    
     def check_vol_money(self, stock, context):
         current_profile = self.g.stock_chan_type[stock][1]
         current_zoushi_start_time = current_profile[5]
@@ -820,11 +849,6 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #         # current zslx money split by mid term
         sub_latest_money = sum(stock_data['money'][sub_cutting_loc:])
         sub_past_money = sum(stock_data['money'][:sub_cutting_loc][-sub_cuttinng_offset:])
-        
-#         cur_latest_money = sum(stock_data['money'][-120:])
-#         cur_past_money = sum(stock_data['money'][-240:][:120])
-#         cur_latest_money = sum(stock_data['money'][-48:])
-#         cur_past_money = sum(stock_data['money'][:48])
 
         cur_ratio = cur_latest_money/cur_past_money
         sub_ratio = sub_latest_money/sub_past_money
@@ -907,12 +931,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                         periods=[self.periods[1]], 
                                         count=self.num_of_data, 
                                         direction=TopBotType.top2bot, 
-                                        chan_types=[Chan_Type.III, 
-                                                    Chan_Type.III_weak, 
-                                                    Chan_Type.III_strong, 
-                                                    Chan_Type.I, 
-                                                    Chan_Type.I_weak,
-                                                    Chan_Type.INVALID], 
+                                        chan_types=self.sub_chan_type, 
                                         isdebug=self.isdebug, 
                                         is_anal=False, 
                                         split_time=None,
@@ -968,25 +987,37 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 if self.halt_check_when_enough and (self.long_candidate_num <= (len(filter_stock_list) + len(self.tentative_stage_I) + len(self.tentative_stage_II))):
                     # we don't need to look further, we have enough candidates for long position + 1 backup
                     break
-                result, profile, _ = check_stock_full(stock,
-                                                     end_time=context.current_dt,
-                                                     periods=self.periods,
-                                                     count=self.num_of_data,
-                                                     direction=TopBotType.top2bot, 
-                                                     current_chan_type=self.curent_chan_type,
-                                                     sub_chan_type=self.sub_chan_type,
-                                                     isdebug=self.isdebug,
-                                                     is_description=self.isDescription,
-                                                     sub_force_zhongshu=self.sub_force_zhongshu, 
-                                                     sub_check_bi=self.bi_level_precision,
-                                                     use_sub_split=self.use_sub_split,
-                                                     ignore_cur_xd=self.ignore_xd,
-                                                     ignore_sub_xd=self.bi_level_precision)
+                
+                result, xd_result, c_profile = check_chan_by_type_exhaustion(stock,
+                                                      end_time=context.current_dt,
+                                                      periods=[self.periods[0]],
+                                                      count=self.num_of_data,
+                                                      direction=TopBotType.top2bot,
+                                                      chan_type=self.curent_chan_type,
+                                                      isdebug=self.isdebug,
+                                                      is_description =self.isDescription,
+                                                      is_anal=False,
+                                                      check_structure=True,
+                                                      check_full_zoushi=False,
+                                                      slope_only=False) # synch with selection
+#                 result, profile, _ = check_stock_full(stock,
+#                                                      end_time=context.current_dt,
+#                                                      periods=self.periods,
+#                                                      count=self.num_of_data,
+#                                                      direction=TopBotType.top2bot, 
+#                                                      current_chan_type=self.curent_chan_type,
+#                                                      sub_chan_type=self.sub_chan_type,
+#                                                      isdebug=self.isdebug,
+#                                                      is_description=self.isDescription,
+#                                                      sub_force_zhongshu=self.sub_force_zhongshu, 
+#                                                      sub_check_bi=self.bi_level_precision,
+#                                                      use_sub_split=self.use_sub_split,
+#                                                      ignore_cur_xd=self.ignore_xd,
+#                                                      ignore_sub_xd=self.bi_level_precision)
                 
                 if result:
                     filter_stock_list.append(stock)
-                    self.g.stock_chan_type[stock] = self.g.stock_chan_type[stock] + profile
-            
+                    self.g.stock_chan_type[stock] = self.g.stock_chan_type[stock] + c_profile
             
             self.log.info("Qualified stocks: {0}".format(filter_stock_list))
             to_ignore = set()
@@ -995,13 +1026,11 @@ class Filter_Chan_Stocks(Filter_stock_list):
             for stock in filter_stock_list:
                 top_profile = self.g.stock_chan_type[stock][0]
                 current_profile = self.g.stock_chan_type[stock][1]
-                sub_profile = self.g.stock_chan_type[stock][2]
                 
                 top_chan_t = top_profile[0]
                 cur_chan_t = current_profile[0]
-                sub_chan_t = sub_profile[0]
                 
-                chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
+                chan_type_list = [top_chan_t, cur_chan_t]
                 if self.force_chan_type and (chan_type_list not in self.force_chan_type):
     #                 self.log.debug("{0} chan type: {1} ignored".format(stock, chan_type_list))
                     to_ignore.add(stock)
