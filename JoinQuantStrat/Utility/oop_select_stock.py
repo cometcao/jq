@@ -933,6 +933,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                         direction=TopBotType.top2bot, 
                                         chan_types=self.sub_chan_type, 
                                         isdebug=self.isdebug, 
+                                        is_description=self.isDescription,
                                         is_anal=False, 
                                         split_time=None,
                                         check_bi=True,
