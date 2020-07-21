@@ -740,13 +740,13 @@ class Filter_Chan_Stocks(Filter_stock_list):
             result, xd_result, c_profile = check_chan_by_type_exhaustion(stock,
                                                                   end_time=context.current_dt,
                                                                   periods=[self.periods[0]],
-                                                                  count=4800,
+                                                                  count=self.num_of_data,
                                                                   direction=TopBotType.top2bot,
                                                                   chan_type=self.curent_chan_type,
                                                                   isdebug=False,
                                                                   is_description =False,
                                                                   is_anal=False,
-                                                                  check_structure=True,
+                                                                  check_structure=False, # no need to check
                                                                   check_full_zoushi=False,
                                                                   slope_only=False) # synch with selection
 #             if not result:
@@ -926,7 +926,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return kb_chan.formed_tb(tb=TopBotType.bot)
     
     def check_structure_sub(self, stock, context):
-        exhausted, _, _, _ = check_stock_sub(stock, 
+        exhausted, _, profile, _ = check_stock_sub(stock, 
                                         end_time=context.current_dt,
                                         periods=[self.periods[1]], 
                                         count=self.num_of_data, 
@@ -940,6 +940,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                         force_bi_zhongshu=True,
                                         check_full_zoushi=False
                                         )
+        self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0], self.g.stock_chan_type[stock][1]] + profile
         return exhausted
 
 
