@@ -713,6 +713,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.ignore_xd = params.get('ignore_xd', False)
         self.use_stage_II = params.get('use_stage_II', False)
         self.stage_II_timing = params.get('stage_II_timing', [14, 50])
+        self.long_candidate_num = params.get('long_candiate_num', self.long_stock_num)
         
         self.force_chan_type = params.get('force_chan_type', [
                                                               [Chan_Type.I, self.curent_chan_type[0], Chan_Type.I],
@@ -748,19 +749,22 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                   check_structure=True,
                                                                   check_full_zoushi=False,
                                                                   slope_only=False) # synch with selection
-            if not result:
-                self.log.info("Bei Chi long point broken for stock: {0}".format(stock))
+#             if not result:
+#                 self.log.info("Bei Chi long point broken for stock: {0}".format(stock))
+#                 stocks_to_remove.add(stock)
+#             elif not sanity_check(stock, c_profile, context.current_dt, self.periods[0], TopBotType.top2bot):
+#                 self.log.info("Sanity check failed for stock: {0}".format(stock))
+#                 stocks_to_remove.add(stock)
+#             else:
+#                 self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] +\
+#                                                 c_profile +\
+#                                                 [self.g.stock_chan_type[stock][2]]
+
+            old_current_profile = self.g.stock_chan_type[stock][1]
+            if old_current_profile[2] != c_profile[0][2]:
+                self.log.debug("stock {0}, zhongshu changed: {1}".format(stock, old_current_profile[2] != c_profile[0][2]))
                 stocks_to_remove.add(stock)
-            elif not sanity_check(stock, c_profile, context.current_dt, self.periods[0], TopBotType.top2bot):
-                self.log.info("Sanity check failed for stock: {0}".format(stock))
-                stocks_to_remove.add(stock)
-            else:
-#                 old_current_profile = self.g.stock_chan_type[stock][1]
-#                 stock_changed_record[stock] = old_current_profile[2] != c_profile[0][2]
-#                 self.log.debug("stock {0}, zhongshu changed: {1}".format(stock, old_current_profile[2] != c_profile[0][2]))
-                self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] +\
-                                                c_profile +\
-                                                [self.g.stock_chan_type[stock][2]]
+
         self.tentative_stage_I = self.tentative_stage_I.difference(stocks_to_remove)
         
         # check volume/money
@@ -912,9 +916,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                         isdebug=self.isdebug, 
                                         is_anal=False, 
                                         split_time=None,
-                                        check_bi=False,
+                                        check_bi=True,
                                         force_zhongshu=True,
-                                        force_bi_zhongshu=False,
+                                        force_bi_zhongshu=True,
                                         check_full_zoushi=False
                                         )
         return exhausted
@@ -961,7 +965,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
             stock_list = self.sort_by_sector_order(stock_list)
             for stock in stock_list:
-                if self.halt_check_when_enough and (self.long_stock_num * 2 <= (len(filter_stock_list) + len(self.tentative_stage_I) + len(self.tentative_stage_II))):
+                if self.halt_check_when_enough and (self.long_candidate_num <= (len(filter_stock_list) + len(self.tentative_stage_I) + len(self.tentative_stage_II))):
                     # we don't need to look further, we have enough candidates for long position + 1 backup
                     break
                 result, profile, _ = check_stock_full(stock,
