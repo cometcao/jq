@@ -766,7 +766,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                     stocks_to_long.add(stock)
         
         self.tentative_stage_I = self.tentative_stage_I.difference(stocks_to_remove)
-        self.g.info("stocks removed from stage I: {0}".format(stocks_to_remove))
+        self.log.info("stocks removed from stage I: {0}".format(stocks_to_remove))
         
         if not self.use_stage_II:
             self.tentative_stage_I = self.tentative_stage_I.difference(stocks_to_long)
