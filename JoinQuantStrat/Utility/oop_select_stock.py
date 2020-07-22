@@ -803,14 +803,19 @@ class Filter_Chan_Stocks(Filter_stock_list):
         cutting_loc = np.where(stock_data['date']>=current_zoushi_start_time)[0][0]
         cutting_offset = stock_data.size - cutting_loc
 
-        cur_latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
-        cur_past_money = sum(stock_data['money'][cutting_loc:][:-int(cutting_offset/2)])
+        cur_internal_latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
+        cur_internal_past_money = sum(stock_data['money'][cutting_loc:][:-int(cutting_offset/2)])
 # 
-        cur_ratio = cur_latest_money/cur_past_money
+        cur_internal_ratio = cur_internal_latest_money / cur_internal_past_money
+        
+        cur_latest_money = sum(stock_data['money'][cutting_loc:])
+        cur_past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
+        
+        cur_ratio = cur_latest_money / cur_past_money
 
         if cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak:
-            if float_less_equal(cur_ratio, 0.89):
-                self.log.debug("candidate stock {0} cur: {1}".format(stock, cur_ratio))
+            if float_less_equal(cur_internal_ratio, 0.809) or float_less_equal(cur_ratio, 0.809):
+                self.log.debug("candidate stock {0} cur: {1} cur_intern: {2}".format(stock, cur_ratio, cur_internal_ratio))
                 return True
         return False
     
@@ -883,8 +888,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             context.current_dt.minute != self.stage_II_timing[1]):
             return False
         
-        sub_profile = self.g.stock_chan_type[stock][2]
-        sub_zoushi_start_time = sub_profile[5]
+#         sub_profile = self.g.stock_chan_type[stock][2]
+#         sub_zoushi_start_time = sub_profile[5]
         
         stock_data = get_price(security=stock, 
                       end_date=context.current_dt, 
@@ -941,7 +946,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         old_current_profile = self.g.stock_chan_type[stock][1]
         
-        if old_current_profile[2] != profile[0][2]:
+        if (type(profile[0][2]) is list and old_current_profile[2] != profile[0][2][0]) or\
+            (type(profile[0][2]) is not list  and old_current_profile[2] != profile[0][2]):
             self.log.debug("stock {0}, zhongshu changed: {1}".format(stock, old_current_profile[2] != profile[0][2]))
             to_be_removed = True
         
