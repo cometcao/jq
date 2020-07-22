@@ -809,7 +809,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         cur_ratio = cur_latest_money/cur_past_money
 
         if cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak:
-            if float_less_equal(cur_ratio, 0.809):
+            if float_less_equal(cur_ratio, 0.89):
                 self.log.debug("candidate stock {0} cur: {1}".format(stock, cur_ratio))
                 return True
         return False
