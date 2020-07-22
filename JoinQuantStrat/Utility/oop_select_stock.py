@@ -747,23 +747,22 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.tentative_stage_I = self.tentative_stage_I.difference(set(context.portfolio.positions.keys()))
         
         for stock in self.tentative_stage_I:
-            result, to_remove = self.check_structure_sub(stock, context):
+            result, to_remove = self.check_structure_sub(stock, context)
             if to_remove:
                 stocks_to_remove.add(stock)
             else:
-                top_profile = self.g.stock_chan_type[stock][0]
-                current_profile = self.g.stock_chan_type[stock][1]
-                sub_profile = self.g.stock_chan_type[stock][2]
-                 
-                top_chan_t = top_profile[0]
-                cur_chan_t = current_profile[0]
-                sub_chan_t = sub_profile[0]
-                 
-                chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
-                if self.force_chan_type and (chan_type_list not in self.force_chan_type):
-                    continue
-                 
                 if result:
+                    top_profile = self.g.stock_chan_type[stock][0]
+                    current_profile = self.g.stock_chan_type[stock][1]
+                    sub_profile = self.g.stock_chan_type[stock][2]
+                     
+                    top_chan_t = top_profile[0]
+                    cur_chan_t = current_profile[0]
+                    sub_chan_t = sub_profile[0]
+                     
+                    chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
+                    if self.force_chan_type and (chan_type_list not in self.force_chan_type):
+                        continue
                     stocks_to_long.add(stock)
                 
         self.tentative_stage_I = self.tentative_stage_I.difference(stocks_to_remove)
@@ -787,6 +786,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return stocks_to_long
     
     def check_internal_vol_money(self, stock, context):
+
         current_profile = self.g.stock_chan_type[stock][1]
         current_zoushi_start_time = current_profile[5]
         cur_chan_type = current_profile[0]
@@ -888,7 +888,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         stock_data = get_price(security=stock, 
                       end_date=context.current_dt, 
-                      count=10, 
+                      count=5, 
                       frequency='240m', 
                       skip_paused=True, 
                       panel=False, 
@@ -915,8 +915,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #                                                     })
 #         working_data=working_data[working_data['high'].notnull()]
 
-        working_data = stock_data.loc[sub_zoushi_start_time:]
-        working_data_np = working_data.to_records()
+#         working_data = stock_data.loc[sub_zoushi_start_time:]
+        working_data_np = stock_data.to_records()
         kb_chan = KBarChan(working_data_np, isdebug=False)
         
         return kb_chan.formed_tb(tb=TopBotType.bot)
@@ -942,10 +942,11 @@ class Filter_Chan_Stocks(Filter_stock_list):
         old_current_profile = self.g.stock_chan_type[stock][1]
         
         if old_current_profile[2] != profile[0][2]:
-            self.log.debug("stock {0}, zhongshu changed: {1}".format(stock, old_current_profile[2] != c_profile[0][2]))
+            self.log.debug("stock {0}, zhongshu changed: {1}".format(stock, old_current_profile[2] != profile[0][2]))
             to_be_removed = True
         
-        self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile
+        if result:
+            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile
 
         return result, to_be_removed
 
@@ -995,7 +996,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         # sort by sectors again
         filter_stock_list = self.sort_by_sector_order(filter_stock_list)
                 
-        self.log.info("Stocks ready: {0}, tentative: {1}, {2}".format(filter_stock_list, 
+        self.log.info("Stocks ready: {0},\n  tentative I: {1},\n  tentative II: {2}".format(filter_stock_list, 
                                                                       self.tentative_stage_I,
                                                                       self.tentative_stage_II))
         return filter_stock_list
