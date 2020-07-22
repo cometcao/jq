@@ -764,8 +764,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
                     if self.force_chan_type and (chan_type_list not in self.force_chan_type):
                         continue
                     stocks_to_long.add(stock)
-                
+        
         self.tentative_stage_I = self.tentative_stage_I.difference(stocks_to_remove)
+        self.g.info("stocks removed from stage I: {0}".format(stocks_to_remove))
         
         if not self.use_stage_II:
             self.tentative_stage_I = self.tentative_stage_I.difference(stocks_to_long)
@@ -815,7 +816,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 
         if cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak:
             if float_less_equal(cur_internal_ratio, 0.809) or float_less_equal(cur_ratio, 0.809):
-                self.log.debug("candidate stock {0} cur: {1} cur_intern: {2}".format(stock, cur_ratio, cur_internal_ratio))
+#                 self.log.debug("candidate stock {0} cur: {1} cur_intern: {2}".format(stock, cur_ratio, cur_internal_ratio))
                 return True
         return False
     
@@ -893,7 +894,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         stock_data = get_price(security=stock, 
                       end_date=context.current_dt, 
-                      count=5, 
+                      count=10, 
                       frequency='240m', 
                       skip_paused=True, 
                       panel=False, 
@@ -948,7 +949,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         if (type(profile[0][2]) is list and old_current_profile[2] != profile[0][2][0]) or\
             (type(profile[0][2]) is not list  and old_current_profile[2] != profile[0][2]):
-            self.log.debug("stock {0}, zhongshu changed: {1}".format(stock, old_current_profile[2] != profile[0][2]))
+#             self.log.debug("stock {0}, zhongshu changed: {1}".format(stock, old_current_profile[2] != profile[0][2]))
             to_be_removed = True
         
         if result:
