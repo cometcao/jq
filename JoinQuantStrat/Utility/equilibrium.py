@@ -849,8 +849,12 @@ class Equilibrium():
         slope
         force
         '''
+        last_zoushi = self.analytic_result[-1]
+        last_all_nodes = last_zoushi.get_all_nodes()
+        last_zoushi_time = last_all_nodes[-2].time if last_zoushi.isZhongShu else last_all_nodes[0].time
+            
         if not self.check_zoushi_structure(self.analytic_result, at_bi_level, enable_composite):
-            return False, False, None, None, 0, 0
+            return False, False, last_zoushi_time, None, 0, 0
         
         # We shouldn't have III at BI level, only PB or BC
         if current_chan_type == Chan_Type.III and not at_bi_level:
@@ -859,7 +863,6 @@ class Equilibrium():
 #                     print("type III mixed with type I position we ignore")
 #                 return False, False, None, None, 0, 0
             
-            last_zoushi = self.analytic_result[-1]
             if type(last_zoushi) is ZouShiLeiXing:
                 split_direction, split_nodes = last_zoushi.get_reverse_split_zslx()
                 pure_zslx = ZouShiLeiXing(split_direction, last_zoushi.original_df, split_nodes)
@@ -876,13 +879,12 @@ class Equilibrium():
                 if self.force_zhongshu:
                     if self.isdebug:
                         print("ZhongShu not yet formed, force zhongshu return False")
-                    return False, False, None, None, 0, 0
+                    return False, False, last_zoushi_time, None, 0, 0
                 
-                zslx = self.analytic_result[-1]
                 if self.isdebug:
                     print("ZhongShu not yet formed, only check ZSLX exhaustion")
-                xd_exhaustion, ts = zslx.check_exhaustion(allow_simple_zslx=allow_simple_zslx, slope_only=self.slope_only) # only used if we want to avoid one xd
-                return True, xd_exhaustion, zslx.zoushi_nodes[0].time, ts, 0, 0
+                xd_exhaustion, ts = last_zoushi.check_exhaustion(allow_simple_zslx=allow_simple_zslx, slope_only=self.slope_only) # only used if we want to avoid one xd
+                return True, xd_exhaustion, last_zoushi_time, ts, 0, 0
             elif type(self.analytic_result[-1]) is ZhongShu:
                 zs = self.analytic_result[-1]
 #                 if zs.get_level().value > ZhongShuLevel.current.value and not at_bi_level:
@@ -892,7 +894,7 @@ class Equilibrium():
                 if self.isdebug:
                     print("only one zhongshu, check zhongshu exhaustion")
                 xd_exhaustion, ts = zs.check_exhaustion(slope_only=self.slope_only)
-                return True, xd_exhaustion, zs.first.time, ts, 0, 0
+                return True, xd_exhaustion, last_zoushi_time, ts, 0, 0
         
         a, central_B, c, central_region = self.find_most_recent_zoushi(direction, current_chan_type, enable_composite=enable_composite)
         
@@ -908,7 +910,7 @@ class Equilibrium():
                                            at_bi_level=at_bi_level):
             return self.check_exhaustion(a, c, new_high_low)
         else:
-            return False, False, None, None, 0, 0
+            return False, False, last_zoushi_time, None, 0, 0
     
     def check_equilibrium_structure(self, 
                                zslx_a, 
