@@ -804,10 +804,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
         cutting_loc = np.where(stock_data['date']>=current_zoushi_start_time)[0][0]
         cutting_offset = stock_data.size - cutting_loc
 
-        cur_internal_latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
-        cur_internal_past_money = sum(stock_data['money'][cutting_loc:][:-int(cutting_offset/2)])
-# 
-        cur_internal_ratio = cur_internal_latest_money / cur_internal_past_money
+#         cur_internal_latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
+#         cur_internal_past_money = sum(stock_data['money'][cutting_loc:][:-int(cutting_offset/2)])
+#         cur_internal_ratio = cur_internal_latest_money / cur_internal_past_money
         
         cur_latest_money = sum(stock_data['money'][cutting_loc:])
         cur_past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
@@ -815,7 +814,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
         cur_ratio = cur_latest_money / cur_past_money
 
         if cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak:
-            if float_less_equal(cur_internal_ratio, 0.809) or float_less_equal(cur_ratio, 0.809):
+            if float_less_equal(cur_ratio, 0.809):
+#             float_less_equal(cur_internal_ratio, 0.809) or 
 #                 self.log.debug("candidate stock {0} cur: {1} cur_intern: {2}".format(stock, cur_ratio, cur_internal_ratio))
                 return True
         return False
@@ -1026,7 +1026,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         stored_stocks = list(self.g.stock_chan_type.keys())
         to_be_removed = [stock for stock in stored_stocks if (stock not in holding_pos and stock not in self.tentative_stage_I and stock not in self.tentative_stage_II)]
         [self.g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
-        self.log.info("position chan info: {0}".format(self.g.stock_chan_type))
+        self.log.info("position chan info: {0}".format(self.g.stock_chan_type.keys()))
 
 class Filter_Pair_Trading(Filter_stock_list):
     def __init__(self, params):
