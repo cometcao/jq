@@ -1066,7 +1066,7 @@ class Short_Chan(Sell_stocks):
                                                       is_description=self.isDescription,
                                                       is_anal=False,
                                                       split_time=min_time,
-                                                      check_bi=False,
+                                                      check_bi=True,
                                                       allow_simple_zslx=False,
                                                       force_zhongshu=True,
                                                       check_full_zoushi=False,
