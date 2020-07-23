@@ -804,18 +804,18 @@ class Filter_Chan_Stocks(Filter_stock_list):
         cutting_loc = np.where(stock_data['date']>=current_zoushi_start_time)[0][0]
         cutting_offset = stock_data.size - cutting_loc
 
-#         cur_internal_latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
-#         cur_internal_past_money = sum(stock_data['money'][cutting_loc:][:-int(cutting_offset/2)])
-#         cur_internal_ratio = cur_internal_latest_money / cur_internal_past_money
+        cur_internal_latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
+        cur_internal_past_money = sum(stock_data['money'][cutting_loc:][:-int(cutting_offset/2)])
+        cur_internal_ratio = cur_internal_latest_money / cur_internal_past_money
         
         cur_latest_money = sum(stock_data['money'][cutting_loc:])
         cur_past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
         
         cur_ratio = cur_latest_money / cur_past_money
-
+        
         if cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak:
-            if float_less_equal(cur_ratio, 0.809):
-#             float_less_equal(cur_internal_ratio, 0.809) or 
+            if float_less_equal(cur_ratio, 0.809) or\
+                (float_more_equal(cur_ratio, 1.191) and float_less_equal(cur_internal_ratio, 0.809)):
 #                 self.log.debug("candidate stock {0} cur: {1} cur_intern: {2}".format(stock, cur_ratio, cur_internal_ratio))
                 return True
         return False
@@ -969,7 +969,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
         if within_processing_time:
             if len(context.portfolio.positions) == self.long_stock_num != 0:
                 return filter_stock_list
-            stock_list = [stock for stock in stock_list if stock not in context.portfolio.positions.keys()]
+            stocks_in_place = set(context.portfolio.positions.keys()).union(self.tentative_stage_I).union(self.tentative_stage_II)
+            stock_list = [stock for stock in stock_list if stock not in stocks_in_place]
             stock_list = self.sort_by_sector_order(stock_list)
             for stock in stock_list:
                 if self.halt_check_when_enough and (self.long_candidate_num <= (len(self.tentative_stage_I) + len(self.tentative_stage_II))):
