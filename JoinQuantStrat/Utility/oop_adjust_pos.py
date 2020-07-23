@@ -775,7 +775,7 @@ class Short_Chan(Sell_stocks):
     
     def check_stop_loss(self, stock, context):
         avg_cost = context.portfolio.positions[stock].avg_cost
-#         position_time = context.portfolio.positions[stock].transact_time
+        position_time = context.portfolio.positions[stock].transact_time
         # short circuit
         if context.portfolio.positions[stock].avg_cost < context.portfolio.positions[stock].price:
             return False
@@ -811,7 +811,7 @@ class Short_Chan(Sell_stocks):
             min_price_time = stock_data.loc[current_zoushi_start_time:, 'low'].idxmin()
 #             max_loc = stock_data.index.get_loc(max_price_time)
 #             min_loc = stock_data.index.get_loc(min_price_time)
-            current_loc_diff = stock_data.loc[effective_time:,].shape[0]
+            current_loc_diff = stock_data.loc[position_time:,].shape[0]
             first_loc_diff = stock_data.loc[current_zoushi_start_time:,].shape[0] - current_loc_diff
             
 #             if current_loc_diff > int(first_loc_diff/2):
