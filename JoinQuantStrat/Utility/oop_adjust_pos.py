@@ -1007,7 +1007,7 @@ class Short_Chan(Sell_stocks):
                                                   force_zhongshu=True,
                                                   check_full_zoushi=False, 
                                                   ignore_sub_xd=False)
-            if current_exhausted and current_zhongshu_formed:
+            if current_exhausted and current_xd_exhausted:
                 print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
                                                                             self.current_period,
                                                                             current_exhausted,
@@ -1030,7 +1030,7 @@ class Short_Chan(Sell_stocks):
                                                   force_zhongshu=False,
                                                   check_full_zoushi=False,
                                                   ignore_sub_xd=False)
-            if sub_exhausted:
+            if sub_exhausted and sub_xd_exhausted:
                 print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
                                                                             self.sub_period,
                                                                             sub_exhausted,
@@ -1066,12 +1066,12 @@ class Short_Chan(Sell_stocks):
                                                       is_description=self.isDescription,
                                                       is_anal=False,
                                                       split_time=min_time,
-                                                      check_bi=True,
+                                                      check_bi=False,
                                                       allow_simple_zslx=False,
                                                       force_zhongshu=True,
                                                       check_full_zoushi=False,
                                                       ignore_sub_xd=False)
-                if sub_exhausted:
+                if sub_exhausted and sub_xd_exhausted:
                     print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
                                                                                 self.sub_period,
                                                                                 sub_exhausted,
