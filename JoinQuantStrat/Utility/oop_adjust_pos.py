@@ -835,6 +835,7 @@ class Short_Chan(Sell_stocks):
     
 
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
+                self.log.info("HARDCORE stop loss: {0} -> {1}".format(stock_data.iloc[-1].close, avg_cost))
                 return True
                 # check if original long point still holds
 #                 result, xd_result, _ = check_chan_by_type_exhaustion(stock,
@@ -947,27 +948,30 @@ class Short_Chan(Sell_stocks):
             return False
     
     
-    def process_stage_I(self, stock, context):
+    def process_stage_I(self, stock, context, min_time):
         current_data = get_current_data()
         if float_more_equal(current_data[stock].last_price, current_data[stock].high_limit):
             self.tentative_I.add(stock)
             self.short_stock_info[stock] = None
             return
         
-        result, xd_result, c_profile = check_chan_by_type_exhaustion(stock,
-                                                              end_time=context.current_dt,
-                                                              periods=[self.current_period],
-                                                              count=4800,
-                                                              direction=TopBotType.bot2top,
-                                                              chan_type=[Chan_Type.I, 
-                                                                         Chan_Type.I_weak, 
-                                                                         Chan_Type.INVALID],
-                                                              isdebug=self.isdebug,
-                                                              is_description =self.isDescription,
-                                                              is_anal=False,
-                                                              check_structure=True,
-                                                              check_full_zoushi=False,
-                                                              slope_only=False) # synch with selection
+        result, xd_result, c_profile, sub_zhongshu_formed = check_stock_sub(stock,
+                                              end_time=context.current_dt,
+                                              periods=[self.current_period],
+                                              count=2000,
+                                              direction=TopBotType.bot2top,
+                                              chan_types=[Chan_Type.I, 
+                                                          Chan_Type.I_weak, 
+                                                          Chan_Type.INVALID],
+                                              isdebug=self.isdebug,
+                                              is_description=self.isDescription,
+                                              is_anal=False,
+                                              split_time=min_time,
+                                              check_bi=False,
+                                              allow_simple_zslx=False,
+                                              force_zhongshu=False,
+                                              check_full_zoushi=False,
+                                              ignore_sub_xd=False)
 
         if result and xd_result:
             print("STOP PROFIT {0} {1} exhausted: {2}, {3}".format(stock,
@@ -1002,9 +1006,9 @@ class Short_Chan(Sell_stocks):
                                    frequency=self.current_period, 
                                    fields=('high', 'low', 'close'), 
                                    skip_paused=False)
-            
+            min_time = stock_data.loc[sub_zoushi_start_time:, 'low'].idxmin()
             if stock not in self.tentative_I and stock not in self.tentative_II:
-                self.process_stage_I(stock, context)
+                self.process_stage_I(stock, context, min_time)
             
             if stock in self.tentative_I and stock not in self.tentative_II:
                 c_profile = self.short_stock_info[stock]
@@ -1025,7 +1029,7 @@ class Short_Chan(Sell_stocks):
                                                       isdebug=self.isdebug,
                                                       is_description=self.isDescription,
                                                       is_anal=False,
-                                                      split_time=None,
+                                                      split_time=min_time,
                                                       check_bi=False,
                                                       allow_simple_zslx=False,
                                                       force_zhongshu=True,
@@ -1176,7 +1180,7 @@ class Short_Chan(Sell_stocks):
                                 end_dt=context.current_dt, 
                                 fq_ref_date=context.current_dt.date(), 
                                 df=False)
-            current_zoushi_start_time = c_profile[5]
+            current_zoushi_start_time = c_profile[0][5]
     
             cutting_loc = np.where(stock_data['date']>=current_zoushi_start_time)[0][0]
             cutting_offset = stock_data.size - cutting_loc
