@@ -1196,12 +1196,8 @@ class Short_Chan(Sell_stocks):
                     self.g.close_position(self, position, True, pindex)
 
     def after_trading_end(self, context):
-        holding_pos = context.portfolio.positions.keys()
-        
-        
-        to_be_removed = [stock for stock in stored_stocks if (stock not in holding_pos and stock not in self.tentative_stage_I and stock not in self.tentative_stage_II)]
-        [self.g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
-        self.log.info("position chan info: {0}".format(self.g.stock_chan_type.keys()))
+        self.log.info("stocks to be sold: {0}".format(self.to_sell))
+        self.log.info("stocks short process, tentative I: {0}, tentative: {1}".format(self.tentative_I, self.tentative_II))
 
     def __str__(self):
         return '缠论调仓卖出规则'
