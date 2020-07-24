@@ -949,7 +949,7 @@ class Short_Chan(Sell_stocks):
     
     def process_stage_I(self, stock):
         current_data = get_current_data()
-        if float_more_equal(current_data[stock].price, current_data[stock].high_limit):
+        if float_more_equal(current_data[stock].last_price, current_data[stock].high_limit):
             self.tentative_I.add(stock)
             self.short_stock_info[stock] = None
             return
