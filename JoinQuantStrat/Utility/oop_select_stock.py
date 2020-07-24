@@ -1004,7 +1004,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         # sort by sectors again
         filter_stock_list = self.sort_by_sector_order(filter_stock_list)
                 
-        self.log.info("Stocks ready: {0},\n  tentative I: {1},\n  tentative II: {2}".format(filter_stock_list, 
+        self.log.info("\nStocks ready: {0},\ntentative I: {1},\ntentative II: {2}".format(filter_stock_list, 
                                                                       self.tentative_stage_I,
                                                                       self.tentative_stage_II))
         return filter_stock_list

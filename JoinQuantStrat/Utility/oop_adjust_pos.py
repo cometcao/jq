@@ -970,10 +970,10 @@ class Short_Chan(Sell_stocks):
                                                               slope_only=False) # synch with selection
 
         if result and xd_result:
-            print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
-                                                                        self.current_period,
-                                                                        result,
-                                                                        xd_result))
+            print("STOP PROFIT {0} {1} exhausted: {2}, {3}".format(stock,
+                                                                    self.current_period,
+                                                                    result,
+                                                                    xd_result))
             self.tentative_I.add(stock)
             self.short_stock_info[stock] = c_profile
     
