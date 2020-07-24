@@ -14,7 +14,7 @@ from ta_analysis import *
 from oop_strategy_frame import *
 from position_control_analysis import *
 from rsrs_timing import *
-from chan_common_include import Chan_Type, float_more_equal, GOLDEN_RATIO
+from chan_common_include import Chan_Type, float_more_equal, GOLDEN_RATIO, float_less_equal
 from equilibrium import check_chan_indepth, check_stock_sub, check_chan_by_type_exhaustion, check_stock_full, sanity_check
 from biaoLiStatus import TopBotType
 import json
