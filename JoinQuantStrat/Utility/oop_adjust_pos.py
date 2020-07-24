@@ -947,7 +947,7 @@ class Short_Chan(Sell_stocks):
             return False
     
     
-    def process_stage_I(self, stock):
+    def process_stage_I(self, stock, context):
         current_data = get_current_data()
         if float_more_equal(current_data[stock].last_price, current_data[stock].high_limit):
             self.tentative_I.add(stock)
@@ -1004,7 +1004,7 @@ class Short_Chan(Sell_stocks):
                                    skip_paused=False)
             
             if stock not in self.tentative_I and stock not in self.tentative_II:
-                self.process_stage_I(stock)
+                self.process_stage_I(stock, context)
             
             if stock in self.tentative_I and stock not in self.tentative_II:
                 c_profile = self.short_stock_info[stock]
@@ -1209,6 +1209,7 @@ class Short_Chan(Sell_stocks):
         self.adjust(context, data, self.to_sell)
         
         self.to_sell = self.to_sell.intersection(set(to_check)) # in case stock failed to short
+        self.log.info("stocks short process, tentative I: {0}, tentative II: {1}".format(self.tentative_I, self.tentative_II))
 
     def adjust(self, context, data, sell_stocks):
         # 卖出在待卖股票列表中的股票
@@ -1221,7 +1222,6 @@ class Short_Chan(Sell_stocks):
 
     def after_trading_end(self, context):
         self.log.info("stocks to be sold: {0}".format(self.to_sell))
-        self.log.info("stocks short process, tentative I: {0}, tentative: {1}".format(self.tentative_I, self.tentative_II))
 
     def __str__(self):
         return '缠论调仓卖出规则'
