@@ -1170,7 +1170,7 @@ class Short_Chan(Sell_stocks):
         else:
             stock_data = get_bars(stock, 
                                 count=2000, # 5d
-                                unit=self.periods[0],
+                                unit=self.current_period,
                                 fields=['date','money'],
                                 include_now=True, 
                                 end_dt=context.current_dt, 
