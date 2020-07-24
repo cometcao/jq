@@ -946,6 +946,37 @@ class Short_Chan(Sell_stocks):
             
             return False
     
+    
+    def process_stage_I(self, stock):
+        current_data = get_current_data()
+        if float_more_equal(current_data[stock].price, current_data[stock].high_limit):
+            self.tentative_I.add(stock)
+            self.short_stock_info[stock] = None
+            return
+        
+        result, xd_result, c_profile = check_chan_by_type_exhaustion(stock,
+                                                              end_time=context.current_dt,
+                                                              periods=[self.current_period],
+                                                              count=4800,
+                                                              direction=TopBotType.bot2top,
+                                                              chan_type=[Chan_Type.I, 
+                                                                         Chan_Type.I_weak, 
+                                                                         Chan_Type.INVALID],
+                                                              isdebug=self.isdebug,
+                                                              is_description =self.isDescription,
+                                                              is_anal=False,
+                                                              check_structure=True,
+                                                              check_full_zoushi=False,
+                                                              slope_only=False) # synch with selection
+
+        if result and xd_result:
+            print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
+                                                                        self.current_period,
+                                                                        result,
+                                                                        xd_result))
+            self.tentative_I.add(stock)
+            self.short_stock_info[stock] = c_profile
+    
     def check_stop_profit(self, stock, context):
         # short circuit
         if context.portfolio.positions[stock].avg_cost > context.portfolio.positions[stock].price:
@@ -973,36 +1004,16 @@ class Short_Chan(Sell_stocks):
                                    skip_paused=False)
             
             if stock not in self.tentative_I and stock not in self.tentative_II:
-                result, xd_result, c_profile = check_chan_by_type_exhaustion(stock,
-                                                                      end_time=context.current_dt,
-                                                                      periods=[self.current_period],
-                                                                      count=4800,
-                                                                      direction=TopBotType.bot2top,
-                                                                      chan_type=[Chan_Type.I, 
-                                                                                 Chan_Type.I_weak, 
-                                                                                 Chan_Type.INVALID],
-                                                                      isdebug=self.isdebug,
-                                                                      is_description =self.isDescription,
-                                                                      is_anal=False,
-                                                                      check_structure=True,
-                                                                      check_full_zoushi=False,
-                                                                      slope_only=False) # synch with selection
-    
-                if result and xd_result:
-                    print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
-                                                                                self.current_period,
-                                                                                result,
-                                                                                xd_result,
-                                                                                current_zhongshu_formed))
-                    self.tentative_I.add(stock)
-                    self.short_stock_info[stock] = c_profile
+                self.process_stage_I(stock)
             
             if stock in self.tentative_I and stock not in self.tentative_II:
                 c_profile = self.short_stock_info[stock]
                 if self.check_internal_vol_money(stock, context, c_profile):
-                    self.tentative_II.add(stock)
                     self.tentative_I.remove(stock)
                     self.short_stock_info.pop(stock, None)
+                    if c_profile is None: # reached high limit
+                        return True
+                    self.tentative_II.add(stock)
                 
             if stock in self.tentative_II:
                 sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
@@ -1142,33 +1153,46 @@ class Short_Chan(Sell_stocks):
             return False
 
     def check_internal_vol_money(self, stock, context, c_profile):
-        current_zoushi_start_time = c_profile[5]
-        cur_chan_type = c_profile[0]
-
-        stock_data = get_bars(stock, 
-                            count=2000, # 5d
-                            unit=self.periods[0],
-                            fields=['date','money'],
-                            include_now=True, 
-                            end_dt=context.current_dt, 
-                            fq_ref_date=context.current_dt.date(), 
-                            df=False)
-        
-        cutting_loc = np.where(stock_data['date']>=current_zoushi_start_time)[0][0]
-        cutting_offset = stock_data.size - cutting_loc
-
-        cur_internal_latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
-        cur_internal_past_money = sum(stock_data['money'][cutting_loc:][:-int(cutting_offset/2)])
-        cur_internal_ratio = cur_internal_latest_money / cur_internal_past_money
-        
-        cur_latest_money = sum(stock_data['money'][cutting_loc:])
-        cur_past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
-        
-        cur_ratio = cur_latest_money / cur_past_money
-        
-        if float_more_equal(cur_ratio, 1.191) or\
-            (float_less_equal(cur_ratio, 0.809) and float_more_equal(cur_internal_ratio, 1.191)):
-            return True
+        if c_profile is None:
+            stock_data = get_bars(stock, 
+                                count=2, # 5d
+                                unit='1d',
+                                fields=['date','money'],
+                                include_now=True, 
+                                end_dt=context.current_dt, 
+                                fq_ref_date=context.current_dt.date(), 
+                                df=False)
+            
+            cur_ratio = stock_data['money'][-1] / stock_data['money'][-2]
+            if float_more_equal(cur_ratio, 1.809):
+                return True
+            
+        else:
+            stock_data = get_bars(stock, 
+                                count=2000, # 5d
+                                unit=self.periods[0],
+                                fields=['date','money'],
+                                include_now=True, 
+                                end_dt=context.current_dt, 
+                                fq_ref_date=context.current_dt.date(), 
+                                df=False)
+            current_zoushi_start_time = c_profile[5]
+    
+            cutting_loc = np.where(stock_data['date']>=current_zoushi_start_time)[0][0]
+            cutting_offset = stock_data.size - cutting_loc
+    
+            cur_internal_latest_money = sum(stock_data['money'][cutting_loc:][-int(cutting_offset/2):])
+            cur_internal_past_money = sum(stock_data['money'][cutting_loc:][:-int(cutting_offset/2)])
+            cur_internal_ratio = cur_internal_latest_money / cur_internal_past_money
+            
+            cur_latest_money = sum(stock_data['money'][cutting_loc:])
+            cur_past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
+            
+            cur_ratio = cur_latest_money / cur_past_money
+            
+            if float_more_equal(cur_ratio, 1.191) or\
+                (float_less_equal(cur_ratio, 0.809) and float_more_equal(cur_internal_ratio, 1.191)):
+                return True
         return False
 
     def handle_data(self, context, data):
