@@ -967,12 +967,13 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         filter_stock_list = []
         if within_processing_time:
-            if len(context.portfolio.positions) == self.long_stock_num != 0:
-                return filter_stock_list
             stocks_in_place = set(context.portfolio.positions.keys()).union(self.tentative_stage_I).union(self.tentative_stage_II)
             stock_list = [stock for stock in stock_list if stock not in stocks_in_place]
             stock_list = self.sort_by_sector_order(stock_list)
             for stock in stock_list:
+                if len(context.portfolio.positions) == self.long_stock_num != 0:
+                    break
+                
                 if self.halt_check_when_enough and (self.long_candidate_num <= (len(self.tentative_stage_I) + len(self.tentative_stage_II))):
                     # we don't need to look further, we have enough candidates for long position + 1 backup
                     break
