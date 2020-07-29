@@ -872,6 +872,7 @@ class KBarChan(object):
         self.standardize()
         self.markTopBot()
         found_idx = np.where(self.kDataFrame_standardized['tb']==tb.value)[0]
+        print("tb location: {0}, total size: {1}".format(found_idx, self.kDataFrame_standardized.size))
         if len(found_idx) > 0 and found_idx[-1] == self.kDataFrame_standardized.size-2:
             return True
         return False
