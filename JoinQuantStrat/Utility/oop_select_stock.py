@@ -894,7 +894,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         stock_data = get_price(security=stock, 
                       end_date=context.current_dt, 
-                      count=10, 
+                      count=20, 
                       frequency='240m', 
                       skip_paused=True, 
                       panel=False, 
