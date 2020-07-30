@@ -750,6 +750,13 @@ class Filter_Chan_Stocks(Filter_stock_list):
             if self.halt_check_when_enough and (self.long_candidate_num <= len(self.tentative_stage_II)):
                 break
             
+            if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
+                current_profile = self.g.stock_chan_type[stock][1]
+                current_chan_p = current_profile[2]
+                if float_more_equal(get_current_data()[stock].last_price, current_chan_p):
+                    stocks_to_remove.add(stock)
+                    continue
+            
             result, to_remove = self.check_structure_sub(stock, context)
             if to_remove:
                 stocks_to_remove.add(stock)
