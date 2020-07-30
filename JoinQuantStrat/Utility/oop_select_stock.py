@@ -747,10 +747,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.tentative_stage_I = self.tentative_stage_I.difference(set(context.portfolio.positions.keys()))
         
         for stock in self.tentative_stage_I:
-            if len(context.portfolio.positions) == self.long_stock_num != 0:
-                break
-            
-            if self.halt_check_when_enough and (self.long_candidate_num <= (len(self.tentative_stage_I) + len(self.tentative_stage_II))):
+            if self.halt_check_when_enough and (self.long_candidate_num <= len(self.tentative_stage_II)):
                 break
             
             result, to_remove = self.check_structure_sub(stock, context)
@@ -785,6 +782,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                     
             for stock in self.tentative_stage_II:
+                if len(context.portfolio.positions) == self.long_stock_num != 0:
+                    break
                 if self.check_bot_shape(stock, context):
                     stocks_to_long.add(stock)
                     
@@ -977,6 +976,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stock_list = [stock for stock in stock_list if stock not in stocks_in_place]
             stock_list = self.sort_by_sector_order(stock_list)
             for stock in stock_list:
+                if self.halt_check_when_enough and (self.long_candidate_num <= len(self.tentative_stage_I)):
+                    break
 #                 result, xd_result, c_profile = check_chan_by_type_exhaustion(stock,
 #                                                       end_time=context.current_dt,
 #                                                       periods=[self.periods[0]],
