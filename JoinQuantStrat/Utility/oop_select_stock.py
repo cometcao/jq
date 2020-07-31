@@ -254,6 +254,56 @@ class Filter_financial_data2(Early_Filter_stock_list):
             s += '[限制选股数:%s]' % (limit)
         return '多因子筛选:' + s
 
+class Filter_black_stocks(Early_Filter_stock_list):
+    
+    def filter(self, context, stock_list):
+        print("before filter: {0}".format(stock_list))
+
+        q = query(
+            income.np_parent_company_owners
+        ).filter(
+            valuation.code.in_(stock_list)
+        )
+
+        df = get_fundamentals_continuously(q, 
+                                           end_date=context.previous_date, 
+                                           count=250, 
+                                           panel=False)
+        df = df[df['np_parent_company_owners'] < 0]
+        result_df = df.groupby('code').nunique()
+        remove_list = df[df['np_parent_company_owners'] >= 3].index.tolist()
+
+        stock_list = [stock for stock in stock_list if stock not in remove_list]
+        print("after filter: {0}".format(stock_list))
+        return stock_list
+
+    def __str__(self):
+        s = ''
+        for fd_param in self._params.get('factors', []):
+            if not isinstance(fd_param, FD_Factor):
+                continue
+            if fd_param.min is None and fd_param.max is None:
+                continue
+            s += '\n\t\t\t\t---'
+            if fd_param.min is not None and fd_param.max is not None:
+                s += '[ %s < %s < %s ]' % (fd_param.min, fd_param.factor, fd_param.max)
+            elif fd_param.min is not None:
+                s += '[ %s < %s ]' % (fd_param.min, fd_param.factor)
+            elif fd_param.max is not None:
+                s += '[ %s > %s ]' % (fd_param.factor, fd_param.max)
+
+        order_by = self._params.get('order_by', None)
+        sort_type = self._params.get('sort', SortType.asc)
+        if order_by is not None:
+            s += '\n\t\t\t\t---'
+            sort_type = '从小到大' if sort_type == SortType.asc else '从大到小'
+            s += '[排序:%s %s]' % (order_by, sort_type)
+        limit = self._params.get('limit', None)
+        if limit is not None:
+            s += '\n\t\t\t\t---'
+            s += '[限制选股数:%s]' % (limit)
+        return '多因子筛选:' + s
+
 
 class Filter_FX_data(Early_Filter_stock_list):
     def __init__(self, params):
@@ -1060,7 +1110,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         stored_stocks = list(self.g.stock_chan_type.keys())
         to_be_removed = [stock for stock in stored_stocks if (stock not in holding_pos and stock not in self.tentative_stage_I and stock not in self.tentative_stage_II)]
         [self.g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
-        self.log.info("position chan info: {0}".format(self.g.stock_chan_type))
+        self.log.info("position chan info: {0}".format(self.g.stock_chan_type.keys()))
 
 class Filter_Pair_Trading(Filter_stock_list):
     def __init__(self, params):
