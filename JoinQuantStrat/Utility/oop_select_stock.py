@@ -739,7 +739,23 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.tentative_stage_I = set() # list to hold stocks waiting to be operated
         self.tentative_stage_II = set()
         self.halt_check_when_enough = params.get('halt_check_when_enough', True)
-        
+    
+    def check_guide_price_reached(self, stock, context):
+        current_profile = self.g.stock_chan_type[stock][1]
+        current_chan_p = current_profile[2]
+        current_start_time = current_profile[5]
+        current_effective_time = current_profile[6]
+        stock_data = get_price(stock,
+                               start_date=current_start_time, 
+                               end_date=context.current_dt, 
+                               frequency=self.periods[0], 
+                               fields=('high', 'low', 'close', 'money'), 
+                               skip_paused=False)
+        max_price_after_long = stock_data.loc[current_effective_time:, 'high'].max()
+        if float_more_equal(max_price_after_long, current_chan_p):
+            return True
+        return False
+    
     def check_tentative_stocks(self, context):
         stocks_to_long = set()
         stocks_to_remove = set()
@@ -751,9 +767,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 break
             
             if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
-                current_profile = self.g.stock_chan_type[stock][1]
-                current_chan_p = current_profile[2]
-                if float_more_equal(get_current_data()[stock].last_price, current_chan_p):
+                if self.check_guide_price_reached(stock, context):
                     stocks_to_remove.add(stock)
                     continue
             
