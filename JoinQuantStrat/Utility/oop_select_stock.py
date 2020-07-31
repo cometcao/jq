@@ -758,7 +758,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
     
     def check_tentative_stocks(self, context):
         stocks_to_long = set()
-        stocks_to_remove = set()
+        stocks_to_remove_I = set()
         
         self.tentative_stage_I = self.tentative_stage_I.difference(set(context.portfolio.positions.keys()))
         
@@ -768,12 +768,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
             
             if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
                 if self.check_guide_price_reached(stock, context):
-                    stocks_to_remove.add(stock)
+                    stocks_to_remove_I.add(stock)
                     continue
             
             result, to_remove = self.check_structure_sub(stock, context)
             if to_remove:
-                stocks_to_remove.add(stock)
+                stocks_to_remove_I.add(stock)
             else:
                 if result:
                     top_profile = self.g.stock_chan_type[stock][0]
@@ -789,12 +789,14 @@ class Filter_Chan_Stocks(Filter_stock_list):
                         continue
                     stocks_to_long.add(stock)
         
-        self.tentative_stage_I = self.tentative_stage_I.difference(stocks_to_remove)
-        self.log.info("stocks removed from stage I: {0}".format(stocks_to_remove))
+        self.tentative_stage_I = self.tentative_stage_I.difference(stocks_to_remove_I)
+        self.log.info("stocks removed from stage I: {0}".format(stocks_to_remove_I))
         
         if not self.use_stage_II:
             self.tentative_stage_I = self.tentative_stage_I.difference(stocks_to_long)
         else:
+            stocks_to_remove_II = set()
+            
             self.tentative_stage_II = stocks_to_long.union(self.tentative_stage_II)
             stocks_to_long = set()
             self.tentative_stage_I = self.tentative_stage_I.difference(self.tentative_stage_II)
@@ -805,8 +807,17 @@ class Filter_Chan_Stocks(Filter_stock_list):
             for stock in self.tentative_stage_II:
                 if len(context.portfolio.positions) == self.long_stock_num != 0:
                     break
+                
+                if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
+                    if self.check_guide_price_reached(stock, context):
+                        stocks_to_remove_II.add(stock)
+                        continue
+                    
                 if self.check_bot_shape(stock, context):
                     stocks_to_long.add(stock)
+                    
+            self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_remove_II)
+            self.log.info("stocks removed from stage II: {0}".format(stocks_to_remove_II))
                     
             self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_long)
                 
@@ -978,7 +989,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #             self.log.debug("stock {0}, zhongshu changed: {1}".format(stock, old_current_profile[2] != profile[0][2]))
             to_be_removed = True
         
-        if result:
+        if profile[0][5] is not None and profile[0][6] is not None:
             self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile
 
         return result, to_be_removed
@@ -1049,7 +1060,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         stored_stocks = list(self.g.stock_chan_type.keys())
         to_be_removed = [stock for stock in stored_stocks if (stock not in holding_pos and stock not in self.tentative_stage_I and stock not in self.tentative_stage_II)]
         [self.g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
-        self.log.info("position chan info: {0}".format(self.g.stock_chan_type.keys()))
+        self.log.info("position chan info: {0}".format(self.g.stock_chan_type))
 
 class Filter_Pair_Trading(Filter_stock_list):
     def __init__(self, params):
