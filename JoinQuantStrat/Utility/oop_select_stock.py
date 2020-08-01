@@ -271,7 +271,8 @@ class Filter_black_stocks(Early_Filter_stock_list):
                                            panel=False)
         df = df[df['np_parent_company_owners'] < 0]
         result_df = df.groupby('code').nunique()
-        remove_list = df[df['np_parent_company_owners'] >= 3].index.tolist()
+        remove_list = result_df[result_df['np_parent_company_owners'] >= 3].index.tolist()
+        print(remove_list)
 
         stock_list = [stock for stock in stock_list if stock not in remove_list]
         print("after filter: {0}".format(stock_list))
