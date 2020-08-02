@@ -804,6 +804,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                skip_paused=False)
         max_price_after_long = stock_data.loc[current_effective_time:, 'high'].max()
         if float_more_equal(max_price_after_long, current_chan_p):
+            self.log.info("{0} reached target price:{1}, max: {2}".format(stock, 
+                                                                          current_chan_p, 
+                                                                          max_price_after_long))
             return True
         return False
     
@@ -814,13 +817,14 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.tentative_stage_I = self.tentative_stage_I.difference(set(context.portfolio.positions.keys()))
         
         for stock in self.tentative_stage_I:
-            if self.halt_check_when_enough and (self.long_candidate_num <= len(self.tentative_stage_II)):
-                break
             
             if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
                 if self.check_guide_price_reached(stock, context):
                     stocks_to_remove_I.add(stock)
                     continue
+                
+            if self.halt_check_when_enough and (self.long_candidate_num <= len(self.tentative_stage_II)):
+                continue
             
             result, to_remove = self.check_structure_sub(stock, context)
             if to_remove:
