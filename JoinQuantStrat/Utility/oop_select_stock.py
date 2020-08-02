@@ -804,9 +804,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                skip_paused=False)
         max_price_after_long = stock_data.loc[current_effective_time:, 'high'].max()
         if float_more_equal(max_price_after_long, current_chan_p):
-            self.log.info("{0} reached target price:{1}, max: {2}".format(stock, 
-                                                                          current_chan_p, 
-                                                                          max_price_after_long))
+#             self.log.info("{0} reached target price:{1}, max: {2}".format(stock, 
+#                                                                           current_chan_p, 
+#                                                                           max_price_after_long))
             return True
         return False
     
