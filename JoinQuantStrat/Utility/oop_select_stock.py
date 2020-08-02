@@ -856,9 +856,6 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                     
             for stock in self.tentative_stage_II:
-                if len(context.portfolio.positions) == self.long_stock_num != 0:
-                    break
-                
                 if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
                     if self.check_guide_price_reached(stock, context):
                         stocks_to_remove_II.add(stock)
@@ -977,12 +974,13 @@ class Filter_Chan_Stocks(Filter_stock_list):
             context.current_dt.minute != self.stage_II_timing[1]):
             return False
         
-        current_profile = self.g.stock_chan_type[stock][1]
-        current_start_time = current_profile[5]
+#         current_profile = self.g.stock_chan_type[stock][1]
+#         current_start_time = current_profile[5]
         
         stock_data = get_price(security=stock, 
                       end_date=context.current_dt, 
-                      start_date=current_start_time, 
+#                       start_date=current_start_time, 
+                      count = 20,
                       frequency='240m', 
                       skip_paused=True, 
                       panel=False, 
@@ -1011,6 +1009,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 
 #         working_data = stock_data.loc[sub_zoushi_start_time:]
         working_data_np = stock_data.to_records()
+#         print("check bot: {0}".format(stock))
         kb_chan = KBarChan(working_data_np, isdebug=False)
         
         return kb_chan.formed_tb(tb=TopBotType.bot)
