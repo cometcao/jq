@@ -823,8 +823,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
                     stocks_to_remove_I.add(stock)
                     continue
                 
-            if self.halt_check_when_enough and (self.long_candidate_num <= len(self.tentative_stage_II)):
-                continue
+#            # we don't want to halt any in-stage stock process they needs to be checked all time 
+#             if self.halt_check_when_enough and (self.long_candidate_num <= len(self.tentative_stage_II)):
+#                 continue
             
             result, to_remove = self.check_structure_sub(stock, context)
             if to_remove:
