@@ -852,12 +852,10 @@ class Equilibrium():
         last_zoushi = self.analytic_result[-1]
         last_all_nodes = last_zoushi.get_all_nodes()
         last_zoushi_time = last_all_nodes[-2].time if last_zoushi.isZhongShu else last_all_nodes[0].time
-            
-        if not self.check_zoushi_structure(self.analytic_result, at_bi_level, enable_composite):
-            return False, False, last_zoushi_time, None, 0, 0
         
         # We shouldn't have III at BI level, only PB or BC
-        if current_chan_type == Chan_Type.III and not at_bi_level:
+        if (current_chan_type == Chan_Type.III or current_chan_type == Chan_Type.III_strong) and\
+            not at_bi_level:
 #             if self.isQvShi_simple or self.isQvShi:
 #                 if self.isdebug:
 #                     print("type III mixed with type I position we ignore")
@@ -872,6 +870,9 @@ class Equilibrium():
             else: # ZhongShu case 
                 xd_exhaustion, ts = last_zoushi.check_exhaustion(slope_only=self.slope_only)
                 return True, xd_exhaustion, last_zoushi_time, ts, 0, 0
+            
+        if not self.check_zoushi_structure(self.analytic_result, at_bi_level, enable_composite):
+            return False, False, last_zoushi_time, None, 0, 0
         
         # if we only have one zhongshu / ZSLX we can only rely on the xd level check
         if len(self.analytic_result) < 2:
