@@ -793,6 +793,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
     
     def check_guide_price_reached(self, stock, context):
         current_profile = self.g.stock_chan_type[stock][1]
+        current_chan_t = current_profile[0]
         current_chan_p = current_profile[2]
         current_start_time = current_profile[5]
         current_effective_time = current_profile[6]
@@ -802,12 +803,17 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                frequency=self.periods[0], 
                                fields=('high', 'low', 'close', 'money'), 
                                skip_paused=False)
-        max_price_after_long = stock_data.loc[current_effective_time:, 'high'].max()
-        if float_more_equal(max_price_after_long, current_chan_p):
-#             self.log.info("{0} reached target price:{1}, max: {2}".format(stock, 
-#                                                                           current_chan_p, 
-#                                                                           max_price_after_long))
-            return True
+        if current_chan_t == Chan_Type.I or current_chan_t == Chan_Type.I_weak:
+            max_price_after_long = stock_data.loc[current_effective_time:, 'high'].max()
+            if float_more_equal(max_price_after_long, current_chan_p):
+    #             self.log.info("{0} reached target price:{1}, max: {2}".format(stock, 
+    #                                                                           current_chan_p, 
+    #                                                                           max_price_after_long))
+                return True
+        elif current_chan_t == Chan_Type.III or current_chan_t == Chan_Type.III_strong:
+            min_price_after_long = stock_data.loc[current_effective_time:, 'low'].min()
+            if float_less_equal(min_price_after_long, current_chan_p):
+                return True
         return False
     
     def check_tentative_stocks(self, context):
@@ -1048,7 +1054,6 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile
 
         return result, to_be_removed
-
     
     def filter(self, context, data, stock_list):
         within_processing_time = True

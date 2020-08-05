@@ -147,7 +147,9 @@ class KBar(object):
                 
         if Chan_Type.III in chan_types and cls.chan_type_III_check(kbar_list, direction):
             chan_type_result.append(Chan_Type.III)
-        elif Chan_Type.I in chan_types and cls.chan_type_I_check(kbar_list, direction):
+        elif Chan_Type.III_strong in chan_types and cls.chan_type_III_strong_check(kbar_list, direction):
+            chan_type_result.append(Chan_Type.III_strong)
+        elif (Chan_Type.I in chan_types or Chan_Type.I_weak in chan_types) and cls.chan_type_I_check(kbar_list, direction):
             chan_type_result.append(Chan_Type.I)
         elif Chan_Type.INVALID in chan_types and cls.chan_type_PB_check(kbar_list, direction):
             chan_type_result.append(Chan_Type.INVALID)
@@ -242,6 +244,10 @@ class KBar(object):
         
         return result
         
+    @classmethod
+    def chan_type_III_strong_check(cls, kbar_list, direction):
+        result = False
+        return result
         
     @classmethod
     def chan_type_III_check(cls, kbar_list, direction):
