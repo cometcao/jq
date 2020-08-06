@@ -926,7 +926,8 @@ class Equilibrium():
                                            check_tb_structure=check_tb_structure,
                                            check_balance_structure=check_balance_structure,
                                            current_chan_type=current_chan_type,
-                                           at_bi_level=at_bi_level):
+                                           at_bi_level=at_bi_level,
+                                           enable_ac_opposite_direction=enable_ac_opposite_direction):
             return self.check_exhaustion(a, c, new_high_low)
         else:
             return False, False, last_zoushi_time, None, 0, 0
@@ -939,7 +940,8 @@ class Equilibrium():
                                check_tb_structure=False,
                                check_balance_structure=False, 
                                current_chan_type=Chan_Type.INVALID,
-                               at_bi_level=False):
+                               at_bi_level=False,
+                               enable_ac_opposite_direction=False):
         if zslx_a is None or zslx_c is None or zslx_a.isEmpty() or zslx_c.isEmpty():
             if self.isdebug:
                 print("Not enough DATA check_exhaustion")
@@ -975,7 +977,7 @@ class Equilibrium():
         if at_bi_level:
             return True
         
-        if check_tb_structure:
+        if check_tb_structure and not enable_ac_opposite_direction:
              if a_s[0] != c_s[0] or a_s[-1] != c_s[-1]:
 #            if not ((a_s[0] == c_s[0] and a_s[-1] == c_s[-1]) or\
 #               (a_s[0] == TopBotType.reverse(c_s[0]) and a_s[-1] == TopBotType.reverse(c_s[-1]))):
