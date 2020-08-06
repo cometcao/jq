@@ -837,62 +837,9 @@ class Short_Chan(Sell_stocks):
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
                 self.log.info("HARDCORE stop loss: {0} -> {1}".format(stock_data.iloc[-1].close, avg_cost))
                 return True
-                # check if original long point still holds
-#                 result, xd_result, _ = check_chan_by_type_exhaustion(stock,
-#                                                                       end_time=min_price_time,
-#                                                                       periods=[self.current_period],
-#                                                                       count=4800,
-#                                                                       direction=TopBotType.top2bot,
-#                                                                       chan_type=[current_chan_t],
-#                                                                       isdebug=self.isdebug,
-#                                                                       is_description =self.isDescription,
-#                                                                       is_anal=False,
-#                                                                       check_structure=True,
-#                                                                       check_full_zoushi=False,
-#                                                                       slope_only=False) # synch with selection
-#                 if not result:
-#                     print("Bei Chi long point broken: {0}".format(stock))
-#                     return True
-            
-#             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss * 2:
-#                 print("HARDCORE stop loss")
-#                 return True
 
-#                 result, profile, _ = check_stock_full(stock,
-#                                                      end_time=min_price_time,
-#                                                      periods=[self.current_period, self.sub_period],
-#                                                      count=6000, # needs more data!
-#                                                      direction=TopBotType.top2bot, 
-#                                                      current_chan_type=[current_chan_t],
-#                                                      sub_chan_type=[sub_chan_t],
-#                                                      isdebug=self.isdebug,
-#                                                      is_description=self.isDescription,
-#                                                      sub_force_zhongshu=True, 
-#                                                      sub_check_bi=False,
-#                                                      use_sub_split=self.use_sub_split, 
-#                                                      ignore_sub_xd=False)
-#                 if not result:
-#                     print("BeiChi long point broken")
-#                     return True
-
-#             elif (1 - stock_data.iloc[-1].close / avg_cost) >= 0:
-#                 # check slope
-#                 latest_slope = (max_price_after_long-min_price)/(max_loc-min_loc)
-#                 if latest_slope < 0 and abs(latest_slope) >= abs(current_chan_slope):
-#                     print("slope gets deeper! STOPLOSS {0},{1}".format(current_chan_slope, latest_slope))
-#                     return True
-#                   
-#                 # check force
-#                 money_sum = stock_data.loc[current_zoushi_start_time:, 'money'].sum() / 1e8
-#                 price_delta = (min_price - max_price_after_long) / max_price_after_long * 100
-#                 time_delta = stock_data.loc[current_zoushi_start_time:,:].shape[0] / 1200 * 100
-#                 latest_force = money_sum * price_delta / time_delta ** 2
-#                 if current_chan_force != 0 and latest_force < 0 and abs(latest_force) > abs(current_chan_force):
-#                     print("force gets deeper! STOPLOSS {0},{1}".format(current_chan_force, latest_force))
-#                     return True
-                
             return False
-        elif current_chan_t == Chan_Type.III or current_chan_t == Chan_Type.INVALID:
+        elif current_chan_t == Chan_Type.III or current_chan_t == Chan_Type.III_strong:
             # This is to make sure we have enough data for MACD and MA
             data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=120)
             stock_data = get_price(stock,
@@ -901,51 +848,25 @@ class Short_Chan(Sell_stocks):
                                    frequency='1m', 
                                    fields=('high', 'low', 'close', 'money'), 
                                    skip_paused=False)
-            # check slope
-            max_price_after_long = stock_data.loc[sub_zoushi_start_time:, 'high'].max()
-            min_price = stock_data.loc[sub_zoushi_start_time:, 'low'].min()
-            max_price_time = stock_data.loc[sub_zoushi_start_time:, 'high'].idxmax()
-            min_price_time = stock_data.loc[sub_zoushi_start_time:, 'low'].idxmin()
-            max_loc = stock_data.index.get_loc(max_price_time)
-            min_loc = stock_data.index.get_loc(min_price_time)
+#             # check slope
+#             max_price_after_long = stock_data.loc[sub_zoushi_start_time:, 'high'].max()
+#             min_price = stock_data.loc[sub_zoushi_start_time:, 'low'].min()
+#             max_price_time = stock_data.loc[sub_zoushi_start_time:, 'high'].idxmax()
+#             min_price_time = stock_data.loc[sub_zoushi_start_time:, 'low'].idxmin()
+#             max_loc = stock_data.index.get_loc(max_price_time)
+#             min_loc = stock_data.index.get_loc(min_price_time)
 
-            if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss: # reached stop loss mark
-                exhausted, xd_exhausted, _, _ = check_stock_sub(stock,
-                                                              end_time=min_price_time,
-                                                              periods=['1m' if self.sub_period == 'bi' else self.sub_period],
-                                                              count=2500,
-                                                              direction=TopBotType.top2bot,
-                                                              chan_types=[Chan_Type.I, Chan_Type.INVALID],
-                                                              isdebug=self.isdebug,
-                                                              is_description =self.isDescription,
-                                                              is_anal=False,
-                                                              split_time=current_zoushi_start_time,
-                                                              check_bi=(self.sub_period=='bi'),
-                                                              force_zhongshu=True,
-                                                              check_full_zoushi=False) # synch with selection
-                if not exhausted or not xd_exhausted:
-                    print("sub long point broken")
-                    return True
-            elif (1 - stock_data.iloc[-1].close / avg_cost) >= 0: # negative return
-                latest_slope = (max_price_after_long-min_price)/(max_loc-min_loc)
-                if latest_slope < 0 and abs(latest_slope) >= abs(sub_chan_slope):
-                    print("slope gets deeper! STOPLOSS {0},{1}".format(sub_chan_slope, latest_slope))
-                    return True
-                
-                # use force instead
-                money_sum = stock_data.loc[sub_zoushi_start_time:, 'money'].sum() / 1e8
-                price_delta = (min_price - max_price_after_long) / max_price_after_long * 100
-                time_delta = stock_data.loc[sub_zoushi_start_time:, :].shape[0] / 1200 * 100
-                latest_force = money_sum * price_delta / time_delta ** 2
-                if sub_chan_force != 0 and latest_force < 0 and abs(latest_force) > abs(sub_chan_force):
-                    print("force gets deeper! STOPLOSS {0},{1}".format(sub_chan_force, latest_force))
-                    return True
-
-            if current_chan_t == Chan_Type.III and stock_data.loc[effective_time:,'low'].min() <= current_chan_p:
+            if stock_data.loc[effective_time:,'low'].min() <= current_chan_p:
                 print("TYPE III invalidated {0}, {1}".format(stock_data.loc[effective_time:,'low'].min(), current_chan_p))
                 return True
             
+            if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
+                self.log.info("HARDCORE stop loss: {0} -> {1}".format(stock_data.iloc[-1].close, avg_cost))
+                return True
+            
             return False
+        elif current_chan_t == Chan_Type.INVALID:
+            print("NOT YET CODED!")
     
     
     def process_stage_I(self, stock, context, min_time):
