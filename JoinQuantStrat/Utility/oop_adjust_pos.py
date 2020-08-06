@@ -869,7 +869,7 @@ class Short_Chan(Sell_stocks):
             print("NOT YET CODED!")
     
     
-    def process_stage_I(self, stock, context, min_time):
+    def process_stage_I(self, stock, context, min_time, working_period):
         current_data = get_current_data()
         if float_more_equal(current_data[stock].last_price, current_data[stock].high_limit):
             self.tentative_I.add(stock)
@@ -878,7 +878,7 @@ class Short_Chan(Sell_stocks):
         
         result, xd_result, c_profile, sub_zhongshu_formed = check_stock_sub(stock,
                                               end_time=context.current_dt,
-                                              periods=[self.current_period],
+                                              periods=[working_period],
                                               count=2000,
                                               direction=TopBotType.bot2top,
                                               chan_types=[Chan_Type.I, 
@@ -896,7 +896,7 @@ class Short_Chan(Sell_stocks):
 
         if result and xd_result:
             print("STOP PROFIT {0} {1} exhausted: {2}, {3}".format(stock,
-                                                                    self.current_period,
+                                                                    working_period,
                                                                     result,
                                                                     xd_result))
             self.tentative_I.add(stock)
@@ -929,7 +929,7 @@ class Short_Chan(Sell_stocks):
                                    skip_paused=False)
             min_time = stock_data.loc[sub_zoushi_start_time:, 'low'].idxmin()
             if stock not in self.tentative_I and stock not in self.tentative_II:
-                self.process_stage_I(stock, context, min_time)
+                self.process_stage_I(stock, context, min_time, self.current_period)
             
             if stock in self.tentative_I and stock not in self.tentative_II:
                 c_profile = self.short_stock_info[stock]
@@ -1000,7 +1000,7 @@ class Short_Chan(Sell_stocks):
                                    skip_paused=False)
 
             if stock not in self.tentative_I and stock not in self.tentative_II:
-                self.process_stage_I(stock, context, None)
+                self.process_stage_I(stock, context, None, self.sub_period)
             
             if stock in self.tentative_I and stock not in self.tentative_II:
                 c_profile = self.short_stock_info[stock]
