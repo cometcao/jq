@@ -817,6 +817,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return False
     
     def check_tentative_stocks(self, context):
+        
         stocks_to_long = set()
         stocks_to_remove_I = set()
         
@@ -833,19 +834,20 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #             if self.halt_check_when_enough and (self.long_candidate_num <= len(self.tentative_stage_II)):
 #                 continue
             
-            result, to_remove = self.check_structure_sub(stock, context)
-            if to_remove:
-                stocks_to_remove_I.add(stock)
+            result, zhongshu_changed = self.check_structure_sub(stock, context)
+            current_profile = self.g.stock_chan_type[stock][1]
+            cur_chan_t = current_profile[0]
+            if zhongshu_changed:
+                if cur_chan_t != Chan_Type.III and cur_chan_t != Chan_Type.III_strong:
+                    stocks_to_remove_I.add(stock)
             else:
                 if result:
                     top_profile = self.g.stock_chan_type[stock][0]
-                    current_profile = self.g.stock_chan_type[stock][1]
                     sub_profile = self.g.stock_chan_type[stock][2]
-                     
+                    
                     top_chan_t = top_profile[0]
-                    cur_chan_t = current_profile[0]
                     sub_chan_t = sub_profile[0]
-                     
+                    
                     chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
                     if self.force_chan_type and (chan_type_list not in self.force_chan_type):
                         continue
@@ -908,11 +910,14 @@ class Filter_Chan_Stocks(Filter_stock_list):
         cur_past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
         
         cur_ratio = cur_latest_money / cur_past_money
-        
+        self.log.debug("candidate stock {0} cur: {1} cur_intern: {2}".format(stock, cur_ratio, cur_internal_ratio))
         if cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak:
             if float_less_equal(cur_ratio, 0.809) or\
                 (float_more_equal(cur_ratio, 1.191) and float_less_equal(cur_internal_ratio, 0.809)):
-#                 self.log.debug("candidate stock {0} cur: {1} cur_intern: {2}".format(stock, cur_ratio, cur_internal_ratio))
+                return True
+        elif cur_chan_type == Chan_Type.III or cur_chan_type == Chan_Type.III_strong:
+            if float_less_equal(cur_ratio, 0.809) or\
+                float_less_equal(cur_internal_ratio, 0.809):
                 return True
         return False
     
@@ -1026,7 +1031,11 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return kb_chan.formed_tb(tb=TopBotType.bot)
     
     def check_structure_sub(self, stock, context):
-        to_be_removed = False
+        zhongshu_changed = False
+
+        old_current_profile = self.g.stock_chan_type[stock][1]
+        old_chan_type = old_current_profile[0]
+        enable_ac_op_direction = old_chan_type == Chan_Type.III or old_chan_type == Chan_Type.III_strong
 
         result, profile, _ = check_stock_full(stock,
                                              end_time=context.current_dt,
@@ -1041,19 +1050,18 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                              sub_check_bi=self.bi_level_precision,
                                              use_sub_split=self.use_sub_split,
                                              ignore_cur_xd=self.ignore_xd,
-                                             ignore_sub_xd=self.bi_level_precision)
-        
-        old_current_profile = self.g.stock_chan_type[stock][1]
+                                             ignore_sub_xd=self.bi_level_precision,
+                                             enable_ac_opposite_direction=enable_ac_op_direction)
         
         if (type(profile[0][2]) is list and old_current_profile[2] != profile[0][2][0]) or\
             (type(profile[0][2]) is not list  and old_current_profile[2] != profile[0][2]):
-#             self.log.debug("stock {0}, zhongshu changed: {1}".format(stock, old_current_profile[2] != profile[0][2]))
-            to_be_removed = True
+#             self.log.debug("stock {0}, zhongshu changed: {1} <-> {2}".format(stock, old_current_profile[2], profile[0][2]))
+            zhongshu_changed = True
         
         if profile[0][5] is not None and profile[0][6] is not None:
             self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile
 
-        return result, to_be_removed
+        return result, zhongshu_changed
     
     def filter(self, context, data, stock_list):
         within_processing_time = True

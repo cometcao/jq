@@ -78,6 +78,7 @@ def check_chan_by_type_exhaustion(stock,
                                   check_structure=False,
                                   check_full_zoushi=False,
                                   enable_composite=False,
+                                  enable_ac_opposite_direction=False,
                                   slope_only=True):
     if is_description:
         print("check_chan_by_type_exhaustion working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
@@ -95,6 +96,7 @@ def check_chan_by_type_exhaustion(stock,
                              check_tb_structure=check_structure,
                              check_full_zoushi=check_full_zoushi,
                              enable_composite=enable_composite,
+                             enable_ac_opposite_direction=enable_ac_opposite_direction,
                              slope_only=slope_only)
 
 def check_chan_indepth(stock, 
@@ -107,7 +109,8 @@ def check_chan_indepth(stock,
                        is_description=True,
                        split_time=None,
                        check_full_zoushi=True,
-                       ignore_bi_xd=True):
+                       ignore_bi_xd=True,
+                       enable_ac_opposite_direction=False):
     if is_description:
         print("check_chan_indepth working on stock: {0} at {1} from {2} to {3}".format(stock, 
                                                                                        period,
@@ -128,7 +131,8 @@ def check_chan_indepth(stock,
                                      period, 
                                      force_zhongshu=True, 
                                      check_full_zoushi=check_full_zoushi,
-                                     ignore_bi_xd=ignore_bi_xd)
+                                     ignore_bi_xd=ignore_bi_xd,
+                                     enable_ac_opposite_direction=enable_ac_opposite_direction)
 
 def check_stock_sub(stock, 
                     end_time, 
@@ -145,7 +149,8 @@ def check_stock_sub(stock,
                     allow_simple_zslx=True,
                     force_bi_zhongshu=True,
                     check_full_zoushi=True,
-                    ignore_sub_xd=False):
+                    ignore_sub_xd=False,
+                    enable_ac_opposite_direction=False):
     if is_description:
         print("check_stock_sub working on stock: {0} at {1} from {2} to {3}".format(stock, periods, split_time, end_time))
     ni = NestedInterval(stock, 
@@ -169,7 +174,8 @@ def check_stock_sub(stock,
                                                                  force_zhongshu=force_zhongshu,
                                                                  allow_simple_zslx=allow_simple_zslx,
                                                                  check_full_zoushi=check_full_zoushi, 
-                                                                 ignore_sub_xd=ignore_sub_xd) # data split at retrieval time
+                                                                 ignore_sub_xd=ignore_sub_xd,
+                                                                 enable_ac_opposite_direction=enable_ac_opposite_direction) # data split at retrieval time
     if exhausted and (ignore_sub_xd or xd_exhausted) and check_bi:
         bi_split_time = sub_profile[0][5] # split time is the xd start time
         bi_exhausted, bi_xd_exhausted, _, _ = ni.indepth_analyze_zoushi(direction, 
@@ -177,7 +183,8 @@ def check_stock_sub(stock,
                                                                         pe, 
                                                                         force_zhongshu=force_bi_zhongshu,
                                                                         check_full_zoushi=check_full_zoushi,
-                                                                        ignore_bi_xd=False) # never ignore bi level xd check
+                                                                        ignore_bi_xd=False,
+                                                                        enable_ac_opposite_direction=enable_ac_opposite_direction) # never ignore bi level xd check
         return exhausted and bi_exhausted, (ignore_sub_xd or xd_exhausted) and bi_xd_exhausted, sub_profile, ni.completed_zhongshu()
     return exhausted, xd_exhausted, sub_profile, ni.completed_zhongshu()
 
@@ -195,7 +202,8 @@ def check_stock_full(stock,
                      sub_check_bi=False,
                      use_sub_split=True,
                      ignore_cur_xd=False, 
-                     ignore_sub_xd=False):
+                     ignore_sub_xd=False,
+                     enable_ac_opposite_direction=False):
     
     if is_description:
         print("check_stock_full working on stock: {0} at {1} on {2}".format(stock, periods, end_time))
@@ -213,6 +221,7 @@ def check_stock_full(stock,
                                                                       is_anal=is_anal,
                                                                       check_full_zoushi=False,
                                                                       slope_only=False)
+    # enable_ac_opposite_direction not needed at this level
     if not chan_profile:
         chan_profile = [(Chan_Type.INVALID, TopBotType.noTopBot, 0, 0, 0, None, None)]
 
@@ -235,7 +244,8 @@ def check_stock_full(stock,
                                                                                 force_zhongshu=sub_force_zhongshu,
                                                                                 force_bi_zhongshu=True,
                                                                                 ignore_sub_xd=ignore_sub_xd,
-                                                                                check_full_zoushi=False)
+                                                                                check_full_zoushi=False, 
+                                                                                enable_ac_opposite_direction=enable_ac_opposite_direction)
         chan_profile = chan_profile + sub_profile
         return exhausted and (xd_exhausted or ignore_cur_xd) and sub_exhausted and sub_xd_exhausted, chan_profile, zhongshu_completed
     else:
@@ -458,7 +468,11 @@ class Equilibrium():
         self.check_zoushi_status()
         pass
     
-    def find_most_recent_zoushi(self, direction, current_chan_type, enable_composite=False):
+    def find_most_recent_zoushi(self, 
+                                direction, 
+                                current_chan_type, 
+                                enable_composite=False,
+                                enable_ac_opposite_direction=False):
         '''
         Make sure we find the appropriate two XD for comparison.
         A. in case of QVSHI
@@ -508,7 +522,7 @@ class Equilibrium():
                         else:
                             first_xd = zs.take_split_xd_as_zslx(direction)
                             
-                    elif len(self.analytic_result) < 2 or self.analytic_result[-2].direction != direction:
+                    elif len(self.analytic_result) < 2 or (not enable_ac_opposite_direction and self.analytic_result[-2].direction != direction):
                         first_xd = zs.take_split_xd_as_zslx(direction, contain_zs=True, force_remaining_zs=True)
                     else:
                         first_xd = self.analytic_result[-2]
@@ -547,7 +561,7 @@ class Equilibrium():
                     else:
                         first_xd = zs.take_split_xd_as_zslx(direction)
                         
-                elif len(self.analytic_result) < 3 or self.analytic_result[-3].direction != direction:
+                elif len(self.analytic_result) < 3 or (not enable_ac_opposite_direction and self.analytic_result[-3].direction != direction):
                     if len(self.analytic_result) > 1:
                         zs = self.analytic_result[-2]
                         first_xd = zs.take_split_xd_as_zslx(direction, contain_zs=True, force_remaining_zs=True)
@@ -838,7 +852,8 @@ class Equilibrium():
                            current_chan_type=Chan_Type.INVALID,
                            at_bi_level=False, # True currently at bi level
                            allow_simple_zslx=True, # allow simple zoushileixing to be true
-                           enable_composite=False): # allow composite zs, currently only at bi level
+                           enable_composite=False, 
+                           enable_ac_opposite_direction=False): # allow composite zs, currently only at bi level
         '''
         We are dealing type III differently at top level
         return:
@@ -897,7 +912,10 @@ class Equilibrium():
                 xd_exhaustion, ts = zs.check_exhaustion(slope_only=self.slope_only)
                 return True, xd_exhaustion, last_zoushi_time, ts, 0, 0
         
-        a, central_B, c, central_region = self.find_most_recent_zoushi(direction, current_chan_type, enable_composite=enable_composite)
+        a, central_B, c, central_region = self.find_most_recent_zoushi(direction, 
+                                                                       current_chan_type, 
+                                                                       enable_composite=enable_composite,
+                                                                       enable_ac_opposite_direction=enable_ac_opposite_direction)
         
         new_high_low = self.reached_new_high_low(guide_price, direction, c, central_region)
         
@@ -1434,6 +1452,7 @@ class NestedInterval():
                        check_tb_structure=False,
                        check_full_zoushi=False, 
                        enable_composite=False,
+                       enable_ac_opposite_direction=False,
                        slope_only=True):
         ''' THIS METHOD SHOULD ONLY BE USED FOR TOP LEVEL!!
         This is due to the fact that at high level we can't be very precise
@@ -1483,7 +1502,8 @@ class NestedInterval():
                                                                                                     current_chan_type=chan_t,
                                                                                                     at_bi_level=False,
                                                                                                     allow_simple_zslx=True, 
-                                                                                                    enable_composite=enable_composite)
+                                                                                                    enable_composite=enable_composite, 
+                                                                                                    enable_ac_opposite_direction=enable_ac_opposite_direction)
             if self.isDescription or self.isdebug:
                 print("Top level {0} {1} {2} {3} {4} with price level: {5}".format(self.periods[0], 
                                                                            chan_d, 
@@ -1518,7 +1538,8 @@ class NestedInterval():
                                return_effective_time=False, 
                                force_zhongshu=False,
                                check_full_zoushi=True,
-                               ignore_bi_xd=True):
+                               ignore_bi_xd=True,
+                               enable_ac_opposite_direction=False):
         '''
         specifically used to gauge the smallest level of precision, check at BI level
         split_time param once provided meaning we need to split zoushi otherwise split done at data level
@@ -1563,7 +1584,8 @@ class NestedInterval():
                                                                                          current_chan_type=all_types[0][0],
                                                                                          at_bi_level=True,
                                                                                          allow_simple_zslx=True,
-                                                                                         enable_composite=False)
+                                                                                         enable_composite=False, 
+                                                                                         enable_ac_opposite_direction=enable_ac_opposite_direction)
         if (self.isdebug):
             print("BI level {0}, {1}".format(bi_exhausted, bi_check_exhaustion))
         
@@ -1576,7 +1598,8 @@ class NestedInterval():
                           force_zhongshu=False,
                           allow_simple_zslx=True,
                           check_full_zoushi=True,
-                          ignore_sub_xd=False):
+                          ignore_sub_xd=False,
+                          enable_ac_opposite_direction=False):
         '''
         split done at data level
         
@@ -1632,7 +1655,8 @@ class NestedInterval():
                                                                                                    current_chan_type=chan_t,
                                                                                                    at_bi_level=False,
                                                                                                    allow_simple_zslx=allow_simple_zslx,
-                                                                                                   enable_composite=False)
+                                                                                                   enable_composite=False,
+                                                                                                   enable_ac_opposite_direction=enable_ac_opposite_direction)
         if self.isDescription or self.isdebug:
             print("working level {0} {1} {2} {3} {4} with price:{5}".format(period, 
                                                                         chan_d, 
