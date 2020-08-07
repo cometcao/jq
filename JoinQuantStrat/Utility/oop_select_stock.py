@@ -916,8 +916,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 (float_more_equal(cur_ratio, 1.191) and float_less_equal(cur_internal_ratio, 0.809)):
                 return True
         elif cur_chan_type == Chan_Type.III or cur_chan_type == Chan_Type.III_strong:
-            if float_less_equal(cur_ratio, 0.809) or\
-                float_less_equal(cur_internal_ratio, 0.809):
+            if float_less_equal(cur_ratio, 0.618) or\
+                float_less_equal(cur_internal_ratio, 0.618):
                 return True
         return False
     

@@ -839,7 +839,9 @@ class Short_Chan(Sell_stocks):
                 return True
 
             return False
-        elif current_chan_t == Chan_Type.III or current_chan_t == Chan_Type.III_strong:
+        elif current_chan_t == Chan_Type.III or\
+            current_chan_t == Chan_Type.III_strong or\
+            current_chan_t == Chan_Type.III_weak:
             # This is to make sure we have enough data for MACD and MA
             data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=120)
             stock_data = get_price(stock,
@@ -856,9 +858,9 @@ class Short_Chan(Sell_stocks):
 #             max_loc = stock_data.index.get_loc(max_price_time)
 #             min_loc = stock_data.index.get_loc(min_price_time)
 
-            if stock_data.loc[effective_time:,'low'].min() <= current_chan_p:
-                print("TYPE III invalidated {0}, {1}".format(stock_data.loc[effective_time:,'low'].min(), current_chan_p))
-                return True
+#             if stock_data.loc[position_time:,'low'].min() <= current_chan_p:
+#                 print("TYPE III invalidated {0}, {1}".format(stock_data.loc[effective_time:,'low'].min(), current_chan_p))
+#                 return True
             
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
                 self.log.info("HARDCORE stop loss: {0} -> {1}".format(stock_data.iloc[-1].close, avg_cost))
@@ -867,6 +869,7 @@ class Short_Chan(Sell_stocks):
             return False
         elif current_chan_t == Chan_Type.INVALID:
             print("NOT YET CODED!")
+            return False
     
     
     def process_stage_I(self, stock, context, min_time, working_period):
@@ -903,8 +906,9 @@ class Short_Chan(Sell_stocks):
             self.short_stock_info[stock] = c_profile
     
     def check_stop_profit(self, stock, context):
+        avg_cost = context.portfolio.positions[stock].avg_cost
         # short circuit
-        if context.portfolio.positions[stock].avg_cost > context.portfolio.positions[stock].price:
+        if avg_cost > context.portfolio.positions[stock].price:
             return False
         
         position_time = context.portfolio.positions[stock].transact_time
@@ -988,7 +992,9 @@ class Short_Chan(Sell_stocks):
 #                             print("STOP PROFIT {0} ma5 below ma13: {1}, {2}".format(stock, sma5, sma13))
 #                             return True
             
-        elif current_chan_t == Chan_Type.III or current_chan_t == Chan_Type.INVALID:
+        elif current_chan_t == Chan_Type.III or\
+            current_chan_t == Chan_Type.III_strong or\
+            current_chan_t == Chan_Type.III_weak:
             
             # extra data for SMA calculation
             data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=200)
@@ -1042,8 +1048,16 @@ class Short_Chan(Sell_stocks):
                     print("STOP PROFIT {0} ma5 below ma13: {1}, {2}".format(stock, sma5, sma13))
                     self.tentative_II.remove(stock)
                     return True
-                
+            
+            if (stock_data.iloc[-1].close / avg_cost - 1) >= self.stop_profit:
+                self.log.info("HARDCORE stop profit: {0} -> {1}".format(stock_data.iloc[-1].close, avg_cost))
+                return True
+            
             return False
+        elif current_chan_t == Chan_Type.INVALID:
+            print("NOT YET CODED")
+            return False
+        
 
     def check_internal_vol_money(self, stock, context, c_profile, working_period):
         if c_profile is None:
