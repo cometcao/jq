@@ -933,7 +933,7 @@ class Short_Chan(Sell_stocks):
             
             if stock in self.tentative_I and stock not in self.tentative_II:
                 c_profile = self.short_stock_info[stock]
-                if self.check_internal_vol_money(stock, context, c_profile):
+                if self.check_internal_vol_money(stock, context, c_profile, self.current_period):
                     self.tentative_I.remove(stock)
                     self.short_stock_info.pop(stock, None)
                     if c_profile is None: # reached high limit
@@ -1004,7 +1004,7 @@ class Short_Chan(Sell_stocks):
             
             if stock in self.tentative_I and stock not in self.tentative_II:
                 c_profile = self.short_stock_info[stock]
-                if self.check_internal_vol_money(stock, context, c_profile):
+                if self.check_internal_vol_money(stock, context, c_profile, self.sub_period):
                     self.tentative_I.remove(stock)
                     self.short_stock_info.pop(stock, None)
                     if c_profile is None: # reached high limit
@@ -1045,7 +1045,7 @@ class Short_Chan(Sell_stocks):
                 
             return False
 
-    def check_internal_vol_money(self, stock, context, c_profile):
+    def check_internal_vol_money(self, stock, context, c_profile, working_period):
         if c_profile is None:
             stock_data = get_bars(stock, 
                                 count=2, # 5d
@@ -1063,7 +1063,7 @@ class Short_Chan(Sell_stocks):
         else:
             stock_data = get_bars(stock, 
                                 count=2000, # 5d
-                                unit=self.current_period,
+                                unit=working_period,
                                 fields=['date','money'],
                                 include_now=True, 
                                 end_dt=context.current_dt, 
