@@ -888,7 +888,6 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_III = stocks_to_long.union(self.tentative_stage_III)
             
             self.tentative_stage_II = self.tentative_stage_II.difference(self.tentative_stage_III)
-            self.tentative_stage_III = self.tentative_stage_III.difference(set(context.portfolio.positions.keys()))
             
             # check type III
             type_III_long = set()
@@ -1046,13 +1045,15 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return kb_chan.formed_tb(tb=TopBotType.bot)
     
     def check_type_III(self, stock, context):
+        zhongshu_changed = False
+        current_III_type = [Chan_Type.III, Chan_Type.III_strong, Chan_Type.III_weak]
         
         result, profile, _ = check_stock_full(stock,
                                              end_time=context.current_dt,
                                              periods=self.periods,
                                              count=self.num_of_data,
                                              direction=TopBotType.top2bot, 
-                                             current_chan_type=[Chan_Type.III, Chan_Type.III_strong, Chan_Type.III_weak],
+                                             current_chan_type=current_III_type,
                                              sub_chan_type=[Chan_Type.I, Chan_Type.I_weak, Chan_Type.INVALID],
                                              isdebug=self.isdebug,
                                              is_description=self.isDescription,
@@ -1062,9 +1063,17 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                              ignore_cur_xd=self.ignore_xd,
                                              ignore_sub_xd=self.bi_level_precision,
                                              enable_ac_opposite_direction=True)
-        if result:
+        
+        if len(self.g.stock_chan_type[stock]) > 1:
+            old_current_profile = self.g.stock_chan_type[stock][1]
+            old_current_p = old_current_profile[2][1] if type(old_current_profile[2]) is list else old_current_profile[2]
+            current_p = profile[0][2]
+            zhongshu_changed = current_p != old_current_p
+        
+        if profile[0][0] in current_III_type:
             self.g.stock_chan_type[stock] = [[]] + profile # fit the results
-        return result
+        
+        return result, zhongshu_changed
             
     
     def check_structure_sub(self, stock, context):
