@@ -776,6 +776,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.use_stage_II = params.get('use_stage_II', False)
         self.stage_II_timing = params.get('stage_II_timing', [14, 50])
         self.long_candidate_num = params.get('long_candiate_num', self.long_stock_num)
+        self.use_stage_III = params.get('use_stage_III', False)
         
         self.force_chan_type = params.get('force_chan_type', [
                                                               [Chan_Type.I, self.curent_chan_type[0]],
@@ -789,6 +790,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                     ])
         self.tentative_stage_I = set() # list to hold stocks waiting to be operated
         self.tentative_stage_II = set()
+        self.tentative_stage_III = set()
         self.halt_check_when_enough = params.get('halt_check_when_enough', True)
     
     def check_guide_price_reached(self, stock, context):
@@ -820,6 +822,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         stocks_to_long = set()
         stocks_to_remove_I = set()
+        type_III_long = set()
         
         self.tentative_stage_I = self.tentative_stage_I.difference(set(context.portfolio.positions.keys()))
         
@@ -865,7 +868,6 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stocks_to_long = set()
             self.tentative_stage_I = self.tentative_stage_I.difference(self.tentative_stage_II)
         
-            # check type III
             self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                     
             for stock in self.tentative_stage_II:
@@ -881,8 +883,21 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.log.info("stocks removed from stage II: {0}".format(stocks_to_remove_II))
                     
             self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_long)
+        
+        if self.use_stage_II and self.use_stage_III:
+            self.tentative_stage_III = stocks_to_long.union(self.tentative_stage_III)
+            
+            self.tentative_stage_II = self.tentative_stage_II.difference(self.tentative_stage_III)
+            self.tentative_stage_III = self.tentative_stage_III.difference(set(context.portfolio.positions.keys()))
+            
+            # check type III
+            type_III_long = set()
+            for stock in self.tentative_stage_III:
+                if self.check_type_III(stock, context):
+                    type_III_long.add(stock)
+            self.tentative_stage_III = self.tentative_stage_III.difference(type_III_long)
                 
-        return stocks_to_long
+        return stocks_to_long, type_III_long
     
     def check_internal_vol_money(self, stock, context):
 
@@ -1030,6 +1045,28 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         return kb_chan.formed_tb(tb=TopBotType.bot)
     
+    def check_type_III(stock, context):
+        
+        result, profile, _ = check_stock_full(stock,
+                                             end_time=context.current_dt,
+                                             periods=self.periods,
+                                             count=self.num_of_data,
+                                             direction=TopBotType.top2bot, 
+                                             current_chan_type=[Chan_Type.III, Chan_Type.III_strong, Chan_Type.III_weak],
+                                             sub_chan_type=[Chan_Type.I, Chan_Type.I_weak, Chan_Type.INVALID],
+                                             isdebug=self.isdebug,
+                                             is_description=self.isDescription,
+                                             sub_force_zhongshu=self.sub_force_zhongshu, 
+                                             sub_check_bi=self.bi_level_precision,
+                                             use_sub_split=True,
+                                             ignore_cur_xd=self.ignore_xd,
+                                             ignore_sub_xd=self.bi_level_precision,
+                                             enable_ac_opposite_direction=True)
+        if result:
+            self.g.stock_chan_type[stock] = [[]] + profile # fit the results
+        return result
+            
+    
     def check_structure_sub(self, stock, context):
         zhongshu_changed = False
 
@@ -1100,15 +1137,19 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         # other stages also follows time constrains
         # deal with all tentative stocks
-        filter_stock_list = list(self.check_tentative_stocks(context))
+        type_I_list, type_III_list = self.check_tentative_stocks(context)
+        type_I_list, type_III_list = list(type_I_list), list(type_III_list)
         
         # sort by sectors again
-        filter_stock_list = self.sort_by_sector_order(filter_stock_list)
+        type_I_list = self.sort_by_sector_order(type_I_list) 
                 
-        self.log.info("\nStocks ready: {0},\ntentative I: {1},\ntentative II: {2}".format(filter_stock_list, 
+        self.log.info("\nStocks ready: I: {0}, III: {1},\ntentative I: {2},\ntentative II: {3},\ntentative III:{4}".format(
+                                                                      type_I_list, 
+                                                                      type_III_list,
                                                                       self.tentative_stage_I,
-                                                                      self.tentative_stage_II))
-        return filter_stock_list
+                                                                      self.tentative_stage_II,
+                                                                      self.tentative_stage_III))
+        return type_I_list+type_III_list
 
     def sort_by_sector_order(self, stock_list):
         # sort resulting stocks
