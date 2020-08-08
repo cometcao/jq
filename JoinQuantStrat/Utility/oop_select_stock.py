@@ -1045,7 +1045,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         return kb_chan.formed_tb(tb=TopBotType.bot)
     
-    def check_type_III(stock, context):
+    def check_type_III(self, stock, context):
         
         result, profile, _ = check_stock_full(stock,
                                              end_time=context.current_dt,
