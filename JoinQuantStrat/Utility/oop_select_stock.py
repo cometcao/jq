@@ -1127,7 +1127,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         filter_stock_list = []
         if within_processing_time:
-            stocks_in_place = set(context.portfolio.positions.keys()).union(self.tentative_stage_I).union(self.tentative_stage_II)
+            stocks_in_place = set(context.portfolio.positions.keys()).union(self.tentative_stage_I).union(self.tentative_stage_II).union(self.tentative_stage_III)
             stock_list = [stock for stock in stock_list if stock not in stocks_in_place]
             stock_list = self.sort_by_sector_order(stock_list)
             for stock in stock_list:
@@ -1185,7 +1185,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
     def after_trading_end(self, context):
         holding_pos = context.portfolio.positions.keys()
         stored_stocks = list(self.g.stock_chan_type.keys())
-        to_be_removed = [stock for stock in stored_stocks if (stock not in holding_pos and stock not in self.tentative_stage_I and stock not in self.tentative_stage_II)]
+        to_be_removed = [stock for stock in stored_stocks if (stock not in holding_pos and\
+                                                              stock not in self.tentative_stage_I and\
+                                                              stock not in self.tentative_stage_II and\
+                                                              stock not in self.tentative_stage_III)]
         [self.g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
         self.log.info("position chan info: {0}".format(self.g.stock_chan_type.keys()))
 
