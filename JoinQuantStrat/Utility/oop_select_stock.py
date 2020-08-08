@@ -1076,7 +1076,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         if len(self.g.stock_chan_type[stock]) > 1:
             old_current_profile = self.g.stock_chan_type[stock][1]
             old_current_p = old_current_profile[2][1] if type(old_current_profile[2]) is list else old_current_profile[2]
-            current_p = profile[0][2]
+            current_p = profile[0][2][1] if type(profile[0][2]) is list else profile[0][2]
             zhongshu_changed = current_p != old_current_p
         
         if profile[0][0] in current_III_type:
