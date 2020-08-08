@@ -893,7 +893,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             type_III_long = set()
             stocks_to_remove_III = set()
             for stock in self.tentative_stage_III:
-                ready, zhongshu_changed = self.check_type_III(stock, context):
+                ready, zhongshu_changed = self.check_type_III(stock, context)
                 
                 if ready:
                     type_III_long.add(stock)
