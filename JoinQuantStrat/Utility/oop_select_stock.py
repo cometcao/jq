@@ -887,13 +887,22 @@ class Filter_Chan_Stocks(Filter_stock_list):
         if self.use_stage_II and self.use_stage_III:
             self.tentative_stage_III = stocks_to_long.union(self.tentative_stage_III)
             
-            self.tentative_stage_II = self.tentative_stage_II.difference(self.tentative_stage_III)
+#             self.tentative_stage_II = self.tentative_stage_II.difference(self.tentative_stage_III)
             
             # check type III
             type_III_long = set()
+            stocks_to_remove_III = set()
             for stock in self.tentative_stage_III:
-                if self.check_type_III(stock, context):
+                ready, zhongshu_changed = self.check_type_III(stock, context):
+                
+                if ready:
                     type_III_long.add(stock)
+                if zhongshu_changed:
+                    stocks_to_remove_III.add(stock)
+                    
+            self.tentative_stage_III = self.tentative_stage_III.difference(stocks_to_remove_III)
+            self.log.info("stocks removed from stage III: {0}".format(stocks_to_remove_III))
+                
             self.tentative_stage_III = self.tentative_stage_III.difference(type_III_long)
                 
         return stocks_to_long, type_III_long
