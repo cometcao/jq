@@ -1078,8 +1078,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             current_p = profile[0][2][1] if type(profile[0][2]) is list else profile[0][2]
             zhongshu_changed = current_p != old_current_p
         
-        if profile[0][0] in current_III_type:
-            self.g.stock_chan_type[stock] = [[]] + profile # fit the results
+        if profile[0][0] in current_III_type and stock not in context.portfolio.positions.keys():
+            self.g.stock_chan_type[stock] = [()] + profile # fit the results
         
         return result, zhongshu_changed
             
