@@ -841,7 +841,8 @@ class Short_Chan(Sell_stocks):
             return False
         elif current_chan_t == Chan_Type.III or\
             current_chan_t == Chan_Type.III_strong or\
-            current_chan_t == Chan_Type.III_weak:
+            current_chan_t == Chan_Type.III_weak or\
+            current_chan_t == Chan_Type.INVALID:
             # This is to make sure we have enough data for MACD and MA
             data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=120)
             stock_data = get_price(stock,
@@ -867,9 +868,9 @@ class Short_Chan(Sell_stocks):
                 return True
             
             return False
-        elif current_chan_t == Chan_Type.INVALID:
-            print("NOT YET CODED!")
-            return False
+#         elif current_chan_t == Chan_Type.INVALID:
+#             print("NOT YET CODED!")
+#             return False
     
     
     def process_stage_I(self, stock, context, min_time, working_period):
@@ -994,8 +995,8 @@ class Short_Chan(Sell_stocks):
             
         elif current_chan_t == Chan_Type.III or\
             current_chan_t == Chan_Type.III_strong or\
-            current_chan_t == Chan_Type.III_weak:
-            
+            current_chan_t == Chan_Type.III_weak or\
+            current_chan_t == Chan_Type.INVALID:
             # extra data for SMA calculation
             data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=200)
             stock_data = get_price(stock,
@@ -1054,9 +1055,9 @@ class Short_Chan(Sell_stocks):
                 return True
             
             return False
-        elif current_chan_t == Chan_Type.INVALID:
-            print("NOT YET CODED")
-            return False
+#         elif current_chan_t == Chan_Type.INVALID:
+#             print("NOT YET CODED")
+#             return False
         
 
     def check_internal_vol_money(self, stock, context, c_profile, working_period):
@@ -1153,6 +1154,8 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
         
         # check stocks UPTONOW
         for stock in self.to_buy:
+            print(stock)
+            print(self.g.stock_chan_type[stock])
             current_profile = self.g.stock_chan_type[stock][1]
             cur_chan_t = current_profile[0]
             cur_chan_p = current_profile[2]

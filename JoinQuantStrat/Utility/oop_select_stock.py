@@ -792,6 +792,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.tentative_stage_II = set()
         self.tentative_stage_III = set()
         self.halt_check_when_enough = params.get('halt_check_when_enough', True)
+        self.stage_III_types = params.get('stage_III_types', [Chan_Type.III, Chan_Type.III_strong, Chan_Type.III_weak])
     
     def check_guide_price_reached(self, stock, context):
         current_profile = self.g.stock_chan_type[stock][1]
@@ -822,7 +823,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         stocks_to_long = set()
         stocks_to_remove_I = set()
-        type_III_long = set()
+        stage_III_long = set()
         
         self.tentative_stage_I = self.tentative_stage_I.difference(set(context.portfolio.positions.keys()))
         
@@ -885,27 +886,26 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_long)
         
         if self.use_stage_II and self.use_stage_III:
-            self.tentative_stage_III = stocks_to_long.union(self.tentative_stage_III)
-            
-#             self.tentative_stage_II = self.tentative_stage_II.difference(self.tentative_stage_III)
-            
-            # check type III
-            type_III_long = set()
+            # check stage III
+            stage_III_long = set()
             stocks_to_remove_III = set()
             for stock in self.tentative_stage_III:
-                ready, zhongshu_changed = self.check_type_III(stock, context)
+                ready, zhongshu_changed = self.check_stage_III(stock, context)
                 
                 if ready:
-                    type_III_long.add(stock)
+                    stage_III_long.add(stock)
                 if zhongshu_changed:
                     stocks_to_remove_III.add(stock)
                     
             self.tentative_stage_III = self.tentative_stage_III.difference(stocks_to_remove_III)
             self.log.info("stocks removed from stage III: {0}".format(stocks_to_remove_III))
+            
+            # for stocks to be long we wait after initial stage III check
+            self.tentative_stage_III = self.tentative_stage_III.union(stocks_to_long)
+            self.tentative_stage_III = self.tentative_stage_III.difference(stage_III_long)
+            
                 
-            self.tentative_stage_III = self.tentative_stage_III.difference(type_III_long)
-                
-        return stocks_to_long, type_III_long
+        return stocks_to_long, stage_III_long
     
     def check_internal_vol_money(self, stock, context):
 
@@ -1053,16 +1053,15 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         return kb_chan.formed_tb(tb=TopBotType.bot)
     
-    def check_type_III(self, stock, context):
+    def check_stage_III(self, stock, context):
         zhongshu_changed = False
-        current_III_type = [Chan_Type.III, Chan_Type.III_strong, Chan_Type.III_weak]
         
         result, profile, _ = check_stock_full(stock,
                                              end_time=context.current_dt,
                                              periods=self.periods,
                                              count=self.num_of_data,
                                              direction=TopBotType.top2bot, 
-                                             current_chan_type=current_III_type,
+                                             current_chan_type=self.stage_III_types,
                                              sub_chan_type=[Chan_Type.I, Chan_Type.I_weak, Chan_Type.INVALID],
                                              isdebug=self.isdebug,
                                              is_description=self.isDescription,
@@ -1072,14 +1071,17 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                              ignore_cur_xd=self.ignore_xd,
                                              ignore_sub_xd=self.bi_level_precision,
                                              enable_ac_opposite_direction=True)
-        old_current_profile = self.g.stock_chan_type[stock][1]
-        if len(self.g.stock_chan_type[stock]) > 1 and old_current_profile[0] in current_III_type:
-            old_current_p = old_current_profile[2][1] if type(old_current_profile[2]) is list else old_current_profile[2]
-            current_p = profile[0][2][1] if type(profile[0][2]) is list else profile[0][2]
-            zhongshu_changed = current_p != old_current_p
         
-        if profile[0][0] in current_III_type and stock not in context.portfolio.positions.keys():
-            self.g.stock_chan_type[stock] = [()] + profile # fit the results
+        if stock not in context.portfolio.positions.keys():
+            old_current_profile = self.g.stock_chan_type[stock][1]
+            if len(self.g.stock_chan_type[stock]) > 1 and\
+                old_current_profile[0] in self.stage_III_types:
+                old_current_p = old_current_profile[2][1] if type(old_current_profile[2]) is list else old_current_profile[2]
+                current_p = profile[0][2][1] if type(profile[0][2]) is list else profile[0][2]
+                zhongshu_changed = current_p != old_current_p
+    
+            if profile[0][0] in self.stage_III_types:
+                self.g.stock_chan_type[stock] = [()] + profile # fit the results
         
         return result, zhongshu_changed
             
