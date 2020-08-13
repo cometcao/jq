@@ -17,6 +17,7 @@ from rsrs_timing import *
 from chan_common_include import Chan_Type, float_more_equal, GOLDEN_RATIO, float_less_equal
 from equilibrium import check_chan_indepth, check_stock_sub, check_chan_by_type_exhaustion, check_stock_full, sanity_check
 from biaoLiStatus import TopBotType
+from kBar_Chan import *
 import json
 
 '''==================================调仓条件相关规则========================================='''
@@ -772,6 +773,7 @@ class Short_Chan(Sell_stocks):
         self.stop_profit = params.get('stop_profit', 0.03)
         self.use_ma13 = params.get('use_ma13', False)
         self.use_sub_split = params.get('sub_split', False)
+        self.short_stage_II_timing = params.get('short_stage_II_timing', [14, 50])
         self.tentative_I = set()
         self.tentative_II = set()
         self.to_sell = set()
@@ -977,6 +979,11 @@ class Short_Chan(Sell_stocks):
                     self.tentative_II.remove(stock)
                     return True
                 
+                if self.check_top_shape(stock, context):
+                    self.log.info("STOP PROFIT {0}, top found".format(stock))
+                    self.tentative_II.remove(stock)
+                    return True
+                
             return False
 
 #                 if stock_data.loc[effective_time:, 'high'].max() >= current_chan_p:# reached target price
@@ -1049,6 +1056,11 @@ class Short_Chan(Sell_stocks):
                     print("STOP PROFIT {0} ma5 below ma13: {1}, {2}".format(stock, sma5, sma13))
                     self.tentative_II.remove(stock)
                     return True
+                
+                if self.check_top_shape(stock, context):
+                    self.log.info("STOP PROFIT {0}, top found".format(stock))
+                    self.tentative_II.remove(stock)
+                    return True
             
             if (stock_data.iloc[-1].close / avg_cost - 1) >= self.stop_profit:
                 self.log.info("HARDCORE stop profit: {0} -> {1}".format(stock_data.iloc[-1].close, avg_cost))
@@ -1058,7 +1070,30 @@ class Short_Chan(Sell_stocks):
 #         elif current_chan_t == Chan_Type.INVALID:
 #             print("NOT YET CODED")
 #             return False
+    def check_top_shape(self, stock, context):
         
+        if self.short_stage_II_timing and\
+            (context.current_dt.hour != self.short_stage_II_timing[0] or\
+            context.current_dt.minute != self.short_stage_II_timing[1]):
+            return False
+        
+        current_profile = self.short_stock_info[stock]
+        current_start_time = current_profile[0][5]
+        
+        stock_data = get_price(security=stock, 
+                      end_date=context.current_dt, 
+                      start_date=current_start_time, 
+#                       count = 20,
+                      frequency='240m', 
+                      skip_paused=True, 
+                      panel=False, 
+                      fields=['high', 'low', 'close'])
+        
+        stock_data['date'] = stock_data.index
+        working_data_np = stock_data.to_records()
+        kb_chan = KBarChan(working_data_np, isdebug=False)
+        
+        return kb_chan.formed_tb(tb=TopBotType.top)
 
     def check_internal_vol_money(self, stock, context, c_profile, working_period):
         if c_profile is None:
