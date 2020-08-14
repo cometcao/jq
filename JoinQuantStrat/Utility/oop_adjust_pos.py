@@ -1066,6 +1066,10 @@ class Short_Chan(Sell_stocks):
 #             print("NOT YET CODED")
 #             return False
     def check_daily_ma13(self, stock, context):
+        current_profile = self.short_stock_info[stock]
+        current_start_time = current_profile[0][5]
+        data_start_time = current_start_time - pd.Timedelta(days=13)
+        
         stock_data = get_price(stock,
                                start_date=data_start_time, 
                                end_date=context.current_dt, 
@@ -1102,6 +1106,17 @@ class Short_Chan(Sell_stocks):
         return kb_chan.formed_tb(tb=TopBotType.top)
 
     def check_internal_vol_money(self, stock, context, c_profile, working_period):
+        stock_data = get_price(stock,
+                               count=13, 
+                               end_date=context.current_dt, 
+                               frequency='240m',
+                               fields=('close'), 
+                               skip_paused=False)
+        sma13 = stock_data['close'].values[-13:].sum() / 13
+        sma5 = stock_data['close'].values[-5:].sum() / 5
+        if float_less_equal(sma5, sma13): # sm5 must be above sm13
+            return False
+        
         if c_profile is None:
             stock_data = get_bars(stock, 
                                 count=2, # 5d
@@ -1154,7 +1169,7 @@ class Short_Chan(Sell_stocks):
                 continue
             
             if self.check_stop_profit(stock, context):
-                self.short_stock_info.pop(stock, None)
+                self.short_stock_info.discard(stock)
                 self.to_sell.add(stock)
         self.adjust(context, data, self.to_sell)
         
@@ -1171,6 +1186,11 @@ class Short_Chan(Sell_stocks):
                     self.g.close_position(self, position, True, pindex)
 
     def after_trading_end(self, context):
+        all_tentative_stocks = self.tentative_I.union(self.tentative_II)
+        for stock in all_tentative_stocks:
+            if stock not in context.portfolio.positions:
+                self.tentative_I.discard(stock)
+                self.tentative_II.discard(stock)
         self.log.info("stocks to be sold: {0}".format(self.to_sell))
 
     def __str__(self):
