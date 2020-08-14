@@ -774,6 +774,7 @@ class Short_Chan(Sell_stocks):
         self.use_ma13 = params.get('use_ma13', False)
         self.use_sub_split = params.get('sub_split', False)
         self.short_stage_II_timing = params.get('short_stage_II_timing', [14, 50])
+        self.use_check_top = params.get('use_check_top', True)
         self.tentative_I = set()
         self.tentative_II = set()
         self.to_sell = set()
@@ -885,7 +886,7 @@ class Short_Chan(Sell_stocks):
         result, xd_result, c_profile, sub_zhongshu_formed = check_stock_sub(stock,
                                               end_time=context.current_dt,
                                               periods=[working_period],
-                                              count=2000,
+                                              count=3000,
                                               direction=TopBotType.bot2top,
                                               chan_types=[Chan_Type.I, 
                                                           Chan_Type.I_weak, 
@@ -942,7 +943,6 @@ class Short_Chan(Sell_stocks):
                 c_profile = self.short_stock_info[stock]
                 if self.check_internal_vol_money(stock, context, c_profile, self.current_period):
                     self.tentative_I.remove(stock)
-                    self.short_stock_info.pop(stock, None)
                     if c_profile is None: # reached high limit
                         return True
                     self.tentative_II.add(stock)
@@ -951,7 +951,7 @@ class Short_Chan(Sell_stocks):
                 sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
                                                       end_time=context.current_dt,
                                                       periods=['1m' if self.sub_period == 'bi' else self.sub_period],
-                                                      count=2000,
+                                                      count=3000,
                                                       direction=TopBotType.bot2top,
                                                       chan_types=[Chan_Type.I, Chan_Type.I_weak, Chan_Type.INVALID],
                                                       isdebug=self.isdebug,
@@ -972,14 +972,12 @@ class Short_Chan(Sell_stocks):
                     self.tentative_II.remove(stock)
                     return True
             
-                sma13 = stock_data['close'].values[-13:].sum() / 13
-                sma5 = stock_data['close'].values[-5:].sum() / 5
-                if self.use_ma13 and sma5 < sma13:
-                    print("STOP PROFIT {0} ma5 below ma13: {1}, {2}".format(stock, sma5, sma13))
+                if self.use_ma13 and self.check_daily_ma13(stock, context):
+                    print("STOP PROFIT {0} ma5 below ma13".format(stock))
                     self.tentative_II.remove(stock)
                     return True
                 
-                if self.check_top_shape(stock, context):
+                if self.use_check_top and self.check_top_shape(stock, context):
                     self.log.info("STOP PROFIT {0}, top found".format(stock))
                     self.tentative_II.remove(stock)
                     return True
@@ -1020,7 +1018,6 @@ class Short_Chan(Sell_stocks):
                 c_profile = self.short_stock_info[stock]
                 if self.check_internal_vol_money(stock, context, c_profile, self.sub_period):
                     self.tentative_I.remove(stock)
-                    self.short_stock_info.pop(stock, None)
                     if c_profile is None: # reached high limit
                         return True
                     self.tentative_II.add(stock)
@@ -1029,7 +1026,7 @@ class Short_Chan(Sell_stocks):
                 sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
                                                       end_time=context.current_dt,
                                                       periods=['1m' if self.sub_period == 'bi' else self.sub_period],
-                                                      count=2000,
+                                                      count=3000,
                                                       direction=TopBotType.bot2top,
                                                       chan_types=[Chan_Type.I, Chan_Type.I_weak, Chan_Type.INVALID],
                                                       isdebug=self.isdebug,
@@ -1050,19 +1047,17 @@ class Short_Chan(Sell_stocks):
                     self.tentative_II.remove(stock)
                     return True
             
-                sma13 = stock_data['close'].values[-13:].sum() / 13
-                sma5 = stock_data['close'].values[-5:].sum() / 5
-                if self.use_ma13 and sma5 < sma13:
-                    print("STOP PROFIT {0} ma5 below ma13: {1}, {2}".format(stock, sma5, sma13))
+                if self.use_ma13 and self.check_daily_ma13(stock,context):
+                    print("STOP PROFIT {0} ma5 below ma13".format(stock))
                     self.tentative_II.remove(stock)
                     return True
                 
-                if self.check_top_shape(stock, context):
+                if self.use_check_top and self.check_top_shape(stock, context):
                     self.log.info("STOP PROFIT {0}, top found".format(stock))
                     self.tentative_II.remove(stock)
                     return True
             
-            if (stock_data.iloc[-1].close / avg_cost - 1) >= self.stop_profit:
+            if (get_current_data()[stock].last_price / avg_cost - 1) >= self.stop_profit:
                 self.log.info("HARDCORE stop profit: {0} -> {1}".format(stock_data.iloc[-1].close, avg_cost))
                 return True
             
@@ -1070,6 +1065,17 @@ class Short_Chan(Sell_stocks):
 #         elif current_chan_t == Chan_Type.INVALID:
 #             print("NOT YET CODED")
 #             return False
+    def check_daily_ma13(self, stock, context):
+        stock_data = get_price(stock,
+                               start_date=data_start_time, 
+                               end_date=context.current_dt, 
+                               frequency='240m',
+                               fields=('close'), 
+                               skip_paused=False)
+        sma13 = stock_data['close'].values[-13:].sum() / 13
+        sma5 = stock_data['close'].values[-5:].sum() / 5
+        return stock_data.shape[0] > 13 and sma5 < sma13
+
     def check_top_shape(self, stock, context):
         
         if self.short_stage_II_timing and\
@@ -1148,6 +1154,7 @@ class Short_Chan(Sell_stocks):
                 continue
             
             if self.check_stop_profit(stock, context):
+                self.short_stock_info.pop(stock, None)
                 self.to_sell.add(stock)
         self.adjust(context, data, self.to_sell)
         
