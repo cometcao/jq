@@ -1189,8 +1189,8 @@ class Short_Chan(Sell_stocks):
         all_tentative_stocks = self.tentative_I.union(self.tentative_II)
         for stock in all_tentative_stocks:
             if stock not in context.portfolio.positions:
-                self.tentative_I.pop(stock, None)
-                self.tentative_II.pop(stock, None)
+                self.tentative_I.discard(stock)
+                self.tentative_II.discard(stock)
         self.log.info("stocks to be sold: {0}".format(self.to_sell))
 
     def __str__(self):
