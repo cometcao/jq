@@ -890,7 +890,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stage_III_long = set()
             stocks_to_remove_III = set()
             for stock in self.tentative_stage_III:
-                ready, zhongshu_changed = self.check_stage_III(stock, context)
+                ready, zhongshu_changed = self.check_stage_III_new(stock, context)
                 
                 if ready:
                     stage_III_long.add(stock)
@@ -1053,6 +1053,16 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         return kb_chan.formed_tb(tb=TopBotType.bot)
     
+    
+    def check_stage_III_new(self, stock, context):
+        zhongshu_changed = False
+        
+        if stock not in context.portfolio.positions.keys():
+            if self.check_bot_shape(stock, context):
+                return True, zhongshu_changed
+        
+        return False, zhongshu_changed
+    
     def check_stage_III(self, stock, context):
         zhongshu_changed = False
         
@@ -1062,7 +1072,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                              count=self.num_of_data,
                                              direction=TopBotType.top2bot, 
                                              current_chan_type=self.stage_III_types,
-                                             sub_chan_type=[Chan_Type.I, Chan_Type.I_weak, Chan_Type.INVALID],
+                                             sub_chan_type=[Chan_Type.I, 
+                                                            Chan_Type.I_weak, 
+                                                            Chan_Type.INVALID, 
+                                                            Chan_Type.III_strong, 
+                                                            Chan_Type.III_weak,
+                                                            Chan_Type.III],
                                              isdebug=self.isdebug,
                                              is_description=self.isDescription,
                                              sub_force_zhongshu=self.sub_force_zhongshu, 
@@ -1134,18 +1149,6 @@ class Filter_Chan_Stocks(Filter_stock_list):
             for stock in stock_list:
                 if self.halt_check_when_enough and (self.long_candidate_num <= len(self.tentative_stage_I)):
                     break
-#                 result, xd_result, c_profile = check_chan_by_type_exhaustion(stock,
-#                                                       end_time=context.current_dt,
-#                                                       periods=[self.periods[0]],
-#                                                       count=self.num_of_data,
-#                                                       direction=TopBotType.top2bot,
-#                                                       chan_type=self.curent_chan_type,
-#                                                       isdebug=self.isdebug,
-#                                                       is_description =self.isDescription,
-#                                                       is_anal=False,
-#                                                       check_structure=True,
-#                                                       check_full_zoushi=False,
-#                                                       slope_only=False) # synch with selection
                 
                 if self.check_internal_vol_money(stock, context):
                     filter_stock_list.append(stock)

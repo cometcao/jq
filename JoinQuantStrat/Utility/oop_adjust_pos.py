@@ -847,13 +847,13 @@ class Short_Chan(Sell_stocks):
             current_chan_t == Chan_Type.III_weak or\
             current_chan_t == Chan_Type.INVALID:
             # This is to make sure we have enough data for MACD and MA
-            data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=120)
-            stock_data = get_price(stock,
-                                   start_date=data_start_time, 
-                                   end_date=context.current_dt, 
-                                   frequency='1m', 
-                                   fields=('high', 'low', 'close', 'money'), 
-                                   skip_paused=False)
+#             data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=120)
+#             stock_data = get_price(stock,
+#                                    start_date=data_start_time, 
+#                                    end_date=context.current_dt, 
+#                                    frequency='1m', 
+#                                    fields=('high', 'low', 'close', 'money'), 
+#                                    skip_paused=False)
 #             # check slope
 #             max_price_after_long = stock_data.loc[sub_zoushi_start_time:, 'high'].max()
 #             min_price = stock_data.loc[sub_zoushi_start_time:, 'low'].min()
@@ -865,9 +865,9 @@ class Short_Chan(Sell_stocks):
 #             if stock_data.loc[position_time:,'low'].min() <= current_chan_p:
 #                 print("TYPE III invalidated {0}, {1}".format(stock_data.loc[effective_time:,'low'].min(), current_chan_p))
 #                 return True
-            
-            if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
-                self.log.info("HARDCORE stop loss: {0} -> {1}".format(stock_data.iloc[-1].close, avg_cost))
+            latest_price = get_current_data()[stock].last_price
+            if (1 - latest_price / avg_cost) >= self.stop_loss:
+                self.log.info("HARDCORE stop loss: {0} -> {1}".format(latest_price, avg_cost))
                 return True
             
             return False
@@ -910,6 +910,7 @@ class Short_Chan(Sell_stocks):
             self.short_stock_info[stock] = c_profile
     
     def check_stop_profit(self, stock, context):
+        latest_price = get_current_data()[stock].last_price
         avg_cost = context.portfolio.positions[stock].avg_cost
         # short circuit
         if avg_cost > context.portfolio.positions[stock].price:
@@ -1002,14 +1003,14 @@ class Short_Chan(Sell_stocks):
             current_chan_t == Chan_Type.III_strong or\
             current_chan_t == Chan_Type.III_weak or\
             current_chan_t == Chan_Type.INVALID:
-            # extra data for SMA calculation
-            data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=200)
-            stock_data = get_price(stock,
-                                   start_date=data_start_time, 
-                                   end_date=context.current_dt, 
-                                   frequency=self.current_period, 
-                                   fields=('high', 'low', 'close'), 
-                                   skip_paused=False)
+#             # extra data for SMA calculation
+#             data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=200)
+#             stock_data = get_price(stock,
+#                                    start_date=data_start_time, 
+#                                    end_date=context.current_dt, 
+#                                    frequency=self.current_period, 
+#                                    fields=('high', 'low', 'close'), 
+#                                    skip_paused=False)
 
             if stock not in self.tentative_I and stock not in self.tentative_II:
                 self.process_stage_I(stock, context, None, self.sub_period)
@@ -1057,8 +1058,8 @@ class Short_Chan(Sell_stocks):
                     self.tentative_II.remove(stock)
                     return True
             
-            if (get_current_data()[stock].last_price / avg_cost - 1) >= self.stop_profit:
-                self.log.info("HARDCORE stop profit: {0} -> {1}".format(stock_data.iloc[-1].close, avg_cost))
+            if (latest_price / avg_cost - 1) >= self.stop_profit:
+                self.log.info("HARDCORE stop profit: {0} -> {1}".format(latest_price, avg_cost))
                 return True
             
             return False
