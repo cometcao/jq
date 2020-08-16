@@ -1166,7 +1166,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         splitTime = old_current_profile[5] if self.use_sub_split else None
 
         sub_exhausted, sub_xd_exhausted, sub_profile, zhongshu_completed = check_stock_sub(stock=stock, 
-                                                                                end_time=end_time, 
+                                                                                end_time=context.current_dt, 
                                                                                 periods=[self.periods[1]], 
                                                                                 count=self.num_of_data, 
                                                                                 direction=TopBotType.top2bot, 
