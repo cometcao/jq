@@ -1180,7 +1180,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                                 force_bi_zhongshu=True,
                                                                                 ignore_sub_xd=self.ignore_xd,
                                                                                 check_full_zoushi=False, 
-                                                                                enable_ac_opposite_direction=enable_ac_opposite_direction)
+                                                                                enable_ac_opposite_direction=enable_ac_op_direction)
         
         self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0], self.g.stock_chan_type[stock][1]] + sub_profile
 
