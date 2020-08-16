@@ -763,7 +763,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.isDescription= params.get('isDescription', False)
         self.long_stock_num = params.get('long_stock_num', 0)
         self.sup_chan_type = params.get('sup_chan_type', [Chan_Type.I, Chan_Type.INVALID])
-        self.curent_chan_type = params.get('current_chan_type', [Chan_Type.I])
+        self.current_chan_type = params.get('current_chan_type', [Chan_Type.I])
         self.sub_chan_type = params.get('sub_chan_type', [Chan_Type.INVALID, Chan_Type.I])
         self.periods = params.get('periods', ['5m', '1m'])
         self.num_of_data = params.get('num_of_data', 2500)
@@ -779,14 +779,14 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.use_stage_III = params.get('use_stage_III', False)
         
         self.force_chan_type = params.get('force_chan_type', [
-                                                              [Chan_Type.I, self.curent_chan_type[0]],
-                                                              [Chan_Type.I_weak, self.curent_chan_type[0]],
-                                                              [Chan_Type.INVALID, self.curent_chan_type[0]]
+                                                              [Chan_Type.I, self.current_chan_type[0]],
+                                                              [Chan_Type.I_weak, self.current_chan_type[0]],
+                                                              [Chan_Type.INVALID, self.current_chan_type[0]]
                                                               ])
         self.tentative_chan_type = params.get('tentative_chan_type', [
-                                    [Chan_Type.I, self.curent_chan_type[0]],
-                                    [Chan_Type.I_weak, self.curent_chan_type[0]],
-                                    [Chan_Type.INVALID, self.curent_chan_type[0]]
+                                    [Chan_Type.I, self.current_chan_type[0]],
+                                    [Chan_Type.I_weak, self.current_chan_type[0]],
+                                    [Chan_Type.INVALID, self.current_chan_type[0]]
                                     ])
         self.tentative_stage_I = set() # list to hold stocks waiting to be operated
         self.tentative_stage_II = set()
@@ -951,7 +951,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                           periods=[self.periods[0]], 
                                                                           count=self.num_of_data, 
                                                                           direction=TopBotType.top2bot,
-                                                                          chan_type=self.curent_chan_type, 
+                                                                          chan_type=self.current_chan_type, 
                                                                           isdebug=self.isdebug, 
                                                                           is_description=self.isDescription,
                                                                           check_structure=True,
@@ -1199,7 +1199,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                              periods=self.periods,
                                              count=self.num_of_data,
                                              direction=TopBotType.top2bot, 
-                                             current_chan_type=self.curent_chan_type,
+                                             current_chan_type=self.current_chan_type,
                                              sub_chan_type=self.sub_chan_type,
                                              isdebug=self.isdebug,
                                              is_description=self.isDescription,
