@@ -1217,8 +1217,6 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
         
         # check stocks UPTONOW
         for stock in self.to_buy:
-            print(stock)
-            print(self.g.stock_chan_type[stock])
             current_profile = self.g.stock_chan_type[stock][1]
             cur_chan_t = current_profile[0]
             cur_chan_p = current_profile[2]
