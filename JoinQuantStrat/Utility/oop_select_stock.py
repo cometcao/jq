@@ -868,10 +868,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                     
             for stock in self.tentative_stage_II:
-                if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
-                    if self.check_guide_price_reached(stock, context):
-                        stocks_to_remove_II.add(stock)
-                        continue
+#                 if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
+#                     if self.check_guide_price_reached(stock, context):
+#                         stocks_to_remove_II.add(stock)
+#                         continue
                     
                 if self.check_bot_shape(stock, context):
                     stocks_to_long.add(stock)
@@ -886,7 +886,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stage_III_long = set()
             stocks_to_remove_III = set()
             for stock in self.tentative_stage_III:
-                ready, zhongshu_changed = self.check_stage_III(stock, context)
+                ready, zhongshu_changed = self.check_stage_III_new(stock, context)
                 
                 if ready:
                     stage_III_long.add(stock)
@@ -1057,7 +1057,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #                 return True
         return False
     
-    def check_bot_shape(self, stock, context):
+    def check_bot_shape(self, stock, context, from_local_max=False):
         
         if self.stage_II_timing and\
             (context.current_dt.hour != self.stage_II_timing[0] or\
@@ -1066,6 +1066,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         current_profile = self.g.stock_chan_type[stock][1]
         current_start_time = current_profile[5]
+        current_effective_time = current_profile[6]
         
         stock_data = get_price(security=stock, 
                       end_date=context.current_dt, 
@@ -1075,6 +1076,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
                       skip_paused=True, 
                       panel=False, 
                       fields=['high', 'low', 'close'])
+        
+        if from_local_max:
+            max_time = stock_data.loc[current_effective_time:,'high'].idxmax()
+            stock_data = stock_data.loc[max_time:,]
         
         stock_data['date'] = stock_data.index
 #         stock_data = get_bars(stock, 
@@ -1109,7 +1114,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         zhongshu_changed = False
         
         if stock not in context.portfolio.positions.keys():
-            if self.check_bot_shape(stock, context):
+            if self.check_bot_shape(stock, context, from_local_max=True):
                 return True, zhongshu_changed
         
         return False, zhongshu_changed
