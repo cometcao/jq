@@ -829,14 +829,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         for stock in self.tentative_stage_I:
             
-            if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
-                if self.check_guide_price_reached(stock, context):
-                    stocks_to_remove_I.add(stock)
-                    continue
-                
-#            # we don't want to halt any in-stage stock process they needs to be checked all time 
-#             if self.halt_check_when_enough and (self.long_candidate_num <= len(self.tentative_stage_II)):
-#                 continue
+#             if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
+#                 if self.check_guide_price_reached(stock, context):
+#                     stocks_to_remove_I.add(stock)
+#                     continue
             
             result, zhongshu_changed = self.check_structure_sub_new(stock, context)
             current_profile = self.g.stock_chan_type[stock][1]
