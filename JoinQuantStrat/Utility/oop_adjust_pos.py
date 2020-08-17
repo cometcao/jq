@@ -838,7 +838,7 @@ class Short_Chan(Sell_stocks):
     
 
             if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
-                self.log.info("HARDCORE stop loss: {0} -> {1}".format(stock_data.iloc[-1].close, avg_cost))
+                self.log.info("{0} HARDCORE stop loss: {1} -> {2}".format(stock, stock_data.iloc[-1].close, avg_cost))
                 return True
 
             return False
@@ -867,7 +867,7 @@ class Short_Chan(Sell_stocks):
 #                 return True
             latest_price = get_current_data()[stock].last_price
             if (1 - latest_price / avg_cost) >= self.stop_loss:
-                self.log.info("HARDCORE stop loss: {0} -> {1}".format(latest_price, avg_cost))
+                self.log.info("{0} HARDCORE stop loss: {1} -> {2}".format(stock, latest_price, avg_cost))
                 return True
             
             return False
@@ -1059,7 +1059,7 @@ class Short_Chan(Sell_stocks):
                     return True
             
             if (latest_price / avg_cost - 1) >= self.stop_profit:
-                self.log.info("HARDCORE stop profit: {0} -> {1}".format(latest_price, avg_cost))
+                self.log.info("{0} HARDCORE stop profit: {1} -> {2}".format(stock, latest_price, avg_cost))
                 return True
             
             return False
