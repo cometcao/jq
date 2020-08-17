@@ -834,7 +834,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #                     stocks_to_remove_I.add(stock)
 #                     continue
             
-            result, zhongshu_changed = self.check_structure_sub_new(stock, context)
+            result, zhongshu_changed = self.check_structure_sub(stock, context)
             current_profile = self.g.stock_chan_type[stock][1]
             cur_chan_t = current_profile[0]
             if zhongshu_changed:
@@ -1200,7 +1200,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                              periods=self.periods,
                                              count=self.num_of_data,
                                              direction=TopBotType.top2bot, 
-                                             current_chan_type=self.current_chan_type,
+                                             current_chan_type=self.stage_III_types,
                                              sub_chan_type=self.sub_chan_type,
                                              isdebug=self.isdebug,
                                              is_description=self.isDescription,
@@ -1211,10 +1211,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                              ignore_sub_xd=self.bi_level_precision,
                                              enable_ac_opposite_direction=enable_ac_op_direction)
         
-        if (type(profile[0][2]) is list and old_current_profile[2] != profile[0][2][0]) or\
-            (type(profile[0][2]) is not list  and old_current_profile[2] != profile[0][2]):
+        old_price = old_current_profile[2][0] if type(old_current_profile[2]) is list else old_current_profile[2]
+        new_price = profile[0][2][0] if type(profile[0][2]) is list else profile[0][2]
 #             self.log.debug("stock {0}, zhongshu changed: {1} <-> {2}".format(stock, old_current_profile[2], profile[0][2]))
-            zhongshu_changed = True
+        zhongshu_changed = old_price != new_price
         
         if profile[0][5] is not None and profile[0][6] is not None:
             self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile
