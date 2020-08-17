@@ -829,10 +829,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         for stock in self.tentative_stage_I:
             
-#             if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
-#                 if self.check_guide_price_reached(stock, context):
-#                     stocks_to_remove_I.add(stock)
-#                     continue
+            if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
+                if self.check_guide_price_reached(stock, context):
+                    stocks_to_remove_I.add(stock)
+                    continue
             
             result, zhongshu_changed = self.check_structure_sub(stock, context)
             current_profile = self.g.stock_chan_type[stock][1]
@@ -868,10 +868,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                     
             for stock in self.tentative_stage_II:
-#                 if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
-#                     if self.check_guide_price_reached(stock, context):
-#                         stocks_to_remove_II.add(stock)
-#                         continue
+                if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
+                    if self.check_guide_price_reached(stock, context):
+                        stocks_to_remove_II.add(stock)
+                        continue
                     
                 if self.check_bot_shape(stock, context):
                     stocks_to_long.add(stock)
@@ -1144,12 +1144,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                              enable_ac_opposite_direction=True)
         
         if stock not in context.portfolio.positions.keys():
-#             old_current_profile = self.g.stock_chan_type[stock][1]
-#             if len(self.g.stock_chan_type[stock]) > 1 and\
-#                 old_current_profile[0] in self.stage_III_types:
-#                 old_current_p = old_current_profile[2][1] if type(old_current_profile[2]) is list else old_current_profile[2]
-#                 current_p = profile[0][2][1] if type(profile[0][2]) is list else profile[0][2]
-#                 zhongshu_changed = current_p != old_current_p
+            old_current_profile = self.g.stock_chan_type[stock][1]
+            if len(self.g.stock_chan_type[stock]) > 1 and\
+                old_current_profile[0] in self.stage_III_types:
+                old_current_p = old_current_profile[2][1] if type(old_current_profile[2]) is list else old_current_profile[2]
+                current_p = profile[0][2][1] if type(profile[0][2]) is list else profile[0][2]
+                zhongshu_changed = current_p != old_current_p
     
             if profile[0][0] in self.stage_III_types:
                 self.g.stock_chan_type[stock] = [()] + profile # fit the results
@@ -1200,7 +1200,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                              periods=self.periods,
                                              count=self.num_of_data,
                                              direction=TopBotType.top2bot, 
-                                             current_chan_type=self.stage_III_types,
+                                             current_chan_type=self.current_chan_type,
                                              sub_chan_type=self.sub_chan_type,
                                              isdebug=self.isdebug,
                                              is_description=self.isDescription,
@@ -1237,7 +1237,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 if self.halt_check_when_enough and (self.long_candidate_num <= len(self.tentative_stage_I)):
                     break
                 
-                if self.check_vol_money_cur_structure(stock, context):
+                if self.check_internal_vol_money(stock, context):
                     filter_stock_list.append(stock)
         
         self.log.info("newly qualified stocks: {0}".format(filter_stock_list))
