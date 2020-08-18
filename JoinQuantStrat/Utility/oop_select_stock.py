@@ -834,7 +834,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                     stocks_to_remove_I.add(stock)
                     continue
             
-            result, zhongshu_changed = self.check_structure_sub(stock, context)
+            result, zhongshu_changed = self.check_structure_sub_new(stock, context)
             current_profile = self.g.stock_chan_type[stock][1]
             cur_chan_t = current_profile[0]
             if zhongshu_changed:
@@ -885,7 +885,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             # check stage III
             stocks_to_remove_III = set()
             for stock in self.tentative_stage_III:
-                ready, zhongshu_changed = self.check_stage_III(stock, context)
+                ready, zhongshu_changed = self.check_stage_III_new(stock, context)
                 
                 if ready:
                     stage_III_long.add(stock)
@@ -899,8 +899,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_III = self.tentative_stage_III.union(stocks_to_long)
             self.tentative_stage_III = self.tentative_stage_III.difference(stage_III_long)
             
-            # add back to stage II
-            self.tentative_stage_II = self.tentative_stage_II.union(stage_III_long)
+            # add back to stage I
+            self.tentative_stage_I = self.tentative_stage_I.union(stage_III_long)
             
                 
         return stocks_to_long, stage_III_long
@@ -1116,7 +1116,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
         zhongshu_changed = False
         
         if stock not in context.portfolio.positions.keys():
-            if self.check_bot_shape(stock, context, from_local_max=True):
+#             if self.check_bot_shape(stock, context, from_local_max=True):
+#                 return True, zhongshu_changed
+            if self.check_vol_money_cur_structure(stock, context):
                 return True, zhongshu_changed
         
         return False, zhongshu_changed
@@ -1239,7 +1241,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 if self.halt_check_when_enough and (self.long_candidate_num <= len(self.tentative_stage_I)):
                     break
                 
-                if self.check_internal_vol_money(stock, context):
+                if self.check_vol_money_cur_structure(stock, context):
                     filter_stock_list.append(stock)
         
         self.log.info("newly qualified stocks: {0}".format(filter_stock_list))
