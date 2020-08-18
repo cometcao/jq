@@ -885,7 +885,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             # check stage III
             stocks_to_remove_III = set()
             for stock in self.tentative_stage_III:
-                ready, zhongshu_changed = self.check_stage_III_new(stock, context)
+                ready, zhongshu_changed = self.check_stage_III_new(stock, context, after_stage_III=False)
                 
                 if ready:
                     stage_III_long.add(stock)
@@ -905,7 +905,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 
         return stocks_to_long, stage_III_long
     
-    def check_vol_money_cur_structure(self, stock, context):
+    def check_vol_money_cur_structure(self, stock, context, after_stage_III=False):
 
         current_profile = self.g.stock_chan_type[stock][1]
         current_zoushi_start_time = current_profile[5]
@@ -949,7 +949,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                           periods=[self.periods[0]], 
                                                                           count=self.num_of_data, 
                                                                           direction=TopBotType.top2bot,
-                                                                          chan_type=self.current_chan_type, 
+                                                                          chan_type=self.stage_III_types if after_stage_III else self.current_chan_type, 
                                                                           isdebug=self.isdebug, 
                                                                           is_description=self.isDescription,
                                                                           check_structure=True,
@@ -1118,7 +1118,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         if stock not in context.portfolio.positions.keys():
 #             if self.check_bot_shape(stock, context, from_local_max=True):
 #                 return True, zhongshu_changed
-            if self.check_vol_money_cur_structure(stock, context):
+            if self.check_vol_money_cur_structure(stock, context, after_stage_III=True):
                 return True, zhongshu_changed
         
         return False, zhongshu_changed
