@@ -885,7 +885,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             # check stage III
             stocks_to_remove_III = set()
             for stock in self.tentative_stage_III:
-                ready, zhongshu_changed = self.check_stage_III_new(stock, context, after_stage_III=False)
+                ready, zhongshu_changed = self.check_stage_III_new(stock, context)
                 
                 if ready:
                     stage_III_long.add(stock)
@@ -1241,7 +1241,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 if self.halt_check_when_enough and (self.long_candidate_num <= len(self.tentative_stage_I)):
                     break
                 
-                if self.check_vol_money_cur_structure(stock, context):
+                if self.check_vol_money_cur_structure(stock, context, after_stage_III=False):
                     filter_stock_list.append(stock)
         
         self.log.info("newly qualified stocks: {0}".format(filter_stock_list))
