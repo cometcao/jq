@@ -868,10 +868,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                     
             for stock in self.tentative_stage_II:
-                if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
-                    if self.check_guide_price_reached(stock, context):
-                        stocks_to_remove_II.add(stock)
-                        continue
+#                 if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
+#                     if self.check_guide_price_reached(stock, context):
+#                         stocks_to_remove_II.add(stock)
+#                         continue
                     
                 if self.check_bot_shape(stock, context):
                     stocks_to_long.add(stock)
@@ -883,10 +883,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         if self.use_stage_II and self.use_stage_III:
             # check stage III
-            stage_III_long = set()
             stocks_to_remove_III = set()
             for stock in self.tentative_stage_III:
-                ready, zhongshu_changed = self.check_stage_III_new(stock, context)
+                ready, zhongshu_changed = self.check_stage_III(stock, context)
                 
                 if ready:
                     stage_III_long.add(stock)
@@ -899,6 +898,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
             # for stocks to be long we wait after initial stage III check
             self.tentative_stage_III = self.tentative_stage_III.union(stocks_to_long)
             self.tentative_stage_III = self.tentative_stage_III.difference(stage_III_long)
+            
+            # add back to stage II
+            self.tentative_stage_II = self.tentative_stage_II.union(stage_III_long)
             
                 
         return stocks_to_long, stage_III_long
@@ -1064,14 +1066,14 @@ class Filter_Chan_Stocks(Filter_stock_list):
             context.current_dt.minute != self.stage_II_timing[1]):
             return False
         
-        current_profile = self.g.stock_chan_type[stock][1]
-        current_start_time = current_profile[5]
-        current_effective_time = current_profile[6]
+#         current_profile = self.g.stock_chan_type[stock][1]
+#         current_start_time = current_profile[5]
+#         current_effective_time = current_profile[6]
         
         stock_data = get_price(security=stock, 
                       end_date=context.current_dt, 
-                      start_date=current_start_time, 
-#                       count = 20,
+#                       start_date=current_start_time, 
+                      count = 20,
                       frequency='240m', 
                       skip_paused=True, 
                       panel=False, 
@@ -1138,7 +1140,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                              is_description=self.isDescription,
                                              sub_force_zhongshu=self.sub_force_zhongshu, 
                                              sub_check_bi=self.bi_level_precision,
-                                             use_sub_split=True,
+                                             use_sub_split=False,
                                              ignore_cur_xd=self.ignore_xd,
                                              ignore_sub_xd=self.bi_level_precision,
                                              enable_ac_opposite_direction=True)
@@ -1200,7 +1202,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                              periods=self.periods,
                                              count=self.num_of_data,
                                              direction=TopBotType.top2bot, 
-                                             current_chan_type=self.current_chan_type,
+                                             current_chan_type=self.stage_III_types,
                                              sub_chan_type=self.sub_chan_type,
                                              isdebug=self.isdebug,
                                              is_description=self.isDescription,
@@ -1252,13 +1254,13 @@ class Filter_Chan_Stocks(Filter_stock_list):
         # sort by sectors again
         type_I_list = self.sort_by_sector_order(type_I_list) 
                 
-        self.log.info("\nStocks ready: I: {0}, III: {1},\ntentative I: {2},\ntentative II: {3},\ntentative III:{4}".format(
+        self.log.info("\nStocks ready: Bei Chi: {0}, stage III: {1},\ntentative I: {2},\ntentative II: {3},\ntentative III:{4}".format(
                                                                       type_I_list, 
                                                                       type_III_list,
                                                                       self.tentative_stage_I,
                                                                       self.tentative_stage_II,
                                                                       self.tentative_stage_III))
-        return type_I_list+type_III_list
+        return type_I_list
 
     def sort_by_sector_order(self, stock_list):
         # sort resulting stocks

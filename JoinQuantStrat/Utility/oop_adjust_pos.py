@@ -1088,13 +1088,13 @@ class Short_Chan(Sell_stocks):
             context.current_dt.minute != self.short_stage_II_timing[1]):
             return False
         
-        current_profile = self.short_stock_info[stock]
-        current_start_time = current_profile[0][5]
+#         current_profile = self.g.stock_chan_type[stock]
+#         current_effective_time = current_profile[1][6]
         
         stock_data = get_price(security=stock, 
                       end_date=context.current_dt, 
-                      start_date=current_start_time, 
-#                       count = 20,
+#                       start_date=current_effective_time, 
+                      count = 20,
                       frequency='240m', 
                       skip_paused=True, 
                       panel=False, 
@@ -1166,6 +1166,7 @@ class Short_Chan(Sell_stocks):
 
         for stock in to_check:
             if self.check_stop_loss(stock, context):
+                self.short_stock_info.pop(stock, None)
                 self.to_sell.add(stock)
                 continue
             
