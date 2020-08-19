@@ -937,11 +937,13 @@ class Filter_Chan_Stocks(Filter_stock_list):
             if float_less_equal(cur_ratio, 0.809) or\
                 (float_more_equal(cur_ratio, 1.191) and float_less_equal(cur_internal_ratio, 0.809)):
                 result = True
-        elif cur_chan_type == Chan_Type.III or cur_chan_type == Chan_Type.III_strong:
+        elif cur_chan_type == Chan_Type.III or\
+            cur_chan_type == Chan_Type.III_strong or\
+            cur_chan_type == Chan_Type.III_weak or\
+            cur_chan_type == Chan_Type.INVALID:
             if float_less_equal(cur_ratio, 0.618) or\
                 float_less_equal(cur_internal_ratio, 0.618):
                 result = True
-                
         # check current level here
         if result:
             cur_result, cur_xd_result, cur_profile = check_chan_by_type_exhaustion(stock,
