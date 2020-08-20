@@ -908,7 +908,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
     def check_vol_money_cur_structure(self, stock, context, after_stage_III=False):
         result = False
         zhongshu_changed = False
-        if self.check_internal_vol_money(stock_, context):
+        if self.check_internal_vol_money(stock, context):
             # check current level here
             cur_result, cur_xd_result, cur_profile = check_chan_by_type_exhaustion(stock,
                                                                           end_time=context.current_dt, 
