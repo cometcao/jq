@@ -983,7 +983,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         sub_effective_time = sub_profile[6]
 
         stock_data = get_bars(stock, 
-                            count=2000, # 5d
+                            count=4800, # 5d
                             unit=self.periods[0],
                             fields=['date','money', 'high'],
                             include_now=True, 
@@ -992,18 +992,27 @@ class Filter_Chan_Stocks(Filter_stock_list):
                             df=False)
         
 #         if not stock_changed_record[stock]: # Zhongshu unchanged
-        cutting_loc = np.where(stock_data['date']>=sub_effective_time)[0][0]
-        cut_stock_data = stock_data[cutting_loc:]
+        sub_loc = np.where(stock_data['date']>=sub_effective_time)[0][0]
+        cut_stock_data = stock_data[sub_loc:]
         
         cutting_idx = np.where(cut_stock_data['high'] == np.amax(cut_stock_data['high']))[0][0]
-        cutting_offset = stock_data.size - cutting_idx
+        cutting_date = cut_stock_data['date'][cutting_idx]
         
-        cur_latest_money = sum(stock_data['money'][cutting_idx:])
-        cur_past_money = sum(stock_data['money'][:cutting_idx][-cutting_offset:])
+        real_cutting_idx = np.where(stock_data['date'] == cutting_date)[0][0]
+        cutting_offset = stock_data.size - real_cutting_idx
+        
+#         print(sub_effective_time)
+#         print(cutting_date)
+#         print(real_cutting_idx)
+#         print(stock_data.size)
+#         print(cutting_offset)
+        
+        cur_latest_money = sum(stock_data['money'][real_cutting_idx:])
+        cur_past_money = sum(stock_data['money'][:real_cutting_idx][-cutting_offset:])
 # 
 #         # current zslx money split by mid term
         sub_latest_money = sum(stock_data['money'][-int(cutting_offset/2):])
-        sub_past_money = sum(stock_data['money'][cutting_idx:][:int(cutting_offset/2)])
+        sub_past_money = sum(stock_data['money'][real_cutting_idx:][:int(cutting_offset/2)])
 
         cur_ratio = cur_latest_money/cur_past_money
         sub_ratio = sub_latest_money/sub_past_money
