@@ -885,7 +885,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             # check stage III
             stocks_to_remove_III = set()
             for stock in self.tentative_stage_III:
-                ready, zhongshu_changed = self.check_stage_III(stock, context)
+                ready, zhongshu_changed = self.check_stage_III_new(stock, context)
                 
                 if ready:
                     stage_III_long.add(stock)
@@ -962,10 +962,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         cur_past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
         
         cur_ratio = cur_latest_money / cur_past_money
-
-        return self.vol_money_ratio_check(cur_internal_ratio, cur_ratio)
-    
-    def vol_money_ratio_check(self, cur_internal_ratio, cur_ratio):
+        
 #         self.log.debug("candidate stock {0} cur: {1} cur_intern: {2}".format(stock, cur_ratio, cur_internal_ratio))
         if cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak:
             if float_less_equal(cur_ratio, 0.809) or\
@@ -998,7 +995,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         cutting_loc = np.where(stock_data['date']>=sub_effective_time)[0][0]
         cut_stock_data = stock_data[cutting_loc:]
         
-        cutting_idx = np.where(cut_stock_data['high'] == numpy.amax(cut_stock_data['high']))
+        cutting_idx = np.where(cut_stock_data['high'] == np.amax(cut_stock_data['high']))[0][0]
         cutting_offset = stock_data.size - cutting_idx
         
         cur_latest_money = sum(stock_data['money'][cutting_idx:])
@@ -1006,7 +1003,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 # 
 #         # current zslx money split by mid term
         sub_latest_money = sum(stock_data['money'][-int(cutting_offset/2):])
-        sub_past_money = sum(stock_data['money'][cutting_idx:][:int(sub_cuttinng_offset/2)])
+        sub_past_money = sum(stock_data['money'][cutting_idx:][:int(cutting_offset/2)])
 
         cur_ratio = cur_latest_money/cur_past_money
         sub_ratio = sub_latest_money/sub_past_money
@@ -1077,14 +1074,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
     
     
     def check_stage_III_new(self, stock, context):
-        zhongshu_changed = result = False
-        
         if stock not in context.portfolio.positions.keys():
             if self.check_vol_money(stock, context) and\
-            self.check_bot_shape(stock, context, from_local_max=True):
-                return True, zhongshu_changed
+            self.check_bot_shape(stock, context, from_local_max=False):
+                return True, False
         
-        return result, zhongshu_changed
+        return False, False
     
     def check_stage_III(self, stock, context):
         result = False
