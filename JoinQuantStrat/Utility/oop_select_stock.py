@@ -838,8 +838,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             current_profile = self.g.stock_chan_type[stock][1]
             cur_chan_t = current_profile[0]
             if zhongshu_changed:
-                if cur_chan_t != Chan_Type.III and cur_chan_t != Chan_Type.III_strong:
-                    stocks_to_remove_I.add(stock)
+#                 if cur_chan_t != Chan_Type.III and cur_chan_t != Chan_Type.III_strong:
+                stocks_to_remove_I.add(stock)
             else:
                 if result:
                     top_profile = self.g.stock_chan_type[stock][0]
@@ -868,10 +868,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                     
             for stock in self.tentative_stage_II:
-#                 if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
-#                     if self.check_guide_price_reached(stock, context):
-#                         stocks_to_remove_II.add(stock)
-#                         continue
+                if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
+                    if self.check_guide_price_reached(stock, context):
+                        stocks_to_remove_II.add(stock)
+                        continue
                     
                 if self.check_bot_shape(stock, context):
                     stocks_to_long.add(stock)
@@ -885,7 +885,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             # check stage III
             stocks_to_remove_III = set()
             for stock in self.tentative_stage_III:
-                ready, zhongshu_changed = self.check_stage_III_new(stock, context)
+                ready, zhongshu_changed = self.check_stage_III(stock, context)
                 
                 if ready:
                     stage_III_long.add(stock)
@@ -899,8 +899,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_III = self.tentative_stage_III.union(stocks_to_long)
             self.tentative_stage_III = self.tentative_stage_III.difference(stage_III_long)
             
-            # add back to stage I
-            self.tentative_stage_I = self.tentative_stage_I.union(stage_III_long)
+#             # add back to stage I, -> let's not do this
+#             self.tentative_stage_I = self.tentative_stage_I.union(stage_III_long)
             
                 
         return stocks_to_long, stage_III_long
@@ -962,6 +962,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
         cur_past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
         
         cur_ratio = cur_latest_money / cur_past_money
+
+        return self.vol_money_ratio_check(cur_internal_ratio, cur_ratio)
+    
+    def vol_money_ratio_check(self, cur_internal_ratio, cur_ratio):
 #         self.log.debug("candidate stock {0} cur: {1} cur_intern: {2}".format(stock, cur_ratio, cur_internal_ratio))
         if cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak:
             if float_less_equal(cur_ratio, 0.809) or\
@@ -978,36 +982,31 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return False
     
     def check_vol_money(self, stock, context):
-        current_profile = self.g.stock_chan_type[stock][1]
-        current_zoushi_start_time = current_profile[5]
-        cur_chan_type = current_profile[0]
         sub_profile = self.g.stock_chan_type[stock][2]
-        sub_chan_type = sub_profile[0]
-        sub_zoushi_start_time = sub_profile[5]
+        sub_effective_time = sub_profile[6]
 
         stock_data = get_bars(stock, 
                             count=2000, # 5d
                             unit=self.periods[0],
-                            fields=['date','money'],
+                            fields=['date','money', 'high'],
                             include_now=True, 
                             end_dt=context.current_dt, 
                             fq_ref_date=context.current_dt.date(), 
                             df=False)
         
 #         if not stock_changed_record[stock]: # Zhongshu unchanged
-        cutting_loc = np.where(stock_data['date']>=current_zoushi_start_time)[0][0]
-        cutting_offset = stock_data.size - cutting_loc
+        cutting_loc = np.where(stock_data['date']>=sub_effective_time)[0][0]
+        cut_stock_data = stock_data[cutting_loc:]
         
-        sub_cutting_loc = np.where(stock_data['date']>=sub_zoushi_start_time)[0][0]
-        sub_cuttinng_offset = stock_data.size - sub_cutting_loc
-#             
-#     #         # current zslx money compare to zs money
-        cur_latest_money = sum(stock_data['money'][cutting_loc:])
-        cur_past_money = sum(stock_data['money'][:cutting_loc][-cutting_offset:])
+        cutting_idx = np.where(cut_stock_data['high'] == numpy.amax(cut_stock_data['high']))
+        cutting_offset = stock_data.size - cutting_idx
+        
+        cur_latest_money = sum(stock_data['money'][cutting_idx:])
+        cur_past_money = sum(stock_data['money'][:cutting_idx][-cutting_offset:])
 # 
 #         # current zslx money split by mid term
-        sub_latest_money = sum(stock_data['money'][sub_cutting_loc:])
-        sub_past_money = sum(stock_data['money'][:sub_cutting_loc][-sub_cuttinng_offset:])
+        sub_latest_money = sum(stock_data['money'][-int(cutting_offset/2):])
+        sub_past_money = sum(stock_data['money'][cutting_idx:][:int(sub_cuttinng_offset/2)])
 
         cur_ratio = cur_latest_money/cur_past_money
         sub_ratio = sub_latest_money/sub_past_money
@@ -1015,28 +1014,13 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.log.debug("candidate stock {0} cur: {1}, sub: {2}".format(stock, 
                                                                     cur_ratio, 
                                                                     sub_ratio))
-        if (cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak) and\
-            (sub_chan_type == Chan_Type.I or sub_chan_type == Chan_Type.I_weak):
-            if float_less_equal(cur_ratio, 0.809) and\
-                float_more_equal(sub_ratio, 1.191):
-                return True
-            if float_less_equal(cur_ratio, 0.809) and\
-                float_less_equal(sub_ratio, 0.809):
-                return True
-#             if float_more_equal(cur_ratio, 1.191) and\
-#                 float_less_equal(sub_ratio, 0.809):
-#                 return True
-        
-        if (cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak) and\
-            sub_chan_type == Chan_Type.INVALID:
-            if float_more_equal(cur_ratio, 1.191) and\
-                float_less_equal(sub_ratio, 0.809):
-                return True
-            elif (float_more_equal(cur_ratio, 1.191) and float_more_equal(sub_ratio, 1)) or\
-                (float_more_equal(cur_ratio, 1) and float_more_equal(sub_ratio, 1.191)):
-                return True
-#             elif float_less_equal(cur_ratio, 0.618):
-#                 return True
+        if float_more_equal(cur_ratio, 1.191) or\
+            float_more_equal(sub_ratio, 1.191):
+            return True
+        if float_less_equal(cur_ratio, 0.809) or\
+            float_less_equal(sub_ratio, 0.809):
+            return True
+
         return False
     
     def check_bot_shape(self, stock, context, from_local_max=False):
@@ -1096,16 +1080,17 @@ class Filter_Chan_Stocks(Filter_stock_list):
         zhongshu_changed = result = False
         
         if stock not in context.portfolio.positions.keys():
-#             if self.check_bot_shape(stock, context, from_local_max=True):
-#                 return True, zhongshu_changed
-            result, zhongshu_changed = self.check_vol_money_cur_structure(stock, context, after_stage_III=True)
+            if self.check_vol_money(stock, context) and\
+            self.check_bot_shape(stock, context, from_local_max=True):
+                return True, zhongshu_changed
         
         return result, zhongshu_changed
     
     def check_stage_III(self, stock, context):
+        result = False
         zhongshu_changed = False
         
-        result, profile, _ = check_stock_full(stock,
+        exhaustion_result, profile, _ = check_stock_full(stock,
                                              end_time=context.current_dt,
                                              periods=self.periods,
                                              count=self.num_of_data,
@@ -1135,7 +1120,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 zhongshu_changed = current_p != old_current_p
     
             if profile[0][0] in self.stage_III_types:
-                self.g.stock_chan_type[stock] = [()] + profile # fit the results
+                self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile # fit the results
+            
+            result = exhaustion_result and self.check_internal_vol_money(stock, context)
         
         return result, zhongshu_changed
             
@@ -1199,8 +1186,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #             self.log.debug("stock {0}, zhongshu changed: {1} <-> {2}".format(stock, old_current_profile[2], profile[0][2]))
         zhongshu_changed = old_price != new_price
         
-        if profile[0][5] is not None and profile[0][6] is not None:
-            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile
+        self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile
 
         return result, zhongshu_changed
     
@@ -1242,7 +1228,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                       self.tentative_stage_I,
                                                                       self.tentative_stage_II,
                                                                       self.tentative_stage_III))
-        return type_I_list
+        return type_I_list+type_III_list
 
     def sort_by_sector_order(self, stock_list):
         # sort resulting stocks
