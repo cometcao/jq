@@ -791,6 +791,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.tentative_stage_I = set() # list to hold stocks waiting to be operated
         self.tentative_stage_II = set()
         self.tentative_stage_III = set()
+        self.tentative_stage_IV = set()
         self.halt_check_when_enough = params.get('halt_check_when_enough', True)
         self.stage_III_types = params.get('stage_III_types', [Chan_Type.III, Chan_Type.III_strong, Chan_Type.III_weak])
     
@@ -817,13 +818,17 @@ class Filter_Chan_Stocks(Filter_stock_list):
             min_price_after_long = stock_data.loc[current_effective_time:, 'low'].min()
             if float_less_equal(min_price_after_long, current_chan_p):
                 return True
+        
+#         if self.check_bot_shape(stock, context, from_local_max=False):
+#             # if we found bot here, we don't want to continue it
+#             return True
         return False
     
     def check_tentative_stocks(self, context):
         
         stocks_to_long = set()
         stocks_to_remove_I = set()
-        stage_III_long = set()
+        stage_IV_long = set()
         
         self.tentative_stage_I = self.tentative_stage_I.difference(set(context.portfolio.positions.keys()))
         
@@ -868,10 +873,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                     
             for stock in self.tentative_stage_II:
-                if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
-                    if self.check_guide_price_reached(stock, context):
-                        stocks_to_remove_II.add(stock)
-                        continue
+#                 if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
+#                     if self.check_guide_price_reached(stock, context):
+#                         stocks_to_remove_II.add(stock)
+#                         continue
                     
                 if self.check_bot_shape(stock, context):
                     stocks_to_long.add(stock)
@@ -883,6 +888,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         if self.use_stage_II and self.use_stage_III:
             # check stage III
+            stage_III_long = set()
             stocks_to_remove_III = set()
             for stock in self.tentative_stage_III:
                 ready, zhongshu_changed = self.check_stage_III_new(stock, context)
@@ -895,20 +901,27 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_III = self.tentative_stage_III.difference(stocks_to_remove_III)
             self.log.info("stocks removed from stage III: {0}".format(stocks_to_remove_III))
             
-            # for stocks to be long we wait after initial stage III check
+            # for stocks to be long we wait after initial stage III check ########
             self.tentative_stage_III = self.tentative_stage_III.union(stocks_to_long)
+            ######################################################################
             self.tentative_stage_III = self.tentative_stage_III.difference(stage_III_long)
             
-#             # add back to stage I, -> let's not do this
-#             self.tentative_stage_I = self.tentative_stage_I.union(stage_III_long)
+            self.tentative_stage_IV = self.tentative_stage_IV.union(stage_III_long)
             
+            for stock in self.tentative_stage_IV:
+                if self.check_stage_IV(stock, context):
+                    stage_IV_long.add(stock)
+                    
+            self.tentative_stage_IV = self.tentative_stage_IV.difference(stage_IV_long)
                 
-        return stocks_to_long, stage_III_long
+        return stocks_to_long, stage_IV_long
     
     def check_vol_money_cur_structure(self, stock, context, after_stage_III=False):
         result = False
         zhongshu_changed = False
-        if self.check_internal_vol_money(stock, context):
+        vol_result = self.check_vol_money(stock, context) if after_stage_III else self.check_internal_vol_money(stock, context)
+            
+        if vol_result:
             # check current level here
             cur_result, cur_xd_result, cur_profile = check_chan_by_type_exhaustion(stock,
                                                                           end_time=context.current_dt, 
@@ -995,7 +1008,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         sub_loc = np.where(stock_data['date']>=sub_effective_time)[0][0]
         cut_stock_data = stock_data[sub_loc:]
         
-        cutting_idx = np.where(cut_stock_data['high'] == np.amax(cut_stock_data['high']))[0][0]
+        cutting_idx = np.where(cut_stock_data['high'] == np.amax(cut_stock_data['high']))[0][-1]
         cutting_date = cut_stock_data['date'][cutting_idx]
         
         real_cutting_idx = np.where(stock_data['date'] == cutting_date)[0][0]
@@ -1084,11 +1097,13 @@ class Filter_Chan_Stocks(Filter_stock_list):
     
     def check_stage_III_new(self, stock, context):
         if stock not in context.portfolio.positions.keys():
-            if self.check_vol_money(stock, context) and\
-            self.check_bot_shape(stock, context, from_local_max=False):
-                return True, False
-        
+            return self.check_vol_money(stock, context), False
         return False, False
+    
+    def check_stage_IV(self, stock, context):
+        if stock not in context.portfolio.positions.keys():
+            return self.check_bot_shape(stock, context, from_local_max=False)
+        return False
     
     def check_stage_III(self, stock, context):
         result = False
@@ -1203,7 +1218,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         filter_stock_list = []
         if within_processing_time:
-            stocks_in_place = set(context.portfolio.positions.keys()).union(self.tentative_stage_I).union(self.tentative_stage_II).union(self.tentative_stage_III)
+            stocks_in_place = set(context.portfolio.positions.keys()).union(self.tentative_stage_I).union(self.tentative_stage_II).union(self.tentative_stage_III).union(self.tentative_stage_IV)
             stock_list = [stock for stock in stock_list if stock not in stocks_in_place]
             stock_list = self.sort_by_sector_order(stock_list)
             for stock in stock_list:
@@ -1220,19 +1235,22 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         # other stages also follows time constrains
         # deal with all tentative stocks
-        type_I_list, type_III_list = self.check_tentative_stocks(context)
-        type_I_list, type_III_list = list(type_I_list), list(type_III_list)
+        beichi_list, enhanced_list = self.check_tentative_stocks(context)
+        beichi_list, enhanced_list = list(beichi_list), list(enhanced_list)
         
         # sort by sectors again
-        type_I_list = self.sort_by_sector_order(type_I_list) 
+        beichi_list = self.sort_by_sector_order(beichi_list) 
+        enhanced_list = [stock for stock in enhanced_list if stock in self.g.negative_return_stocks]
+        self.g.negative_return_stocks = self.g.negative_return_stocks.difference(enhanced_list)
                 
-        self.log.info("\nStocks ready: Bei Chi: {0}, stage III: {1},\ntentative I: {2},\ntentative II: {3},\ntentative III:{4}".format(
-                                                                      type_I_list, 
-                                                                      type_III_list,
+        self.log.info("\nStocks ready: Bei Chi: {0}, stage IV: {1},\ntentative I: {2},\ntentative II: {3},\ntentative III:{4}, \ntentative IV:{5}".format(
+                                                                      beichi_list, 
+                                                                      enhanced_list,
                                                                       self.tentative_stage_I,
                                                                       self.tentative_stage_II,
-                                                                      self.tentative_stage_III))
-        return type_I_list+type_III_list
+                                                                      self.tentative_stage_III, 
+                                                                      self.tentative_stage_IV,))
+        return beichi_list+enhanced_list
 
     def sort_by_sector_order(self, stock_list):
         # sort resulting stocks
@@ -1249,11 +1267,13 @@ class Filter_Chan_Stocks(Filter_stock_list):
 
     def after_trading_end(self, context):
         holding_pos = context.portfolio.positions.keys()
+        
         stored_stocks = list(self.g.stock_chan_type.keys())
         to_be_removed = [stock for stock in stored_stocks if (stock not in holding_pos and\
                                                               stock not in self.tentative_stage_I and\
                                                               stock not in self.tentative_stage_II and\
-                                                              stock not in self.tentative_stage_III)]
+                                                              stock not in self.tentative_stage_III and\
+                                                              stock not in self.tentative_stage_IV)]
         [self.g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
         self.log.info("position chan info: {0}".format(self.g.stock_chan_type.keys()))
 

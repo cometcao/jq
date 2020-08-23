@@ -67,6 +67,7 @@ class Global_variable(object):
     position_proportion = {} # 仓位控制比例
     stock_chan_type = {} # record chan types
     industry_sector_list = [] # record industry sector names
+    negative_return_stocks = set()
 
     def __init__(self, owner):
         self._owner = owner

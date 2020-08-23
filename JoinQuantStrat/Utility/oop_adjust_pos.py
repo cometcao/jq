@@ -1168,6 +1168,7 @@ class Short_Chan(Sell_stocks):
             if self.check_stop_loss(stock, context):
                 self.short_stock_info.pop(stock, None)
                 self.to_sell.add(stock)
+                self.g.negative_return_stocks.add(stock)
                 continue
             
             if self.check_stop_profit(stock, context):
