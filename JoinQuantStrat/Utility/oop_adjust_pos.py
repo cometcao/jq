@@ -897,7 +897,7 @@ class Short_Chan(Sell_stocks):
                                               split_time=min_time,
                                               check_bi=False,
                                               allow_simple_zslx=False,
-                                              force_zhongshu=True,
+                                              force_zhongshu=False,
                                               check_full_zoushi=False,
                                               ignore_sub_xd=False)
 
@@ -1063,9 +1063,8 @@ class Short_Chan(Sell_stocks):
                 return True
             
             return False
-#         elif current_chan_t == Chan_Type.INVALID:
-#             print("NOT YET CODED")
-#             return False
+
+
     def check_daily_ma13(self, stock, context):
         current_profile = self.short_stock_info[stock]
         current_start_time = current_profile[0][5]
