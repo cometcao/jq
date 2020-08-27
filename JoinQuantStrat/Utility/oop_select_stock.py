@@ -1240,8 +1240,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         # sort by sectors again
         beichi_list = self.sort_by_sector_order(beichi_list) 
-        enhanced_list = [stock for stock in enhanced_list if stock in self.g.negative_return_stocks]
-        self.g.negative_return_stocks = self.g.negative_return_stocks.difference(enhanced_list)
+        enhanced_list = [stock for stock in enhanced_list if stock in self.g.all_return_stocks]
+        self.g.all_return_stocks = self.g.all_return_stocks.difference(enhanced_list)
                 
         self.log.info("\nStocks ready: Bei Chi: {0}, stage IV: {1},\ntentative I: {2},\ntentative II: {3},\ntentative III:{4}, \ntentative IV:{5}".format(
                                                                       beichi_list, 

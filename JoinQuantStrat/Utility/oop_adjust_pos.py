@@ -1167,12 +1167,13 @@ class Short_Chan(Sell_stocks):
             if self.check_stop_loss(stock, context):
                 self.short_stock_info.pop(stock, None)
                 self.to_sell.add(stock)
-                self.g.negative_return_stocks.add(stock)
+                self.g.all_return_stocks.add(stock)
                 continue
             
             if self.check_stop_profit(stock, context):
                 self.short_stock_info.pop(stock, None)
                 self.to_sell.add(stock)
+#                 self.g.all_return_stocks.add(stock)
         self.adjust(context, data, self.to_sell)
         
         self.to_sell = self.to_sell.intersection(set(to_check)) # in case stock failed to short
