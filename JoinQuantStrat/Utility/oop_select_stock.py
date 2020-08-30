@@ -839,7 +839,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                     stocks_to_remove_I.add(stock)
                     continue
             
-            result, zhongshu_changed = self.check_structure_sub_new(stock, context)
+            result, zhongshu_changed = self.check_structure_sub(stock, context)
             current_profile = self.g.stock_chan_type[stock][1]
             cur_chan_t = current_profile[0]
             if zhongshu_changed:
@@ -873,11 +873,6 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                     
             for stock in self.tentative_stage_II:
-#                 if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
-#                     if self.check_guide_price_reached(stock, context):
-#                         stocks_to_remove_II.add(stock)
-#                         continue
-                    
                 if self.check_bot_shape(stock, context):
                     stocks_to_long.add(stock)
                     
@@ -891,7 +886,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stage_III_long = set()
             stocks_to_remove_III = set()
             for stock in self.tentative_stage_III:
-                ready, zhongshu_changed = self.check_stage_III_new(stock, context)
+                ready, zhongshu_changed = self.check_stage_III(stock, context)
                 
                 if ready:
                     stage_III_long.add(stock)
@@ -913,6 +908,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                     stage_IV_long.add(stock)
                     
             self.tentative_stage_IV = self.tentative_stage_IV.difference(stage_IV_long)
+            
+            self.tentative_stage_III = self.tentative_stage_III.union(stage_IV_long)
                 
         return stocks_to_long, stage_IV_long
     
@@ -1013,12 +1010,6 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         real_cutting_idx = np.where(stock_data['date'] == cutting_date)[0][0]
         cutting_offset = stock_data.size - real_cutting_idx
-        
-#         print(sub_effective_time)
-#         print(cutting_date)
-#         print(real_cutting_idx)
-#         print(stock_data.size)
-#         print(cutting_offset)
         
         cur_latest_money = sum(stock_data['money'][real_cutting_idx:])
         cur_past_money = sum(stock_data['money'][:real_cutting_idx][-cutting_offset:])
