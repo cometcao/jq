@@ -839,7 +839,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                     stocks_to_remove_I.add(stock)
                     continue
             
-            result, zhongshu_changed = self.check_structure_sub(stock, context)
+            result, zhongshu_changed = self.check_structure_sub_new(stock, context)
             current_profile = self.g.stock_chan_type[stock][1]
             cur_chan_t = current_profile[0]
             if zhongshu_changed:
