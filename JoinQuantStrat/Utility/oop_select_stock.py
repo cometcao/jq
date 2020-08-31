@@ -886,8 +886,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stage_III_long = set()
             stocks_to_remove_III = set()
             for stock in self.tentative_stage_III:
-                ready, zhongshu_changed = self.check_stage_III(stock, context)
-                
+                ready, zhongshu_changed = self.check_stage_III_new(stock, context)
+
+#                 if self.check_guide_price_reached(stock, context):
+#                     stocks_to_remove_III.add(stock)
+#                     continue
+
                 if ready:
                     stage_III_long.add(stock)
                 if zhongshu_changed:
@@ -909,7 +913,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                     
             self.tentative_stage_IV = self.tentative_stage_IV.difference(stage_IV_long)
             
-            self.tentative_stage_III = self.tentative_stage_III.union(stage_IV_long)
+#             self.tentative_stage_III = self.tentative_stage_III.union(stage_IV_long)
                 
         return stocks_to_long, stage_IV_long
     
