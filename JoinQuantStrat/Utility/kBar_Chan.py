@@ -868,13 +868,21 @@ class KBarChan(object):
         self.getPureBi()
         return self.kDataFrame_marked
     
-    def formed_tb(self, tb = TopBotType.bot):
+    def formed_tb(self, tb = TopBotType.bot, check_price = False):
         self.standardize()
         self.markTopBot()
         found_idx = np.where(self.kDataFrame_standardized['tb']==tb.value)[0]
-#         print("tb location: {0}, total size: {1}".format(found_idx, self.kDataFrame_standardized.size))
+        print("tb location: {0}, total size: {1}".format(found_idx, self.kDataFrame_standardized.size))
         if len(found_idx) > 0 and found_idx[-1] == self.kDataFrame_standardized.size-2:
-            return True
+            if len(found_idx) >= 2:
+                check_price_result = float_less_equal(self.kDataFrame_standardized['low'][found_idx[-1]], min(self.kDataFrame_standardized['low'][found_idx[:-1]]))\
+                                    if tb == TopBotType.bot else\
+                                    float_more_equal(self.kDataFrame_standardized['high'][found_idx[-1]], max(self.kDataFrame_standardized['high'][found_idx[:-1]]))
+                print(self.kDataFrame_standardized)
+            else:
+                check_price_result = False
+            if (check_price and check_price_result) or not check_price:
+                return True
         return False
         
     
