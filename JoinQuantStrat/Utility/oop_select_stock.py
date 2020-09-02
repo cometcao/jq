@@ -843,8 +843,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             current_profile = self.g.stock_chan_type[stock][1]
             cur_chan_t = current_profile[0]
             if zhongshu_changed:
-#                 if cur_chan_t != Chan_Type.III and cur_chan_t != Chan_Type.III_strong:
-                stocks_to_remove_I.add(stock)
+                if cur_chan_t != Chan_Type.III and cur_chan_t != Chan_Type.III_strong:
+                    stocks_to_remove_I.add(stock)
             else:
                 if result:
                     top_profile = self.g.stock_chan_type[stock][0]
@@ -873,7 +873,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                     
             for stock in self.tentative_stage_II:
-                if self.check_bot_shape(stock, context, check_price=True):
+                if self.check_bot_shape(stock, context, check_price=False):
                     stocks_to_long.add(stock)
                     
             self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_remove_II)
@@ -1087,7 +1087,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
     
     def check_stage_III_new(self, stock, context):
         if stock not in context.portfolio.positions.keys():
-            return self.check_vol_money(stock, context), False
+            return self.check_vol_money_cur_structure(stock, context, after_stage_III=True), False
         return False, False
     
     def check_stage_IV(self, stock, context):
@@ -1236,7 +1236,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #             self.log.debug("stock {0}, zhongshu changed: {1} <-> {2}".format(stock, old_current_profile[2], profile[0][2]))
         zhongshu_changed = old_price != new_price
         
-        self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile
+        if profile[0][5] is not None and profile[0][6] is not None:
+            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile
 
         return result, zhongshu_changed
     
