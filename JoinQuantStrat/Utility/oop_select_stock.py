@@ -830,10 +830,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         for stock in self.tentative_stage_I:
             
-            if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
-                if self.check_guide_price_reached(stock, context):
-                    stocks_to_remove_I.add(stock)
-                    continue
+#             if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
+#                 if self.check_guide_price_reached(stock, context):
+#                     stocks_to_remove_I.add(stock)
+#                     continue
             
             result, zhongshu_changed = self.check_structure_sub_new(stock, context)
             current_profile = self.g.stock_chan_type[stock][1]
@@ -901,9 +901,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stocks_to_remove_IV = set()
             for stock in self.tentative_stage_IV:
                 check_result, price_checked = self.check_stage_IV(stock, context)
-                if not price_checked:
-                    stocks_to_remove_IV.add(stock)
-                elif check_result and price_checked:
+#                 if not price_checked:
+#                     stocks_to_remove_IV.add(stock)
+                if check_result:
                     stage_IV_long.add(stock)
                     
             self.tentative_stage_IV = self.tentative_stage_IV.difference(stage_IV_long)
@@ -1248,8 +1248,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         # sort by sectors again
         beichi_list = self.sort_by_sector_order(beichi_list) 
-        enhanced_list = [stock for stock in enhanced_list if stock in self.g.all_return_stocks]
-        self.g.all_return_stocks = self.g.all_return_stocks.difference(enhanced_list)
+        # relate to existing position profit result
+#         enhanced_list = [stock for stock in enhanced_list if stock in self.g.all_return_stocks]
+#         self.g.all_return_stocks = self.g.all_return_stocks.difference(enhanced_list)
                 
         self.log.info("\nStocks ready: Bei Chi: {0}, stage IV: {1},\ntentative I: {2},\ntentative II: {3},\ntentative III:{4}, \ntentative IV:{5}".format(
                                                                       beichi_list, 
