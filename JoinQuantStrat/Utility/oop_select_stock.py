@@ -869,7 +869,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                     
             for stock in self.tentative_stage_II:
-                check_result, price_checked = self.check_bot_shape(stock, context, check_price=False)
+                check_result, price_checked = self.check_bot_shape(stock, context)
                 if check_result:
                     stocks_to_long.add(stock)
                     
@@ -907,6 +907,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                     stage_IV_long.add(stock)
                     
             self.tentative_stage_IV = self.tentative_stage_IV.difference(stage_IV_long)
+            self.tentative_stage_IV = self.tentative_stage_IV.difference(stocks_to_remove_IV)
             self.log.info("stocks removed from stage IV: {0}".format(stocks_to_remove_IV))
             
 #             self.tentative_stage_III = self.tentative_stage_III.union(stage_IV_long)
@@ -975,18 +976,16 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
 #         self.log.debug("candidate stock {0} cur: {1} cur_intern: {2}".format(stock, cur_ratio, cur_internal_ratio))
         if cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak:
-#             if float_less_equal(cur_ratio, 0.618) or\
-#                 (float_more_equal(cur_ratio, 1.191) and float_less_equal(cur_internal_ratio, 0.618)):
-            if float_less_equal(cur_ratio, 0.618) or\
-                float_less_equal(cur_internal_ratio, 0.618):
+            if float_less_equal(cur_ratio, 0.809) or\
+                (float_more_equal(cur_ratio, 1.191) and float_less_equal(cur_internal_ratio, 0.809)):
                 return True
         elif cur_chan_type == Chan_Type.III or cur_chan_type == Chan_Type.III_strong:
             if float_less_equal(cur_ratio, 0.618) or\
                 float_less_equal(cur_internal_ratio, 0.618):
                 return True
         elif cur_chan_type == Chan_Type.INVALID:
-            if float_less_equal(cur_ratio, 0.809) or\
-                float_less_equal(cur_internal_ratio, 0.809):
+            if float_less_equal(cur_ratio, 0.618) or\
+                float_less_equal(cur_internal_ratio, 0.618):
                 result = True
         return False
     
@@ -1040,7 +1039,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         if self.stage_II_timing and\
             (context.current_dt.hour != self.stage_II_timing[0] or\
             context.current_dt.minute != self.stage_II_timing[1]):
-            return False
+            return False, False
         
 #         current_profile = self.g.stock_chan_type[stock][1]
 #         current_start_time = current_profile[5]
@@ -1069,14 +1068,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
     
     
     def check_stage_III_new(self, stock, context):
-        if stock not in context.portfolio.positions.keys():
-            return self.check_vol_money_cur_structure(stock, context, after_stage_III=True), False
-        return False, False
+        return self.check_vol_money_cur_structure(stock, context, after_stage_III=True), False
     
     def check_stage_IV(self, stock, context):
-        if stock not in context.portfolio.positions.keys():
-            return self.check_bot_shape(stock, context, from_local_max=False, check_price=True)
-        return False
+        return self.check_bot_shape(stock, context, from_local_max=False)
     
     def check_stage_III(self, stock, context):
         result = False
@@ -1095,29 +1090,28 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                       slope_only=False)
         exhaustion_result = cur_result and (cur_xd_result or self.ignore_xd)
         
-        if stock not in context.portfolio.positions.keys():
-            old_current_profile = self.g.stock_chan_type[stock][1]
-            if len(self.g.stock_chan_type[stock]) > 1 and\
-                old_current_profile[0] in self.stage_III_types:
-                old_current_p = old_current_profile[2][0] if type(old_current_profile[2]) is list else old_current_profile[2]
-                current_p = cur_profile[0][2][0] if type(cur_profile[0][2]) is list else cur_profile[0][2]
-                zhongshu_changed = current_p != old_current_p
-    
-            if cur_profile[0][0] in self.stage_III_types:
-                self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] +\
-                                                                        cur_profile +\
-                                                [(Chan_Type.INVALID,
-                                                   TopBotType.top2bot,
-                                                   0,
-                                                   0,
-                                                   0,
-                                                   None,
-                                                   context.current_dt, 
-                                                   )]# fit the results
-            
-            result = exhaustion_result and self.check_internal_vol_money(stock, context)
+        old_current_profile = self.g.stock_chan_type[stock][1]
+        if len(self.g.stock_chan_type[stock]) > 1 and\
+            old_current_profile[0] in self.stage_III_types:
+            old_current_p = old_current_profile[2][0] if type(old_current_profile[2]) is list else old_current_profile[2]
+            current_p = cur_profile[0][2][0] if type(cur_profile[0][2]) is list else cur_profile[0][2]
+            zhongshu_changed = current_p != old_current_p
+
+        if cur_profile[0][0] in self.stage_III_types:
+            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] +\
+                                                                    cur_profile +\
+                                            [(Chan_Type.INVALID,
+                                               TopBotType.top2bot,
+                                               0,
+                                               0,
+                                               0,
+                                               None,
+                                               context.current_dt, 
+                                               )]# fit the results
         
-        return result, zhongshu_changed
+#             result = exhaustion_result and self.check_internal_vol_money(stock, context)
+        return exhaustion_result, zhongshu_changed
+#         return result, zhongshu_changed
             
 
     def check_stage_III_old(self, stock, context):
@@ -1145,18 +1139,17 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                              ignore_sub_xd=self.bi_level_precision,
                                              enable_ac_opposite_direction=True)
         
-        if stock not in context.portfolio.positions.keys():
-            old_current_profile = self.g.stock_chan_type[stock][1]
-            if len(self.g.stock_chan_type[stock]) > 1 and\
-                old_current_profile[0] in self.stage_III_types:
-                old_current_p = old_current_profile[2][0] if type(old_current_profile[2]) is list else old_current_profile[2]
-                current_p = profile[0][2][0] if type(profile[0][2]) is list else profile[0][2]
-                zhongshu_changed = current_p != old_current_p
-    
-            if profile[0][0] in self.stage_III_types:
-                self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile # fit the results
-            
-            result = exhaustion_result and self.check_internal_vol_money(stock, context)
+        old_current_profile = self.g.stock_chan_type[stock][1]
+        if len(self.g.stock_chan_type[stock]) > 1 and\
+            old_current_profile[0] in self.stage_III_types:
+            old_current_p = old_current_profile[2][0] if type(old_current_profile[2]) is list else old_current_profile[2]
+            current_p = profile[0][2][0] if type(profile[0][2]) is list else profile[0][2]
+            zhongshu_changed = current_p != old_current_p
+
+        if profile[0][0] in self.stage_III_types:
+            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile # fit the results
+        
+        result = exhaustion_result and self.check_internal_vol_money(stock, context)
         
         return result, zhongshu_changed
             
