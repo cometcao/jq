@@ -818,10 +818,6 @@ class Filter_Chan_Stocks(Filter_stock_list):
             min_price_after_long = stock_data.loc[current_effective_time:, 'low'].min()
             if float_less_equal(min_price_after_long, current_chan_p):
                 return True
-        
-#         if self.check_bot_shape(stock, context, from_local_max=False):
-#             # if we found bot here, we don't want to continue it
-#             return True
         return False
     
     def check_tentative_stocks(self, context):
@@ -843,20 +839,20 @@ class Filter_Chan_Stocks(Filter_stock_list):
             current_profile = self.g.stock_chan_type[stock][1]
             cur_chan_t = current_profile[0]
             if zhongshu_changed:
-                if cur_chan_t != Chan_Type.III and cur_chan_t != Chan_Type.III_strong:
-                    stocks_to_remove_I.add(stock)
-            else:
-                if result:
-                    top_profile = self.g.stock_chan_type[stock][0]
-                    sub_profile = self.g.stock_chan_type[stock][2]
-                    
-                    top_chan_t = top_profile[0]
-                    sub_chan_t = sub_profile[0]
-                    
-                    chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
-                    if self.force_chan_type and (chan_type_list not in self.force_chan_type):
-                        continue
-                    stocks_to_long.add(stock)
+                pass
+#                 if cur_chan_t != Chan_Type.III and cur_chan_t != Chan_Type.III_strong:
+#                     stocks_to_remove_I.add(stock)
+            if result:
+                top_profile = self.g.stock_chan_type[stock][0]
+                sub_profile = self.g.stock_chan_type[stock][2]
+                
+                top_chan_t = top_profile[0]
+                sub_chan_t = sub_profile[0]
+                
+                chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
+                if self.force_chan_type and (chan_type_list not in self.force_chan_type):
+                    continue
+                stocks_to_long.add(stock)
         
         self.tentative_stage_I = self.tentative_stage_I.difference(stocks_to_remove_I)
         self.log.info("stocks removed from stage I: {0}".format(stocks_to_remove_I))
@@ -873,7 +869,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                     
             for stock in self.tentative_stage_II:
-                if self.check_bot_shape(stock, context, check_price=False):
+                check_result, price_checked = self.check_bot_shape(stock, context, check_price=False)
+                if check_result:
                     stocks_to_long.add(stock)
                     
             self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_remove_II)
@@ -889,8 +886,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 ready, zhongshu_changed = self.check_stage_III(stock, context)
                 if ready:
                     stage_III_long.add(stock)
-                if zhongshu_changed:
-                    stocks_to_remove_III.add(stock)
+#                 if zhongshu_changed:
+#                     stocks_to_remove_III.add(stock)
                     
             self.tentative_stage_III = self.tentative_stage_III.difference(stocks_to_remove_III)
             self.log.info("stocks removed from stage III: {0}".format(stocks_to_remove_III))
@@ -901,12 +898,16 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_III = self.tentative_stage_III.difference(stage_III_long)
             
             self.tentative_stage_IV = self.tentative_stage_IV.union(stage_III_long)
-            
+            stocks_to_remove_IV = set()
             for stock in self.tentative_stage_IV:
-                if self.check_stage_IV(stock, context):
+                check_result, price_checked = self.check_stage_IV(stock, context)
+                if not price_checked:
+                    stocks_to_remove_IV.add(stock)
+                elif check_result and price_checked:
                     stage_IV_long.add(stock)
                     
             self.tentative_stage_IV = self.tentative_stage_IV.difference(stage_IV_long)
+            self.log.info("stocks removed from stage IV: {0}".format(stocks_to_remove_IV))
             
 #             self.tentative_stage_III = self.tentative_stage_III.union(stage_IV_long)
                 
@@ -1034,7 +1035,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 
         return False
     
-    def check_bot_shape(self, stock, context, from_local_max=False, check_price=False):
+    def check_bot_shape(self, stock, context, from_local_max=False):
         
         if self.stage_II_timing and\
             (context.current_dt.hour != self.stage_II_timing[0] or\
@@ -1059,32 +1060,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stock_data = stock_data.loc[max_time:,]
         
         stock_data['date'] = stock_data.index
-#         stock_data = get_bars(stock, 
-#                             count=20, # 5d
-#                             unit='120m',
-#                             fields=['date', 'high', 'low', 'close'],
-#                             include_now=True, 
-#                             end_dt=context.current_dt, 
-#                             fq_ref_date=context.current_dt.date(), 
-#                             df=True)
-#         #resample
-#         stock_data.set_index('date', inplace=True)
-#         working_data = stock_data.loc[sub_zoushi_start_time:]
-#         if working_data.shape[0] < 10:
-#             working_data = stock_data.iloc[-10:, ]
-#         working_data = working_data.resample('240Min').agg({
-#                                                      'high': 'max', 
-#                                                      'low': 'min',
-#                                                      'close': 'last'
-#                                                     })
-#         working_data=working_data[working_data['high'].notnull()]
-
-#         working_data = stock_data.loc[sub_zoushi_start_time:]
         working_data_np = stock_data.to_records()
 #         print("check bot: {0}".format(stock))
         kb_chan = KBarChan(working_data_np, isdebug=False)
         
-        return kb_chan.formed_tb(tb=TopBotType.bot, check_price=check_price)
+        return kb_chan.formed_tb(tb=TopBotType.bot)
+        
     
     
     def check_stage_III_new(self, stock, context):

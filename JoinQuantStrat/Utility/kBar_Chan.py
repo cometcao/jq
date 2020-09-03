@@ -868,7 +868,7 @@ class KBarChan(object):
         self.getPureBi()
         return self.kDataFrame_marked
     
-    def formed_tb(self, tb = TopBotType.bot, check_price = False):
+    def formed_tb(self, tb = TopBotType.bot):
         self.standardize()
         self.markTopBot()
         found_idx = np.where(self.kDataFrame_standardized['tb']==tb.value)[0]
@@ -881,9 +881,8 @@ class KBarChan(object):
 #                 print(self.kDataFrame_standardized)
             else:
                 check_price_result = False
-            if (check_price and check_price_result) or not check_price:
-                return True
-        return False
+            return True, check_price_result
+        return False, False
         
     
     def getPureBi(self):
