@@ -974,8 +974,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
 #         self.log.debug("candidate stock {0} cur: {1} cur_intern: {2}".format(stock, cur_ratio, cur_internal_ratio))
         if cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak:
+#             if float_less_equal(cur_ratio, 0.618) or\
+#                 (float_more_equal(cur_ratio, 1.191) and float_less_equal(cur_internal_ratio, 0.618)):
             if float_less_equal(cur_ratio, 0.618) or\
-                (float_more_equal(cur_ratio, 1.382) and float_less_equal(cur_internal_ratio, 0.618)):
+                float_less_equal(cur_internal_ratio, 0.618):
                 return True
         elif cur_chan_type == Chan_Type.III or cur_chan_type == Chan_Type.III_strong:
             if float_less_equal(cur_ratio, 0.618) or\
