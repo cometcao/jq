@@ -889,7 +889,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stage_III_long = set()
             stocks_to_remove_III = set()
             for stock in self.tentative_stage_III:
-                ready, zhongshu_changed = self.check_stage_III(stock, context)
+                ready, zhongshu_changed = self.check_stage_III_old(stock, context)
                 if ready:
                     stage_III_long.add(stock)
 #                 if zhongshu_changed:
@@ -1160,9 +1160,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
         if profile[0][0] in self.stage_III_types:
             self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile # fit the results
         
-        result = exhaustion_result and self.check_internal_vol_money(stock, context)
+#         result = exhaustion_result and self.check_internal_vol_money(stock, context)
         
-        return result, zhongshu_changed
+        return exhaustion_result, zhongshu_changed
             
     def check_structure_sub_new(self, stock, context):
         zhongshu_changed = False
@@ -1285,8 +1285,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
         # sort by sectors again
         beichi_list = self.sort_by_sector_order(beichi_list) 
         # relate to existing position profit result
-        enhanced_list = [stock for stock in enhanced_list if stock in self.g.all_return_stocks]
-        self.g.all_return_stocks = self.g.all_return_stocks.difference(enhanced_list)
+#         enhanced_list = [stock for stock in enhanced_list if stock in self.g.all_return_stocks]
+#         self.g.all_return_stocks = self.g.all_return_stocks.difference(enhanced_list)
                 
         self.log.info("\nStocks ready: Bei Chi: {0}, stage IV: {1},\ntentative I: {2},\ntentative II: {3},\ntentative III:{4}, \ntentative IV:{5}".format(
                                                                       beichi_list, 
