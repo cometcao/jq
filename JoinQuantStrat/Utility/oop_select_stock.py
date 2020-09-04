@@ -836,7 +836,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                     self.tentative_stage_III.add(stock) # skip first phase
                     continue
             
-            result, zhongshu_changed = self.check_structure_cur(stock, context, check_structure_cur=False)
+            result, zhongshu_changed = self.check_structure_cur(stock, context, after_stage_III=False)
             current_profile = self.g.stock_chan_type[stock][1]
             cur_chan_t = current_profile[0]
             if zhongshu_changed:
@@ -844,15 +844,6 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #                 if cur_chan_t != Chan_Type.III and cur_chan_t != Chan_Type.III_strong:
 #                     stocks_to_remove_I.add(stock)
             if result:
-                top_profile = self.g.stock_chan_type[stock][0]
-                sub_profile = self.g.stock_chan_type[stock][2]
-                
-                top_chan_t = top_profile[0]
-                sub_chan_t = sub_profile[0]
-                
-                chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
-                if self.force_chan_type and (chan_type_list not in self.force_chan_type):
-                    continue
                 stocks_to_long.add(stock)
         
         self.tentative_stage_I = self.tentative_stage_I.difference(stocks_to_remove_I)
@@ -872,6 +863,18 @@ class Filter_Chan_Stocks(Filter_stock_list):
             for stock in self.tentative_stage_II:
                 check_result, price_checked = self.check_stage_II(stock, context)
                 if check_result:
+                    top_profile = self.g.stock_chan_type[stock][0]
+                    cur_profile = self.g.stock_chan_type[stock][1]
+                    sub_profile = self.g.stock_chan_type[stock][2]
+                    
+                    top_chan_t = top_profile[0]
+                    cur_chan_t = cur_profile[0]
+                    sub_chan_t = sub_profile[0]
+                    
+                    chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
+                    if self.force_chan_type and (chan_type_list not in self.force_chan_type):
+                        stocks_to_remove_II.add(stock)
+                        continue
                     stocks_to_long.add(stock)
                 elif check_result and not price_checked:
                     stocks_to_remove_II.add(stock)
@@ -1069,7 +1072,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return kb_chan.formed_tb(tb=TopBotType.bot)
         
     def check_stage_II(self, stock, context):
-        result, _ = check_structure_sub_new(self, stock, context)
+        result, _ = self.check_structure_sub_new(stock, context)
         if result:
             return result, True
         
@@ -1193,6 +1196,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
     
 
     def check_structure_cur(self, stock, context, after_stage_III=False):
+        zhongshu_changed=False
         cur_result, cur_xd_result, cur_profile = check_chan_by_type_exhaustion(stock,
                                                                       end_time=context.current_dt, 
                                                                       periods=[self.periods[0]], 
@@ -1215,7 +1219,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
     
             self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + cur_profile
             
-            
+        return result, zhongshu_changed
 
     def check_structure_sub_old(self, stock, context):
         zhongshu_changed = False
