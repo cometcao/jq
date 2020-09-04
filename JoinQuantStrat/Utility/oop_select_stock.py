@@ -876,7 +876,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                         stocks_to_remove_II.add(stock)
                         continue
                     stocks_to_long.add(stock)
-                elif check_result and not price_checked:
+                if check_result and not price_checked:
                     stocks_to_remove_II.add(stock)
                     
             self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_remove_II)
@@ -909,7 +909,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 check_result, price_checked = self.check_stage_IV(stock, context)
                 if not price_checked and check_result:
                     stocks_to_remove_IV.add(stock)
-                if check_result and price_checked: # if we only redo negative return
+                if check_result: # if we only redo negative return
                     stage_IV_long.add(stock)
                     
             self.tentative_stage_IV = self.tentative_stage_IV.difference(stage_IV_long)
@@ -1320,7 +1320,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                               stock not in self.tentative_stage_III and\
                                                               stock not in self.tentative_stage_IV)]
         [self.g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
-        self.log.info("position chan info: {0}".format(self.g.stock_chan_type.keys()))
+        self.log.info("position chan info: {0}".format(self.g.stock_chan_type))
 
 class Filter_Pair_Trading(Filter_stock_list):
     def __init__(self, params):
