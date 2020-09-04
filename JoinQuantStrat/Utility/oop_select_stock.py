@@ -830,12 +830,13 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         for stock in self.tentative_stage_I:
             
-#             if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
-#                 if self.check_guide_price_reached(stock, context):
-#                     stocks_to_remove_I.add(stock)
-#                     continue
+            if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
+                if self.check_guide_price_reached(stock, context):
+                    stocks_to_remove_I.add(stock)
+                    self.tentative_stage_III.add(stock) # skip first phase
+                    continue
             
-            result, zhongshu_changed = self.check_structure_sub_new(stock, context)
+            result, zhongshu_changed = self.check_structure_cur(stock, context, check_structure_cur=False)
             current_profile = self.g.stock_chan_type[stock][1]
             cur_chan_t = current_profile[0]
             if zhongshu_changed:
@@ -869,9 +870,11 @@ class Filter_Chan_Stocks(Filter_stock_list):
             self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                     
             for stock in self.tentative_stage_II:
-                check_result, price_checked = self.check_bot_shape(stock, context)
+                check_result, price_checked = self.check_stage_II(stock, context)
                 if check_result:
                     stocks_to_long.add(stock)
+                elif check_result and not price_checked:
+                    stocks_to_remove_II.add(stock)
                     
             self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_remove_II)
             self.log.info("stocks removed from stage II: {0}".format(stocks_to_remove_II))
@@ -1065,7 +1068,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         return kb_chan.formed_tb(tb=TopBotType.bot)
         
-    
+    def check_stage_II(self, stock, context):
+        result, _ = check_structure_sub_new(self, stock, context)
+        if result:
+            return result, True
+        
+        return self.check_bot_shape(stock, context, from_local_max=False)
     
     def check_stage_III_new(self, stock, context):
         return self.check_vol_money_cur_structure(stock, context, after_stage_III=True), False
@@ -1184,7 +1192,32 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return sub_exhausted and sub_xd_exhausted, zhongshu_changed
     
 
-    def check_structure_sub(self, stock, context):
+    def check_structure_cur(self, stock, context, after_stage_III=False):
+        cur_result, cur_xd_result, cur_profile = check_chan_by_type_exhaustion(stock,
+                                                                      end_time=context.current_dt, 
+                                                                      periods=[self.periods[0]], 
+                                                                      count=self.num_of_data, 
+                                                                      direction=TopBotType.top2bot,
+                                                                      chan_type=self.stage_III_types if after_stage_III else self.current_chan_type, 
+                                                                      isdebug=self.isdebug, 
+                                                                      is_description=False,
+                                                                      check_structure=True,
+                                                                      check_full_zoushi=False,
+                                                                      slope_only=False)
+        result = cur_result and (cur_xd_result or self.ignore_xd)
+        if result or after_stage_III:
+            if len(self.g.stock_chan_type[stock]) > 1:
+                old_current_profile = self.g.stock_chan_type[stock][1]
+                if old_current_profile[0] in self.stage_III_types:
+                    old_current_p = old_current_profile[2][0] if type(old_current_profile[2]) is list else old_current_profile[2]
+                    current_p = cur_profile[0][2][0] if type(cur_profile[0][2]) is list else cur_profile[0][2]
+                    zhongshu_changed = current_p != old_current_p
+    
+            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + cur_profile
+            
+            
+
+    def check_structure_sub_old(self, stock, context):
         zhongshu_changed = False
 
         old_current_profile = self.g.stock_chan_type[stock][1]
@@ -1233,8 +1266,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 if self.halt_check_when_enough and (self.long_candidate_num <= len(self.tentative_stage_I)):
                     break
                 
-                result, _ = self.check_vol_money_cur_structure(stock, context, after_stage_III=False)
-                if result:
+                if self.check_internal_vol_money(stock, context):
                     filter_stock_list.append(stock)
         
         self.log.info("newly qualified stocks: {0}".format(filter_stock_list))
