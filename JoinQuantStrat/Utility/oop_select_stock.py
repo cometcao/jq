@@ -1320,7 +1320,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                               stock not in self.tentative_stage_III and\
                                                               stock not in self.tentative_stage_IV)]
         [self.g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
-        self.log.info("position chan info: {0}".format(self.g.stock_chan_type))
+        self.log.info("position chan info: {0}".format(self.g.stock_chan_type.keys()))
 
 class Filter_Pair_Trading(Filter_stock_list):
     def __init__(self, params):
