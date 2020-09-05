@@ -889,7 +889,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stage_III_long = set()
             stocks_to_remove_III = set()
             for stock in self.tentative_stage_III:
-                ready, zhongshu_changed = self.check_stage_III_old(stock, context)
+                ready, zhongshu_changed = self.check_stage_III(stock, context)
                 if ready:
                     stage_III_long.add(stock)
 #                 if zhongshu_changed:
@@ -1108,7 +1108,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             current_p = cur_profile[0][2][0] if type(cur_profile[0][2]) is list else cur_profile[0][2]
             zhongshu_changed = current_p != old_current_p
 
-        if cur_profile[0][0] in self.stage_III_types:
+        if cur_profile[0][0] in self.stage_III_types and stock not in context.portfolio.positions.keys():
             self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] +\
                                                                     cur_profile +\
                                             [(Chan_Type.INVALID,
@@ -1157,8 +1157,18 @@ class Filter_Chan_Stocks(Filter_stock_list):
             current_p = profile[0][2][0] if type(profile[0][2]) is list else profile[0][2]
             zhongshu_changed = current_p != old_current_p
 
-        if profile[0][0] in self.stage_III_types:
-            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile # fit the results
+        # only update cache when we don't hold it in pos
+        if profile[0][0] in self.stage_III_types and stock not in context.portfolio.positions.keys():
+            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile if len(profile) > 1 else\
+                                            [self.g.stock_chan_type[stock][0]] + profile +\
+                                                [(Chan_Type.INVALID,
+                                               TopBotType.top2bot,
+                                               0,
+                                               0,
+                                               0,
+                                               None,
+                                               context.current_dt, 
+                                               )]
         
 #         result = exhaustion_result and self.check_internal_vol_money(stock, context)
         
