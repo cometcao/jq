@@ -1200,7 +1200,18 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                                 check_full_zoushi=False, 
                                                                                 enable_ac_opposite_direction=enable_ac_op_direction)
         
-        self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0], self.g.stock_chan_type[stock][1]] + sub_profile
+        if sub_profile:
+            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0], self.g.stock_chan_type[stock][1]] + sub_profile
+        else:
+            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0], self.g.stock_chan_type[stock][1]] +\
+                                            [(Chan_Type.INVALID,
+                                               TopBotType.top2bot,
+                                               0,
+                                               0,
+                                               0,
+                                               None,
+                                               context.current_dt, 
+                                               )]
 
         return sub_exhausted and sub_xd_exhausted, zhongshu_changed
     
@@ -1295,8 +1306,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
         # sort by sectors again
         beichi_list = self.sort_by_sector_order(beichi_list) 
         # relate to existing position profit result
-#         enhanced_list = [stock for stock in enhanced_list if stock in self.g.all_return_stocks]
-#         self.g.all_return_stocks = self.g.all_return_stocks.difference(enhanced_list)
+        enhanced_list = [stock for stock in enhanced_list if stock in self.g.all_return_stocks]
+        self.g.all_return_stocks = self.g.all_return_stocks.difference(enhanced_list)
                 
         self.log.info("\nStocks ready: Bei Chi: {0}, stage IV: {1},\ntentative I: {2},\ntentative II: {3},\ntentative III:{4}, \ntentative IV:{5}".format(
                                                                       beichi_list, 
