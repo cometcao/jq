@@ -995,6 +995,21 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 result = True
         return False
     
+    def check_daily_vol_money(self, stock, context):
+        # vol increased
+        stock_data = get_price(security=stock, 
+                      end_date=context.current_dt, 
+                      count = 2,
+                      frequency='240m', 
+                      skip_paused=True, 
+                      panel=False, 
+                      fields=['money'])
+        
+        cur_ratio = stock_data['money'][-1] / stock_data['money'][-2]
+        if float_more_equal(cur_ratio, 1.191):
+            return True
+        return False
+    
     def check_vol_money(self, stock, context):
         sub_profile = self.g.stock_chan_type[stock][2]
         sub_effective_time = sub_profile[6]
@@ -1073,7 +1088,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
     def check_stage_II(self, stock, context):
         result, _ = self.check_structure_sub_new(stock, context)
-        if result:
+        if result and not self.check_daily_vol_money(stock, context):
             return result, True
         
         return self.check_bot_shape(stock, context, from_local_max=False)
@@ -1120,9 +1135,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                context.current_dt, 
                                                )]# fit the results
         
-        result = exhaustion_result and self.check_internal_vol_money(stock, context)
-#         return exhaustion_result, zhongshu_changed
-        return result, zhongshu_changed
+#         result = exhaustion_result and self.check_internal_vol_money(stock, context)
+        return exhaustion_result, zhongshu_changed
+#         return result, zhongshu_changed
             
 
     def check_stage_III_old(self, stock, context):
