@@ -862,7 +862,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                     
             for stock in self.tentative_stage_II:
                 check_result, price_checked = self.check_stage_II(stock, context)
-                if check_result and price_checked:
+                if check_result:
                     top_profile = self.g.stock_chan_type[stock][0]
                     cur_profile = self.g.stock_chan_type[stock][1]
                     sub_profile = self.g.stock_chan_type[stock][2]
