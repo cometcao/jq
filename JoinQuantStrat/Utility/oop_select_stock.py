@@ -862,7 +862,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                     
             for stock in self.tentative_stage_II:
                 check_result, price_checked = self.check_stage_II(stock, context)
-                if check_result:
+                if check_result and price_checked:
                     top_profile = self.g.stock_chan_type[stock][0]
                     cur_profile = self.g.stock_chan_type[stock][1]
                     sub_profile = self.g.stock_chan_type[stock][2]
@@ -1120,9 +1120,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                context.current_dt, 
                                                )]# fit the results
         
-#             result = exhaustion_result and self.check_internal_vol_money(stock, context)
-        return exhaustion_result, zhongshu_changed
-#         return result, zhongshu_changed
+        result = exhaustion_result and self.check_internal_vol_money(stock, context)
+#         return exhaustion_result, zhongshu_changed
+        return result, zhongshu_changed
             
 
     def check_stage_III_old(self, stock, context):
