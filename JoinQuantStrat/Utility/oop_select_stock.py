@@ -794,6 +794,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.tentative_stage_IV = set()
         self.halt_check_when_enough = params.get('halt_check_when_enough', True)
         self.stage_III_types = params.get('stage_III_types', [Chan_Type.III, Chan_Type.III_strong, Chan_Type.III_weak])
+        self.use_all_stocks_4_III = params.get('use_all_stocks_4_III', False)
     
     def check_guide_price_reached(self, stock, context):
         current_profile = self.g.stock_chan_type[stock][1]
@@ -833,7 +834,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
                 if self.check_guide_price_reached(stock, context):
                     stocks_to_remove_I.add(stock)
-                    self.tentative_stage_III.add(stock) # skip first phase
+                    if self.use_all_stocks_4_III:
+                        self.tentative_stage_III.add(stock) # skip first phase
                     continue
             
             result, zhongshu_changed = self.check_structure_cur(stock, context, after_stage_III=False)
@@ -996,7 +998,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return False
     
     def check_daily_vol_money(self, stock, context):
-        # vol increased
+        # vol must decrease!
         stock_data = get_price(security=stock, 
                       end_date=context.current_dt, 
                       count = 2,
@@ -1006,7 +1008,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                       fields=['money'])
         
         cur_ratio = stock_data['money'][-1] / stock_data['money'][-2]
-        if float_more_equal(cur_ratio, 1.191):
+        if float_less_equal(cur_ratio, 1.0):
             return True
         return False
     
@@ -1088,7 +1090,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
     def check_stage_II(self, stock, context):
         result, _ = self.check_structure_sub_new(stock, context)
-        if result and not self.check_daily_vol_money(stock, context):
+        if result and self.check_daily_vol_money(stock, context):
             return result, True
         
         return self.check_bot_shape(stock, context, from_local_max=False)
@@ -1320,9 +1322,11 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         # sort by sectors again
         beichi_list = self.sort_by_sector_order(beichi_list) 
-        # relate to existing position profit result
-        enhanced_list = [stock for stock in enhanced_list if stock in self.g.all_return_stocks]
-        self.g.all_return_stocks = self.g.all_return_stocks.difference(enhanced_list)
+        
+        if not self.use_all_stocks_4_III:
+            # relate to existing position profit result
+            enhanced_list = [stock for stock in enhanced_list if stock in self.g.all_return_stocks]
+            self.g.all_return_stocks = self.g.all_return_stocks.difference(enhanced_list)
                 
         self.log.info("\nStocks ready: Bei Chi: {0}, stage IV: {1},\ntentative I: {2},\ntentative II: {3},\ntentative III:{4}, \ntentative IV:{5}".format(
                                                                       beichi_list, 
