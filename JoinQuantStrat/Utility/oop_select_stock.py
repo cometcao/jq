@@ -864,7 +864,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                     
             for stock in self.tentative_stage_II:
                 check_result, price_checked = self.check_stage_II(stock, context)
-                if check_result:
+                if check_result and price_checked:
                     top_profile = self.g.stock_chan_type[stock][0]
                     cur_profile = self.g.stock_chan_type[stock][1]
                     sub_profile = self.g.stock_chan_type[stock][2]
@@ -1008,7 +1008,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                       fields=['money'])
         
         cur_ratio = stock_data['money'][-1] / stock_data['money'][-2]
-        if float_less_equal(cur_ratio, 1.0):
+        if float_less_equal(cur_ratio, 0.809):
             return True
         return False
     
@@ -1058,12 +1058,6 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return False
     
     def check_bot_shape(self, stock, context, from_local_max=False):
-        
-        if self.stage_II_timing and\
-            (context.current_dt.hour != self.stage_II_timing[0] or\
-            context.current_dt.minute != self.stage_II_timing[1]):
-            return False, False
-        
 #         current_profile = self.g.stock_chan_type[stock][1]
 #         current_start_time = current_profile[5]
 #         current_effective_time = current_profile[6]
@@ -1089,6 +1083,11 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return kb_chan.formed_tb(tb=TopBotType.bot)
         
     def check_stage_II(self, stock, context):
+        if self.stage_II_timing and\
+            (context.current_dt.hour != self.stage_II_timing[0] or\
+            context.current_dt.minute != self.stage_II_timing[1]):
+            return False, False
+        
         result, _ = self.check_structure_sub_new(stock, context)
         if result and self.check_daily_vol_money(stock, context):
             return result, True
@@ -1099,6 +1098,11 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return self.check_vol_money_cur_structure(stock, context, after_stage_III=True), False
     
     def check_stage_IV(self, stock, context):
+        if self.stage_II_timing and\
+            (context.current_dt.hour != self.stage_II_timing[0] or\
+            context.current_dt.minute != self.stage_II_timing[1]):
+            return False, False
+        
         return self.check_bot_shape(stock, context, from_local_max=False)
     
     def check_stage_III(self, stock, context):
