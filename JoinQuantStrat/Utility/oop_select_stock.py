@@ -793,8 +793,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.tentative_stage_III = set()
         self.tentative_stage_IV = set()
         self.halt_check_when_enough = params.get('halt_check_when_enough', True)
-        self.stage_III_pos_return_types = params.get('stage_III_types', [Chan_Type.III, Chan_Type.III_strong, Chan_Type.III_weak, Chan_Type.INVALID])
-        self.stage_III_neg_return_types = params.get('stage_III_types', [Chan_Type.I, Chan_Type.I_weak])
+        self.stage_III_pos_return_types = params.get('stage_III_pos_return_types', [Chan_Type.III, Chan_Type.III_strong, Chan_Type.III_weak, Chan_Type.INVALID])
+        self.stage_III_neg_return_types = params.get('stage_III_neg_return_types', [Chan_Type.I, Chan_Type.I_weak])
         self.stage_III_types = params.get('stage_III_types', [Chan_Type.III, Chan_Type.III_strong, Chan_Type.III_weak])
         self.use_all_stocks_4_III = params.get('use_all_stocks_4_III', False)
     
@@ -866,7 +866,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                     
             for stock in self.tentative_stage_II:
                 check_result, price_checked = self.check_stage_II(stock, context)
-                if check_result and price_checked:
+                if check_result:
                     top_profile = self.g.stock_chan_type[stock][0]
                     cur_profile = self.g.stock_chan_type[stock][1]
                     sub_profile = self.g.stock_chan_type[stock][2]
@@ -1000,16 +1000,16 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return False
     
     def check_daily_vol_money(self, stock, context):
-        # vol must decrease!
+        # three days vol must decrease!
         stock_data = get_price(security=stock, 
                       end_date=context.current_dt, 
-                      count = 2,
-                      frequency='240m', 
+                      count = 6,
+                      frequency='120m', 
                       skip_paused=True, 
                       panel=False, 
                       fields=['money'])
         
-        cur_ratio = stock_data['money'][-1] / stock_data['money'][-2]
+        cur_ratio = sum(stock_data['money'][-3:]) / sum(stock_data['money'][-6:-3])
         if float_less_equal(cur_ratio, 0.809):
             return True
         return False
@@ -1085,14 +1085,14 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return kb_chan.formed_tb(tb=TopBotType.bot)
         
     def check_stage_II(self, stock, context):
+        result, _ = self.check_structure_sub_new(stock, context)
+        if result and self.check_daily_vol_money(stock, context):
+            return result, True
+        
         if self.stage_II_timing and\
             (context.current_dt.hour != self.stage_II_timing[0] or\
             context.current_dt.minute != self.stage_II_timing[1]):
             return False, False
-        
-        result, _ = self.check_structure_sub_new(stock, context)
-        if result and self.check_daily_vol_money(stock, context):
-            return result, True
         
         return self.check_bot_shape(stock, context, from_local_max=False)
     
@@ -1354,7 +1354,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         self.g.all_pos_return_stocks = self.g.all_pos_return_stocks.difference(stocks)
         self.g.all_neg_return_stocks = self.g.all_neg_return_stocks.difference(stocks)
-        return qualified_stocks
+        return list(qualified_stocks)
 
     def sort_by_sector_order(self, stock_list):
         # sort resulting stocks
