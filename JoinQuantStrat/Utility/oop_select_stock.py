@@ -793,6 +793,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.tentative_stage_III = set()
         self.tentative_stage_IV = set()
         self.halt_check_when_enough = params.get('halt_check_when_enough', True)
+        self.stage_III_pos_return_types = params.get('stage_III_types', [Chan_Type.III, Chan_Type.III_strong, Chan_Type.III_weak, Chan_Type.INVALID])
+        self.stage_III_neg_return_types = params.get('stage_III_types', [Chan_Type.I, Chan_Type.I_weak])
         self.stage_III_types = params.get('stage_III_types', [Chan_Type.III, Chan_Type.III_strong, Chan_Type.III_weak])
         self.use_all_stocks_4_III = params.get('use_all_stocks_4_III', False)
     
@@ -1329,8 +1331,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         if not self.use_all_stocks_4_III:
             # relate to existing position profit result
-            enhanced_list = [stock for stock in enhanced_list if stock in self.g.all_return_stocks]
-            self.g.all_return_stocks = self.g.all_return_stocks.difference(enhanced_list)
+#             enhanced_list = [stock for stock in enhanced_list if stock in self.g.all_return_stocks]
+            enhanced_list = self.filter_enhanced_stock_by_return(enhanced_list)
                 
         self.log.info("\nStocks ready: Bei Chi: {0}, stage IV: {1},\ntentative I: {2},\ntentative II: {3},\ntentative III:{4}, \ntentative IV:{5}".format(
                                                                       beichi_list, 
@@ -1340,6 +1342,19 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                       self.tentative_stage_III, 
                                                                       self.tentative_stage_IV,))
         return beichi_list+enhanced_list
+    
+    def filter_enhanced_stock_by_return(self, stocks):
+        qualified_stocks = set()
+        for stock in stocks:
+            stock_chan_cur_type = self.g.stock_chan_type[stock][1][0]
+            if stock in self.g.all_pos_return_stocks and stock_chan_cur_type in self.stage_III_pos_return_types:
+                qualified_stocks.add(stock)
+            if stock in self.g.all_neg_return_stocks and stock_chan_cur_type in self.stage_III_neg_return_types:
+                qualified_stocks.add(stock)
+        
+        self.g.all_pos_return_stocks = self.g.all_pos_return_stocks.difference(stocks)
+        self.g.all_neg_return_stocks = self.g.all_neg_return_stocks.difference(stocks)
+        return qualified_stocks
 
     def sort_by_sector_order(self, stock_list):
         # sort resulting stocks
