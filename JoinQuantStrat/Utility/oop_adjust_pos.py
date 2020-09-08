@@ -948,6 +948,7 @@ class Short_Chan(Sell_stocks):
                         return True
                     self.tentative_II.add(stock)
                 
+            if stock in self.tentative_I and stock not in self.tentative_II:
                 min_price = stock_data.loc[min_time, 'low']
                 max_price = stock_data.loc[min_time:, 'high'].max()
                 if float_more_equal(max_price/min_price - 1, self.stop_profit):

@@ -773,10 +773,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.long_min_start = params.get('long_min_start', 30)
         self.use_sub_split = params.get('sub_split', True)
         self.ignore_xd = params.get('ignore_xd', False)
-        self.use_stage_II = params.get('use_stage_II', False)
-        self.stage_II_timing = params.get('stage_II_timing', [14, 50])
-        self.long_candidate_num = params.get('long_candiate_num', self.long_stock_num)
         self.use_stage_III = params.get('use_stage_III', False)
+        self.stage_III_timing = params.get('stage_III_timing', [14, 50])
+        self.long_candidate_num = params.get('long_candiate_num', self.long_stock_num)
+        self.use_stage_A = params.get('use_stage_A', False)
         
         self.force_chan_type = params.get('force_chan_type', [
                                                               [Chan_Type.I, self.current_chan_type[0]],
@@ -791,12 +791,13 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.tentative_stage_I = set() # list to hold stocks waiting to be operated
         self.tentative_stage_II = set()
         self.tentative_stage_III = set()
-        self.tentative_stage_IV = set()
+        self.tentative_stage_A = set()
+        self.tentative_stage_B = set()
         self.halt_check_when_enough = params.get('halt_check_when_enough', True)
-        self.stage_III_pos_return_types = params.get('stage_III_pos_return_types', [Chan_Type.III, Chan_Type.III_strong, Chan_Type.III_weak, Chan_Type.INVALID])
-        self.stage_III_neg_return_types = params.get('stage_III_neg_return_types', [Chan_Type.I, Chan_Type.I_weak])
-        self.stage_III_types = params.get('stage_III_types', [Chan_Type.III, Chan_Type.III_strong, Chan_Type.III_weak])
-        self.use_all_stocks_4_III = params.get('use_all_stocks_4_III', False)
+        self.stage_A_pos_return_types = params.get('stage_A_pos_return_types', [Chan_Type.III, Chan_Type.III_strong, Chan_Type.III_weak, Chan_Type.INVALID])
+        self.stage_A_neg_return_types = params.get('stage_A_neg_return_types', [Chan_Type.I, Chan_Type.I_weak])
+        self.stage_A_types = params.get('stage_A_types', [Chan_Type.III, Chan_Type.III_strong, Chan_Type.III_weak])
+        self.use_all_stocks_4_A = params.get('use_all_stocks_4_A', False)
         self.price_revert_range = params.get('price_revert_range', 0.055)
     
     def check_guide_price_reached(self, stock, context):
@@ -814,9 +815,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
         if current_chan_t == Chan_Type.I or current_chan_t == Chan_Type.I_weak:
             max_price_after_long = stock_data.loc[current_effective_time:, 'high'].max()
             if float_more_equal(max_price_after_long, current_chan_p):
-                self.log.info("{0} reached target price:{1}, max: {2}".format(stock, 
-                                                                              current_chan_p, 
-                                                                              max_price_after_long))
+#                 self.log.info("{0} reached target price:{1}, max: {2}".format(stock, 
+#                                                                               current_chan_p, 
+#                                                                               max_price_after_long))
                 return True
         elif current_chan_t == Chan_Type.III or current_chan_t == Chan_Type.III_strong:
             min_price_after_long = stock_data.loc[current_effective_time:, 'low'].min()
@@ -827,9 +828,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
         min_price = stock_data.loc[min_time,'low']
         max_price = stock_data.loc[min_time:, 'high'].max()
         if float_more_equal(max_price / min_price - 1, self.price_revert_range):
-            self.log.info("{0} price reverted:{1}, max: {2}".format(stock, 
-                                                                  min_price, 
-                                                                  max_price))
+#             self.log.info("{0} price reverted:{1}, max: {2}".format(stock, 
+#                                                                   min_price, 
+#                                                                   max_price))
             return True
         return False
     
@@ -837,7 +838,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         stocks_to_long = set()
         stocks_to_remove_I = set()
-        stage_IV_long = set()
+        stage_B_long = set()
         
         self.tentative_stage_I = self.tentative_stage_I.difference(set(context.portfolio.positions.keys()))
         
@@ -846,8 +847,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
                 if self.check_guide_price_reached(stock, context):
                     stocks_to_remove_I.add(stock)
-                    if self.use_all_stocks_4_III:
-                        self.tentative_stage_III.add(stock) # skip first phase
+                    if self.use_all_stocks_4_A:
+                        self.tentative_stage_A.add(stock) # skip first phase
                     continue
             
             result, zhongshu_changed = self.check_structure_cur(stock, context, after_stage_III=False)
@@ -862,78 +863,78 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.tentative_stage_I = self.tentative_stage_I.difference(stocks_to_remove_I)
         self.log.info("stocks removed from stage I: {0}".format(stocks_to_remove_I))
         
-        if not self.use_stage_II:
-            self.tentative_stage_I = self.tentative_stage_I.difference(stocks_to_long)
-        else:
-            stocks_to_remove_II = set()
-            
-            self.tentative_stage_II = stocks_to_long.union(self.tentative_stage_II)
-            stocks_to_long = set()
-            self.tentative_stage_I = self.tentative_stage_I.difference(self.tentative_stage_II)
-        
-            self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
-                    
-            for stock in self.tentative_stage_II:
-                check_result, price_checked = self.check_stage_II(stock, context)
-                if check_result:
-                    top_profile = self.g.stock_chan_type[stock][0]
-                    cur_profile = self.g.stock_chan_type[stock][1]
-                    sub_profile = self.g.stock_chan_type[stock][2]
-                    
-                    top_chan_t = top_profile[0]
-                    cur_chan_t = cur_profile[0]
-                    sub_chan_t = sub_profile[0]
-                    
-                    chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
-                    if self.force_chan_type and (chan_type_list not in self.force_chan_type):
-                        stocks_to_remove_II.add(stock)
-                        continue
-                    stocks_to_long.add(stock)
-                if check_result and not price_checked:
-                    stocks_to_remove_II.add(stock)
-                    
-            self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_remove_II)
-            self.log.info("stocks removed from stage II: {0}".format(stocks_to_remove_II))
-                    
-            self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_long)
-        
-        if self.use_stage_II and self.use_stage_III:
-            # check stage III
-            stage_III_long = set()
-            stocks_to_remove_III = set()
-            for stock in self.tentative_stage_III:
-                ready, zhongshu_changed = self.check_stage_III(stock, context)
-                if ready:
-                    stage_III_long.add(stock)
-#                 if zhongshu_changed:
-#                     stocks_to_remove_III.add(stock)
-                    
-            self.tentative_stage_III = self.tentative_stage_III.difference(stocks_to_remove_III)
-            self.log.info("stocks removed from stage III: {0}".format(stocks_to_remove_III))
-            
-            # for stocks to be long we wait after initial stage III check ########
-            self.tentative_stage_III = self.tentative_stage_III.union(stocks_to_long)
-            ######################################################################
-            self.tentative_stage_III = self.tentative_stage_III.difference(stage_III_long)
-            
-            self.tentative_stage_IV = self.tentative_stage_IV.union(stage_III_long)
-            stocks_to_remove_IV = set()
-            for stock in self.tentative_stage_IV:
-                check_result, price_checked = self.check_stage_IV(stock, context)
-                if check_result and price_checked and stock in self.g.all_neg_return_stocks:
-                    stage_IV_long.add(stock)
-                elif check_result and stock in self.g.all_pos_return_stocks:
-                    stage_IV_long.add(stock)
-                elif check_result:
-                    stocks_to_remove_IV.add(stock)
-                    
-            self.tentative_stage_IV = self.tentative_stage_IV.difference(stage_IV_long)
-            self.tentative_stage_IV = self.tentative_stage_IV.difference(stocks_to_remove_IV)
-            self.log.info("stocks removed from stage IV: {0}".format(stocks_to_remove_IV))
-            
-#             self.tentative_stage_III = self.tentative_stage_III.union(stage_IV_long)
+        stocks_to_remove_II = set()
+        self.tentative_stage_II = stocks_to_long.union(self.tentative_stage_II)
+        stocks_to_long = set()
+        self.tentative_stage_I = self.tentative_stage_I.difference(self.tentative_stage_II)
+        self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                 
-        return stocks_to_long, stage_IV_long
+        for stock in self.tentative_stage_II:
+            check_result = self.check_stage_II(stock, context)
+            if check_result:
+                top_profile = self.g.stock_chan_type[stock][0]
+                cur_profile = self.g.stock_chan_type[stock][1]
+                sub_profile = self.g.stock_chan_type[stock][2]
+                
+                top_chan_t = top_profile[0]
+                cur_chan_t = cur_profile[0]
+                sub_chan_t = sub_profile[0]
+                
+                chan_type_list = [top_chan_t, cur_chan_t, sub_chan_t]
+                if self.force_chan_type and (chan_type_list not in self.force_chan_type):
+                    stocks_to_remove_II.add(stock)
+                    continue
+                stocks_to_long.add(stock)
+                
+        self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_remove_II)
+        self.log.info("stocks removed from stage II: {0}".format(stocks_to_remove_II))
+        self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_long)
+        
+        self.tentative_stage_III = self.tentative_stage_III.union(stocks_to_long)
+        stocks_to_long = set()
+        for stocks in self.tentative_stage_III:
+            check_result, _ = self.check_stage_III(stock, context)
+            if check_result:
+                stocks_to_long.add(stock)
+        self.tentative_stage_III = self.tentative_stage_III.difference(stocks_to_long)
+        
+        if self.use_stage_III and self.use_stage_A:
+            # check stage A
+            stage_A_long = set()
+            stocks_to_remove_A = set()
+            for stock in self.tentative_stage_A:
+                ready, zhongshu_changed = self.check_stage_A_vol(stock, context)
+                if ready:
+                    stage_A_long.add(stock)
+#                 if zhongshu_changed:
+#                     stocks_to_remove_A.add(stock)
+                    
+            self.tentative_stage_A = self.tentative_stage_A.difference(stocks_to_remove_A)
+            self.log.info("stocks removed from stage A: {0}".format(stocks_to_remove_A))
+            
+            # for stocks to be long we wait after initial stage A check ########
+            self.tentative_stage_A = self.tentative_stage_A.union(stocks_to_long)
+            ######################################################################
+            self.tentative_stage_A = self.tentative_stage_A.difference(stage_A_long)
+            
+            self.tentative_stage_B = self.tentative_stage_B.union(stage_A_long)
+            stocks_to_remove_B = set()
+            for stock in self.tentative_stage_B:
+                check_result, price_checked = self.check_stage_B(stock, context)
+                if check_result and price_checked and stock in self.g.all_neg_return_stocks:
+                    stage_B_long.add(stock)
+                elif check_result and stock in self.g.all_pos_return_stocks:
+                    stage_B_long.add(stock)
+                elif check_result:
+                    stocks_to_remove_B.add(stock)
+                    
+            self.tentative_stage_B = self.tentative_stage_B.difference(stage_B_long)
+            self.tentative_stage_B = self.tentative_stage_B.difference(stocks_to_remove_B)
+            self.log.info("stocks removed from stage B: {0}".format(stocks_to_remove_B))
+            
+#             self.tentative_stage_A = self.tentative_stage_A.union(stage_B_long)
+                
+        return stocks_to_long, stage_B_long
     
     def check_vol_money_cur_structure(self, stock, context, after_stage_III=False):
         result = False
@@ -947,7 +948,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                           periods=[self.periods[0]], 
                                                                           count=self.num_of_data, 
                                                                           direction=TopBotType.top2bot,
-                                                                          chan_type=self.stage_III_types if after_stage_III else self.current_chan_type, 
+                                                                          chan_type=self.stage_A_types if after_stage_III else self.current_chan_type, 
                                                                           isdebug=self.isdebug, 
                                                                           is_description=False,
                                                                           check_structure=True,
@@ -957,7 +958,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             if result or after_stage_III:
                 if len(self.g.stock_chan_type[stock]) > 1:
                     old_current_profile = self.g.stock_chan_type[stock][1]
-                    if old_current_profile[0] in self.stage_III_types:
+                    if old_current_profile[0] in self.stage_A_types:
                         old_current_p = old_current_profile[2][0] if type(old_current_profile[2]) is list else old_current_profile[2]
                         current_p = cur_profile[0][2][0] if type(cur_profile[0][2]) is list else cur_profile[0][2]
                         zhongshu_changed = current_p != old_current_p
@@ -1014,13 +1015,13 @@ class Filter_Chan_Stocks(Filter_stock_list):
         # three days vol must decrease!
         stock_data = get_price(security=stock, 
                       end_date=context.current_dt, 
-                      count = 6,
+                      count = 4,
                       frequency='120m', 
                       skip_paused=True, 
                       panel=False, 
                       fields=['money'])
         
-        cur_ratio = sum(stock_data['money'][-3:]) / sum(stock_data['money'][-6:-3])
+        cur_ratio = sum(stock_data['money'][-2:]) / sum(stock_data['money'][-4:-2])
         if float_less_equal(cur_ratio, 0.809):
             return True
         if float_more_equal(cur_ratio, 1.191):
@@ -1060,9 +1061,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
         cur_ratio = cur_latest_money/cur_past_money
         sub_ratio = sub_latest_money/sub_past_money
 
-        self.log.debug("candidate stock {0} cur: {1}, sub: {2}".format(stock, 
-                                                                    cur_ratio, 
-                                                                    sub_ratio))
+#         self.log.debug("candidate stock {0} cur: {1}, sub: {2}".format(stock, 
+#                                                                     cur_ratio, 
+#                                                                     sub_ratio))
         if float_more_equal(cur_ratio, 1.191) or\
             float_more_equal(sub_ratio, 1.191):
             return True
@@ -1099,28 +1100,30 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
     def check_stage_II(self, stock, context):
         result, _ = self.check_structure_sub_new(stock, context)
-        if result and self.check_daily_vol_money(stock, context):
-            return result, True
-        
-        if self.stage_II_timing and\
-            (context.current_dt.hour != self.stage_II_timing[0] or\
-            context.current_dt.minute != self.stage_II_timing[1]):
-            return False, False
-        
-        return self.check_bot_shape(stock, context, from_local_max=False)
-    
-    def check_stage_III_new(self, stock, context):
-        return self.check_vol_money_cur_structure(stock, context, after_stage_III=True), False
-    
-    def check_stage_IV(self, stock, context):
-        if self.stage_II_timing and\
-            (context.current_dt.hour != self.stage_II_timing[0] or\
-            context.current_dt.minute != self.stage_II_timing[1]):
-            return False, False
-        
-        return self.check_bot_shape(stock, context, from_local_max=False)
+#         if result and self.check_daily_vol_money(stock, context): # call again :)
+        return result
+
     
     def check_stage_III(self, stock, context):
+        if self.stage_III_timing and\
+            (context.current_dt.hour != self.stage_III_timing[0] or\
+            context.current_dt.minute != self.stage_III_timing[1]):
+            return False, False
+        
+        return self.check_bot_shape(stock, context, from_local_max=False)
+    
+    def check_stage_B(self, stock, context):
+        if self.stage_III_timing and\
+            (context.current_dt.hour != self.stage_III_timing[0] or\
+            context.current_dt.minute != self.stage_III_timing[1]):
+            return False, False
+        
+        return self.check_bot_shape(stock, context, from_local_max=False)
+    
+    def check_stage_A_vol(self, stock, context):
+        return self.check_internal_vol_money(stock, context), False
+    
+    def check_stage_III_cur(self, stock, context):
         result = False
         zhongshu_changed = False
         
@@ -1129,7 +1132,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                       periods=[self.periods[0]], 
                                                                       count=self.num_of_data, 
                                                                       direction=TopBotType.top2bot,
-                                                                      chan_type=self.stage_III_types, 
+                                                                      chan_type=self.stage_A_types, 
                                                                       isdebug=self.isdebug, 
                                                                       is_description=False,
                                                                       check_structure=True,
@@ -1139,12 +1142,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         old_current_profile = self.g.stock_chan_type[stock][1]
         if len(self.g.stock_chan_type[stock]) > 1 and\
-            old_current_profile[0] in self.stage_III_types:
+            old_current_profile[0] in self.stage_A_types:
             old_current_p = old_current_profile[2][0] if type(old_current_profile[2]) is list else old_current_profile[2]
             current_p = cur_profile[0][2][0] if type(cur_profile[0][2]) is list else cur_profile[0][2]
             zhongshu_changed = current_p != old_current_p
 
-        if cur_profile[0][0] in self.stage_III_types and stock not in context.portfolio.positions.keys():
+        if cur_profile[0][0] in self.stage_A_types and stock not in context.portfolio.positions.keys():
             self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] +\
                                                                     cur_profile +\
                                             [(Chan_Type.INVALID,
@@ -1161,7 +1164,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #         return result, zhongshu_changed
             
 
-    def check_stage_III_old(self, stock, context):
+    def check_stage_III_full(self, stock, context):
         result = False
         zhongshu_changed = False
         
@@ -1170,7 +1173,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                              periods=self.periods,
                                              count=self.num_of_data,
                                              direction=TopBotType.top2bot, 
-                                             current_chan_type=self.stage_III_types,
+                                             current_chan_type=self.stage_A_types,
                                              sub_chan_type=[Chan_Type.I, 
                                                             Chan_Type.I_weak, 
                                                             Chan_Type.INVALID, 
@@ -1188,13 +1191,13 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         old_current_profile = self.g.stock_chan_type[stock][1]
         if len(self.g.stock_chan_type[stock]) > 1 and\
-            old_current_profile[0] in self.stage_III_types:
+            old_current_profile[0] in self.stage_A_types:
             old_current_p = old_current_profile[2][0] if type(old_current_profile[2]) is list else old_current_profile[2]
             current_p = profile[0][2][0] if type(profile[0][2]) is list else profile[0][2]
             zhongshu_changed = current_p != old_current_p
 
         # only update cache when we don't hold it in pos
-        if profile[0][0] in self.stage_III_types and stock not in context.portfolio.positions.keys():
+        if profile[0][0] in self.stage_A_types and stock not in context.portfolio.positions.keys():
             self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile if len(profile) > 1 else\
                                             [self.g.stock_chan_type[stock][0]] + profile +\
                                                 [(Chan_Type.INVALID,
@@ -1259,7 +1262,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                       periods=[self.periods[0]], 
                                                                       count=self.num_of_data, 
                                                                       direction=TopBotType.top2bot,
-                                                                      chan_type=self.stage_III_types if after_stage_III else self.current_chan_type, 
+                                                                      chan_type=self.stage_A_types if after_stage_III else self.current_chan_type, 
                                                                       isdebug=self.isdebug, 
                                                                       is_description=False,
                                                                       check_structure=True,
@@ -1269,7 +1272,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         if result or after_stage_III:
             if len(self.g.stock_chan_type[stock]) > 1:
                 old_current_profile = self.g.stock_chan_type[stock][1]
-                if old_current_profile[0] in self.stage_III_types:
+                if old_current_profile[0] in self.stage_A_types:
                     old_current_p = old_current_profile[2][0] if type(old_current_profile[2]) is list else old_current_profile[2]
                     current_p = cur_profile[0][2][0] if type(cur_profile[0][2]) is list else cur_profile[0][2]
                     zhongshu_changed = current_p != old_current_p
@@ -1290,7 +1293,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                              periods=self.periods,
                                              count=self.num_of_data,
                                              direction=TopBotType.top2bot, 
-                                             current_chan_type=self.stage_III_types,
+                                             current_chan_type=self.stage_A_types,
                                              sub_chan_type=self.sub_chan_type,
                                              isdebug=self.isdebug,
                                              is_description=self.isDescription,
@@ -1320,7 +1323,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         filter_stock_list = []
         if within_processing_time:
-            stocks_in_place = set(context.portfolio.positions.keys()).union(self.tentative_stage_I).union(self.tentative_stage_II).union(self.tentative_stage_III).union(self.tentative_stage_IV)
+            stocks_in_place = set(context.portfolio.positions.keys()).union(self.tentative_stage_I).union(self.tentative_stage_II).union(self.tentative_stage_III).union(self.tentative_stage_A).union(self.tentative_stage_B)
             stock_list = [stock for stock in stock_list if stock not in stocks_in_place]
             stock_list = self.sort_by_sector_order(stock_list)
             for stock in stock_list:
@@ -1342,27 +1345,28 @@ class Filter_Chan_Stocks(Filter_stock_list):
         # sort by sectors again
         beichi_list = self.sort_by_sector_order(beichi_list) 
         
-#         if not self.use_all_stocks_4_III:
+#         if not self.use_all_stocks_4_A:
             # relate to existing position profit result
 #             enhanced_list = [stock for stock in enhanced_list if stock in self.g.all_return_stocks]
 #             enhanced_list = self.filter_enhanced_stock_by_return(enhanced_list)
                 
-        self.log.info("\nStocks ready: Bei Chi: {0}, stage IV: {1},\ntentative I: {2},\ntentative II: {3},\ntentative III:{4}, \ntentative IV:{5}".format(
+        self.log.info("\nStocks ready: Bei Chi: {0}, stage IV: {1},\ntentative I: {2},\ntentative II: {3},\ntentative III:{4}, \ntentative A:{5} \ntentative B:{6}".format(
                                                                       beichi_list, 
                                                                       enhanced_list,
                                                                       self.tentative_stage_I,
                                                                       self.tentative_stage_II,
-                                                                      self.tentative_stage_III, 
-                                                                      self.tentative_stage_IV,))
+                                                                      self.tentative_stage_III,
+                                                                      self.tentative_stage_A, 
+                                                                      self.tentative_stage_B,))
         return beichi_list+enhanced_list
     
     def filter_enhanced_stock_by_return(self, stocks):
         qualified_stocks = set()
         for stock in stocks:
             stock_chan_cur_type = self.g.stock_chan_type[stock][1][0]
-            if stock in self.g.all_pos_return_stocks and stock_chan_cur_type in self.stage_III_pos_return_types:
+            if stock in self.g.all_pos_return_stocks and stock_chan_cur_type in self.stage_A_pos_return_types:
                 qualified_stocks.add(stock)
-            if stock in self.g.all_neg_return_stocks and stock_chan_cur_type in self.stage_III_neg_return_types:
+            if stock in self.g.all_neg_return_stocks and stock_chan_cur_type in self.stage_A_neg_return_types:
                 qualified_stocks.add(stock)
         
         self.g.all_pos_return_stocks = self.g.all_pos_return_stocks.difference(stocks)
@@ -1390,7 +1394,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                               stock not in self.tentative_stage_I and\
                                                               stock not in self.tentative_stage_II and\
                                                               stock not in self.tentative_stage_III and\
-                                                              stock not in self.tentative_stage_IV)]
+                                                              stock not in self.tentative_stage_A and\
+                                                              stock not in self.tentative_stage_B)]
         [self.g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
         self.log.info("position chan info: {0}".format(self.g.stock_chan_type.keys()))
 
