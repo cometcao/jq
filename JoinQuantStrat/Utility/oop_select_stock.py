@@ -892,7 +892,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         self.tentative_stage_III = self.tentative_stage_III.union(stocks_to_long)
         stocks_to_long = set()
-        for stocks in self.tentative_stage_III:
+        for stock in self.tentative_stage_III:
             check_result, _ = self.check_stage_III(stock, context)
             if check_result:
                 stocks_to_long.add(stock)
