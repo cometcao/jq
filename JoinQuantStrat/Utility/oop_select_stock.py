@@ -797,6 +797,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.stage_III_neg_return_types = params.get('stage_III_neg_return_types', [Chan_Type.I, Chan_Type.I_weak])
         self.stage_III_types = params.get('stage_III_types', [Chan_Type.III, Chan_Type.III_strong, Chan_Type.III_weak])
         self.use_all_stocks_4_III = params.get('use_all_stocks_4_III', False)
+        self.price_revert_range = params.get('price_revert_range', 0.055)
     
     def check_guide_price_reached(self, stock, context):
         current_profile = self.g.stock_chan_type[stock][1]
@@ -813,14 +814,23 @@ class Filter_Chan_Stocks(Filter_stock_list):
         if current_chan_t == Chan_Type.I or current_chan_t == Chan_Type.I_weak:
             max_price_after_long = stock_data.loc[current_effective_time:, 'high'].max()
             if float_more_equal(max_price_after_long, current_chan_p):
-    #             self.log.info("{0} reached target price:{1}, max: {2}".format(stock, 
-    #                                                                           current_chan_p, 
-    #                                                                           max_price_after_long))
+                self.log.info("{0} reached target price:{1}, max: {2}".format(stock, 
+                                                                              current_chan_p, 
+                                                                              max_price_after_long))
                 return True
         elif current_chan_t == Chan_Type.III or current_chan_t == Chan_Type.III_strong:
             min_price_after_long = stock_data.loc[current_effective_time:, 'low'].min()
             if float_less_equal(min_price_after_long, current_chan_p):
                 return True
+        
+        min_time = stock_data['low'].idxmin()
+        min_price = stock_data.loc[min_time,'low']
+        max_price = stock_data.loc[min_time:, 'high'].max()
+        if float_more_equal(max_price / min_price - 1, self.price_revert_range):
+            self.log.info("{0} price reverted:{1}, max: {2}".format(stock, 
+                                                                  min_price, 
+                                                                  max_price))
+            return True
         return False
     
     def check_tentative_stocks(self, context):
@@ -841,10 +851,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
                     continue
             
             result, zhongshu_changed = self.check_structure_cur(stock, context, after_stage_III=False)
-            current_profile = self.g.stock_chan_type[stock][1]
-            cur_chan_t = current_profile[0]
-            if zhongshu_changed:
-                pass
+#             current_profile = self.g.stock_chan_type[stock][1]
+#             cur_chan_t = current_profile[0]
+#             if zhongshu_changed:
 #                 if cur_chan_t != Chan_Type.III and cur_chan_t != Chan_Type.III_strong:
 #                     stocks_to_remove_I.add(stock)
             if result:
@@ -911,10 +920,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stocks_to_remove_IV = set()
             for stock in self.tentative_stage_IV:
                 check_result, price_checked = self.check_stage_IV(stock, context)
-                if not price_checked and check_result:
-                    stocks_to_remove_IV.add(stock)
-                if check_result: # if we only redo negative return
+                if check_result and price_checked and stock in self.g.all_neg_return_stocks:
                     stage_IV_long.add(stock)
+                elif check_result and stock in self.g.all_pos_return_stocks:
+                    stage_IV_long.add(stock)
+                else:
+                    stocks_to_remove_IV.add(stock)
                     
             self.tentative_stage_IV = self.tentative_stage_IV.difference(stage_IV_long)
             self.tentative_stage_IV = self.tentative_stage_IV.difference(stocks_to_remove_IV)
@@ -994,8 +1005,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 float_less_equal(cur_internal_ratio, 0.618):
                 return True
         elif cur_chan_type == Chan_Type.INVALID:
-            if float_less_equal(cur_ratio, 0.618) or\
-                float_less_equal(cur_internal_ratio, 0.618):
+            if float_less_equal(cur_ratio, 0.809) or\
+                float_less_equal(cur_internal_ratio, 0.809):
                 result = True
         return False
     
@@ -1011,6 +1022,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         cur_ratio = sum(stock_data['money'][-3:]) / sum(stock_data['money'][-6:-3])
         if float_less_equal(cur_ratio, 0.809):
+            return True
+        if float_more_equal(cur_ratio, 1.191):
             return True
         return False
     
@@ -1329,10 +1342,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
         # sort by sectors again
         beichi_list = self.sort_by_sector_order(beichi_list) 
         
-        if not self.use_all_stocks_4_III:
+#         if not self.use_all_stocks_4_III:
             # relate to existing position profit result
 #             enhanced_list = [stock for stock in enhanced_list if stock in self.g.all_return_stocks]
-            enhanced_list = self.filter_enhanced_stock_by_return(enhanced_list)
+#             enhanced_list = self.filter_enhanced_stock_by_return(enhanced_list)
                 
         self.log.info("\nStocks ready: Bei Chi: {0}, stage IV: {1},\ntentative I: {2},\ntentative II: {3},\ntentative III:{4}, \ntentative IV:{5}".format(
                                                                       beichi_list, 
