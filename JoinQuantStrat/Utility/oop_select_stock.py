@@ -924,7 +924,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                     stage_IV_long.add(stock)
                 elif check_result and stock in self.g.all_pos_return_stocks:
                     stage_IV_long.add(stock)
-                else:
+                elif check_result:
                     stocks_to_remove_IV.add(stock)
                     
             self.tentative_stage_IV = self.tentative_stage_IV.difference(stage_IV_long)
