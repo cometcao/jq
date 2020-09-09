@@ -949,11 +949,14 @@ class Short_Chan(Sell_stocks):
                     self.tentative_II.add(stock)
                 
             if stock in self.tentative_I and stock not in self.tentative_II:
-                min_price = stock_data.loc[min_time, 'low']
-                max_price = stock_data.loc[min_time:, 'high'].max()
-                if float_more_equal(max_price/min_price - 1, self.stop_profit):
+                if self.check_daily_ma13(stock, context):
                     self.tentative_I.remove(stock)
                     self.tentative_II.add(stock)
+#                 min_price = stock_data.loc[min_time, 'low']
+#                 max_price = stock_data.loc[min_time:, 'high'].max()
+#                 if float_more_equal(max_price/min_price - 1, self.stop_profit):
+#                     self.tentative_I.remove(stock)
+#                     self.tentative_II.add(stock)
                 
             if stock in self.tentative_II:
                 sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
@@ -1030,6 +1033,7 @@ class Short_Chan(Sell_stocks):
                         return True
                     self.tentative_II.add(stock)
                     
+            if stock in self.tentative_I and stock not in self.tentative_II:
                 min_price = stock_data.loc[min_time, 'low']
                 max_price = stock_data.loc[min_time:, 'high'].max()
                 if float_more_equal(max_price/min_price - 1, self.stop_profit):

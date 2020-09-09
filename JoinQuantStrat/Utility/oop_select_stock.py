@@ -815,23 +815,24 @@ class Filter_Chan_Stocks(Filter_stock_list):
         if current_chan_t == Chan_Type.I or current_chan_t == Chan_Type.I_weak:
             max_price_after_long = stock_data.loc[current_effective_time:, 'high'].max()
             if float_more_equal(max_price_after_long, current_chan_p):
-#                 self.log.info("{0} reached target price:{1}, max: {2}".format(stock, 
-#                                                                               current_chan_p, 
-#                                                                               max_price_after_long))
+                self.log.info("{0} reached target price:{1}, max: {2}".format(stock, 
+                                                                              current_chan_p, 
+                                                                              max_price_after_long))
                 return True
+
+            min_time = stock_data.loc[current_effective_time:, 'low'].idxmin()
+            min_price = stock_data.loc[min_time,'low']
+            max_price = stock_data.loc[min_time:, 'high'].max()
+            if float_more_equal(max_price / min_price - 1, self.price_revert_range):
+                self.log.info("{0} price reverted:{1}, max: {2}".format(stock, 
+                                                                      min_price, 
+                                                                      max_price))
+                return True
+
         elif current_chan_t == Chan_Type.III or current_chan_t == Chan_Type.III_strong:
             min_price_after_long = stock_data.loc[current_effective_time:, 'low'].min()
             if float_less_equal(min_price_after_long, current_chan_p):
                 return True
-        
-        min_time = stock_data['low'].idxmin()
-        min_price = stock_data.loc[min_time,'low']
-        max_price = stock_data.loc[min_time:, 'high'].max()
-        if float_more_equal(max_price / min_price - 1, self.price_revert_range):
-#             self.log.info("{0} price reverted:{1}, max: {2}".format(stock, 
-#                                                                   min_price, 
-#                                                                   max_price))
-            return True
         return False
     
     def check_tentative_stocks(self, context):
@@ -844,12 +845,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         for stock in self.tentative_stage_I:
             
-            if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
-                if self.check_guide_price_reached(stock, context):
-                    stocks_to_remove_I.add(stock)
-                    if self.use_all_stocks_4_A:
-                        self.tentative_stage_A.add(stock) # skip first phase
-                    continue
+#             if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
+#                 if self.check_guide_price_reached(stock, context):
+#                     stocks_to_remove_I.add(stock)
+#                     if self.use_all_stocks_4_A:
+#                         self.tentative_stage_A.add(stock) # skip first phase
+#                     continue
             
             result, zhongshu_changed = self.check_structure_cur(stock, context, after_stage_III=False)
 #             current_profile = self.g.stock_chan_type[stock][1]
@@ -1100,9 +1101,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
     def check_stage_II(self, stock, context):
         result, _ = self.check_structure_sub_new(stock, context)
-#         if result and self.check_daily_vol_money(stock, context): # call again :)
-        return result
-
+        return result or self.check_daily_vol_money(stock, context)
     
     def check_stage_III(self, stock, context):
         if self.stage_III_timing and\
