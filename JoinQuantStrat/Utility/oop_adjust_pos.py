@@ -882,27 +882,23 @@ class Short_Chan(Sell_stocks):
             self.tentative_I.add(stock)
             self.short_stock_info[stock] = None
             return
+
+        cur_result, cur_xd_result, cur_profile = check_chan_by_type_exhaustion(stock,
+                                                                      end_time=context.current_dt, 
+                                                                      periods=[working_period], 
+                                                                      count=3000, 
+                                                                      direction=TopBotType.bot2top,
+                                                                      chan_type=[Chan_Type.I, 
+                                                                                  Chan_Type.I_weak, 
+                                                                                  Chan_Type.INVALID],
+                                                                      isdebug=self.isdebug, 
+                                                                      is_description=self.isDescription,
+                                                                      check_structure=True,
+                                                                      check_full_zoushi=False,
+                                                                      slope_only=False)
         
-        result, xd_result, c_profile, sub_zhongshu_formed = check_stock_sub(stock,
-                                              end_time=context.current_dt,
-                                              periods=[working_period],
-                                              count=3000,
-                                              direction=TopBotType.bot2top,
-                                              chan_types=[Chan_Type.I, 
-                                                          Chan_Type.I_weak, 
-                                                          Chan_Type.INVALID],
-                                              isdebug=self.isdebug,
-                                              is_description=self.isDescription,
-                                              is_anal=False,
-                                              split_time=min_time,
-                                              check_bi=False,
-                                              allow_simple_zslx=False,
-                                              force_zhongshu=True,
-                                              check_full_zoushi=False,
-                                              ignore_sub_xd=False)
-        
-        self.short_stock_info[stock] = c_profile
-        if result and xd_result:
+        self.short_stock_info[stock] = cur_profile
+        if cur_result and cur_xd_result:
             print("STOP PROFIT {0} {1} exhausted: {2}, {3}".format(stock,
                                                                     working_period,
                                                                     result,
@@ -1082,19 +1078,15 @@ class Short_Chan(Sell_stocks):
 
 
     def check_daily_ma13(self, stock, context):
-        current_profile = self.short_stock_info[stock]
-        current_start_time = current_profile[0][5]
-        data_start_time = current_start_time - pd.Timedelta(days=13)
-        
         stock_data = get_price(stock,
-                               start_date=data_start_time, 
+                               count=20, 
                                end_date=context.current_dt, 
                                frequency='240m',
                                fields=('close'), 
                                skip_paused=False)
         sma13 = stock_data['close'].values[-13:].sum() / 13
         sma5 = stock_data['close'].values[-5:].sum() / 5
-        return stock_data.shape[0] > 13 and sma5 < sma13
+        return float_less(sma5, sma13)
 
     def check_top_shape(self, stock, context):
         
@@ -1156,6 +1148,7 @@ class Short_Chan(Sell_stocks):
                                 end_dt=context.current_dt, 
                                 fq_ref_date=context.current_dt.date(), 
                                 df=False)
+            
             current_zoushi_start_time = c_profile[0][5]
     
             cutting_loc = np.where(stock_data['date']>=current_zoushi_start_time)[0][0]

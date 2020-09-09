@@ -1489,7 +1489,11 @@ class NestedInterval():
             if chan_d == TopBotType.reverse(direction):
                 if self.isdebug:
                     print("opposite direction chan type found")
-                return False, False, [(chan_t, chan_d, chan_p, 0, 0, None, None)]
+                return False, False, [(chan_t, 
+                                       chan_d, 
+                                       chan_p, 0, 0, 
+                                       anal_zoushi.analytic_result[-1].get_last_zoushi_time(), 
+                                       None)]
         
         chan_t, chan_d, chan_p = chan_types[0]
         chan_type_check = (chan_t in chan_type) if (type(chan_type) is list) else (chan_t == chan_type)
@@ -1525,7 +1529,11 @@ class NestedInterval():
             if self.isDescription or self.isdebug:
                 print("chan type check failed expected {0}, found {1}".format(chan_type, chan_types))
             
-        return high_exhausted, check_xd_exhaustion, [(chan_t, chan_d, chan_p, 0, 0, None, None)]
+        return high_exhausted, check_xd_exhaustion, [(chan_t, 
+                                                      chan_d, 
+                                                      chan_p, 0, 0, 
+                                                      anal_zoushi.zslx_result[-1].get_last_zoushi_time(), 
+                                                      None)]
 
 #        We don't need thi manual split
 #         split_time = anal_zoushi.sub_zoushi_time(chan_t, chan_d, check_xd_exhaustion)
