@@ -900,14 +900,17 @@ class Short_Chan(Sell_stocks):
                                               force_zhongshu=True,
                                               check_full_zoushi=False,
                                               ignore_sub_xd=False)
-
+        
+        self.short_stock_info[stock] = c_profile
         if result and xd_result:
             print("STOP PROFIT {0} {1} exhausted: {2}, {3}".format(stock,
                                                                     working_period,
                                                                     result,
                                                                     xd_result))
             self.tentative_I.add(stock)
-            self.short_stock_info[stock] = c_profile
+        elif self.check_daily_ma13(stock, context):
+            print("STOP PROFIT {0} MA5 down cross MA13".format(stock))
+            self.tentative_I.add(stock)
     
     def check_stop_profit(self, stock, context):
         latest_price = get_current_data()[stock].last_price
@@ -948,10 +951,6 @@ class Short_Chan(Sell_stocks):
                         return True
                     self.tentative_II.add(stock)
                 
-            if stock in self.tentative_I and stock not in self.tentative_II:
-                if self.check_daily_ma13(stock, context):
-                    self.tentative_I.remove(stock)
-                    self.tentative_II.add(stock)
 #                 min_price = stock_data.loc[min_time, 'low']
 #                 max_price = stock_data.loc[min_time:, 'high'].max()
 #                 if float_more_equal(max_price/min_price - 1, self.stop_profit):
