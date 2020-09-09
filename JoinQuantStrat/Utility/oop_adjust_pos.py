@@ -901,8 +901,8 @@ class Short_Chan(Sell_stocks):
         if cur_result and cur_xd_result:
             print("STOP PROFIT {0} {1} exhausted: {2}, {3}".format(stock,
                                                                     working_period,
-                                                                    result,
-                                                                    xd_result))
+                                                                    cur_result,
+                                                                    cur_xd_result))
             self.tentative_I.add(stock)
         elif self.check_daily_ma13(stock, context):
             print("STOP PROFIT {0} MA5 down cross MA13".format(stock))
