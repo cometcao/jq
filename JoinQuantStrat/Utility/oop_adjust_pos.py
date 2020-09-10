@@ -1081,7 +1081,7 @@ class Short_Chan(Sell_stocks):
         stock_data = get_bars(stock,
                                count=50,
                                end_dt=context.current_dt, 
-                               unit='30m', # use super level
+                               unit='1d', # use super level
                                include_now=True, 
                                fields=('close', 'high'), 
                                fq_ref_date=context.current_dt.date(),
