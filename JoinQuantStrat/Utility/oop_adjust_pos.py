@@ -1086,8 +1086,8 @@ class Short_Chan(Sell_stocks):
                                fields=('close', 'high'), 
                                fq_ref_date=context.current_dt.date(),
                                df=False)
-        upper, _, _ = talib.BBANDS(stock_data['close'], timeperiod=21, nbdevup=2, nbdevdn=2, matype=0)
-        return float_more_equal(stock_data['high'][-1], upper[-1])
+        upper, middle, _ = talib.BBANDS(stock_data['close'], timeperiod=21, nbdevup=2, nbdevdn=2, matype=0)
+        return float_more_equal(stock_data['high'][-1], upper[-1]) or float_more_equal(stock_data['close'][-1], middle[-1])
 
 
     def check_daily_ma13(self, stock, context):
