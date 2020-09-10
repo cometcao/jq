@@ -19,6 +19,7 @@ from equilibrium import check_chan_indepth, check_stock_sub, check_chan_by_type_
 from biaoLiStatus import TopBotType
 from kBar_Chan import *
 import json
+import talib
 
 '''==================================调仓条件相关规则========================================='''
 
@@ -904,8 +905,8 @@ class Short_Chan(Sell_stocks):
                                                                     cur_result,
                                                                     cur_xd_result))
             self.tentative_I.add(stock)
-        elif self.check_daily_ma13(stock, context):
-            print("STOP PROFIT {0} MA5 down cross MA13".format(stock))
+        elif self.check_daily_boll_upper(stock, context):
+            print("STOP PROFIT {0} price reached upper bound".format(stock))
             self.tentative_I.add(stock)
     
     def check_stop_profit(self, stock, context):
@@ -1075,6 +1076,18 @@ class Short_Chan(Sell_stocks):
                 return True
             
             return False
+
+    def check_daily_boll_upper(self, stock, context):
+        stock_data = get_bars(stock,
+                               count=50,
+                               end_dt=context.current_dt, 
+                               unit='30m', # use super level
+                               include_now=True, 
+                               fields=('close', 'high'), 
+                               fq_ref_date=context.current_dt.date(),
+                               df=False)
+        upper, _, _ = talib.BBANDS(stock_data['close'], timeperiod=21, nbdevup=2, nbdevdn=2, matype=0)
+        return float_more_equal(stock_data['high'][-1], upper[-1])
 
 
     def check_daily_ma13(self, stock, context):
