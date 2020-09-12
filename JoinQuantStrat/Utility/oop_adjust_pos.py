@@ -913,8 +913,8 @@ class Short_Chan(Sell_stocks):
         latest_price = get_current_data()[stock].last_price
         avg_cost = context.portfolio.positions[stock].avg_cost
         # short circuit
-        if avg_cost > context.portfolio.positions[stock].price:
-            return False
+#         if avg_cost > context.portfolio.positions[stock].price:
+#             return False
         
         position_time = context.portfolio.positions[stock].transact_time
         current_profile = self.g.stock_chan_type[stock][1]
@@ -1086,9 +1086,13 @@ class Short_Chan(Sell_stocks):
                                fields=('close', 'high'), 
                                fq_ref_date=context.current_dt.date(),
                                df=False)
-        upper, middle, _ = talib.BBANDS(stock_data['close'], timeperiod=21, nbdevup=2, nbdevdn=2, matype=0)
-        return (float_less(stock_data['high'][-2], upper[-2]) and float_more_equal(stock_data['high'][-1], upper[-1])) or\
-                (float_less(stock_data['close'][-2], middle[-2]) and float_more_equal(stock_data['close'][-1], middle[-1]))
+        upper, middle, _ = talib.BBANDS(stock_data['close'], timeperiod=21, nbdevup=1.96, nbdevdn=1.96, matype=0)
+#         print("stock: {0} \nupper {1}, \nmiddle {2}, \nhigh{3}".format(stock, upper[-2:], middle[-2:], stock_data['high'][-2:]))
+        return (float_less(stock_data['high'][-2], upper[-2]) and\
+                float_more_equal(stock_data['high'][-1], upper[-1])) or\
+                (float_less(stock_data['high'][-2], middle[-2]) and\
+                 float_more_equal(stock_data['high'][-1], middle[-1]) and\
+                 float_more_equal(middle[-2], middle[-1]))
 
 
     def check_daily_ma13(self, stock, context):
@@ -1125,19 +1129,20 @@ class Short_Chan(Sell_stocks):
         working_data_np = stock_data.to_records()
         kb_chan = KBarChan(working_data_np, isdebug=False)
         
-        return kb_chan.formed_tb(tb=TopBotType.top)
+        tb_result, _ = kb_chan.formed_tb(tb=TopBotType.top)
+        return tb_result
 
     def check_internal_vol_money(self, stock, context, c_profile, working_period):
-        stock_data = get_price(stock,
-                               count=13, 
-                               end_date=context.current_dt, 
-                               frequency='240m',
-                               fields=('close'), 
-                               skip_paused=False)
-        sma13 = stock_data['close'].values[-13:].sum() / 13
-        sma5 = stock_data['close'].values[-5:].sum() / 5
-        if float_less_equal(sma5, sma13): # sm5 must be above sm13
-            return False
+#         stock_data = get_price(stock,
+#                                count=13, 
+#                                end_date=context.current_dt, 
+#                                frequency='240m',
+#                                fields=('close'), 
+#                                skip_paused=False)
+#         sma13 = stock_data['close'].values[-13:].sum() / 13
+#         sma5 = stock_data['close'].values[-5:].sum() / 5
+#         if float_less_equal(sma5, sma13): # sm5 must be above sm13
+#             return False
         
         if c_profile is None:
             stock_data = get_bars(stock, 
@@ -1177,8 +1182,13 @@ class Short_Chan(Sell_stocks):
             
             cur_ratio = cur_latest_money / cur_past_money
             
+#             print("stock: {0} cur_ratio: {1} internal_ratio: {2}".format(stock, 
+#                                                                          cur_ratio, 
+#                                                                          cur_internal_ratio))
+            
             if float_more_equal(cur_ratio, 1.191) or\
-                (float_less_equal(cur_ratio, 0.809) and float_more_equal(cur_internal_ratio, 1.191)):
+                (float_less_equal(cur_ratio, 0.809) and float_more_equal(cur_internal_ratio, 1.191)) or\
+                (float_less_equal(cur_ratio, 0.809) and float_less_equal(cur_internal_ratio, 0.809)):
                 return True
         return False
 

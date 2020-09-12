@@ -904,11 +904,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stage_A_long = set()
             stocks_to_remove_A = set()
             for stock in self.tentative_stage_A:
-                ready, zhongshu_changed = self.check_stage_A_vol(stock, context)
-                if ready:
-                    stage_A_long.add(stock)
-#                 if zhongshu_changed:
-#                     stocks_to_remove_A.add(stock)
+                if stock not in context.portfolio.positions.keys():
+                    ready, zhongshu_changed = self.check_stage_A_vol(stock, context)
+                    if ready:
+                        stage_A_long.add(stock)
+    #                 if zhongshu_changed:
+    #                     stocks_to_remove_A.add(stock)
                     
             self.tentative_stage_A = self.tentative_stage_A.difference(stocks_to_remove_A)
             self.log.info("stocks removed from stage A: {0}".format(stocks_to_remove_A))
@@ -1357,7 +1358,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                       self.tentative_stage_III,
                                                                       self.tentative_stage_A, 
                                                                       self.tentative_stage_B,))
-        return beichi_list+enhanced_list
+        # prioritize old stocks
+        return enhanced_list+beichi_list
     
     def filter_enhanced_stock_by_return(self, stocks):
         qualified_stocks = set()
