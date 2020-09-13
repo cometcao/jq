@@ -948,12 +948,6 @@ class Short_Chan(Sell_stocks):
                         return True
                     self.tentative_II.add(stock)
                 
-#                 min_price = stock_data.loc[min_time, 'low']
-#                 max_price = stock_data.loc[min_time:, 'high'].max()
-#                 if float_more_equal(max_price/min_price - 1, self.stop_profit):
-#                     self.tentative_I.remove(stock)
-#                     self.tentative_II.add(stock)
-                
             if stock in self.tentative_II:
                 sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
                                                       end_time=context.current_dt,
@@ -1010,13 +1004,13 @@ class Short_Chan(Sell_stocks):
             current_chan_t == Chan_Type.III_weak or\
             current_chan_t == Chan_Type.INVALID:
 #             # extra data for SMA calculation
-#             data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=200)
-#             stock_data = get_price(stock,
-#                                    start_date=data_start_time, 
-#                                    end_date=context.current_dt, 
-#                                    frequency=self.current_period, 
-#                                    fields=('high', 'low', 'close'), 
-#                                    skip_paused=False)
+            data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=200)
+            stock_data = get_price(stock,
+                                   start_date=data_start_time, 
+                                   end_date=context.current_dt, 
+                                   frequency=self.current_period, 
+                                   fields=('high', 'low', 'close'), 
+                                   skip_paused=False)
 
             if stock not in self.tentative_I and stock not in self.tentative_II:
                 self.process_stage_I(stock, context, None, self.sub_period)
@@ -1029,12 +1023,6 @@ class Short_Chan(Sell_stocks):
                         return True
                     self.tentative_II.add(stock)
                     
-            if stock in self.tentative_I and stock not in self.tentative_II:
-                min_price = stock_data.loc[min_time, 'low']
-                max_price = stock_data.loc[min_time:, 'high'].max()
-                if float_more_equal(max_price/min_price - 1, self.stop_profit):
-                    self.tentative_I.remove(stock)
-                    self.tentative_II.add(stock)
                 
             if stock in self.tentative_II:
                 sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
