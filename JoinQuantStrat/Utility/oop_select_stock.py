@@ -905,7 +905,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stocks_to_remove_A = set()
             for stock in self.tentative_stage_A:
                 if stock not in context.portfolio.positions.keys():
-                    ready, zhongshu_changed = self.check_stage_A_vol(stock, context)
+                    ready, zhongshu_changed = self.check_stage_A_cur(stock, context)
                     if ready:
                         stage_A_long.add(stock)
     #                 if zhongshu_changed:
@@ -1123,7 +1123,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
     def check_stage_A_vol(self, stock, context):
         return self.check_internal_vol_money(stock, context), False
     
-    def check_stage_III_cur(self, stock, context):
+    def check_stage_A_cur(self, stock, context):
         result = False
         zhongshu_changed = False
         
@@ -1159,12 +1159,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                context.current_dt, 
                                                )]# fit the results
         
-#         result = exhaustion_result and self.check_internal_vol_money(stock, context)
-        return exhaustion_result, zhongshu_changed
-#         return result, zhongshu_changed
+        result = exhaustion_result or self.check_internal_vol_money(stock, context)
+#         return exhaustion_result, zhongshu_changed
+        return result, zhongshu_changed
             
 
-    def check_stage_III_full(self, stock, context):
+    def check_stage_A_full(self, stock, context):
         result = False
         zhongshu_changed = False
         
