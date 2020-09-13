@@ -1119,7 +1119,7 @@ class Short_Chan(Sell_stocks):
         stock_data = get_price(security=stock, 
                       end_date=context.current_dt, 
 #                       start_date=current_effective_time, 
-                      count = 20,
+                      count = 50,
                       frequency='240m', 
                       skip_paused=True, 
                       panel=False, 
