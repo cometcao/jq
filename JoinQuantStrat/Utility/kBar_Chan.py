@@ -871,19 +871,32 @@ class KBarChan(object):
     def formed_tb(self, tb = TopBotType.bot):
         self.standardize()
         self.markTopBot()
-        working_df = self.kDataFrame_standardized[self.kDataFrame_standardized['tb']!=TopBotType.noTopBot.value]
-        found_idx = np.where(working_df['tb']==tb.value)[0]
-#         print("tb location: {0}, total size: {1}".format(found_idx, working_df.size))
-#         print(working_df)
-        if len(found_idx) > 0 and found_idx[-1] == working_df.size-2:
-            if len(found_idx) >= 2:
-                check_price_result = float_less_equal(working_df['low'][found_idx[-1]], min(working_df['low'][found_idx[:-1]]))\
-                                    if tb == TopBotType.bot else\
-                                    float_more_equal(working_df['high'][found_idx[-1]], max(working_df['high'][found_idx[:-1]]))
+        self.defineBi()
+        working_df = self.kDataFrame_marked
+        total_size = self.kDataFrame_origin.size
+#        print("tb info: {0}, total size: {1}".format(working_df, self.kDataFrame_origin.size))
+        
+        if working_df['tb'][-1] == tb.value and working_df['real_loc'][-1] != total_size -1:
+            if working_df.size > 2:
+                check_price_result = float_less_equal(working_df['low'][-1], working_df['low'][-3])\
+                                     if tb == TopBotType.bot else\
+                                     float_more_equal(working_df['high'][-1], working_df['high'][-3])
+                return True, check_price_result
             else:
-                check_price_result = False
-            return True, check_price_result
+                return True, True
         return False, False
+        
+#         found_idx = np.where(working_df['tb']==tb.value)[0]
+
+#         if len(found_idx) > 0 and found_idx[-1] == self.kDataFrame_origin.size-2:
+#             if len(found_idx) >= 2:
+#                 check_price_result = float_less_equal(working_df['low'][found_idx[-1]], min(working_df['low'][found_idx[:-1]]))\
+#                                     if tb == TopBotType.bot else\
+#                                     float_more_equal(working_df['high'][found_idx[-1]], max(working_df['high'][found_idx[:-1]]))
+#             else:
+#                 check_price_result = False
+#             return True, check_price_result
+#         return False, False
         
     
     def getPureBi(self):
