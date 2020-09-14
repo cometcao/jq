@@ -892,7 +892,7 @@ class KBarChan(object):
 #         print(working_df)
 #         print("tb location: {0}, total size: {1}".format(found_idx, working_df.size))
 
-        if len(found_idx) > 0 and found_idx[-1] != working_df.size-1:
+        if len(found_idx) > 0 and found_idx[-1] == working_df.size-2:
             if len(found_idx) >= 2:
                 check_price_result = float_less_equal(working_df['low'][found_idx[-1]], min(working_df['low'][found_idx[:-1]]))\
                                     if tb == TopBotType.bot else\
