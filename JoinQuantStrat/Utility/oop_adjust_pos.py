@@ -929,141 +929,72 @@ class Short_Chan(Sell_stocks):
         effective_time = sub_profile[6]
         
         if current_chan_t == Chan_Type.I or current_chan_t == Chan_Type.I_weak:
-            data_start_time = current_zoushi_start_time - pd.Timedelta(minutes=200)
-            stock_data = get_price(stock,
-                                   start_date=data_start_time, 
-                                   end_date=context.current_dt, 
-                                   frequency=self.current_period, 
-                                   fields=('high', 'low', 'close'), 
-                                   skip_paused=False)
-            min_time = stock_data.loc[sub_zoushi_start_time:, 'low'].idxmin()
-            if stock not in self.tentative_I and stock not in self.tentative_II:
-                self.process_stage_I(stock, context, min_time, self.current_period)
-            
-            if stock in self.tentative_I and stock not in self.tentative_II:
-                c_profile = self.short_stock_info[stock]
-                if self.check_internal_vol_money(stock, context, c_profile, self.current_period):
-                    self.tentative_I.remove(stock)
-                    if c_profile is None: # reached high limit
-                        return True
-                    self.tentative_II.add(stock)
-                
-            if stock in self.tentative_II:
-                sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
-                                                      end_time=context.current_dt,
-                                                      periods=['1m' if self.sub_period == 'bi' else self.sub_period],
-                                                      count=3000,
-                                                      direction=TopBotType.bot2top,
-                                                      chan_types=[Chan_Type.I, Chan_Type.I_weak, Chan_Type.INVALID],
-                                                      isdebug=self.isdebug,
-                                                      is_description=self.isDescription,
-                                                      is_anal=False,
-                                                      split_time=min_time,
-                                                      check_bi=False,
-                                                      allow_simple_zslx=False,
-                                                      force_zhongshu=True,
-                                                      check_full_zoushi=False,
-                                                      ignore_sub_xd=False)
-                if sub_exhausted and sub_xd_exhausted:
-                    print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
-                                                                                self.sub_period,
-                                                                                sub_exhausted,
-                                                                                sub_xd_exhausted,
-                                                                                sub_zhongshu_formed))
-                    self.tentative_II.remove(stock)
-                    return True
-            
-                if self.use_ma13 and self.check_daily_ma13(stock, context):
-                    print("STOP PROFIT {0} ma5 below ma13".format(stock))
-                    self.tentative_II.remove(stock)
-                    return True
-                
-                if self.use_check_top and self.check_top_shape(stock, context):
-                    self.log.info("STOP PROFIT {0}, top found".format(stock))
-                    self.tentative_II.remove(stock)
-                    return True
-                
-            return False
-
-#                 if stock_data.loc[effective_time:, 'high'].max() >= current_chan_p:# reached target price
-#                     print("STOP PROFIT {0} target price: {1}, now max: {2}".format(stock, current_chan_p, stock_data.loc[effective_time:, 'high'].max()))
-#                     if context.portfolio.positions[stock].price < current_chan_p:
-#                         if self.use_ma13 and sma5 < sma13:
-#                             print("STOP PROFIT {0} ma5 below ma13: {1}, {2}".format(stock, sma5, sma13))
-#                             return True
-#                     
-#                 else:
-#                     if current_zhongshu_formed: 
-#                         print("STOP PROFIT working level zhongshu {0}".format("formed" if current_zhongshu_formed else "not formed"))
-#                         if self.use_ma13 and sma5 < sma13:
-#                             print("STOP PROFIT {0} ma5 below ma13: {1}, {2}".format(stock, sma5, sma13))
-#                             return True
-            
+            working_period = self.current_period
         elif current_chan_t == Chan_Type.III or\
             current_chan_t == Chan_Type.III_strong or\
             current_chan_t == Chan_Type.III_weak or\
             current_chan_t == Chan_Type.INVALID:
-#             # extra data for SMA calculation
-            data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=200)
-            stock_data = get_price(stock,
-                                   start_date=data_start_time, 
-                                   end_date=context.current_dt, 
-                                   frequency=self.current_period, 
-                                   fields=('high', 'low', 'close'), 
-                                   skip_paused=False)
-
-            if stock not in self.tentative_I and stock not in self.tentative_II:
-                self.process_stage_I(stock, context, None, self.sub_period)
-            
-            if stock in self.tentative_I and stock not in self.tentative_II:
-                c_profile = self.short_stock_info[stock]
-                if self.check_internal_vol_money(stock, context, c_profile, self.sub_period):
-                    self.tentative_I.remove(stock)
-                    if c_profile is None: # reached high limit
-                        return True
-                    self.tentative_II.add(stock)
-                    
-                
-            if stock in self.tentative_II:
-                sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
-                                                      end_time=context.current_dt,
-                                                      periods=['1m' if self.sub_period == 'bi' else self.sub_period],
-                                                      count=3000,
-                                                      direction=TopBotType.bot2top,
-                                                      chan_types=[Chan_Type.I, Chan_Type.I_weak, Chan_Type.INVALID],
-                                                      isdebug=self.isdebug,
-                                                      is_description=self.isDescription,
-                                                      is_anal=False,
-                                                      split_time=None,
-                                                      check_bi=False,
-                                                      allow_simple_zslx=False,
-                                                      force_zhongshu=True,
-                                                      check_full_zoushi=False,
-                                                      ignore_sub_xd=False)
-                if sub_exhausted and sub_xd_exhausted:
-                    print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
-                                                                                self.sub_period,
-                                                                                sub_exhausted,
-                                                                                sub_xd_exhausted,
-                                                                                sub_zhongshu_formed))
-                    self.tentative_II.remove(stock)
+            working_period = self.sub_period
+        
+        data_start_time = current_zoushi_start_time - pd.Timedelta(minutes=200)
+        stock_data = get_price(stock,
+                               start_date=data_start_time, 
+                               end_date=context.current_dt, 
+                               frequency=self.current_period, 
+                               fields=('high', 'low', 'close'), 
+                               skip_paused=False)
+        min_time = stock_data.loc[sub_zoushi_start_time:, 'low'].idxmin()
+        if stock not in self.tentative_I and stock not in self.tentative_II:
+            self.process_stage_I(stock, context, min_time, working_period)
+        
+        if stock in self.tentative_I and stock not in self.tentative_II:
+            c_profile = self.short_stock_info[stock]
+            if self.check_internal_vol_money(stock, context, c_profile, self.current_period):
+                self.tentative_I.remove(stock)
+                if c_profile is None: # reached high limit
                     return True
+                self.tentative_II.add(stock)
             
-                if self.use_ma13 and self.check_daily_ma13(stock,context):
-                    print("STOP PROFIT {0} ma5 below ma13".format(stock))
-                    self.tentative_II.remove(stock)
-                    return True
-                
-                if self.use_check_top and self.check_top_shape(stock, context):
-                    self.log.info("STOP PROFIT {0}, top found".format(stock))
-                    self.tentative_II.remove(stock)
-                    return True
-            
-            if (latest_price / avg_cost - 1) >= self.stop_profit:
-                self.log.info("{0} HARDCORE stop profit: {1} -> {2}".format(stock, latest_price, avg_cost))
+        if stock in self.tentative_II:
+            sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
+                                                  end_time=context.current_dt,
+                                                  periods=['1m' if self.sub_period == 'bi' else self.sub_period],
+                                                  count=3000,
+                                                  direction=TopBotType.bot2top,
+                                                  chan_types=[Chan_Type.I, Chan_Type.I_weak, Chan_Type.INVALID],
+                                                  isdebug=self.isdebug,
+                                                  is_description=self.isDescription,
+                                                  is_anal=False,
+                                                  split_time=min_time,
+                                                  check_bi=True,
+                                                  allow_simple_zslx=False,
+                                                  force_zhongshu=True,
+                                                  check_full_zoushi=False,
+                                                  ignore_sub_xd=True)
+            if sub_exhausted and sub_xd_exhausted:
+                print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
+                                                                            self.sub_period,
+                                                                            sub_exhausted,
+                                                                            sub_xd_exhausted,
+                                                                            sub_zhongshu_formed))
+                self.tentative_II.remove(stock)
+                return True
+        
+            if self.use_ma13 and self.check_daily_ma13(stock, context):
+                print("STOP PROFIT {0} ma5 below ma13".format(stock))
+                self.tentative_II.remove(stock)
                 return True
             
-            return False
+            if self.use_check_top and self.check_top_shape(stock, context):
+                self.log.info("STOP PROFIT {0}, top found".format(stock))
+                self.tentative_II.remove(stock)
+                return True
+            
+        if current_chan_t == Chan_Type.INVALID and (latest_price / avg_cost - 1) >= self.stop_profit:
+            self.log.info("{0} HARDCORE stop profit: {1} -> {2}".format(stock, latest_price, avg_cost))
+            return True
+            
+        return False
 
     def check_daily_boll_upper(self, stock, context):
         stock_data = get_bars(stock,
