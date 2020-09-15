@@ -26,6 +26,7 @@ from chan_kbar_filter import *
 from equilibrium import *
 from kBar_Chan import *
 import datetime
+import talib
 
 
 '''=========================选股规则相关==================================='''
@@ -852,7 +853,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #                         self.tentative_stage_A.add(stock) # skip first phase
 #                     continue
             
-            result, zhongshu_changed = self.check_structure_cur(stock, context, after_stage_III=False)
+            result, zhongshu_changed = self.check_stage_I(stock, context, after_stage_III=False)
 #             current_profile = self.g.stock_chan_type[stock][1]
 #             cur_chan_t = current_profile[0]
 #             if zhongshu_changed:
@@ -1101,8 +1102,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return kb_chan.formed_tb(tb=TopBotType.bot)
         
     def check_stage_II(self, stock, context):
-        result, _ = self.check_structure_sub_new(stock, context)
+        result, _ = self.check_structure_sub_only(stock, context)
         return result or self.check_daily_vol_money(stock, context)
+#         return result
     
     def check_stage_III(self, stock, context):
         if self.stage_III_timing and\
@@ -1213,7 +1215,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         return exhaustion_result, zhongshu_changed
             
-    def check_structure_sub_new(self, stock, context):
+    def check_structure_sub_only(self, stock, context):
         zhongshu_changed = False
 
         old_current_profile = self.g.stock_chan_type[stock][1]
@@ -1254,6 +1256,30 @@ class Filter_Chan_Stocks(Filter_stock_list):
 
         return sub_exhausted and sub_xd_exhausted, zhongshu_changed
     
+    def check_daily_boll_lower(self, stock, context):
+        stock_data = get_bars(stock,
+                               count=50,
+                               end_dt=context.current_dt, 
+                               unit='1d', # use super level
+                               include_now=True, 
+                               fields=('close', 'low'), 
+                               fq_ref_date=context.current_dt.date(),
+                               df=False)
+        upper, middle, lower = talib.BBANDS(stock_data['close'], timeperiod=21, nbdevup=1.96, nbdevdn=1.96, matype=0)
+#         print("stock: {0} \nupper {1}, \nmiddle {2}, \nhigh{3}".format(stock, upper[-2:], middle[-2:], stock_data['high'][-2:]))
+        return (float_more(stock_data['low'][-2], lower[-2]) and\
+                float_less_equal(stock_data['low'][-1], lower[-1])) or\
+                (float_more(stock_data['low'][-2], middle[-2]) and\
+                 float_less_equal(stock_data['low'][-1], middle[-1]) and\
+                 float_less_equal(middle[-2], middle[-1]))
+    
+    
+    def check_stage_I(self, stock, context, after_stage_III=False):
+        result, zhongshu_changed = self.check_structure_cur(stock, context, after_stage_III)
+        if not result:
+            return self.check_daily_boll_lower(stock, context), zhongshu_changed
+        else:
+            return result, zhongshu_changed
 
     def check_structure_cur(self, stock, context, after_stage_III=False):
         zhongshu_changed=False
@@ -1281,7 +1307,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             
         return result, zhongshu_changed
 
-    def check_structure_sub_old(self, stock, context):
+    def check_structure_sub_full(self, stock, context):
         zhongshu_changed = False
 
         old_current_profile = self.g.stock_chan_type[stock][1]
@@ -1309,9 +1335,19 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #             self.log.debug("stock {0}, zhongshu changed: {1} <-> {2}".format(stock, old_current_profile[2], profile[0][2]))
         zhongshu_changed = old_price != new_price
         
-        if profile[0][5] is not None and profile[0][6] is not None:
-            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile
 
+        if len(profile) > 1:
+            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile
+        else:
+            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0], self.g.stock_chan_type[stock][1]] +\
+                                            [(Chan_Type.INVALID,
+                                               TopBotType.top2bot,
+                                               0,
+                                               0,
+                                               0,
+                                               None,
+                                               context.current_dt, 
+                                               )]
         return result, zhongshu_changed
     
     def filter(self, context, data, stock_list):
