@@ -258,8 +258,7 @@ class Filter_financial_data2(Early_Filter_stock_list):
 class Filter_black_stocks(Early_Filter_stock_list):
     
     def filter(self, context, stock_list):
-        print("before filter: {0}".format(stock_list))
-
+#         print("before filter: {0}".format(stock_list))
         q = query(
             income.np_parent_company_owners
         ).filter(
@@ -273,10 +272,10 @@ class Filter_black_stocks(Early_Filter_stock_list):
         df = df[df['np_parent_company_owners'] < 0]
         result_df = df.groupby('code').nunique()
         remove_list = result_df[result_df['np_parent_company_owners'] >= 3].index.tolist()
-        print(remove_list)
+        print("{0} filtered OUT".format(remove_list))
 
         stock_list = [stock for stock in stock_list if stock not in remove_list]
-        print("after filter: {0}".format(stock_list))
+#         print("after filter: {0}".format(stock_list))
         return stock_list
 
     def __str__(self):
