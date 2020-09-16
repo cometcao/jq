@@ -838,8 +838,8 @@ class Short_Chan(Sell_stocks):
                 return True
     
 
-            if (1 - stock_data.iloc[-1].close / avg_cost) >= self.stop_loss:
-                self.log.info("{0} HARDCORE stop loss: {1} -> {2}".format(stock, stock_data.iloc[-1].close, avg_cost))
+            if (1 - stock_data.iloc[-1].close / max_price_after_long) >= self.stop_loss:
+                self.log.info("{0} HARDCORE stop loss: {1} -> {2}".format(stock, stock_data.iloc[-1].close, max_price_after_long))
                 return True
 
             return False
@@ -867,8 +867,8 @@ class Short_Chan(Sell_stocks):
 #                 print("TYPE III invalidated {0}, {1}".format(stock_data.loc[effective_time:,'low'].min(), current_chan_p))
 #                 return True
             latest_price = get_current_data()[stock].last_price
-            if (1 - latest_price / avg_cost) >= self.stop_loss:
-                self.log.info("{0} HARDCORE stop loss: {1} -> {2}".format(stock, latest_price, avg_cost))
+            if (1 - latest_price / max_price_after_long) >= self.stop_loss:
+                self.log.info("{0} HARDCORE stop loss: {1} -> {2}".format(stock, latest_price, max_price_after_long))
                 return True
             
             return False
@@ -956,29 +956,29 @@ class Short_Chan(Sell_stocks):
                 self.tentative_II.add(stock)
             
         if stock in self.tentative_II:
-            sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
-                                                  end_time=context.current_dt,
-                                                  periods=['1m' if self.sub_period == 'bi' else self.sub_period],
-                                                  count=3000,
-                                                  direction=TopBotType.bot2top,
-                                                  chan_types=[Chan_Type.I, Chan_Type.I_weak, Chan_Type.INVALID],
-                                                  isdebug=self.isdebug,
-                                                  is_description=self.isDescription,
-                                                  is_anal=False,
-                                                  split_time=min_time,
-                                                  check_bi=True,
-                                                  allow_simple_zslx=False,
-                                                  force_zhongshu=True,
-                                                  check_full_zoushi=False,
-                                                  ignore_sub_xd=True)
-            if sub_exhausted and sub_xd_exhausted:
-                print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
-                                                                            self.sub_period,
-                                                                            sub_exhausted,
-                                                                            sub_xd_exhausted,
-                                                                            sub_zhongshu_formed))
-                self.tentative_II.remove(stock)
-                return True
+#             sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
+#                                                   end_time=context.current_dt,
+#                                                   periods=['1m' if self.sub_period == 'bi' else self.sub_period],
+#                                                   count=3000,
+#                                                   direction=TopBotType.bot2top,
+#                                                   chan_types=[Chan_Type.I, Chan_Type.I_weak, Chan_Type.INVALID],
+#                                                   isdebug=self.isdebug,
+#                                                   is_description=self.isDescription,
+#                                                   is_anal=False,
+#                                                   split_time=min_time,
+#                                                   check_bi=True,
+#                                                   allow_simple_zslx=False,
+#                                                   force_zhongshu=True,
+#                                                   check_full_zoushi=False,
+#                                                   ignore_sub_xd=True)
+#             if sub_exhausted and sub_xd_exhausted:
+#                 print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
+#                                                                             self.sub_period,
+#                                                                             sub_exhausted,
+#                                                                             sub_xd_exhausted,
+#                                                                             sub_zhongshu_formed))
+#                 self.tentative_II.remove(stock)
+#                 return True
         
             if self.use_ma13 and self.check_daily_ma13(stock, context):
                 print("STOP PROFIT {0} ma5 below ma13".format(stock))
@@ -989,7 +989,7 @@ class Short_Chan(Sell_stocks):
                 self.log.info("STOP PROFIT {0}, top found".format(stock))
                 self.tentative_II.remove(stock)
                 return True
-            
+        
         if current_chan_t == Chan_Type.INVALID and (latest_price / avg_cost - 1) >= self.stop_profit:
             self.log.info("{0} HARDCORE stop profit: {1} -> {2}".format(stock, latest_price, avg_cost))
             return True

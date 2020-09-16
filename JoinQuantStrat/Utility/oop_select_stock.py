@@ -1276,10 +1276,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
     
     def check_stage_I(self, stock, context, after_stage_III=False):
         result, zhongshu_changed = self.check_structure_cur(stock, context, after_stage_III)
-        if not result:
-            return self.check_daily_boll_lower(stock, context), zhongshu_changed
-        else:
-            return result, zhongshu_changed
+#         if not result:
+#             return self.check_daily_boll_lower(stock, context), zhongshu_changed
+#         else:
+        return result, zhongshu_changed
 
     def check_structure_cur(self, stock, context, after_stage_III=False):
         zhongshu_changed=False
