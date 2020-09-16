@@ -838,8 +838,8 @@ class Short_Chan(Sell_stocks):
                 return True
     
 
-            if (1 - latest_price / max_price_after_long) >= self.stop_loss:
-                self.log.info("{0} HARDCORE stop loss: {1} -> {2}".format(stock, stock_data.iloc[-1].close, max_price_after_long))
+            if (1 - latest_price / avg_cost) >= self.stop_loss:
+                self.log.info("{0} HARDCORE stop loss: {1} -> {2}".format(stock, latest_price, avg_cost))
                 return True
 
             return False
@@ -867,8 +867,8 @@ class Short_Chan(Sell_stocks):
 #                 print("TYPE III invalidated {0}, {1}".format(stock_data.loc[effective_time:,'low'].min(), current_chan_p))
 #                 return True
             
-            if (1 - latest_price / max_price_after_long) >= self.stop_loss:
-                self.log.info("{0} HARDCORE stop loss: {1} -> {2}".format(stock, latest_price, max_price_after_long))
+            if (1 - latest_price / avg_cost) >= self.stop_loss:
+                self.log.info("{0} HARDCORE stop loss: {1} -> {2}".format(stock, latest_price, avg_cost))
                 return True
             
             return False
