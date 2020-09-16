@@ -802,6 +802,7 @@ class Short_Chan(Sell_stocks):
         sub_chan_force = sub_profile[4]
         sub_zoushi_start_time = sub_profile[5]
         effective_time = sub_profile[6]
+        latest_price = get_current_data()[stock].last_price
         
         if current_chan_t == Chan_Type.I or current_chan_t == Chan_Type.I_weak:
             # This is to make sure we have enough data for MACD and MA
@@ -813,7 +814,7 @@ class Short_Chan(Sell_stocks):
                                    fields=('high', 'low', 'close', 'money'), 
                                    skip_paused=False)
 
-            max_price_after_long = stock_data.loc[effective_time:, 'high'].max()
+            max_price_after_long = stock_data.loc[position_time:, 'high'].max()
 #             min_price = stock_data.loc[current_zoushi_start_time:, 'low'].min()
 #             max_price_time = stock_data.loc[effective_time:, 'high'].idxmax()
             min_price_time = stock_data.loc[current_zoushi_start_time:, 'low'].idxmin()
@@ -829,7 +830,6 @@ class Short_Chan(Sell_stocks):
 #                                                                                                   stock_data.iloc[-1].close))
 #                     return True
             if current_loc_diff > first_loc_diff:
-#                 if max_price_after_long < current_chan_p:
                 self.log.info("{0} waited for equal period {1}:{2} never reached guiding price {3}".format(
                                                                                               stock,
                                                                                               first_loc_diff, 
@@ -838,7 +838,7 @@ class Short_Chan(Sell_stocks):
                 return True
     
 
-            if (1 - stock_data.iloc[-1].close / max_price_after_long) >= self.stop_loss:
+            if (1 - latest_price / max_price_after_long) >= self.stop_loss:
                 self.log.info("{0} HARDCORE stop loss: {1} -> {2}".format(stock, stock_data.iloc[-1].close, max_price_after_long))
                 return True
 
@@ -848,15 +848,15 @@ class Short_Chan(Sell_stocks):
             current_chan_t == Chan_Type.III_weak or\
             current_chan_t == Chan_Type.INVALID:
             # This is to make sure we have enough data for MACD and MA
-#             data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=120)
-#             stock_data = get_price(stock,
-#                                    start_date=data_start_time, 
-#                                    end_date=context.current_dt, 
-#                                    frequency='1m', 
-#                                    fields=('high', 'low', 'close', 'money'), 
-#                                    skip_paused=False)
-#             # check slope
-#             max_price_after_long = stock_data.loc[sub_zoushi_start_time:, 'high'].max()
+            data_start_time = sub_zoushi_start_time - pd.Timedelta(minutes=120)
+            stock_data = get_price(stock,
+                                   start_date=data_start_time, 
+                                   end_date=context.current_dt, 
+                                   frequency='1m', 
+                                   fields=('high', 'low', 'close', 'money'), 
+                                   skip_paused=False)
+            # check slope
+            max_price_after_long = stock_data.loc[position_time:, 'high'].max()
 #             min_price = stock_data.loc[sub_zoushi_start_time:, 'low'].min()
 #             max_price_time = stock_data.loc[sub_zoushi_start_time:, 'high'].idxmax()
 #             min_price_time = stock_data.loc[sub_zoushi_start_time:, 'low'].idxmin()
@@ -866,15 +866,12 @@ class Short_Chan(Sell_stocks):
 #             if stock_data.loc[position_time:,'low'].min() <= current_chan_p:
 #                 print("TYPE III invalidated {0}, {1}".format(stock_data.loc[effective_time:,'low'].min(), current_chan_p))
 #                 return True
-            latest_price = get_current_data()[stock].last_price
+            
             if (1 - latest_price / max_price_after_long) >= self.stop_loss:
                 self.log.info("{0} HARDCORE stop loss: {1} -> {2}".format(stock, latest_price, max_price_after_long))
                 return True
             
             return False
-#         elif current_chan_t == Chan_Type.INVALID:
-#             print("NOT YET CODED!")
-#             return False
     
     
     def process_stage_I(self, stock, context, min_time, working_period):
