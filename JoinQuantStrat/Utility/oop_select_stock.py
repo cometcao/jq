@@ -899,7 +899,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stocks_to_remove_A = set()
             for stock in self.tentative_stage_A:
                 if stock not in context.portfolio.positions.keys():
-                    ready, zhongshu_changed = self.check_stage_A_cur(stock, context)
+                    ready, zhongshu_changed = self.check_stage_A(stock, context)
                     if ready:
                         stage_A_long.add(stock)
     #                 if zhongshu_changed:
@@ -1095,9 +1095,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return kb_chan.formed_tb(tb=TopBotType.bot)
         
     def check_stage_II(self, stock, context):
-        result, _ = self.check_structure_sub_only(stock, context)
-        return result or self.check_daily_vol_money(stock, context)
-#         return result
+#         result, _ = self.check_structure_sub_only(stock, context)
+#         return result or self.check_daily_vol_money(stock, context)
+        return True
     
     def check_stage_III(self, stock, context):
         if self.stage_III_timing and\
@@ -1114,6 +1114,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
             return False, False
         
         return self.check_bot_shape(stock, context, from_local_max=False)
+    
+    def check_stage_A(self, stock, context):
+        return self.check_daily_boll_lower(stock, context) or self.check_stage_A_cur(stock, context)[0]
     
     def check_stage_A_vol(self, stock, context):
         return self.check_internal_vol_money(stock, context), False
@@ -1268,7 +1271,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
     
     
     def check_stage_I(self, stock, context):
-        return self.check_internal_vol_money(stock, context) or self.check_daily_boll_lower(stock, context)
+        result, _ = self.check_structure_sub_full(stock, context)
+        return result
 
     def check_structure_cur(self, stock, context, after_stage_III=False):
         zhongshu_changed=False
@@ -1308,7 +1312,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                              periods=self.periods,
                                              count=self.num_of_data,
                                              direction=TopBotType.top2bot, 
-                                             current_chan_type=self.stage_A_types,
+                                             current_chan_type=self.current_chan_type,
                                              sub_chan_type=self.sub_chan_type,
                                              isdebug=self.isdebug,
                                              is_description=self.isDescription,
@@ -1355,8 +1359,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 if self.halt_check_when_enough and (self.long_candidate_num <= len(self.tentative_stage_I)):
                     break
                 
-                result, zhongshu_changed = self.check_structure_cur(stock, context, after_stage_III=False)
-                if result:
+                if self.initial_stock_check(context, stock):
                     filter_stock_list.append(stock)
         
         self.log.info("newly qualified stocks: {0}".format(filter_stock_list))
@@ -1386,6 +1389,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                       self.tentative_stage_B,))
         # prioritize old stocks
         return enhanced_list+beichi_list
+    
+    def initial_stock_check(self, context, stock):
+        return self.check_internal_vol_money(stock, context) or self.check_daily_boll_lower(stock, context)
+        
     
     def filter_enhanced_stock_by_return(self, stocks):
         qualified_stocks = set()
