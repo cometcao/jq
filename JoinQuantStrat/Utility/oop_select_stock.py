@@ -775,7 +775,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.ignore_xd = params.get('ignore_xd', False)
         self.use_stage_III = params.get('use_stage_III', False)
         self.stage_III_timing = params.get('stage_III_timing', [14, 50])
-        self.long_candidate_num = params.get('long_candiate_num', self.long_stock_num)
+        self.long_candidate_num = params.get('long_candidate_num', self.long_stock_num)
         self.use_stage_A = params.get('use_stage_A', False)
         
         self.force_chan_type = params.get('force_chan_type', [
@@ -845,20 +845,14 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         for stock in self.tentative_stage_I:
             
-#             if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
-#                 if self.check_guide_price_reached(stock, context):
-#                     stocks_to_remove_I.add(stock)
-#                     if self.use_all_stocks_4_A:
-#                         self.tentative_stage_A.add(stock) # skip first phase
-#                     continue
+            if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
+                if self.check_guide_price_reached(stock, context):
+                    stocks_to_remove_I.add(stock)
+                    if self.use_all_stocks_4_A:
+                        self.tentative_stage_A.add(stock) # skip first phase
+                    continue
             
-            result, zhongshu_changed = self.check_stage_I(stock, context, after_stage_III=False)
-#             current_profile = self.g.stock_chan_type[stock][1]
-#             cur_chan_t = current_profile[0]
-#             if zhongshu_changed:
-#                 if cur_chan_t != Chan_Type.III and cur_chan_t != Chan_Type.III_strong:
-#                     stocks_to_remove_I.add(stock)
-            if result:
+            if self.check_stage_I(stock, context):
                 stocks_to_long.add(stock)
         
         self.tentative_stage_I = self.tentative_stage_I.difference(stocks_to_remove_I)
@@ -1273,12 +1267,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                  float_less_equal(middle[-2], middle[-1]))
     
     
-    def check_stage_I(self, stock, context, after_stage_III=False):
-        result, zhongshu_changed = self.check_structure_cur(stock, context, after_stage_III)
-#         if not result:
-#             return self.check_daily_boll_lower(stock, context), zhongshu_changed
-#         else:
-        return result, zhongshu_changed
+    def check_stage_I(self, stock, context):
+        return self.check_internal_vol_money(stock, context) or self.check_daily_boll_lower(stock, context)
 
     def check_structure_cur(self, stock, context, after_stage_III=False):
         zhongshu_changed=False
@@ -1365,7 +1355,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 if self.halt_check_when_enough and (self.long_candidate_num <= len(self.tentative_stage_I)):
                     break
                 
-                if self.check_internal_vol_money(stock, context):
+                result, zhongshu_changed = self.check_structure_cur(stock, context, after_stage_III=False)
+                if result:
                     filter_stock_list.append(stock)
         
         self.log.info("newly qualified stocks: {0}".format(filter_stock_list))
