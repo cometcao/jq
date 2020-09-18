@@ -899,7 +899,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stocks_to_remove_A = set()
             for stock in self.tentative_stage_A:
                 if stock not in context.portfolio.positions.keys():
-                    ready, zhongshu_changed = self.check_stage_A(stock, context)
+                    ready = self.check_stage_A(stock, context)
                     if ready:
                         stage_A_long.add(stock)
     #                 if zhongshu_changed:
