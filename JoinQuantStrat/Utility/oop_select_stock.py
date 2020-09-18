@@ -1092,9 +1092,16 @@ class Filter_Chan_Stocks(Filter_stock_list):
         kb_chan = KBarChan(working_data_np, isdebug=False)
         
         result, check = kb_chan.formed_tb(tb=TopBotType.bot)
+        # avoid the case of big down stick!
         return result and\
             (ignore_bot_shape or\
-            float_more_equal(stock_data['close'][-1], stock_data['open'][-1])), check
+            not self.is_big_negative_stick(stock_data['open'][-1], 
+                                           stock_data['close'][-1], 
+                                           stock_data['high'][-1], 
+                                           stock_data['low'][-1])), check
+        
+    def is_big_negative_stick(self, open, close, high, low):
+        return float_less(close, open) and float_more_equal((open-close)/(high-low), 0.618)
         
     def check_stage_II(self, stock, context):
 #         result, _ = self.check_structure_sub_only(stock, context)
