@@ -1081,7 +1081,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                       frequency='240m', 
                       skip_paused=True, 
                       panel=False, 
-                      fields=['high', 'low', 'close'])
+                      fields=['high', 'low', 'close', 'open'])
         
         if from_local_max:
             max_time = stock_data.loc[current_effective_time:,'high'].idxmax()
@@ -1089,10 +1089,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         stock_data['date'] = stock_data.index
         working_data_np = stock_data.to_records()
-#         print("check bot: {0}".format(stock))
         kb_chan = KBarChan(working_data_np, isdebug=False)
         
-        return kb_chan.formed_tb(tb=TopBotType.bot)
+        return kb_chan.formed_tb(tb=TopBotType.bot) and\
+            float_more_equal(stock_data['close'][-1], stock_data['open'][-1])
         
     def check_stage_II(self, stock, context):
 #         result, _ = self.check_structure_sub_only(stock, context)
@@ -1391,7 +1391,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return enhanced_list+beichi_list
     
     def initial_stock_check(self, context, stock):
-        return self.check_internal_vol_money(stock, context) or self.check_daily_boll_lower(stock, context)
+        return self.check_internal_vol_money(stock, context)
         
     
     def filter_enhanced_stock_by_return(self, stocks):
