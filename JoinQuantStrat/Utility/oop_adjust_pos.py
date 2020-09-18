@@ -902,9 +902,27 @@ class Short_Chan(Sell_stocks):
                                                                     cur_result,
                                                                     cur_xd_result))
             self.tentative_I.add(stock)
-        elif self.check_daily_boll_upper(stock, context):
+        elif self.check_daily_boll_upper(stock, context) and self.check_daily_vol_money(stock, context):
             print("STOP PROFIT {0} price reached upper bound".format(stock))
             self.tentative_I.add(stock)
+    
+    def check_daily_vol_money(self, stock, context):
+        # three days vol must decrease!
+        stock_data = get_price(security=stock, 
+                      end_date=context.current_dt, 
+                      count = 4,
+                      frequency='120m', 
+                      skip_paused=True, 
+                      panel=False, 
+                      fields=['money'])
+        
+        cur_ratio = sum(stock_data['money'][-2:]) / sum(stock_data['money'][-4:-2])
+#         if float_less_equal(cur_ratio, 0.809):
+#             return True
+        if float_more_equal(cur_ratio, 1.191):
+            return True
+        return False
+        
     
     def check_stop_profit(self, stock, context):
         latest_price = get_current_data()[stock].last_price
@@ -1004,8 +1022,8 @@ class Short_Chan(Sell_stocks):
                                df=False)
         upper, middle, _ = talib.BBANDS(stock_data['close'], timeperiod=21, nbdevup=1.96, nbdevdn=1.96, matype=0)
 #         print("stock: {0} \nupper {1}, \nmiddle {2}, \nhigh{3}".format(stock, upper[-2:], middle[-2:], stock_data['high'][-2:]))
-        return (float_less(stock_data['high'][-2], upper[-2]) and\
-                float_more_equal(stock_data['high'][-1], upper[-1])) or\
+        return (float_less(stock_data['close'][-2], upper[-2]) and\
+                float_more_equal(stock_data['close'][-1], upper[-1])) or\
                 (float_less(stock_data['high'][-2], middle[-2]) and\
                  float_more_equal(stock_data['high'][-1], middle[-1]) and\
                  float_more_equal(middle[-2], middle[-1]))

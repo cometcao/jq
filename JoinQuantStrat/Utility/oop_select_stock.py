@@ -1272,8 +1272,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                df=False)
         upper, middle, lower = talib.BBANDS(stock_data['close'], timeperiod=21, nbdevup=1.96, nbdevdn=1.96, matype=0)
 #         print("stock: {0} \nupper {1}, \nmiddle {2}, \nhigh{3}".format(stock, upper[-2:], middle[-2:], stock_data['high'][-2:]))
-        return (float_more(stock_data['low'][-2], lower[-2]) and\
-                float_less_equal(stock_data['low'][-1], lower[-1])) or\
+        return (float_more(stock_data['close'][-2], lower[-2]) and\
+                float_less_equal(stock_data['close'][-1], lower[-1])) or\
                 (float_more(stock_data['low'][-2], middle[-2]) and\
                  float_less_equal(stock_data['low'][-1], middle[-1]) and\
                  float_less_equal(middle[-2], middle[-1]))
