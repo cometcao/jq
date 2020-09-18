@@ -1069,7 +1069,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 
         return False
     
-    def check_bot_shape(self, stock, context, from_local_max=False):
+    def check_bot_shape(self, stock, context, from_local_max=False, ignore_bot_shape=True):
 #         current_profile = self.g.stock_chan_type[stock][1]
 #         current_start_time = current_profile[5]
 #         current_effective_time = current_profile[6]
@@ -1091,8 +1091,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
         working_data_np = stock_data.to_records()
         kb_chan = KBarChan(working_data_np, isdebug=False)
         
-        return kb_chan.formed_tb(tb=TopBotType.bot) and\
-            float_more_equal(stock_data['close'][-1], stock_data['open'][-1])
+        result, check = kb_chan.formed_tb(tb=TopBotType.bot)
+        return result and\
+            (ignore_bot_shape or\
+            float_more_equal(stock_data['close'][-1], stock_data['open'][-1])), check
         
     def check_stage_II(self, stock, context):
 #         result, _ = self.check_structure_sub_only(stock, context)
@@ -1105,7 +1107,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             context.current_dt.minute != self.stage_III_timing[1]):
             return False, False
         
-        return self.check_bot_shape(stock, context, from_local_max=False)
+        return self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=True)
     
     def check_stage_B(self, stock, context):
         if self.stage_III_timing and\
@@ -1113,7 +1115,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             context.current_dt.minute != self.stage_III_timing[1]):
             return False, False
         
-        return self.check_bot_shape(stock, context, from_local_max=False)
+        return self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=False)
     
     def check_stage_A(self, stock, context):
         return self.check_daily_boll_lower(stock, context) or self.check_stage_A_cur(stock, context)[0]
