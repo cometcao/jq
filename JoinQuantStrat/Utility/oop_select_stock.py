@@ -820,14 +820,14 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                               max_price_after_long))
                 return True
 
-            min_time = stock_data.loc[current_effective_time:, 'low'].idxmin()
-            min_price = stock_data.loc[min_time,'low']
-            max_price = stock_data.loc[min_time:, 'high'].max()
-            if float_more_equal(max_price / min_price - 1, self.price_revert_range):
-                self.log.info("{0} price reverted:{1}, max: {2}".format(stock, 
-                                                                      min_price, 
-                                                                      max_price))
-                return True
+#             min_time = stock_data.loc[current_effective_time:, 'low'].idxmin()
+#             min_price = stock_data.loc[min_time,'low']
+#             max_price = stock_data.loc[min_time:, 'high'].max()
+#             if float_more_equal(max_price / min_price - 1, self.price_revert_range):
+#                 self.log.info("{0} price reverted:{1}, max: {2}".format(stock, 
+#                                                                       min_price, 
+#                                                                       max_price))
+#                 return True
 
         elif current_chan_t == Chan_Type.III or current_chan_t == Chan_Type.III_strong:
             min_price_after_long = stock_data.loc[current_effective_time:, 'low'].min()
