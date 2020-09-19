@@ -852,7 +852,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
                         self.tentative_stage_A.add(stock) # skip first phase
                     continue
             
-            if self.check_stage_I(stock, context):
+            check_result, zhongshu_changed = self.check_stage_I(stock, context):
+            if zhongshu_changed:
+                stocks_to_remove_I.add(stock)
+            elif check_result:
                 stocks_to_long.add(stock)
         
         self.tentative_stage_I = self.tentative_stage_I.difference(stocks_to_remove_I)
@@ -1280,8 +1283,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
     
     
     def check_stage_I(self, stock, context):
-        result, _ = self.check_structure_sub_full(stock, context)
-        return result
+        result, zhongshu_changed = self.check_structure_sub_full(stock, context)
+        return result, zhongshu_changed
 
     def check_structure_cur(self, stock, context, after_stage_III=False):
         zhongshu_changed=False
