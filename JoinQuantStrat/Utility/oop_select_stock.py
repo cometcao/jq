@@ -1070,14 +1070,14 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return False
     
     def check_bot_shape(self, stock, context, from_local_max=False, ignore_bot_shape=True):
-#         current_profile = self.g.stock_chan_type[stock][1]
-#         current_start_time = current_profile[5]
-#         current_effective_time = current_profile[6]
+        current_profile = self.g.stock_chan_type[stock][1]
+        current_start_time = current_profile[5]
+        current_effective_time = current_profile[6]
         
         stock_data = get_price(security=stock, 
                       end_date=context.current_dt, 
-#                       start_date=current_start_time, 
-                      count = 20,
+                      start_date=current_start_time, 
+#                       count = 20,
                       frequency='240m', 
                       skip_paused=True, 
                       panel=False, 
