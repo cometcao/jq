@@ -852,7 +852,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                         self.tentative_stage_A.add(stock) # skip first phase
                     continue
             
-            check_result, zhongshu_changed = self.check_stage_I(stock, context):
+            check_result, zhongshu_changed = self.check_stage_I(stock, context)
             if zhongshu_changed:
                 stocks_to_remove_I.add(stock)
             elif check_result:
