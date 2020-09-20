@@ -1128,10 +1128,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=False)
     
     def check_stage_A(self, stock, context):
-        return self.check_daily_boll_lower(stock, context) or self.check_stage_A_cur(stock, context)[0]
+        return self.check_daily_boll_lower(stock, context) or\
+                self.check_stage_A_cur(stock, context)[0] or\
+                self.check_stage_A_vol(stock, context)
     
     def check_stage_A_vol(self, stock, context):
-        return self.check_internal_vol_money(stock, context), False
+        return self.check_internal_vol_money(stock, context)
     
     def check_stage_A_cur(self, stock, context):
         result = False
