@@ -1405,7 +1405,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return enhanced_list+beichi_list
     
     def initial_stock_check(self, context, stock):
-        return self.check_internal_vol_money(stock, context) or self.check_daily_boll_lower(stock, context)
+        return self.check_internal_vol_money(stock, context)
+#     or self.check_daily_boll_lower(stock, context)
         
     
     def filter_enhanced_stock_by_return(self, stocks):

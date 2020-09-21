@@ -178,7 +178,7 @@ class Buy_stocks(Rule):
         else:
             if self.buy_count > len(context.portfolio.positions):
                 cash_value = context.portfolio.available_cash
-                cash_avg = cash_value / (len(self.buy_count) - len(context.portfolio.positions.keys()))
+                cash_avg = cash_value / (self.buy_count - len(context.portfolio.positions.keys()))
                 value_avg = context.portfolio.total_value / self.buy_count
                 
                 if cash_avg / value_avg - 1 > 0.191:
