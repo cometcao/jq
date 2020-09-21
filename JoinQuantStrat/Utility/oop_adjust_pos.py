@@ -176,7 +176,16 @@ class Buy_stocks(Rule):
         if self.use_adjust_portion:
             self.adjust_portion(context, data, self.to_buy)
         else:
-            self.adjust(context, data, self.to_buy)
+            if self.buy_count > len(context.portfolio.positions):
+                cash_value = context.portfolio.available_cash
+                cash_avg = cash_value / (len(self.buy_count) - len(context.portfolio.positions.keys()))
+                value_avg = context.portfolio.total_value / self.buy_count
+                
+                if cash_avg / value_avg - 1 > 0.191:
+                    self.log.info("rebalance positions")
+                    self.adjust_avg(context, data, self.to_buy)
+                else:
+                    self.adjust(context, data, self.to_buy)
 
     def ta_long_filter(self, context, data, to_buy):
         cta = checkTAIndicator_OR({
@@ -223,6 +232,20 @@ class Buy_stocks(Rule):
                             if len(context.subportfolios[pindex].long_positions) == self.buy_count:
                                 break
         pass        
+    
+    def adjust_avg(self, context, data, buy_stocks):
+        for pindex in self.g.op_pindexs:
+            position_count = len(context.subportfolios[pindex].long_positions)
+            if self.buy_count > position_count:
+                buy_stocks = [stock for stock in buy_stocks if stock not in self.g.sell_stocks and stock not in context.subportfolios[pindex].long_positions.keys()]
+                buy_stocks = context.subportfolios[pindex].long_positions.keys() + buy_stocks
+                
+        avg_value = context.portfolio.total_value / self.buy_count
+        for pindex in self.g.op_pindexs:
+            for stock in buy_stocks:
+                if self.g.open_position(self, stock, avg_value, pindex):
+                    if len(context.subportfolios[pindex].long_positions) == self.buy_count:
+                        break
         
     def adjust_portion(self, context, data, buy_stocks):
         # 买入股票
@@ -954,8 +977,8 @@ class Short_Chan(Sell_stocks):
         latest_price = get_current_data()[stock].last_price
         avg_cost = context.portfolio.positions[stock].avg_cost
         # short circuit
-        if avg_cost > context.portfolio.positions[stock].price:
-            return False
+#         if avg_cost > context.portfolio.positions[stock].price:
+#             return False
         
         position_time = context.portfolio.positions[stock].transact_time
         current_profile = self.g.stock_chan_type[stock][1]
