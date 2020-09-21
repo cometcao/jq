@@ -200,7 +200,7 @@ class KBarChan(object):
         else:
             return TopBotType.noTopBot
     
-    def markTopBot(self, initial_state=TopBotType.noTopBot):
+    def markTopBot(self, initial_state=TopBotType.noTopBot, mark_last_kbar=True):
         self.kDataFrame_standardized = append_fields(self.kDataFrame_standardized,
                                                      'tb',
                                                      [TopBotType.noTopBot.value]*self.kDataFrame_standardized.size,
@@ -239,10 +239,11 @@ class KBarChan(object):
                 self.kDataFrame_standardized[0][tb] = TopBotType.reverse(first_tb).value
             
         # mark the last kbar 
-        last_tb = TopBotType.value2type(self.kDataFrame_standardized[last_idx][tb])
-        self.kDataFrame_standardized[-1][tb] = TopBotType.reverse(last_tb).value
-        if self.isdebug:
-            print("mark topbot on self.kDataFrame_standardized[20]:{0}".format(self.kDataFrame_standardized[:20]))
+        if mark_last_kbar:
+            last_tb = TopBotType.value2type(self.kDataFrame_standardized[last_idx][tb])
+            self.kDataFrame_standardized[-1][tb] = TopBotType.reverse(last_tb).value
+            if self.isdebug:
+                print("mark topbot on self.kDataFrame_standardized[20]:{0}".format(self.kDataFrame_standardized[:20]))
             
     def trace_back_index(self, working_df, previous_index):
         # find the closest FenXing with top/bot backwards from previous_index
@@ -870,7 +871,7 @@ class KBarChan(object):
     
     def formed_tb(self, tb = TopBotType.bot):
         self.standardize()
-        self.markTopBot()
+        self.markTopBot(mark_last_kbar=False)
         
 #         self.defineBi()
 #         working_df = self.kDataFrame_marked
