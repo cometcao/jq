@@ -1098,8 +1098,8 @@ class Short_Chan(Sell_stocks):
         
         current_profile = self.short_stock_info[stock]
 #         current_profile = self.g.stock_chan_type[stock]
-        current_zoushi_start_time = current_profile[1][5]
-        current_effective_time = current_profile[1][6]
+        current_zoushi_start_time = current_profile[0][5]
+        current_effective_time = current_profile[0][6]
         
         stock_data = get_price(security=stock, 
                       end_date=context.current_dt, 

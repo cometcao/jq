@@ -902,11 +902,11 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stocks_to_remove_A = set()
             for stock in self.tentative_stage_A:
                 if stock not in context.portfolio.positions.keys():
-                    ready = self.check_stage_A(stock, context)
-                    if ready:
+                    ready, zhongshu_changed = self.check_stage_A(stock, context)
+                    if zhongshu_changed:
+                        stocks_to_remove_A.add(stock)
+                    elif ready:
                         stage_A_long.add(stock)
-    #                 if zhongshu_changed:
-    #                     stocks_to_remove_A.add(stock)
                     
             self.tentative_stage_A = self.tentative_stage_A.difference(stocks_to_remove_A)
             self.log.info("stocks removed from stage A: {0}".format(stocks_to_remove_A))
@@ -1128,9 +1128,11 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=False)
     
     def check_stage_A(self, stock, context):
-        return self.check_daily_boll_lower(stock, context) or\
-                self.check_stage_A_cur(stock, context)[0] or\
-                self.check_stage_A_vol(stock, context)
+        result, zs_changed = self.check_stage_A_full(stock, context)
+        if not result:
+            result = (self.check_daily_boll_lower(stock, context) and\
+                      self.check_stage_A_vol(stock, context))
+        return result, zs_changed
     
     def check_stage_A_vol(self, stock, context):
         return self.check_internal_vol_money(stock, context)
