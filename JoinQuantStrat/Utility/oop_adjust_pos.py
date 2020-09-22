@@ -1049,10 +1049,10 @@ class Short_Chan(Sell_stocks):
                 self.tentative_II.remove(stock)
                 return True
             
-#             if self.use_check_top and self.check_top_shape(stock, context):
-#                 self.log.info("STOP PROFIT {0}, top found".format(stock))
-#                 self.tentative_II.remove(stock)
-#                 return True
+            if self.use_check_top and self.check_top_shape(stock, context):
+                self.log.info("STOP PROFIT {0}, top found".format(stock))
+                self.tentative_II.remove(stock)
+                return True
         
         if current_chan_t == Chan_Type.INVALID and (latest_price / avg_cost - 1) >= self.stop_profit:
             self.log.info("{0} HARDCORE stop profit: {1} -> {2}".format(stock, latest_price, avg_cost))
@@ -1096,13 +1096,15 @@ class Short_Chan(Sell_stocks):
             context.current_dt.minute != self.short_stage_II_timing[1]):
             return False
         
+        current_profile = self.short_stock_info[stock]
 #         current_profile = self.g.stock_chan_type[stock]
-#         current_effective_time = current_profile[1][6]
+        current_zoushi_start_time = current_profile[1][5]
+        current_effective_time = current_profile[1][6]
         
         stock_data = get_price(security=stock, 
                       end_date=context.current_dt, 
-#                       start_date=current_effective_time, 
-                      count = 20,
+                      start_date=current_zoushi_start_time, 
+#                       count = 20,
                       frequency='240m', 
                       skip_paused=True, 
                       panel=False, 
@@ -1216,7 +1218,7 @@ class Short_Chan(Sell_stocks):
         return '缠论调仓卖出规则'
 
 
-class Long_Chan(Buy_stocks_var):  # Buy_stocks_portion
+class Long_Chan(Buy_stocks):  # Buy_stocks_portion
     def __init__(self, params):
         Buy_stocks_var.__init__(self, params)
         self.buy_count = params.get('buy_count', 3)
