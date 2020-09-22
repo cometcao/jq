@@ -101,9 +101,11 @@ class Global_variable(object):
             return False
         # 通过当前价，四乘五入的计算要买的股票数。
         amount = int(round(value / cur_price / 100) * 100)
+        if amount == 0:
+            return True
         new_value = amount * cur_price
 
-        if abs(1 - context.subportfolios[pindex].long_positions[security].value/new_value) <= 0.05:
+        if abs(1 - context.subportfolios[pindex].long_positions[security].value/new_value) <= 0.191:
             return True # don't need to make adjustments
 
         order = order_target_value(security, new_value, pindex=pindex)
