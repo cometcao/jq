@@ -922,8 +922,8 @@ class Short_Chan(Sell_stocks):
                                               check_full_zoushi=False,
                                               ignore_sub_xd=False)
 
+        self.short_stock_info[stock] = c_profile
         if result and xd_result:
-            self.short_stock_info[stock] = c_profile
             print("STOP PROFIT {0} {1} exhausted: {2}, {3}".format(stock,
                                                                     working_period,
                                                                     result,
