@@ -680,6 +680,7 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
         self.top_chan_types = params.get('top_chan_types', [Chan_Type.I, Chan_Type.INVALID])
         self.enable_on_demand = params.get('on_demand', False)
         self.isdebug = params.get('isdebug', False)
+        self.min_stock_num = params.get('min_stock_num', 0)
         
     def before_trading_start(self, context):
         chan_stock_list = []
@@ -750,7 +751,7 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                                                        datetime.datetime.strptime(s_time, "%Y-%m-%d %H:%M:%S"), 
                                                        )]
             self.log.info("filtered data read from file: {0} stocks info".format(len(chan_stock_list)))
-        return chan_stock_list
+        return chan_stock_list if len(chan_stock_list) >= self.min_stock_num else []
     
     def __str__(self):
         return "从文件中读取根据缠论已经写好的股票列表以及数据"
@@ -1563,7 +1564,7 @@ class Filter_Industry_Sector(Early_Filter_stock_list):
                     avgPeriod=self.avgPeriod,
                     isWeighted=self.isWeighted,
                     effective_date=context.previous_date)
-            self.new_list = ss.processAllIndustrySectorStocks()
+            self.new_list = ss.processAllIndustrySectorStocks(isDisplay=False)
             self.g.industry_sector_list = ss.processAllIndustrySectors() # save sector order for later use
             self.log.info("saved industry list: {0}... (top TEN)".format(self.g.industry_sector_list[:10]))
             

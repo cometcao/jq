@@ -93,14 +93,19 @@ class SectorSelection(object):
             message += '***'
         send_message(message, channel='weixin')      
 
-    def processAllIndustrySectors(self):
+    def processAllIndustrySectors(self, isDisplay=False):
         if self.filtered_industry:
             return self.filtered_industry
         
         industryStrength = self.processIndustrySectors()
+
         industry_limit_value = int(self.top_limit * len(self.jqIndustry))
         
         self.filtered_industry = [sector for sector, strength in industryStrength[:industry_limit_value] if (strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)] 
+        
+        if isDisplay:
+            print("industry strength: {0}".format(industryStrength))
+            print("matching industries: {0}".format(self.filtered_industry))
         
         return self.filtered_industry
 
@@ -126,8 +131,8 @@ class SectorSelection(object):
         else:
             return (self.filtered_industry, self.filtered_concept)
     
-    def processAllIndustrySectorStocks(self):
-        industry = self.processAllIndustrySectors()
+    def processAllIndustrySectorStocks(self, isDisplay=False):
+        industry = self.processAllIndustrySectors(isDisplay=isDisplay)
         allstocks = []
         for idu in industry:
             allstocks += get_industry_stocks(idu)
