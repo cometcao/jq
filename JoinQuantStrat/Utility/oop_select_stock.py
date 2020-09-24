@@ -1108,10 +1108,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #                                            stock_data['low'][-1])), check
                                         
     def is_big_positive_stick(self, open, close, high, low):
-        return float_more(close, open) and float_more_equal((close-open)/(high-low), 0.382)
+        return float_more(close, open) and float_more_equal((close-open)/(high-low), 0.618)
         
     def is_big_negative_stick(self, open, close, high, low):
-        return float_less(close, open) and float_more_equal((open-close)/(high-low), 0.382)
+        return float_less(close, open) and float_more_equal((open-close)/(high-low), 0.618)
         
     def check_stage_II(self, stock, context):
 #         result, _ = self.check_structure_sub_only(stock, context)
@@ -1124,7 +1124,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             context.current_dt.minute != self.stage_III_timing[1]):
             return False, False
         
-        return self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=False)
+        return self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=True)
     
     def check_stage_B(self, stock, context):
         if self.stage_III_timing and\
