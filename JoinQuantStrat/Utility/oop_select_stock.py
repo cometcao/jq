@@ -1125,7 +1125,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             context.current_dt.minute != self.stage_III_timing[1]):
             return False, False
         
-        return self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=True)
+        bot_result, checked = self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=False)
+        return bot_result and self.check_daily_boll_lower(stock, context), checked
     
     def check_stage_B(self, stock, context):
         if self.stage_III_timing and\
@@ -1133,13 +1134,14 @@ class Filter_Chan_Stocks(Filter_stock_list):
             context.current_dt.minute != self.stage_III_timing[1]):
             return False, False
         
-        return self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=False)
+        bot_result, checked = self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=False)
+        return bot_result and self.check_daily_boll_lower(stock, context), checked
     
     def check_stage_A(self, stock, context):
         result, zs_changed = self.check_stage_A_full(stock, context)
-        if not result:
-            result = (self.check_daily_boll_lower(stock, context) and\
-                      self.check_stage_A_vol(stock, context))
+#         if not result:
+#             result = (self.check_daily_boll_lower(stock, context) and\
+#                       self.check_stage_A_vol(stock, context))
         return result, zs_changed
     
     def check_stage_A_vol(self, stock, context):
@@ -1285,13 +1287,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                fields=('close', 'low'), 
                                fq_ref_date=context.current_dt.date(),
                                df=False)
-        upper, middle, lower = talib.BBANDS(stock_data['close'], timeperiod=21, nbdevup=1.96, nbdevdn=1.96, matype=0)
+        upper, middle, lower = talib.BBANDS(stock_data['close'], timeperiod=21, nbdevup=2, nbdevdn=2, matype=0)
 #         print("stock: {0} \nupper {1}, \nmiddle {2}, \nhigh{3}".format(stock, upper[-2:], middle[-2:], stock_data['high'][-2:]))
-        return (float_more(stock_data['close'][-2], lower[-2]) and\
+        # consecutive below lower bounds or upper/lower shrink
+        return (float_less_equal(stock_data['close'][-2], lower[-2]) and\
                 float_less_equal(stock_data['close'][-1], lower[-1])) or\
-                (float_more(stock_data['low'][-2], middle[-2]) and\
-                 float_less_equal(stock_data['low'][-1], middle[-1]) and\
-                 float_less_equal(middle[-2], middle[-1]))
+                float_less_equal(upper[-1]-lower[-1], upper[-2]-lower[-2])
     
     
     def check_stage_I(self, stock, context):
@@ -1416,8 +1417,6 @@ class Filter_Chan_Stocks(Filter_stock_list):
     
     def initial_stock_check(self, context, stock):
         return self.check_internal_vol_money(stock, context)
-#     or self.check_daily_boll_lower(stock, context)
-        
     
     def filter_enhanced_stock_by_return(self, stocks):
         qualified_stocks = set()
