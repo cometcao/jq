@@ -1125,7 +1125,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             context.current_dt.minute != self.stage_III_timing[1]):
             return False, False
         
-        bot_result, checked = self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=False)
+        bot_result, checked = self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=True)
         return bot_result and self.check_daily_boll_lower(stock, context), checked
     
     def check_stage_B(self, stock, context):
@@ -1290,9 +1290,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
         upper, middle, lower = talib.BBANDS(stock_data['close'], timeperiod=21, nbdevup=2, nbdevdn=2, matype=0)
 #         print("stock: {0} \nupper {1}, \nmiddle {2}, \nhigh{3}".format(stock, upper[-2:], middle[-2:], stock_data['high'][-2:]))
         # consecutive below lower bounds or upper/lower shrink
-        return (float_less_equal(stock_data['close'][-2], lower[-2]) and\
-                float_less_equal(stock_data['close'][-1], lower[-1])) or\
-                float_less_equal(upper[-1]-lower[-1], upper[-2]-lower[-2])
+        return float_less(round(upper[-1], 2), round(upper[-2], 2))
+#         return (float_less_equal(stock_data['low'][-2], lower[-2]) and\
+#                 float_less_equal(stock_data['low'][-1], lower[-1])) or\
+#                 float_less_equal(upper[-1]-lower[-1], upper[-2]-lower[-2])
     
     
     def check_stage_I(self, stock, context):
