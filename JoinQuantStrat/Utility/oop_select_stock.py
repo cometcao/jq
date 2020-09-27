@@ -20,7 +20,7 @@ from pair_trading_ols import *
 from value_factor_lib import *
 from quant_lib import *
 from functools import reduce
-from chan_common_include import Chan_Type, float_less_equal, float_more_equal
+from chan_common_include import Chan_Type, float_less_equal, float_more_equal, float_equal
 from biaoLiStatus import TopBotType
 from chan_kbar_filter import *
 from equilibrium import *
@@ -890,11 +890,17 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_long)
         
         self.tentative_stage_III = self.tentative_stage_III.union(stocks_to_long)
+        stocks_to_remove_III = set()
         stocks_to_long = set()
         for stock in self.tentative_stage_III:
-            check_result, _ = self.check_stage_III(stock, context)
-            if check_result:
+            check_result, in_region = self.check_stage_III(stock, context)
+            if not in_region:
+                stocks_to_remove_III.add(stock)
+            elif check_result:
                 stocks_to_long.add(stock)
+                
+        self.tentative_stage_III = self.tentative_stage_III.difference(stocks_to_remove_III)
+        self.log.info("stocks removed from stage III: {0}".format(stocks_to_remove_III))
         self.tentative_stage_III = self.tentative_stage_III.difference(stocks_to_long)
         
         if self.use_stage_III and self.use_stage_A:
@@ -1126,7 +1132,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             return False, False
         
         bot_result, checked = self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=True)
-        return bot_result and self.check_daily_boll_lower(stock, context), checked
+        boll_result, in_region = self.check_daily_boll_lower(stock, context)
+        return bot_result and boll_result, in_region
     
     def check_stage_B(self, stock, context):
         if self.stage_III_timing and\
@@ -1135,7 +1142,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             return False, False
         
         bot_result, checked = self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=False)
-        return bot_result and self.check_daily_boll_lower(stock, context), checked
+        boll_result, in_region = self.check_daily_boll_lower(stock, context)
+        return bot_result and boll_result, in_region
     
     def check_stage_A(self, stock, context):
         result, zs_changed = self.check_stage_A_full(stock, context)
@@ -1284,13 +1292,16 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                end_dt=context.current_dt, 
                                unit='1d', # use super level
                                include_now=True, 
-                               fields=('close', 'low'), 
+                               fields=('close', 'low', 'high'), 
                                fq_ref_date=context.current_dt.date(),
                                df=False)
         upper, middle, lower = talib.BBANDS(stock_data['close'], timeperiod=21, nbdevup=2, nbdevdn=2, matype=0)
 #         print("stock: {0} \nupper {1}, \nmiddle {2}, \nhigh{3}".format(stock, upper[-2:], middle[-2:], stock_data['high'][-2:]))
         # consecutive below lower bounds or upper/lower shrink
-        return float_less(round(upper[-1], 2), round(upper[-2], 2))
+        return float_less(round(upper[-1]-middle[-1], 2), round(upper[-2]-middle[-2], 2)) or\
+                (float_equal(round(upper[-1]-middle[-1], 2), round(upper[-2]-middle[-2], 2)) and\
+                 float_less(round(upper[-1], 2), round(upper[-2], 2))),\
+                 float_less(stock_data['high'][-1], middle[-1])
 #         return (float_less_equal(stock_data['low'][-2], lower[-2]) and\
 #                 float_less_equal(stock_data['low'][-1], lower[-1])) or\
 #                 float_less_equal(upper[-1]-lower[-1], upper[-2]-lower[-2])

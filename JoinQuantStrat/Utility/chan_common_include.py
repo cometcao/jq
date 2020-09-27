@@ -20,6 +20,9 @@ def float_less_equal(a, b):
 def float_more_equal(a, b):
     return a > b or np.isclose(a, b)
 
+def float_equal(a, b):
+    return np.isclose(a, b)
+
 
 ######################## chan_kbar_filter ##########################
 TYPE_III_NUM = 7
