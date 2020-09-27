@@ -1492,7 +1492,7 @@ class NestedInterval():
                 return False, False, [(chan_t, 
                                        chan_d, 
                                        chan_p, 0, 0, 
-                                       anal_zoushi.analytic_result[-1].get_last_zoushi_time(), 
+                                       anal_zoushi.zslx_result[-1].get_last_zoushi_time(), 
                                        None)]
         
         chan_t, chan_d, chan_p = chan_types[0]
