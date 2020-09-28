@@ -1129,7 +1129,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         if self.stage_III_timing and\
             (context.current_dt.hour != self.stage_III_timing[0] or\
             context.current_dt.minute != self.stage_III_timing[1]):
-            return False, False
+            return False, True
         
         bot_result, checked = self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=True)
         boll_result, in_region = self.check_daily_boll_lower(stock, context)
