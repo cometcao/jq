@@ -1084,32 +1084,34 @@ class Filter_Chan_Stocks(Filter_stock_list):
         current_start_time = current_profile[5]
         current_effective_time = current_profile[6]
         
-#         stock_data = get_price(security=stock, 
-#                       end_date=context.current_dt, 
-#                       start_date=current_start_time, 
-# #                       count = 20,
-#                       frequency='240m', 
-#                       skip_paused=True, 
-#                       panel=False, 
-#                       fields=['high', 'low', 'close', 'open'])
-
-        stock_data = get_bars_new(stock, 
-                            start_dt=current_start_time,
-                            unit='1d',
-                            fields=['date','high', 'low', 'close', 'open'],
-                            include_now=True, 
-                            end_dt=context.current_dt, 
-                            fq_ref_date=context.current_dt.date(), 
-                            df=False)
+        data_start_time = str(current_start_time.date()) + " {0}:{1}:00".format(self.stage_III_timing[0], 
+                                                                                self.stage_III_timing[1]+1) # +1 fix data format bug
+        stock_data = get_price(security=stock, 
+                      end_date=context.current_dt, 
+                      start_date=data_start_time, 
+#                       count = 20,
+                      frequency='240m', 
+                      skip_paused=True, 
+                      panel=False, 
+                      fields=['high', 'low', 'close', 'open'])
+        
+#         stock_data = get_bars_new(stock, 
+#                             start_dt=current_start_time,
+#                             unit='1d',
+#                             fields=['date','high', 'low', 'close', 'open'],
+#                             include_now=True, 
+#                             end_dt=context.current_dt, 
+#                             fq_ref_date=context.current_dt.date(), 
+#                             df=False)
 
         
         if from_local_max:
             max_time = stock_data.loc[current_effective_time:,'high'].idxmax()
             stock_data = stock_data.loc[max_time:,]
         
-#         stock_data['date'] = stock_data.index
-#         working_data_np = stock_data.to_records()
-        kb_chan = KBarChan(stock_data, isdebug=False)
+        stock_data['date'] = stock_data.index
+        working_data_np = stock_data.to_records()
+        kb_chan = KBarChan(working_data_np, isdebug=False)
         
         result, check = kb_chan.formed_tb(tb=TopBotType.bot)
         # avoid the case of big down stick!
@@ -1139,6 +1141,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         bot_result, checked = self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=False)
         boll_result, in_region = self.check_daily_boll_lower(stock, context)
+#         print("{0} {1}, {2}, {3}, {4}".format(stock, bot_result, checked, boll_result, in_region))
         return bot_result and boll_result, in_region
     
     def check_stage_B(self, stock, context):
@@ -1301,16 +1304,18 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                fields=('close', 'low', 'high'), 
                                fq_ref_date=context.current_dt.date(),
                                df=False)
-        upper, middle, lower = talib.BBANDS(stock_data['close'], timeperiod=21, nbdevup=2, nbdevdn=2, matype=0)
-#         print("stock: {0} \nupper {1}, \nmiddle {2}, \nhigh{3}".format(stock, upper[-2:], middle[-2:], stock_data['high'][-2:]))
+        upper, middle, lower = talib.BBANDS(stock_data['close'], timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
+#         print("stock: {0} \nupper {1}, \nmiddle {2}, \nlow {3}, \nhigh{4}".format(stock, 
+#                                                                        upper[-2:], 
+#                                                                        middle[-2:], 
+#                                                                        lower[-2:],
+#                                                                        stock_data['high'][-2:]))
         # consecutive below lower bounds or upper/lower shrink
-        return float_less(round(upper[-1]-middle[-1], 2), round(upper[-2]-middle[-2], 2)) or\
-                (float_equal(round(upper[-1]-middle[-1], 2), round(upper[-2]-middle[-2], 2)) and\
-                 float_less(round(upper[-1], 2), round(upper[-2], 2))),\
-                 float_less(stock_data['high'][-1], middle[-1])
-#         return (float_less_equal(stock_data['low'][-2], lower[-2]) and\
-#                 float_less_equal(stock_data['low'][-1], lower[-1])) or\
-#                 float_less_equal(upper[-1]-lower[-1], upper[-2]-lower[-2])
+#         return float_less(round(upper[-1]-middle[-1], 2), round(upper[-2]-middle[-2], 2)) or\
+#                 (float_equal(round(upper[-1]-middle[-1], 2), round(upper[-2]-middle[-2], 2)) and\
+#                  float_less(round(upper[-1], 2), round(upper[-2], 2))),\
+#                  float_less(stock_data['high'][-1], middle[-1])
+        return float_less(upper[-1], upper[-2]), float_less(stock_data['high'][-1], middle[-1])
     
     
     def check_stage_I(self, stock, context):

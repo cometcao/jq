@@ -1100,10 +1100,13 @@ class Short_Chan(Sell_stocks):
 #         current_profile = self.g.stock_chan_type[stock]
         current_zoushi_start_time = current_profile[0][5]
         current_effective_time = current_profile[0][6]
+
+        data_start_time = str(current_zoushi_start_time.date()) + " {0}:{1}:00".format(self.short_stage_II_timing[0], 
+                                                                                       self.short_stage_II_timing[1]+1) 
         
         stock_data = get_price(security=stock, 
                       end_date=context.current_dt, 
-                      start_date=current_zoushi_start_time, 
+                      start_date=data_start_time, 
 #                       count = 20,
                       frequency='240m', 
                       skip_paused=True, 
