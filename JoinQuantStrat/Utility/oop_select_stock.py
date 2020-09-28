@@ -20,7 +20,7 @@ from pair_trading_ols import *
 from value_factor_lib import *
 from quant_lib import *
 from functools import reduce
-from chan_common_include import Chan_Type, float_less_equal, float_more_equal, float_equal
+from chan_common_include import Chan_Type, float_less_equal, float_more_equal, float_equal, get_bars_new
 from biaoLiStatus import TopBotType
 from chan_kbar_filter import *
 from equilibrium import *
@@ -1084,22 +1084,32 @@ class Filter_Chan_Stocks(Filter_stock_list):
         current_start_time = current_profile[5]
         current_effective_time = current_profile[6]
         
-        stock_data = get_price(security=stock, 
-                      end_date=context.current_dt, 
-                      start_date=current_start_time, 
-#                       count = 20,
-                      frequency='240m', 
-                      skip_paused=True, 
-                      panel=False, 
-                      fields=['high', 'low', 'close', 'open'])
+#         stock_data = get_price(security=stock, 
+#                       end_date=context.current_dt, 
+#                       start_date=current_start_time, 
+# #                       count = 20,
+#                       frequency='240m', 
+#                       skip_paused=True, 
+#                       panel=False, 
+#                       fields=['high', 'low', 'close', 'open'])
+
+        stock_data = get_bars_new(stock, 
+                            start_dt=current_start_time,
+                            unit='1d',
+                            fields=['date','high', 'low', 'close', 'open'],
+                            include_now=True, 
+                            end_dt=context.current_dt, 
+                            fq_ref_date=context.current_dt.date(), 
+                            df=False)
+
         
         if from_local_max:
             max_time = stock_data.loc[current_effective_time:,'high'].idxmax()
             stock_data = stock_data.loc[max_time:,]
         
-        stock_data['date'] = stock_data.index
-        working_data_np = stock_data.to_records()
-        kb_chan = KBarChan(working_data_np, isdebug=False)
+#         stock_data['date'] = stock_data.index
+#         working_data_np = stock_data.to_records()
+        kb_chan = KBarChan(stock_data, isdebug=False)
         
         result, check = kb_chan.formed_tb(tb=TopBotType.bot)
         # avoid the case of big down stick!
@@ -1109,10 +1119,6 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                            stock_data['close'][-1], 
                                            stock_data['high'][-1], 
                                            stock_data['low'][-1])), check
-#             self.is_big_positive_stick(stock_data['open'][-1], 
-#                                            stock_data['close'][-1], 
-#                                            stock_data['high'][-1], 
-#                                            stock_data['low'][-1])), check
                                         
     def is_big_positive_stick(self, open, close, high, low):
         return float_more(close, open) and float_more_equal((close-open)/(high-low), 0.618)
@@ -1131,7 +1137,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             context.current_dt.minute != self.stage_III_timing[1]):
             return False, True
         
-        bot_result, checked = self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=True)
+        bot_result, checked = self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=False)
         boll_result, in_region = self.check_daily_boll_lower(stock, context)
         return bot_result and boll_result, in_region
     
@@ -1143,7 +1149,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         bot_result, checked = self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=False)
         boll_result, in_region = self.check_daily_boll_lower(stock, context)
-        return bot_result and boll_result, in_region
+        return bot_result and boll_result, checked
     
     def check_stage_A(self, stock, context):
         result, zs_changed = self.check_stage_A_full(stock, context)
