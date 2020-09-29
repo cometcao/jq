@@ -1311,11 +1311,11 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #                                                                        lower[-2:],
 #                                                                        stock_data['high'][-2:]))
         # consecutive below lower bounds or upper/lower shrink
-        return float_less(round(upper[-1]-middle[-1], 2), round(upper[-2]-middle[-2], 2)) or\
-                (float_equal(round(upper[-1]-middle[-1], 2), round(upper[-2]-middle[-2], 2)) and\
-                 float_less(round(upper[-1], 2), round(upper[-2], 2))),\
-                 float_less(stock_data['close'][-1], middle[-1])
-#         return float_less(upper[-1], upper[-2]), float_less(stock_data['close'][-1], middle[-1])
+#         return float_less(round(upper[-1]-middle[-1], 2), round(upper[-2]-middle[-2], 2)) or\
+#                 (float_equal(round(upper[-1]-middle[-1], 2), round(upper[-2]-middle[-2], 2)) and\
+#                  float_less(upper[-1], upper[-2])),\
+#                  float_less(stock_data['close'][-1], middle[-1])
+        return float_less(upper[-1], upper[-2]), float_less(stock_data['close'][-1], middle[-1])
     
     
     def check_stage_I(self, stock, context):
