@@ -181,7 +181,7 @@ class Buy_stocks(Rule):
                 cash_avg = cash_value / (self.buy_count - len(context.portfolio.positions.keys()))
                 value_avg = context.portfolio.total_value / self.buy_count
                 
-                if abs(cash_avg / value_avg - 1) > 0.191:
+                if cash_avg / value_avg - 1 > 0.191:
                     self.log.info("rebalance positions")
                     self.adjust_avg(context, data, self.to_buy)
                 else:
