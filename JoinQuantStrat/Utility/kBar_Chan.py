@@ -898,9 +898,9 @@ class KBarChan(object):
   
         if len(found_idx) > 0 and found_idx[-1] == working_df.size-2:
             if len(found_idx) >= 2:
-                check_price_result = float_less_equal(working_df['low'][found_idx[-1]], min(working_df['low'][found_idx[:-1]]))\
+                check_price_result = float_less_equal(working_df['low'][found_idx[-1]], min(self.kDataFrame_origin['low']))\
                                     if tb == TopBotType.bot else\
-                                    float_more_equal(working_df['high'][found_idx[-1]], max(working_df['high'][found_idx[:-1]]))
+                                    float_more_equal(working_df['high'][found_idx[-1]], max(self.kDataFrame_origin['high']))
             else:
                 check_price_result = False
             return True, check_price_result
