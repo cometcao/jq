@@ -1049,7 +1049,9 @@ class Short_Chan(Sell_stocks):
                 self.tentative_II.remove(stock)
                 return True
             
-            if self.use_check_top and self.check_top_shape(stock, context):
+            if self.use_check_top and\
+                self.check_top_shape(stock, context) and\
+                self.check_daily_boll_upper(stock, context):
                 self.log.info("STOP PROFIT {0}, top found".format(stock))
                 self.tentative_II.remove(stock)
                 return True
@@ -1069,13 +1071,14 @@ class Short_Chan(Sell_stocks):
                                fields=('close', 'high'), 
                                fq_ref_date=context.current_dt.date(),
                                df=False)
-        upper, middle, _ = talib.BBANDS(stock_data['close'], timeperiod=21, nbdevup=1.96, nbdevdn=1.96, matype=0)
+        upper, middle, lower = talib.BBANDS(stock_data['close'], timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
 #         print("stock: {0} \nupper {1}, \nmiddle {2}, \nhigh{3}".format(stock, upper[-2:], middle[-2:], stock_data['high'][-2:]))
-        return (float_less(stock_data['close'][-2], upper[-2]) and\
-                float_more_equal(stock_data['close'][-1], upper[-1])) or\
-                (float_less(stock_data['high'][-2], middle[-2]) and\
-                 float_more_equal(stock_data['high'][-1], middle[-1]) and\
-                 float_more_equal(middle[-2], middle[-1]))
+#         return (float_less(stock_data['close'][-2], upper[-2]) and\
+#                 float_more_equal(stock_data['close'][-1], upper[-1])) or\
+#                 (float_less(stock_data['high'][-2], middle[-2]) and\
+#                  float_more_equal(stock_data['high'][-1], middle[-1]) and\
+#                  float_more_equal(middle[-2], middle[-1]))
+        return float_more(lower[-1], lower[-2])
 
 
     def check_daily_ma13(self, stock, context):

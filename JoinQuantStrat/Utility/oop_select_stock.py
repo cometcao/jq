@@ -847,11 +847,11 @@ class Filter_Chan_Stocks(Filter_stock_list):
         for stock in self.tentative_stage_I:
             
             if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
-                if self.check_guide_price_reached(stock, context):
-                    stocks_to_remove_I.add(stock)
-                    if self.use_all_stocks_4_A:
-                        self.tentative_stage_A.add(stock) # skip first phase
-                    continue
+#                 if self.check_guide_price_reached(stock, context):
+#                     stocks_to_remove_I.add(stock)
+#                     if self.use_all_stocks_4_A and self.use_stage_A:
+#                         self.tentative_stage_A.add(stock) # skip first phase
+#                     continue
             
             check_result, zhongshu_changed = self.check_stage_I(stock, context)
             if zhongshu_changed:
@@ -896,7 +896,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             check_result, checked, in_region = self.check_stage_III(stock, context)
             if not in_region:
                 stocks_to_remove_III.add(stock)
-            elif check_result:
+            elif check_result and checked:
                 stocks_to_long.add(stock)
                 
         self.tentative_stage_III = self.tentative_stage_III.difference(stocks_to_remove_III)
