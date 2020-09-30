@@ -101,8 +101,6 @@ class Global_variable(object):
             return False
         # 通过当前价，四乘五入的计算要买的股票数。
         amount = int(round(value / cur_price / 100) * 100)
-        if amount == 0:
-            return True
         new_value = amount * cur_price
 
         if security in context.subportfolios[pindex].long_positions.keys() and\
