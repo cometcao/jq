@@ -400,10 +400,11 @@ class Buy_stocks_var(Buy_stocks):
                     pass
     
     def getOrderByRatio(self, current_ratio, target_ratio):
-        diff_ratio = [(stock, target_ratio[stock]-current_ratio[stock]) for stock in target_ratio if stock in current_ratio] \
-                    + [(stock, target_ratio[stock]) for stock in target_ratio if stock not in current_ratio] \
-                    + [(stock, 0.0) for stock in current_ratio if stock not in target_ratio]
-        diff_ratio.sort(key=lambda x: x[1]) # asc
+        diff_ratio = [(stock, 0.0) for stock in current_ratio if stock not in target_ratio] +\
+                     [(stock, target_ratio[stock]) for stock in target_ratio if stock in current_ratio] +\
+                     [(stock, target_ratio[stock]) for stock in target_ratio if stock not in current_ratio]
+#         diff_ratio.sort(key=lambda x: x[1]) # asc
+#         print("diff_ratio: {0}, target_ratio: {1} current_ratio: {2}".format(diff_ratio, target_ratio, current_ratio))
         return [stock for stock,_ in diff_ratio]
     
     def __str__(self):
@@ -1224,7 +1225,7 @@ class Short_Chan(Sell_stocks):
         return '缠论调仓卖出规则'
 
 
-class Long_Chan(Buy_stocks):  # Buy_stocks_portion
+class Long_Chan(Buy_stocks_var):  # Buy_stocks_portion
     def __init__(self, params):
         Buy_stocks_var.__init__(self, params)
         self.buy_count = params.get('buy_count', 3)

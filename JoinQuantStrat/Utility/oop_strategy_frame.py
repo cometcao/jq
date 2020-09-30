@@ -105,7 +105,8 @@ class Global_variable(object):
             return True
         new_value = amount * cur_price
 
-        if abs(1 - context.subportfolios[pindex].long_positions[security].value/new_value) <= 0.191:
+        if security in context.subportfolios[pindex].long_positions.keys() and\
+            abs(1 - context.subportfolios[pindex].long_positions[security].value/new_value) <= 0.055:
             return True # don't need to make adjustments
 
         order = order_target_value(security, new_value, pindex=pindex)
