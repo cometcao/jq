@@ -846,7 +846,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         for stock in self.tentative_stage_I:
             
-            if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
+#             if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
 #                 if self.check_guide_price_reached(stock, context):
 #                     stocks_to_remove_I.add(stock)
 #                     if self.use_all_stocks_4_A and self.use_stage_A:
