@@ -1588,11 +1588,15 @@ class NestedInterval():
             return False, False, []
         
         found_chan_type = False
-        for chan_t, chan_d, _ in chan_type_result: # early checks if we have any types found with opposite direction, no need to go further
+        for chan_t, chan_d, chan_p in chan_type_result: # early checks if we have any types found with opposite direction, no need to go further
             if chan_d == TopBotType.reverse(direction):
                 if self.isdebug:
                     print("opposite direction chan type found")
-                return False, False, []
+                return False, False, [(chan_t, 
+                                       chan_d, 
+                                       chan_p, 0, 0, 
+                                       anal_zoushi.zslx_result[-1].get_last_zoushi_time(), 
+                                       None)]
             
             if chan_t in chan_types:
                 found_chan_type = True
@@ -1600,7 +1604,12 @@ class NestedInterval():
         if not found_chan_type:
             if self.isdebug:
                 print("chan type {0} not found".format(chan_type_result))
-            return False, False, []
+            chan_t, chan_d, chan_p = chan_type_result[0]
+            return False, False, [(chan_t, 
+                                   chan_d, 
+                                   chan_p, 0, 0, 
+                                   anal_zoushi.zslx_result[-1].get_last_zoushi_time(), 
+                                   None)]
 
         # only type II and III can coexist, only need to check the first one
         # reverse direction case are dealt above

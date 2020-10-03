@@ -930,6 +930,19 @@ class Short_Chan(Sell_stocks):
                                                                     result,
                                                                     xd_result))
             self.tentative_I.add(stock)
+            return
+        
+        old_current_profile = self.g.stock_chan_type[stock][1]
+        
+        if c_profile:
+#         if float_more(current_data[stock].last_price / context.portfolio.positions[stock].avg_cost - 1, self.stop_profit):
+            old_price = old_current_profile[2][0] if type(old_current_profile[2]) is list else old_current_profile[2]
+            new_price = c_profile[0][2][0] if type(c_profile[0][2]) is list else c_profile[0][2]
+            if float_more(new_price, old_price):
+                print("Zhong Shu lifted:  {0} -> {1}, profit over threthold".format(old_price, new_price))
+                self.tentative_I.add(stock)
+                return
+            
 
 #         cur_result, cur_xd_result, cur_profile = check_chan_by_type_exhaustion(stock,
 #                                                                       end_time=context.current_dt, 
@@ -1051,7 +1064,7 @@ class Short_Chan(Sell_stocks):
                 return True
             
             if self.use_check_top and\
-                self.check_top_shape(stock, context) and\
+                self.check_top_shape(stock, context, ignore_top_shape=False) and\
                 self.check_daily_boll_upper(stock, context):
                 self.log.info("STOP PROFIT {0}, top found".format(stock))
                 self.tentative_II.remove(stock)
@@ -1093,7 +1106,7 @@ class Short_Chan(Sell_stocks):
         sma5 = stock_data['close'].values[-5:].sum() / 5
         return float_less(sma5, sma13)
 
-    def check_top_shape(self, stock, context):
+    def check_top_shape(self, stock, context, ignore_top_shape=True):
         
         if self.short_stage_II_timing and\
             (context.current_dt.hour != self.short_stage_II_timing[0] or\
@@ -1115,14 +1128,21 @@ class Short_Chan(Sell_stocks):
                       frequency='240m', 
                       skip_paused=True, 
                       panel=False, 
-                      fields=['high', 'low', 'close'])
+                      fields=['high', 'low', 'close', 'open'])
         
         stock_data['date'] = stock_data.index
         working_data_np = stock_data.to_records()
         kb_chan = KBarChan(working_data_np, isdebug=False)
         
         tb_result, _ = kb_chan.formed_tb(tb=TopBotType.top)
-        return tb_result
+        return tb_result and\
+            (ignore_top_shape or self.is_big_negative_stick(stock_data['open'][-1], 
+                                           stock_data['close'][-1], 
+                                           stock_data['high'][-1], 
+                                           stock_data['low'][-1]))
+            
+    def is_big_negative_stick(self, open, close, high, low):
+        return float_less(close, open) and float_more_equal((open-close)/(high-low), 0.618)
 
     def check_internal_vol_money(self, stock, context, c_profile, working_period):
 #         stock_data = get_price(stock,
