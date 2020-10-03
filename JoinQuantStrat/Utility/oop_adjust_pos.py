@@ -900,7 +900,14 @@ class Short_Chan(Sell_stocks):
     
     def process_stage_I(self, stock, context, min_time, working_period):
         current_data = get_current_data()
+        # reached high limit, if vol/money increase dramatically
         if float_more_equal(current_data[stock].last_price, current_data[stock].high_limit):
+            print("stock {0} reached high limit".format(stock))
+            self.tentative_I.add(stock)
+            self.short_stock_info[stock] = None
+            return
+        elif self.check_big_setback(stock, context):
+            print("stock {0} showed big setback".format(stock))
             self.tentative_I.add(stock)
             self.short_stock_info[stock] = None
             return
@@ -931,6 +938,10 @@ class Short_Chan(Sell_stocks):
                                                                     xd_result))
             self.tentative_I.add(stock)
             return
+        elif self.check_3_day_boll_upper(stock, context) and self.check_3_day_vol_money(stock, context):
+            print("STOP PROFIT {0} price reached upper bound".format(stock))
+            self.tentative_I.add(stock)
+            return
         
         old_current_profile = self.g.stock_chan_type[stock][1]
         
@@ -942,7 +953,8 @@ class Short_Chan(Sell_stocks):
                 print("Zhong Shu lifted:  {0} -> {1}, profit over threthold".format(old_price, new_price))
                 self.tentative_I.add(stock)
                 return
-            
+        
+        
 
 #         cur_result, cur_xd_result, cur_profile = check_chan_by_type_exhaustion(stock,
 #                                                                       end_time=context.current_dt, 
@@ -965,23 +977,19 @@ class Short_Chan(Sell_stocks):
 #                                                                     cur_result,
 #                                                                     cur_xd_result))
 #             self.tentative_I.add(stock)
-#         elif self.check_daily_boll_upper(stock, context) and self.check_daily_vol_money(stock, context):
-#             print("STOP PROFIT {0} price reached upper bound".format(stock))
-#             self.tentative_I.add(stock)
+
     
-    def check_daily_vol_money(self, stock, context):
+    def check_3_day_vol_money(self, stock, context):
         # three days vol must decrease!
         stock_data = get_price(security=stock, 
                       end_date=context.current_dt, 
-                      count = 4,
+                      count = 6,
                       frequency='120m', 
                       skip_paused=True, 
                       panel=False, 
                       fields=['money'])
         
-        cur_ratio = sum(stock_data['money'][-2:]) / sum(stock_data['money'][-4:-2])
-#         if float_less_equal(cur_ratio, 0.809):
-#             return True
+        cur_ratio = sum(stock_data['money'][-3:]) / sum(stock_data['money'][-6:-3])
         if float_more_equal(cur_ratio, 1.191):
             return True
         return False
@@ -1065,7 +1073,7 @@ class Short_Chan(Sell_stocks):
             
             if self.use_check_top and\
                 self.check_top_shape(stock, context, ignore_top_shape=False) and\
-                self.check_daily_boll_upper(stock, context):
+                self.check_daily_boll_top(stock, context):
                 self.log.info("STOP PROFIT {0}, top found".format(stock))
                 self.tentative_II.remove(stock)
                 return True
@@ -1076,7 +1084,7 @@ class Short_Chan(Sell_stocks):
             
         return False
 
-    def check_daily_boll_upper(self, stock, context):
+    def check_daily_boll_top(self, stock, context):
         stock_data = get_bars(stock,
                                count=50,
                                end_dt=context.current_dt, 
@@ -1086,13 +1094,21 @@ class Short_Chan(Sell_stocks):
                                fq_ref_date=context.current_dt.date(),
                                df=False)
         upper, middle, lower = talib.BBANDS(stock_data['close'], timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
-#         print("stock: {0} \nupper {1}, \nmiddle {2}, \nhigh{3}".format(stock, upper[-2:], middle[-2:], stock_data['high'][-2:]))
-#         return (float_less(stock_data['close'][-2], upper[-2]) and\
-#                 float_more_equal(stock_data['close'][-1], upper[-1])) or\
-#                 (float_less(stock_data['high'][-2], middle[-2]) and\
-#                  float_more_equal(stock_data['high'][-1], middle[-1]) and\
-#                  float_more_equal(middle[-2], middle[-1]))
         return float_more(lower[-1], lower[-2])
+    
+    def check_3_day_boll_upper(self, stock, context):
+        stock_data = get_bars(stock,
+                               count=50,
+                               end_dt=context.current_dt, 
+                               unit='1d', # use super level
+                               include_now=True, 
+                               fields=('close', 'high'), 
+                               fq_ref_date=context.current_dt.date(),
+                               df=False)
+        upper, _, _ = talib.BBANDS(stock_data['close'], timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
+        return (float_more_equal(stock_data['high'][-3], upper[-3]) and\
+                float_more_equal(stock_data['high'][-2], upper[-2]) and\
+                float_more_equal(stock_data['high'][-1], upper[-1]))
 
 
     def check_daily_ma13(self, stock, context):
@@ -1143,6 +1159,23 @@ class Short_Chan(Sell_stocks):
             
     def is_big_negative_stick(self, open, close, high, low):
         return float_less(close, open) and float_more_equal((open-close)/(high-low), 0.618)
+    
+    def is_big_setback(self, open, close, high, low):
+        return float_more_equal((high-close)/(high-low), 0.618)
+
+    def check_big_setback(self, stock, context):
+        stock_data = get_bars(stock, 
+                            count=1, # 5d
+                            unit='1d',
+                            fields=['date','open', 'close', 'high', 'low'],
+                            include_now=True, 
+                            end_dt=context.current_dt, 
+                            fq_ref_date=context.current_dt.date(), 
+                            df=False)
+        return self.is_big_setback(stock_data['open'][-1], 
+                                   stock_data['close'][-1], 
+                                   stock_data['high'][-1], 
+                                   stock_data['low'][-1])
 
     def check_internal_vol_money(self, stock, context, c_profile, working_period):
 #         stock_data = get_price(stock,
