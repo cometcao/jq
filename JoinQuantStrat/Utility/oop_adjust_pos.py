@@ -1243,13 +1243,11 @@ class Short_Chan(Sell_stocks):
 
         for stock in to_check:
             if self.check_stop_loss(stock, context):
-                self.short_stock_info.pop(stock, None)
                 self.to_sell.add(stock)
                 self.g.all_neg_return_stocks.add(stock)
                 continue
             
             if self.check_stop_profit(stock, context):
-                self.short_stock_info.pop(stock, None)
                 self.to_sell.add(stock)
                 self.g.all_pos_return_stocks.add(stock)
         self.adjust(context, data, self.to_sell)
@@ -1272,6 +1270,14 @@ class Short_Chan(Sell_stocks):
             if stock not in context.portfolio.positions:
                 self.tentative_I.discard(stock)
                 self.tentative_II.discard(stock)
+        
+        short_info_discard = set()
+        for stock in self.short_stock_info:
+            if stock not in context.portfolio.positions:
+                short_info_discard.add(stock)
+        
+        [self.short_stock_info.pop(stock, None) for stock in short_info_discard]
+            
         self.log.info("stocks to be sold: {0}".format(self.to_sell))
 
     def __str__(self):
