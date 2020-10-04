@@ -1155,11 +1155,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return bot_result and boll_result, checked, in_region
     
     def check_stage_A(self, stock, context):
-        result, zs_changed = self.check_stage_A_full(stock, context)
-#         if not result:
-#             result = (self.check_daily_boll_lower(stock, context) and\
-#                       self.check_stage_A_vol(stock, context))
-        return result, zs_changed
+        result, zs_changed = self.check_stage_A_cur(stock, context)
+        return result and self.check_stage_A_vol(stock, context), zs_changed
     
     def check_stage_A_vol(self, stock, context):
         return self.check_internal_vol_money(stock, context)
@@ -1168,29 +1165,33 @@ class Filter_Chan_Stocks(Filter_stock_list):
         result = False
         zhongshu_changed = False
         
-        cur_result, cur_xd_result, cur_profile = check_chan_by_type_exhaustion(stock,
-                                                                      end_time=context.current_dt, 
-                                                                      periods=[self.periods[0]], 
-                                                                      count=self.num_of_data, 
-                                                                      direction=TopBotType.top2bot,
-                                                                      chan_type=self.stage_A_types, 
-                                                                      isdebug=self.isdebug, 
-                                                                      is_description=False,
-                                                                      check_structure=True,
-                                                                      check_full_zoushi=False,
-                                                                      slope_only=False)
-        exhaustion_result = cur_result and (cur_xd_result or self.ignore_xd)
+        result, xd_result, c_profile, sub_zhongshu_formed = check_stock_sub(stock,
+                                              end_time=context.current_dt,
+                                              periods=[self.periods[0]],
+                                              count=self.num_of_data,
+                                              direction=TopBotType.top2bot,
+                                              chan_types=self.stage_A_types,
+                                              isdebug=self.isdebug,
+                                              is_description=self.isDescription,
+                                              is_anal=False,
+                                              split_time=None,
+                                              check_bi=False,
+                                              allow_simple_zslx=False,
+                                              force_zhongshu=False,
+                                              check_full_zoushi=False,
+                                              ignore_sub_xd=False)
+        exhaustion_result = result and (xd_result or self.ignore_xd)
         
         old_current_profile = self.g.stock_chan_type[stock][1]
         if len(self.g.stock_chan_type[stock]) > 1 and\
             old_current_profile[0] in self.stage_A_types:
             old_current_p = old_current_profile[2][0] if type(old_current_profile[2]) is list else old_current_profile[2]
-            current_p = cur_profile[0][2][0] if type(cur_profile[0][2]) is list else cur_profile[0][2]
+            current_p = c_profile[0][2][0] if type(c_profile[0][2]) is list else c_profile[0][2]
             zhongshu_changed = current_p != old_current_p
 
-        if cur_profile[0][0] in self.stage_A_types and stock not in context.portfolio.positions.keys():
+        if c_profile[0][0] in self.stage_A_types and stock not in context.portfolio.positions.keys():
             self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] +\
-                                                                    cur_profile +\
+                                                                    c_profile +\
                                             [(Chan_Type.INVALID,
                                                TopBotType.top2bot,
                                                0,
@@ -1199,10 +1200,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                None,
                                                context.current_dt, 
                                                )]# fit the results
-        
-        result = exhaustion_result or self.check_internal_vol_money(stock, context)
-#         return exhaustion_result, zhongshu_changed
-        return result, zhongshu_changed
+        return exhaustion_result, zhongshu_changed
             
 
     def check_stage_A_full(self, stock, context):
