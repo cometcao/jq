@@ -835,7 +835,7 @@ class Equilibrium():
                 return True, xd_exhaustion, last_zoushi_time, ts, 0, 0
             
         if not self.check_zoushi_structure(self.analytic_result, at_bi_level, enable_composite):
-            return False, False, last_zoushi_time, None, 0, 0
+            return False, False, last_zoushi_time, last_zoushi_time, 0, 0
         
         # if we only have one zhongshu / ZSLX we can only rely on the xd level check
         if len(self.analytic_result) < 2:
@@ -843,7 +843,7 @@ class Equilibrium():
                 if self.force_zhongshu:
                     if self.isdebug:
                         print("ZhongShu not yet formed, force zhongshu return False")
-                    return False, False, last_zoushi_time, None, 0, 0
+                    return False, False, last_zoushi_time, last_zoushi_time, 0, 0
                 
                 if self.isdebug:
                     print("ZhongShu not yet formed, only check ZSLX exhaustion")
@@ -878,7 +878,7 @@ class Equilibrium():
                                            enable_ac_opposite_direction=enable_ac_opposite_direction):
             return self.check_exhaustion(a, c, new_high_low)
         else:
-            return False, False, last_zoushi_time, None, 0, 0
+            return False, False, last_zoushi_time, last_zoushi_time, 0, 0
     
     def check_equilibrium_structure(self, 
                                zslx_a, 
