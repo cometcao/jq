@@ -909,7 +909,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stocks_to_remove_A = set()
             for stock in self.tentative_stage_A:
                 if stock not in context.portfolio.positions.keys():
-                    ready = self.check_stage_A_vol(stock, context)
+                    ready = self.check_stage_A(stock, context)
 #                     if zhongshu_changed:
 #                         stocks_to_remove_A.add(stock)
                     if ready:
@@ -931,7 +931,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                     stage_B_long.add(stock)
                 elif check_result and stock in self.g.all_pos_return_stocks:
                     stage_B_long.add(stock)
-                elif not in_region:
+                elif check_result:
                     stocks_to_remove_B.add(stock)
                     
             self.tentative_stage_B = self.tentative_stage_B.difference(stage_B_long)
@@ -1028,9 +1028,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
                       fields=['money'])
         
         cur_ratio = sum(stock_data['money'][-2:]) / sum(stock_data['money'][-4:-2])
-        if float_less_equal(cur_ratio, 0.809):
+        if float_less_equal(cur_ratio, 0.618):
             return True
-        if float_more_equal(cur_ratio, 1.191):
+        if float_more_equal(cur_ratio, 1.382):
             return True
         return False
     
@@ -1152,14 +1152,47 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         bot_result, checked = self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=False)
         boll_result, in_region = self.check_daily_boll_lower(stock, context)
-        return bot_result and boll_result, checked, in_region
+        return bot_result, checked, in_region
     
     def check_stage_A(self, stock, context):
-        result, zs_changed = self.check_stage_A_cur(stock, context)
-        return result and self.check_stage_A_vol(stock, context), zs_changed
+        return self.check_stage_A_boll(stock, context) and self.check_stage_A_vol(stock, context)
+    
+    def check_stage_A_boll(self, stock, context):
+        stock_data = get_bars(stock,
+                               count=50,
+                               end_dt=context.current_dt, 
+                               unit='1d', # use super level
+                               include_now=True, 
+                               fields=('close', 'low', 'high'), 
+                               fq_ref_date=context.current_dt.date(),
+                               df=False)
+        upper, middle, lower = talib.BBANDS(stock_data['close'], timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
+        return float_less(stock_data['low'][-1],middle[-1])
+    
+    def check_stage_A_sub(self, stock, context):
+        result, xd_result, s_profile, sub_zhongshu_formed = check_stock_sub(stock,
+                                              end_time=context.current_dt,
+                                              periods=[self.periods[1]],
+                                              count=self.num_of_data,
+                                              direction=TopBotType.top2bot,
+                                              chan_types=self.stage_A_types,
+                                              isdebug=self.isdebug,
+                                              is_description=self.isDescription,
+                                              is_anal=False,
+                                              split_time=None,
+                                              check_bi=False,
+                                              allow_simple_zslx=False,
+                                              force_zhongshu=False,
+                                              check_full_zoushi=False,
+                                              ignore_sub_xd=False)
+        exhaustion_result = result and (xd_result or self.ignore_xd)
+        
+        self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0], self.g.stock_chan_type[stock][1]] +\
+                                                                s_profile
+        return exhaustion_result
     
     def check_stage_A_vol(self, stock, context):
-        return self.check_internal_vol_money(stock, context)
+        return self.check_daily_vol_money(stock, context)
     
     def check_stage_A_cur(self, stock, context):
         result = False
@@ -1425,7 +1458,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #             enhanced_list = [stock for stock in enhanced_list if stock in self.g.all_return_stocks]
 #             enhanced_list = self.filter_enhanced_stock_by_return(enhanced_list)
                 
-        self.log.info("\nStocks ready: Bei Chi: {0}, stage IV: {1},\ntentative I: {2},\ntentative II: {3},\ntentative III:{4}, \ntentative A:{5} \ntentative B:{6}".format(
+        self.g.all_pos_return_stocks = self.g.all_pos_return_stocks.difference(enhanced_list)
+        self.g.all_neg_return_stocks = self.g.all_neg_return_stocks.difference(enhanced_list)
+        
+        self.log.info("\nStocks ready: Bei Chi: {0}, stage B: {1},\ntentative I: {2},\ntentative II: {3},\ntentative III:{4}, \ntentative A:{5} \ntentative B:{6}".format(
                                                                       beichi_list, 
                                                                       enhanced_list,
                                                                       self.tentative_stage_I,
@@ -1448,8 +1484,6 @@ class Filter_Chan_Stocks(Filter_stock_list):
             if stock in self.g.all_neg_return_stocks and stock_chan_cur_type in self.stage_A_neg_return_types:
                 qualified_stocks.add(stock)
         
-        self.g.all_pos_return_stocks = self.g.all_pos_return_stocks.difference(stocks)
-        self.g.all_neg_return_stocks = self.g.all_neg_return_stocks.difference(stocks)
         return list(qualified_stocks)
 
     def sort_by_sector_order(self, stock_list):
