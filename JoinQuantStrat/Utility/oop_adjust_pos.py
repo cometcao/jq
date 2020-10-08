@@ -897,20 +897,35 @@ class Short_Chan(Sell_stocks):
             
             return False
     
+    def check_exceptional_money_spike(self, stock, context):
+        stock_data = get_bars(stock, 
+                            count=2, # 5d
+                            unit='1d',
+                            fields=['date','money'],
+                            include_now=True, 
+                            end_dt=context.current_dt, 
+                            fq_ref_date=context.current_dt.date(), 
+                            df=False)
+        
+        cur_ratio = stock_data['money'][-1] / stock_data['money'][-2]
+        if float_more_equal(cur_ratio, 1.809):
+            return True
+        return False
     
     def process_stage_I(self, stock, context, min_time, working_period):
         current_data = get_current_data()
         # reached high limit, if vol/money increase dramatically
-        if float_more_equal(current_data[stock].last_price, current_data[stock].high_limit):
-            print("stock {0} reached high limit".format(stock))
-            self.tentative_I.add(stock)
-            self.short_stock_info[stock] = None
-            return
-        elif self.check_big_setback(stock, context):
-            print("stock {0} showed big setback".format(stock))
-            self.tentative_I.add(stock)
-            self.short_stock_info[stock] = None
-            return
+        if self.check_exceptional_money_spike(stock, context):
+            if float_more_equal(current_data[stock].last_price, current_data[stock].high_limit):
+                print("stock {0} reached high limit".format(stock))
+                self.tentative_I.add(stock)
+                self.short_stock_info[stock] = None
+                return
+            elif self.check_big_setback(stock, context):
+                print("stock {0} showed big setback".format(stock))
+                self.tentative_I.add(stock)
+                self.short_stock_info[stock] = None
+                return
 
         result, xd_result, c_profile, sub_zhongshu_formed = check_stock_sub(stock,
                                               end_time=context.current_dt,
@@ -1038,6 +1053,7 @@ class Short_Chan(Sell_stocks):
             if self.check_internal_vol_money(stock, context, c_profile, self.current_period):
                 self.tentative_I.remove(stock)
                 if c_profile is None: # reached high limit
+                    print("stock {0} sold skipping stage II".format(stock))
                     return True
                 self.tentative_II.add(stock)
             
@@ -1175,34 +1191,11 @@ class Short_Chan(Sell_stocks):
         return self.is_big_setback(stock_data['open'][-1], 
                                    stock_data['close'][-1], 
                                    stock_data['high'][-1], 
-                                   stock_data['low'][-1])
+                                   stock_data['low'][-1]) and float_less(stock['close'][-1], stock['open'][-1])
 
     def check_internal_vol_money(self, stock, context, c_profile, working_period):
-#         stock_data = get_price(stock,
-#                                count=13, 
-#                                end_date=context.current_dt, 
-#                                frequency='240m',
-#                                fields=('close'), 
-#                                skip_paused=False)
-#         sma13 = stock_data['close'].values[-13:].sum() / 13
-#         sma5 = stock_data['close'].values[-5:].sum() / 5
-#         if float_less_equal(sma5, sma13): # sm5 must be above sm13
-#             return False
-        
-        if c_profile is None:
-            stock_data = get_bars(stock, 
-                                count=2, # 5d
-                                unit='1d',
-                                fields=['date','money'],
-                                include_now=True, 
-                                end_dt=context.current_dt, 
-                                fq_ref_date=context.current_dt.date(), 
-                                df=False)
-            
-            cur_ratio = stock_data['money'][-1] / stock_data['money'][-2]
-            if float_more_equal(cur_ratio, 1.809):
-                return True
-            
+        if c_profile is None: # special case
+            return True
         else:
             stock_data = get_bars(stock, 
                                 count=2000, # 5d
@@ -1284,9 +1277,9 @@ class Short_Chan(Sell_stocks):
         return '缠论调仓卖出规则'
 
 
-class Long_Chan(Buy_stocks_var):  # Buy_stocks_portion
+class Long_Chan(Buy_stocks):  # Buy_stocks_portion
     def __init__(self, params):
-        Buy_stocks_var.__init__(self, params)
+        Buy_stocks.__init__(self, params)
         self.buy_count = params.get('buy_count', 3)
         self.force_price_check = params.get('force_price_check', True)
         self.expected_profit = params.get('expected_profit', 0.03)
