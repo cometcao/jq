@@ -1191,7 +1191,7 @@ class Short_Chan(Sell_stocks):
         return self.is_big_setback(stock_data['open'][-1], 
                                    stock_data['close'][-1], 
                                    stock_data['high'][-1], 
-                                   stock_data['low'][-1]) and float_less(stock['close'][-1], stock['open'][-1])
+                                   stock_data['low'][-1]) and float_less(stock_data['close'][-1], stock_data['open'][-1])
 
     def check_internal_vol_money(self, stock, context, c_profile, working_period):
         if c_profile is None: # special case
