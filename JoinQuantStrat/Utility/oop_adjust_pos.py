@@ -912,21 +912,37 @@ class Short_Chan(Sell_stocks):
             return True
         return False
     
-    def process_stage_I(self, stock, context, min_time, working_period):
+    def check_high_limit_money_spike(self, stock, context):
+        stock_data = get_bars(stock, 
+                            count=2, # 5d
+                            unit='1d',
+                            fields=['date','money'],
+                            include_now=True, 
+                            end_dt=context.current_dt, 
+                            fq_ref_date=context.current_dt.date(), 
+                            df=False)
+        
+        cur_ratio = stock_data['money'][-1] / stock_data['money'][-2]
+        if float_more_equal(cur_ratio, 5.618):
+            return True
+        return False
+    
+    def check_exceptional_case(self, stock, context):
         current_data = get_current_data()
         # reached high limit, if vol/money increase dramatically
-        if self.check_exceptional_money_spike(stock, context):
-            if float_more_equal(current_data[stock].last_price, current_data[stock].high_limit):
+        if self.check_high_limit_money_spike(stock, context) and\
+            self.high_limit_sequence_break(stock, context):
                 print("stock {0} reached high limit".format(stock))
                 self.tentative_I.add(stock)
-                self.short_stock_info[stock] = None
-                return
-            elif self.check_big_setback(stock, context):
+                return True
+        if self.check_exceptional_money_spike(stock, context) and\
+            self.check_big_setback(stock, context):
                 print("stock {0} showed big setback".format(stock))
                 self.tentative_I.add(stock)
-                self.short_stock_info[stock] = None
-                return
-
+                return True
+        return False
+    
+    def process_stage_I(self, stock, context, min_time, working_period):
         result, xd_result, c_profile, sub_zhongshu_formed = check_stock_sub(stock,
                                               end_time=context.current_dt,
                                               periods=[working_period],
@@ -1014,8 +1030,9 @@ class Short_Chan(Sell_stocks):
         latest_price = get_current_data()[stock].last_price
         avg_cost = context.portfolio.positions[stock].avg_cost
         # short circuit
-#         if avg_cost > context.portfolio.positions[stock].price:
-#             return False
+        if self.check_exceptional_case(stock, context):
+            print("stock {0} sold skipping stage checks".format(stock))
+            return True
         
         position_time = context.portfolio.positions[stock].transact_time
         current_profile = self.g.stock_chan_type[stock][1]
@@ -1052,9 +1069,6 @@ class Short_Chan(Sell_stocks):
             c_profile = self.short_stock_info[stock]
             if self.check_internal_vol_money(stock, context, c_profile, self.current_period):
                 self.tentative_I.remove(stock)
-                if c_profile is None: # reached high limit
-                    print("stock {0} sold skipping stage II".format(stock))
-                    return True
                 self.tentative_II.add(stock)
             
         if stock in self.tentative_II:
@@ -1068,11 +1082,11 @@ class Short_Chan(Sell_stocks):
                                                   is_description=self.isDescription,
                                                   is_anal=False,
                                                   split_time=min_time,
-                                                  check_bi=False,
+                                                  check_bi=True,
                                                   allow_simple_zslx=False,
                                                   force_zhongshu=True,
                                                   check_full_zoushi=False,
-                                                  ignore_sub_xd=False)
+                                                  ignore_sub_xd=True)
             if sub_exhausted and sub_xd_exhausted:
                 print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
                                                                             self.sub_period,
@@ -1192,6 +1206,33 @@ class Short_Chan(Sell_stocks):
                                    stock_data['close'][-1], 
                                    stock_data['high'][-1], 
                                    stock_data['low'][-1]) and float_less(stock_data['close'][-1], stock_data['open'][-1])
+
+    def is_sequential_high_limit(self, stock, context):
+        h = attribute_history(stock, 
+                              2, 
+                              unit='1d', 
+                              fields=('open', 'close', 'high', 'low', 'high_limit'), 
+                              skip_paused=True,
+                              df=False)
+        return float_equal(h['open'][-2], h['close'][-2]) and\
+                float_equal(h['close'][-2], h['high'][-2]) and\
+                float_equal(h['high'][-2], h['low'][-2]) and\
+                float_equal(h['low'][-2], h['high_limit'][-2])
+
+    def high_limit_sequence_break(self, stock, context):
+        current_data = get_current_data()
+        stock_data = get_bars(stock, 
+                            count=2, # 5d
+                            unit='1d',
+                            fields=['date','open', 'close', 'high', 'low'],
+                            include_now=True, 
+                            end_dt=context.current_dt, 
+                            fq_ref_date=context.current_dt.date(), 
+                            df=False)
+        if not float_equal(current_data[stock].high_limit, stock_data['low'][-1]) and\
+            self.is_sequential_high_limit(stock, context):
+            return True
+        return False
 
     def check_internal_vol_money(self, stock, context, c_profile, working_period):
         if c_profile is None: # special case
