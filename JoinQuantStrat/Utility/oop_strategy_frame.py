@@ -69,6 +69,7 @@ class Global_variable(object):
     industry_sector_list = [] # record industry sector names
     all_pos_return_stocks = set()
     all_neg_return_stocks = set()
+    enchanced_long_stocks = set()
 
     def __init__(self, owner):
         self._owner = owner

@@ -14,7 +14,7 @@ from ta_analysis import *
 from oop_strategy_frame import *
 from position_control_analysis import *
 from rsrs_timing import *
-from chan_common_include import Chan_Type, float_more_equal, GOLDEN_RATIO, float_less_equal
+from chan_common_include import Chan_Type, float_more_equal, GOLDEN_RATIO, float_less_equal, float_equal
 from equilibrium import check_chan_indepth, check_stock_sub, check_chan_by_type_exhaustion, check_stock_full, sanity_check
 from biaoLiStatus import TopBotType
 from kBar_Chan import *
@@ -929,18 +929,19 @@ class Short_Chan(Sell_stocks):
     
     def check_exceptional_case(self, stock, context):
         current_data = get_current_data()
+        current_high_limited = float_equal(current_data[stock].last_price, current_data[stock].high_limit)
         # reached high limit, if vol/money increase dramatically
         if self.check_high_limit_money_spike(stock, context) and\
             self.high_limit_sequence_break(stock, context):
                 print("stock {0} reached high limit".format(stock))
                 self.tentative_I.add(stock)
-                return True
+                return True, current_high_limited
         if self.check_exceptional_money_spike(stock, context) and\
             self.check_big_setback(stock, context):
                 print("stock {0} showed big setback".format(stock))
                 self.tentative_I.add(stock)
-                return True
-        return False
+                return True, current_high_limited
+        return False, current_high_limited
     
     def process_stage_I(self, stock, context, min_time, working_period):
         result, xd_result, c_profile, sub_zhongshu_formed = check_stock_sub(stock,
@@ -967,10 +968,6 @@ class Short_Chan(Sell_stocks):
                                                                     working_period,
                                                                     result,
                                                                     xd_result))
-            self.tentative_I.add(stock)
-            return
-        elif self.check_3_day_boll_upper(stock, context) and self.check_3_day_vol_money(stock, context):
-            print("STOP PROFIT {0} price reached upper bound".format(stock))
             self.tentative_I.add(stock)
             return
         
@@ -1030,9 +1027,19 @@ class Short_Chan(Sell_stocks):
         latest_price = get_current_data()[stock].last_price
         avg_cost = context.portfolio.positions[stock].avg_cost
         # short circuit
-        if self.check_exceptional_case(stock, context):
+        check_exception_filled, high_limited = self.check_exceptional_case(stock, context)
+        if check_exception_filled:
             print("stock {0} sold skipping stage checks".format(stock))
             return True
+        if high_limited:
+            print("stock {0} ZHANGTING, we hold it".format(stock))
+            return False
+        
+        if stock not in self.tentative_II and self.check_3_day_boll_upper(stock, context) and self.check_3_day_vol_money(stock, context):
+            print("stock {0} price reached upper bound THREE TIMES promote to stage II".format(stock))
+            self.tentative_II.add(stock)
+            self.tentative_I.discard(stock)
+            return
         
         position_time = context.portfolio.positions[stock].transact_time
         current_profile = self.g.stock_chan_type[stock][1]
@@ -1072,29 +1079,32 @@ class Short_Chan(Sell_stocks):
                 self.tentative_II.add(stock)
             
         if stock in self.tentative_II:
-            sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
-                                                  end_time=context.current_dt,
-                                                  periods=['1m' if self.sub_period == 'bi' else self.sub_period],
-                                                  count=2000,
-                                                  direction=TopBotType.bot2top,
-                                                  chan_types=[Chan_Type.I, Chan_Type.I_weak, Chan_Type.INVALID],
-                                                  isdebug=self.isdebug,
-                                                  is_description=self.isDescription,
-                                                  is_anal=False,
-                                                  split_time=min_time,
-                                                  check_bi=True,
-                                                  allow_simple_zslx=False,
-                                                  force_zhongshu=True,
-                                                  check_full_zoushi=False,
-                                                  ignore_sub_xd=True)
-            if sub_exhausted and sub_xd_exhausted:
-                print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
-                                                                            self.sub_period,
-                                                                            sub_exhausted,
-                                                                            sub_xd_exhausted,
-                                                                            sub_zhongshu_formed))
-                self.tentative_II.remove(stock)
-                return True
+#             if stock not in self.g.enchanced_long_stocks:
+#                 sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
+#                                                       end_time=context.current_dt,
+#                                                       periods=['1m' if self.sub_period == 'bi' else self.sub_period],
+#                                                       count=2000,
+#                                                       direction=TopBotType.bot2top,
+#                                                       chan_types=[Chan_Type.I, Chan_Type.I_weak, Chan_Type.INVALID],
+#                                                       isdebug=self.isdebug,
+#                                                       is_description=self.isDescription,
+#                                                       is_anal=False,
+#                                                       split_time=min_time,
+#                                                       check_bi=True,
+#                                                       allow_simple_zslx=False,
+#                                                       force_zhongshu=True,
+#                                                       check_full_zoushi=False,
+#                                                       ignore_sub_xd=True)
+#                 if sub_exhausted and sub_xd_exhausted:
+#                     print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
+#                                                                                 self.sub_period,
+#                                                                                 sub_exhausted,
+#                                                                                 sub_xd_exhausted,
+#                                                                                 sub_zhongshu_formed))
+#                     self.tentative_II.remove(stock)
+#                     return True
+#             else:
+#                 print("stock {0} in enhanced list, we skip sub level check".format(stock))
         
             if self.use_ma13 and self.check_daily_ma13(stock, context):
                 print("STOP PROFIT {0} ma5 below ma13".format(stock))
@@ -1108,9 +1118,9 @@ class Short_Chan(Sell_stocks):
                 self.tentative_II.remove(stock)
                 return True
         
-        if current_chan_t == Chan_Type.INVALID and (latest_price / avg_cost - 1) >= self.stop_profit:
-            self.log.info("{0} HARDCORE stop profit: {1} -> {2}".format(stock, latest_price, avg_cost))
-            return True
+#         if current_chan_t == Chan_Type.INVALID and (latest_price / avg_cost - 1) >= self.stop_profit:
+#             self.log.info("{0} HARDCORE stop profit: {1} -> {2}".format(stock, latest_price, avg_cost))
+#             return True
             
         return False
 
@@ -1160,21 +1170,30 @@ class Short_Chan(Sell_stocks):
             return False
         
         current_profile = self.short_stock_info[stock]
-#         current_profile = self.g.stock_chan_type[stock]
-        current_zoushi_start_time = current_profile[0][5]
-        current_effective_time = current_profile[0][6]
-
-        data_start_time = str(current_zoushi_start_time.date()) + " {0}:{1}:00".format(self.short_stage_II_timing[0], 
-                                                                                       self.short_stage_II_timing[1]+1) 
         
-        stock_data = get_price(security=stock, 
-                      end_date=context.current_dt, 
-                      start_date=data_start_time, 
-#                       count = 20,
-                      frequency='240m', 
-                      skip_paused=True, 
-                      panel=False, 
-                      fields=['high', 'low', 'close', 'open'])
+        if current_profile is not None and current_profile:
+            current_zoushi_start_time = current_profile[0][5]
+            current_effective_time = current_profile[0][6]
+    
+            data_start_time = str(current_zoushi_start_time.date()) + " {0}:{1}:00".format(self.short_stage_II_timing[0], 
+                                                                                           self.short_stage_II_timing[1]+1) 
+            
+            stock_data = get_price(security=stock, 
+                          end_date=context.current_dt, 
+                          start_date=data_start_time, 
+                          frequency='240m', 
+                          skip_paused=True, 
+                          panel=False, 
+                          fields=['high', 'low', 'close', 'open'])
+        else:
+            print ("stock {0} missing profile using count 20".format(stock))
+            stock_data = get_price(security=stock, 
+                          end_date=context.current_dt, 
+                          count = 20,
+                          frequency='240m', 
+                          skip_paused=True, 
+                          panel=False, 
+                          fields=['high', 'low', 'close', 'open'])
         
         stock_data['date'] = stock_data.index
         working_data_np = stock_data.to_records()

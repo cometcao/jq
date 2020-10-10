@@ -1448,6 +1448,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
         # other stages also follows time constrains
         # deal with all tentative stocks
         beichi_list, enhanced_list = self.check_tentative_stocks(context)
+        self.g.enchanced_long_stocks = self.g.enchanced_long_stocks.union(enhanced_list)
+        
         beichi_list, enhanced_list = list(beichi_list), list(enhanced_list)
         
         # sort by sectors again
@@ -1460,6 +1462,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 
         self.g.all_pos_return_stocks = self.g.all_pos_return_stocks.difference(enhanced_list)
         self.g.all_neg_return_stocks = self.g.all_neg_return_stocks.difference(enhanced_list)
+        
         
         self.log.info("\nStocks ready: Bei Chi: {0}, stage B: {1},\ntentative I: {2},\ntentative II: {3},\ntentative III:{4}, \ntentative A:{5} \ntentative B:{6}".format(
                                                                       beichi_list, 
@@ -1510,6 +1513,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                               stock not in self.tentative_stage_A and\
                                                               stock not in self.tentative_stage_B)]
         [self.g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
+        self.g.enchanced_long_stocks = self.g.enchanced_long_stocks.intersection(set(holding_pos))
+        
         self.log.info("position chan info: {0}".format(self.g.stock_chan_type.keys()))
 
 class Filter_Pair_Trading(Filter_stock_list):
