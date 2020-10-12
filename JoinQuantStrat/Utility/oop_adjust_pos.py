@@ -1074,37 +1074,39 @@ class Short_Chan(Sell_stocks):
         
         if stock in self.tentative_I and stock not in self.tentative_II:
             c_profile = self.short_stock_info[stock]
-            if self.check_internal_vol_money(stock, context, c_profile, self.current_period):
+            # after stage I, we have enough vol or we have reached guide price
+            if self.check_internal_vol_money(stock, context, c_profile, self.current_period) or\
+                float_more(latest_price, current_chan_p):
                 self.tentative_I.remove(stock)
                 self.tentative_II.add(stock)
             
         if stock in self.tentative_II:
-#             if stock not in self.g.enchanced_long_stocks:
-#                 sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
-#                                                       end_time=context.current_dt,
-#                                                       periods=['1m' if self.sub_period == 'bi' else self.sub_period],
-#                                                       count=2000,
-#                                                       direction=TopBotType.bot2top,
-#                                                       chan_types=[Chan_Type.I, Chan_Type.I_weak, Chan_Type.INVALID],
-#                                                       isdebug=self.isdebug,
-#                                                       is_description=self.isDescription,
-#                                                       is_anal=False,
-#                                                       split_time=min_time,
-#                                                       check_bi=True,
-#                                                       allow_simple_zslx=False,
-#                                                       force_zhongshu=True,
-#                                                       check_full_zoushi=False,
-#                                                       ignore_sub_xd=True)
-#                 if sub_exhausted and sub_xd_exhausted:
-#                     print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
-#                                                                                 self.sub_period,
-#                                                                                 sub_exhausted,
-#                                                                                 sub_xd_exhausted,
-#                                                                                 sub_zhongshu_formed))
-#                     self.tentative_II.remove(stock)
-#                     return True
-#             else:
-#                 print("stock {0} in enhanced list, we skip sub level check".format(stock))
+            if stock not in self.g.enchanced_long_stocks:
+                sub_exhausted, sub_xd_exhausted, _, sub_zhongshu_formed = check_stock_sub(stock,
+                                                      end_time=context.current_dt,
+                                                      periods=['1m' if self.sub_period == 'bi' else self.sub_period],
+                                                      count=2000,
+                                                      direction=TopBotType.bot2top,
+                                                      chan_types=[Chan_Type.I, Chan_Type.I_weak, Chan_Type.INVALID],
+                                                      isdebug=self.isdebug,
+                                                      is_description=self.isDescription,
+                                                      is_anal=False,
+                                                      split_time=min_time,
+                                                      check_bi=True,
+                                                      allow_simple_zslx=False,
+                                                      force_zhongshu=True,
+                                                      check_full_zoushi=False,
+                                                      ignore_sub_xd=True)
+                if sub_exhausted and sub_xd_exhausted:
+                    print("STOP PROFIT {0} {1} exhausted: {2}, {3}, {4}".format(stock,
+                                                                                self.sub_period,
+                                                                                sub_exhausted,
+                                                                                sub_xd_exhausted,
+                                                                                sub_zhongshu_formed))
+                    self.tentative_II.remove(stock)
+                    return True
+            else:
+                print("stock {0} in enhanced list, we skip sub level check".format(stock))
         
             if self.use_ma13 and self.check_daily_ma13(stock, context):
                 print("STOP PROFIT {0} ma5 below ma13".format(stock))
@@ -1305,7 +1307,7 @@ class Short_Chan(Sell_stocks):
                 self.g.all_pos_return_stocks.add(stock)
         self.adjust(context, data, self.to_sell)
         
-        self.to_sell = self.to_sell.intersection(set(to_check)) # in case stock failed to short
+        self.to_sell = self.to_sell.intersection(set(context.portfolio.positions.keys())) # in case stock failed to short
         self.log.info("stocks short process, tentative I: {0}, tentative II: {1}".format(self.tentative_I, self.tentative_II))
 
     def adjust(self, context, data, sell_stocks):
@@ -1337,9 +1339,9 @@ class Short_Chan(Sell_stocks):
         return '缠论调仓卖出规则'
 
 
-class Long_Chan(Buy_stocks):  # Buy_stocks_portion
+class Long_Chan(Buy_stocks_var):  # Buy_stocks_portion
     def __init__(self, params):
-        Buy_stocks.__init__(self, params)
+        Buy_stocks_var.__init__(self, params)
         self.buy_count = params.get('buy_count', 3)
         self.force_price_check = params.get('force_price_check', True)
         self.expected_profit = params.get('expected_profit', 0.03)
