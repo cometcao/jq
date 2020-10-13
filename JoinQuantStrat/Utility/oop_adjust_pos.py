@@ -1341,15 +1341,30 @@ class Short_Chan(Sell_stocks):
 
 class Long_Chan(Buy_stocks_var):  # Buy_stocks_portion
     def __init__(self, params):
-        Buy_stocks_var.__init__(self, params)
+        self.use_var = params.get('use_var', True)
+        if self.use_var:
+            Buy_stocks_var.__init__(self, params)
+        else:
+            Buy_stocks.__init__(self, params)
+        
         self.buy_count = params.get('buy_count', 3)
         self.force_price_check = params.get('force_price_check', True)
         self.expected_profit = params.get('expected_profit', 0.03)
+        self.long_timing = params.get('long_timing', [14, 50])
         self.to_buy = []
+    
+    def update_params(self, context, params):
+        self.long_timing = params.get('long_timing', [14, 50])
         
     def handle_data(self, context, data):
         if self.is_to_return:
             self.log_warn('无法执行买入!! self.is_to_return 未开启')
+            return
+        
+        if self.long_timing and\
+            (context.current_dt.hour != self.long_timing[0] or\
+             context.current_dt.minute != self.long_timing[1]):
+            # avoid any long action outside long time
             return
 
         self.to_buy = self.g.monitor_buy_list
