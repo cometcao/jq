@@ -1339,14 +1339,9 @@ class Short_Chan(Sell_stocks):
         return '缠论调仓卖出规则'
 
 
-class Long_Chan(Buy_stocks_var):  # Buy_stocks_portion
+class Long_Chan(Buy_stocks):  # Buy_stocks_portion
     def __init__(self, params):
-        self.use_var = params.get('use_var', True)
-        if self.use_var:
-            Buy_stocks_var.__init__(self, params)
-        else:
-            Buy_stocks.__init__(self, params)
-        
+        Buy_stocks.__init__(self, params)
         self.buy_count = params.get('buy_count', 3)
         self.force_price_check = params.get('force_price_check', True)
         self.expected_profit = params.get('expected_profit', 0.03)
