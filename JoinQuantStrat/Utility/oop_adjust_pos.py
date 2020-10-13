@@ -1075,8 +1075,8 @@ class Short_Chan(Sell_stocks):
         if stock in self.tentative_I and stock not in self.tentative_II:
             c_profile = self.short_stock_info[stock]
             # after stage I, we have enough vol or we have reached guide price
-            if self.check_internal_vol_money(stock, context, c_profile, self.current_period) or\
-                float_more(latest_price, current_chan_p):
+            if self.check_internal_vol_money(stock, context, c_profile, self.current_period):
+#                 float_more(latest_price, current_chan_p):
                 self.tentative_I.remove(stock)
                 self.tentative_II.add(stock)
             
@@ -1286,9 +1286,7 @@ class Short_Chan(Sell_stocks):
 #                                                                          cur_ratio, 
 #                                                                          cur_internal_ratio))
             
-            if float_more_equal(cur_ratio, 1.191) or\
-                (float_less_equal(cur_ratio, 0.809) and float_more_equal(cur_internal_ratio, 1.191)):
-#                 (float_less_equal(cur_ratio, 0.809) and float_less_equal(cur_internal_ratio, 0.809)):
+            if float_more_equal(cur_ratio, 1.191) or float_more_equal(cur_internal_ratio, 1.191):
                 return True
         return False
 
