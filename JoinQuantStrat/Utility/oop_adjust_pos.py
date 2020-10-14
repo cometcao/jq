@@ -1286,7 +1286,7 @@ class Short_Chan(Sell_stocks):
 #                                                                          cur_ratio, 
 #                                                                          cur_internal_ratio))
             
-            if float_more_equal(cur_ratio, 1.191) or float_more_equal(cur_internal_ratio, 1.191):
+            if float_more_equal(cur_ratio, 1.618) or float_more_equal(cur_internal_ratio, 1.618):
                 return True
         return False
 

@@ -465,16 +465,16 @@ class Pick_Rank_Factor(Create_stock_list):
         self.stock_num = params.get('stock_num', 20)
         self.index_scope = params.get('index_scope', '000985.XSHG')
         self.use_enhanced = params.get('use_enhanced', False)
-        self.factor_category = params.get('factor_category', ['basics'])
+        self.factor_category = params.get('factor_category', None)
         self.is_debug = params.get('is_debug', False)
         self.regress_profit = params.get('regress_profit', False)
         pass
     
-    def update_params(self, context, params):
-        self.use_enhanced = params.get('use_enhanced', False)      
-        self.factor_category = params.get('factor_category', ['basics'])
-        self.is_debug = params.get('is_debug', False)
-        self.regress_profit = params.get('regress_profit', False)
+#     def update_params(self, context, params):
+#         self.use_enhanced = params.get('use_enhanced', False)      
+#         self.factor_category = params.get('factor_category', None)
+#         self.is_debug = params.get('is_debug', False)
+#         self.regress_profit = params.get('regress_profit', False)
     
     def before_trading_start(self, context):
         if self.use_enhanced:

@@ -28,7 +28,7 @@ class Dynamic_factor_based_stock_ranking(object):
         self.index_scope = params.get('index_scope', 'hs300')
         self.period = params.get('period', 'month_3')
         self.model = params.get('model', 'long_only')
-        self.category = params.get('category', ['basics'])
+        self.category = params.get('category', None)
         self.factor_gauge = params.get('factor_gauge', 'ir')
         self.factor_num = params.get('factor_num', 10)
         self.factor_date_count = params.get('factor_date_count', 1)
@@ -37,8 +37,8 @@ class Dynamic_factor_based_stock_ranking(object):
         self.is_debug = params.get('is_debug', False)
         
         if self.category is None:
-            print("category not supplied, get it from data source")
             self.category = get_all_factors()['category'].unique().tolist()
+            print("category not supplied, get it from data source: {0}".format(self.category))
         
         
     def get_idx_code(self, scope):
@@ -62,15 +62,15 @@ class Dynamic_factor_based_stock_ranking(object):
 
         factor_code_list_negative = factor_rank['code'].head(num_fac).tolist()
         
-#         if self.is_debug:
-#             print("positive factor candidates: {0}".format(factor_code_list_positive))
-#             print("negative factor candidates: {0}".format(factor_code_list_negative))
+        if self.is_debug:
+            print("positive factor candidates: {0}".format(factor_code_list_positive))
+            print("negative factor candidates: {0}".format(factor_code_list_negative))
         
         full_factor_list = factor_rank.reindex(factor_rank[self.factor_gauge].abs().sort_values(ascending=False).index)['code'].head(num_fac).tolist() # sort by abs ascending
         
-#         if self.is_debug:
-#             print(factor_rank.tail(5))
-#             print(factor_rank.reindex(factor_rank[self.factor_gauge].abs().sort_values(ascending=False).index).head(5))
+        if self.is_debug:
+            print(factor_rank.tail(5))
+            print(factor_rank.reindex(factor_rank[self.factor_gauge].abs().sort_values(ascending=False).index).head(5))
             
         pos_list, neg_list = [factor for factor in factor_code_list_positive if factor in full_factor_list], [factor for factor in factor_code_list_negative if factor in full_factor_list]
         
@@ -97,7 +97,7 @@ class Dynamic_factor_based_stock_ranking(object):
 #             print("category {0}: {1}".format(cat, sub_list))
             full_list = full_list + sub_list
         if self.is_debug:
-            print("full factor list: {0}".format(full_list))
+            print("full combined factor list: {0}".format(full_list))
         return full_list
     
     def get_ranked_factors(self, factor_result_file_path=None, working_date=None):
