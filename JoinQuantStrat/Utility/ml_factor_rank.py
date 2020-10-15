@@ -752,7 +752,7 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         elif index == '000906.XSHG':
             return 'zz800'
         else:
-            return 'hs300'
+            return 'zzqz'
     
     def gaugeStocks_byfactors(self, context):
         # traing from past date (up to yesterday)
@@ -762,6 +762,7 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
                 sample = sample +  get_index_stocks(idx, date = None)
         else:
             sample = get_index_stocks(self.index_scope, date = None)
+        sample = list(set(sample))
         # 设置可交易股票池
         self.feasible_stocks = self.set_feasible_stocks(sample,context)
         
