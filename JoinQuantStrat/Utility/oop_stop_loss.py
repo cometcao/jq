@@ -14,7 +14,7 @@ from oop_strategy_frame import *
 from common_include import *
 import statsmodels.api as sm
 from pandas import Series, DataFrame
-from ML_main import *
+# from ML_main import *
 import os
 import math
 # import tensorflow as tf
@@ -164,6 +164,7 @@ class ML_Stock_Timing(Rule):
         self.use_strict_mode = params.get('use_strict_mode', False)
     
     def ml_prediction(self, stock_list, context):
+        from ML_main import ML_biaoli_check
         mbc_weekly = ML_biaoli_check({'rq':False, 
                                'ts':False,
                                'model_path':'training_model/cnn_lstm_model_base_weekly2.h5', 

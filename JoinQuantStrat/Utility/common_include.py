@@ -15,7 +15,7 @@ from pickle import dump
 from pickle import load
 import numpy as np
 import io
-from keras.utils.np_utils import to_categorical
+# from keras.utils.np_utils import to_categorical
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 evs_query_string = '(valuation.market_cap*100000000+balance.longterm_loan+balance.bonds_payable+balance.minority_interests+balance.capital_reserve_fund-balance.cash_equivalents)/(income.net_profit+income.income_tax_expense+income.interest_expense)'
@@ -218,6 +218,7 @@ def sort_training_dataset_by_sublength(dataset, label):
     return narrayData, narrayLabel
     
 def encode_category(label_set): # this is assuming we have full label in the sample
+    from keras.utils.np_utils import to_categorical
     uniques, ids = np.unique(label_set, return_inverse=True)
     y_code = to_categorical(ids, len(uniques))
     return y_code
