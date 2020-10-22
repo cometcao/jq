@@ -14,8 +14,8 @@ from oop_strategy_frame import *
 from chanMatrix import *
 from sector_selection import *
 from herd_head import *
-from ml_factor_rank import *
-from dynamic_factor_based_stock_ranking import *
+# from ml_factor_rank import *
+# from dynamic_factor_based_stock_ranking import *
 from pair_trading_ols import *
 from value_factor_lib import *
 from quant_lib import *
@@ -43,11 +43,7 @@ class Pick_stocks2(Group_rules):
         Group_rules.__init__(self, params)
         self.has_run = False
         self.file_path = params.get('write_to_file', None)
-        self.add_etf = params.get('add_etf', True)
-
-    def update_params(self, context, params):
-        self.file_path = params.get('write_to_file', None)
-        self.add_etf = params.get('add_etf', True)
+        self.add_etf = params.get('add_etf', False)
 
     def handle_data(self, context, data):
         try:
@@ -58,10 +54,16 @@ class Pick_stocks2(Group_rules):
             # self.log.info('设置一天只选一次，跳过选股。')
             return
 
+        self.log.debug("DEBUG 4: stock cache: {0}, stock list: {1}".format(self.g.stock_chan_type.keys(), 
+                                                                           self.g.buy_stocks))
+
         stock_list = self.g.buy_stocks
         for rule in self.rules:
             if isinstance(rule, Filter_stock_list):
                 stock_list = rule.filter(context, data, stock_list)
+                
+        self.log.debug("DEBUG 5: stock cache: {0}, stock list: {1}".format(self.g.stock_chan_type.keys(), 
+                                                                           self.g.buy_stocks))
     
         # add the ETF index into list this is already done in oop_stop_loss, dirty hack
         self.g.monitor_buy_list = stock_list 
@@ -75,15 +77,18 @@ class Pick_stocks2(Group_rules):
             if isinstance(rule, Create_stock_list):
                 self.g.buy_stocks = self.g.buy_stocks + rule.before_trading_start(context)
 
-#         self.g.buy_stocks = list(set(self.g.buy_stocks))
+        self.g.buy_stocks = list(set(self.g.buy_stocks))
         
         for rule in self.rules:
             if isinstance(rule, Early_Filter_stock_list):
                 rule.before_trading_start(context)
-                
+
         for rule in self.rules:
             if isinstance(rule, Early_Filter_stock_list):
                 self.g.buy_stocks = rule.filter(context, self.g.buy_stocks)
+                
+        self.log.debug("DEBUG 3: stock cache: {0}, stock list: {1}".format(self.g.stock_chan_type.keys(), 
+                                                                           self.g.buy_stocks))
     
         checking_stocks = [stock for stock in list(set(self.g.buy_stocks+list(context.portfolio.positions.keys()))) if stock not in g.money_fund]
         if self.add_etf:
@@ -477,6 +482,7 @@ class Pick_Rank_Factor(Create_stock_list):
 #         self.regress_profit = params.get('regress_profit', False)
     
     def before_trading_start(self, context):
+        from ml_factor_rank import ML_Dynamic_Factor_Rank
         if self.use_enhanced:
             mdfr = ML_Dynamic_Factor_Rank({'stock_num':self.stock_num, 
                                   'index_scope':self.index_scope,
@@ -521,6 +527,7 @@ class Pick_Dynamic_Rank_Factor(Create_stock_list):
         self.factor_analyzer_result_path = params.get('factor_analyzer_result_path', None)
 
     def before_trading_start(self, context):
+        from dynamic_factor_based_stock_ranking import Dynamic_factor_based_stock_ranking
         dfbsr = Dynamic_factor_based_stock_ranking({'stock_num':self.stock_num, 
                                                     'index_scope':self.index_scope,
                                                     'period':self.period,
@@ -669,12 +676,12 @@ class Pick_stock_list_from_file(Filter_stock_list):
     def __str__(self):
         return "从文件中读取已经写好的股票列表"
     
-class Pick_stock_from_file_chan(Pick_Chan_Stocks):
+class Pick_stock_from_file_chan(Create_stock_list):
     '''
     take data from preprocessed file based on chan rule
     '''
     def __init__(self, params):
-        Pick_Chan_Stocks.__init__(self, params)
+        Create_stock_list.__init__(self, params)
         self.filename = params.get('filename', None)
         self.current_chan_types = params.get('current_chan_types', [Chan_Type.I, Chan_Type.III, Chan_Type.INVALID])
         self.top_chan_types = params.get('top_chan_types', [Chan_Type.I, Chan_Type.INVALID])
@@ -750,11 +757,101 @@ class Pick_stock_from_file_chan(Pick_Chan_Stocks):
                                                        datetime.datetime.strptime(z_time, "%Y-%m-%d %H:%M:%S"), 
                                                        datetime.datetime.strptime(s_time, "%Y-%m-%d %H:%M:%S"), 
                                                        )]
-            self.log.info("filtered data read from file: {0} stocks info".format(len(chan_stock_list)))
+            self.log.info("filtered data read from file: {0} stocks info. cache info: {1}".format(len(chan_stock_list), 
+                                                                                                  self.g.stock_chan_type.keys()))
         return chan_stock_list if len(chan_stock_list) >= self.min_stock_num else []
     
     def __str__(self):
         return "从文件中读取根据缠论已经写好的股票列表以及数据"
+    
+    
+class Read_stock_from_file_chan(Filter_stock_list):
+    '''
+    take data from preprocessed file based on chan rule
+    '''
+    def __init__(self, params):
+        Filter_stock_list.__init__(self, params)
+        self.filename = params.get('filename', None)
+        self.current_chan_types = params.get('current_chan_types', [Chan_Type.I, Chan_Type.III, Chan_Type.INVALID])
+        self.top_chan_types = params.get('top_chan_types', [Chan_Type.I, Chan_Type.INVALID])
+        self.enable_on_demand = params.get('on_demand', False)
+        self.isdebug = params.get('isdebug', False)
+        self.min_stock_num = params.get('min_stock_num', 0)
+        
+    def filter(self, context, data, stock_list):
+        chan_stock_list = []
+        if self.filename: # model prediction happened outside
+            today_date = context.current_dt.date()
+            yesterday = context.previous_date
+            chan_dict = json.loads(read_file(self.filename))
+            
+                
+            if str(today_date) not in chan_dict:
+                if self.enable_on_demand:
+                    print("{0} not in chan file, get stocks on demand".format(today_date))
+                    check_stocks = filter_high_level_by_index(
+                                                            direction=TopBotType.top2bot,
+                                                            stock_index=['000985.XSHG'],
+                                                            end_dt=yesterday,
+                                                            df=False,
+                                                            periods = ['1M'],
+                                                            chan_types=self.top_chan_types)
+                    check_stocks = filter_high_level_by_stocks(
+                                                        direction=TopBotType.top2bot, 
+                                                        stock_list=check_stocks,  
+                                                        df=False,
+                                                        end_dt= yesterday, 
+                                                        periods = ['1w'],
+                                                        chan_types=self.current_chan_types)
+                    return check_stocks
+                else:
+                    print("{0} not in chan file".format(today_date))
+                    return []
+            
+            chan_list = chan_dict[str(today_date)]
+            if self.isdebug:
+                self.log.info("data read from file: {0} stocks info".format(len(chan_list)))
+            for stock, top_type_value, c_type_value, top_period, cur_period, c_direc_value, c_price, c_slope, c_force, z_time, s_time in chan_list:
+                if stock in context.portfolio.positions.keys():
+                    if self.isdebug:
+                        self.log.info("{0} already in position".format(stock))
+                    chan_stock_list.append(stock)
+                    continue
+                if self.current_chan_types and (Chan_Type.value2type(c_type_value) not in self.current_chan_types):
+                    if self.isdebug:
+                        self.log.info("{0} has invalid current chan type".format(stock))
+                    continue
+                if self.top_chan_types and (Chan_Type.value2type(top_type_value) not in self.top_chan_types):
+                    if self.isdebug:
+                        self.log.info("{0} has invalid top chan type".format(stock))
+                    continue
+                
+                if z_time is None:
+                    continue
+                
+                chan_stock_list.append(stock)
+                if stock not in self.g.stock_chan_type:
+                    self.g.stock_chan_type[stock] = [(Chan_Type.value2type(top_type_value), 
+                                                      TopBotType.top2bot,
+                                                      0, 
+                                                      0,
+                                                      0,
+                                                      None,
+                                                      None),
+                                                      (Chan_Type.value2type(c_type_value),
+                                                       TopBotType.value2type(c_direc_value),
+                                                       c_price,
+                                                       0,
+                                                       0,
+                                                       datetime.datetime.strptime(z_time, "%Y-%m-%d %H:%M:%S"), 
+                                                       datetime.datetime.strptime(s_time, "%Y-%m-%d %H:%M:%S"), 
+                                                       )]
+            self.log.info("filtered data read from file: {0} stocks info. cache info: {1}".format(len(chan_stock_list), 
+                                                                                                  self.g.stock_chan_type.keys()))
+        return chan_stock_list if len(chan_stock_list) >= self.min_stock_num else []
+    
+    def __str__(self):
+        return "DEBUG从文件中读取根据缠论已经写好的股票列表以及数据"
 
         
 class Filter_Chan_Stocks(Filter_stock_list):
@@ -976,7 +1073,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return result, zhongshu_changed
     
     def check_internal_vol_money(self, stock, context):
-
+        
         current_profile = self.g.stock_chan_type[stock][1]
         current_zoushi_start_time = current_profile[5]
         cur_chan_type = current_profile[0]
@@ -1434,10 +1531,11 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stocks_in_place = set(context.portfolio.positions.keys()).union(self.tentative_stage_I).union(self.tentative_stage_II).union(self.tentative_stage_III).union(self.tentative_stage_A).union(self.tentative_stage_B)
             stock_list = [stock for stock in stock_list if stock not in stocks_in_place]
             stock_list = self.sort_by_sector_order(stock_list)
+            
             for stock in stock_list:
                 if self.halt_check_when_enough and (self.long_candidate_num <= len(self.tentative_stage_I)):
                     break
-                
+
                 if self.initial_stock_check(context, stock):
                     filter_stock_list.append(stock)
         

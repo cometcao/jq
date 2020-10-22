@@ -16,7 +16,7 @@ from pickle import load
 import numpy as np
 import io
 # from keras.utils.np_utils import to_categorical
-from sklearn.preprocessing import MinMaxScaler, StandardScaler
+# from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 evs_query_string = '(valuation.market_cap*100000000+balance.longterm_loan+balance.bonds_payable+balance.minority_interests+balance.capital_reserve_fund-balance.cash_equivalents)/(income.net_profit+income.income_tax_expense+income.interest_expense)'
 eve_query_string = '(valuation.market_cap*100000000+balance.longterm_loan+balance.bonds_payable+balance.minority_interests+balance.capital_reserve_fund-balance.cash_equivalents)/(indicator.eps*valuation.capitalization*10000)'
@@ -224,6 +224,7 @@ def encode_category(label_set): # this is assuming we have full label in the sam
     return y_code
 
 def normalize(df, norm_range=[0, 1], fields = ['open', 'close', 'high', 'low', 'money']):
+    from sklearn.preprocessing import MinMaxScaler, StandardScaler
     scaler = MinMaxScaler(feature_range=norm_range) if norm_range is not None else StandardScaler()
     df[fields] = scaler.fit_transform(df[fields]) 
     return df
