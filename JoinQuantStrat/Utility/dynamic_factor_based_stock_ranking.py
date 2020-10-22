@@ -96,8 +96,7 @@ class Dynamic_factor_based_stock_ranking(object):
             _, _, sub_list = self.get_pos_neg_factors(sub_factor_rank, num_fac)
 #             print("category {0}: {1}".format(cat, sub_list))
             full_list = full_list + sub_list
-        if self.is_debug:
-            print("full combined factor list: {0}".format(full_list))
+        print("full combined factor list: {0}".format(full_list))
         return full_list
     
     def get_ranked_factors(self, factor_result_file_path=None, working_date=None):

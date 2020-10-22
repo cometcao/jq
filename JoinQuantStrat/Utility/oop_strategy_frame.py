@@ -66,6 +66,10 @@ class Global_variable(object):
     stock_index_dict = {}
     position_proportion = {} # 仓位控制比例
     stock_chan_type = {} # record chan types
+    print("DEBUG CALLED")
+    import traceback
+    for line in traceback.format_stack():
+        print(line.strip())
     industry_sector_list = [] # record industry sector names
     all_pos_return_stocks = set()
     all_neg_return_stocks = set()
