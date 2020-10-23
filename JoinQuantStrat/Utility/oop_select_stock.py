@@ -473,20 +473,18 @@ class Pick_Rank_Factor(Create_stock_list):
         self.factor_category = params.get('factor_category', None)
         self.is_debug = params.get('is_debug', False)
         self.regress_profit = params.get('regress_profit', False)
+        self.period = params.get('period', 'month_3')
         pass
     
-#     def update_params(self, context, params):
-#         self.use_enhanced = params.get('use_enhanced', False)      
-#         self.factor_category = params.get('factor_category', None)
-#         self.is_debug = params.get('is_debug', False)
-#         self.regress_profit = params.get('regress_profit', False)
+    def update_params(self, context, params):
+        self.period = params.get('period', 'month_3')
     
     def before_trading_start(self, context):
         from ml_factor_rank import ML_Dynamic_Factor_Rank, ML_Factor_Rank
         if self.use_enhanced:
             mdfr = ML_Dynamic_Factor_Rank({'stock_num':self.stock_num, 
                                   'index_scope':self.index_scope,
-                                  'period':'month_3',
+                                  'period':self.period,
                                   'is_debug':self.is_debug, 
                                   'use_dynamic_factors': True, 
                                   'context': context, 
