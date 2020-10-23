@@ -50,9 +50,6 @@ class Global_variable(object):
     for line in traceback.format_stack():
         print(line.strip())
     
-    print(self.buy_stocks)
-    print(self.stock_chan_type.keys())
-    
     stock_pindexs = [0]  # 指示是属于股票性质的子仓列表
     op_pindexs = [0]  # 提示当前操作的股票子仓Id
     buy_stocks = []  # 选股列表
@@ -74,14 +71,11 @@ class Global_variable(object):
     market_timing_check = {}
     stock_index_dict = {}
     position_proportion = {} # 仓位控制比例
-    stock_chan_type = {} # record chan types
+#     stock_chan_type = {} # record chan types
     industry_sector_list = [] # record industry sector names
     all_pos_return_stocks = set()
     all_neg_return_stocks = set()
     enchanced_long_stocks = set()
-    
-    print(self.buy_stocks)
-    print(self.stock_chan_type.keys())
 
     def __init__(self, owner):
         self._owner = owner

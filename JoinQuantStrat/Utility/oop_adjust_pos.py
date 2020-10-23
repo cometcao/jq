@@ -812,8 +812,8 @@ class Short_Chan(Sell_stocks):
         if context.portfolio.positions[stock].avg_cost < context.portfolio.positions[stock].price:
             return False
         
-        current_profile = self.g.stock_chan_type[stock][1]
-        sub_profile = self.g.stock_chan_type[stock][2]
+        current_profile = g.stock_chan_type[stock][1]
+        sub_profile = g.stock_chan_type[stock][2]
         current_chan_t = current_profile[0]
         current_chan_p = current_profile[2]
         current_chan_slope = current_profile[3]
@@ -971,7 +971,7 @@ class Short_Chan(Sell_stocks):
             self.tentative_I.add(stock)
             return
         
-        old_current_profile = self.g.stock_chan_type[stock][1]
+        old_current_profile = g.stock_chan_type[stock][1]
         
         if c_profile:
 #         if float_more(current_data[stock].last_price / context.portfolio.positions[stock].avg_cost - 1, self.stop_profit):
@@ -1042,8 +1042,8 @@ class Short_Chan(Sell_stocks):
             return
         
         position_time = context.portfolio.positions[stock].transact_time
-        current_profile = self.g.stock_chan_type[stock][1]
-        sub_profile = self.g.stock_chan_type[stock][2]
+        current_profile = g.stock_chan_type[stock][1]
+        sub_profile = g.stock_chan_type[stock][2]
         current_chan_t = current_profile[0]
         current_chan_p = current_profile[2]
         current_zoushi_start_time = current_profile[5]
@@ -1366,12 +1366,12 @@ class Long_Chan(Buy_stocks):  # Buy_stocks_portion
         
         # check stocks UPTONOW
         for stock in self.to_buy:
-            current_profile = self.g.stock_chan_type[stock][1]
+            current_profile = g.stock_chan_type[stock][1]
             cur_chan_t = current_profile[0]
             cur_chan_p = current_profile[2]
             current_effective_time = current_profile[6]
             
-            sub_profile = self.g.stock_chan_type[stock][2]
+            sub_profile = g.stock_chan_type[stock][2]
             sub_chan_t = sub_profile[0]
             sub_chan_p = sub_profile[2]
             sub_effective_time = sub_profile[6]

@@ -54,7 +54,7 @@ class Pick_stocks2(Group_rules):
             # self.log.info('设置一天只选一次，跳过选股。')
             return
 
-        self.log.debug("DEBUG 4: stock cache: {0}, stock list: {1}".format(self.g.stock_chan_type.keys(), 
+        self.log.debug("DEBUG 4: stock cache: {0}, stock list: {1}".format(g.stock_chan_type.keys(), 
                                                                            self.g.buy_stocks))
 
         stock_list = self.g.buy_stocks
@@ -62,7 +62,7 @@ class Pick_stocks2(Group_rules):
             if isinstance(rule, Filter_stock_list):
                 stock_list = rule.filter(context, data, stock_list)
                 
-        self.log.debug("DEBUG 5: stock cache: {0}, stock list: {1}".format(self.g.stock_chan_type.keys(), 
+        self.log.debug("DEBUG 5: stock cache: {0}, stock list: {1}".format(g.stock_chan_type.keys(), 
                                                                            self.g.buy_stocks))
     
         # add the ETF index into list this is already done in oop_stop_loss, dirty hack
@@ -87,7 +87,7 @@ class Pick_stocks2(Group_rules):
             if isinstance(rule, Early_Filter_stock_list):
                 self.g.buy_stocks = rule.filter(context, self.g.buy_stocks)
                 
-        self.log.debug("DEBUG 3: stock cache: {0}, stock list: {1}".format(self.g.stock_chan_type.keys(), 
+        self.log.debug("DEBUG 3: stock cache: {0}, stock list: {1}".format(g.stock_chan_type.keys(), 
                                                                            self.g.buy_stocks))
     
         checking_stocks = [stock for stock in list(set(self.g.buy_stocks+list(context.portfolio.positions.keys()))) if stock not in g.money_fund]
@@ -409,10 +409,10 @@ class Pick_Chan_Stocks(Create_stock_list):
                                                                           isdebug=self.is_debug, 
                                                                           is_anal=True)
             if result and xd_result:
-                self.g.stock_chan_type[stock] = chan_profile
+                g.stock_chan_type[stock] = chan_profile
         if self.is_debug:
-            print(str(self.g.stock_chan_type))
-        return list(self.g.stock_chan_type.keys())
+            print(str(g.stock_chan_type))
+        return list(g.stock_chan_type.keys())
     
     def __str__(self):
         return "Chan Selection Params: {0}, {1}, {2}".format(self.index, self.periods, self.chan_types)
@@ -739,8 +739,8 @@ class Pick_stock_from_file_chan(Create_stock_list):
                     continue
                 
                 chan_stock_list.append(stock)
-                if stock not in self.g.stock_chan_type:
-                    self.g.stock_chan_type[stock] = [(Chan_Type.value2type(top_type_value), 
+                if stock not in g.stock_chan_type:
+                    g.stock_chan_type[stock] = [(Chan_Type.value2type(top_type_value), 
                                                       TopBotType.top2bot,
                                                       0, 
                                                       0,
@@ -756,7 +756,7 @@ class Pick_stock_from_file_chan(Create_stock_list):
                                                        datetime.datetime.strptime(s_time, "%Y-%m-%d %H:%M:%S"), 
                                                        )]
             self.log.info("filtered data read from file: {0} stocks info. cache info: {1}".format(len(chan_stock_list), 
-                                                                                                  self.g.stock_chan_type.keys()))
+                                                                                                  g.stock_chan_type.keys()))
         return chan_stock_list if len(chan_stock_list) >= self.min_stock_num else []
     
     def __str__(self):
@@ -828,8 +828,8 @@ class Read_stock_from_file_chan(Filter_stock_list):
                     continue
                 
                 chan_stock_list.append(stock)
-                if stock not in self.g.stock_chan_type:
-                    self.g.stock_chan_type[stock] = [(Chan_Type.value2type(top_type_value), 
+                if stock not in g.stock_chan_type:
+                    g.stock_chan_type[stock] = [(Chan_Type.value2type(top_type_value), 
                                                       TopBotType.top2bot,
                                                       0, 
                                                       0,
@@ -845,7 +845,7 @@ class Read_stock_from_file_chan(Filter_stock_list):
                                                        datetime.datetime.strptime(s_time, "%Y-%m-%d %H:%M:%S"), 
                                                        )]
             self.log.info("filtered data read from file: {0} stocks info. cache info: {1}".format(len(chan_stock_list), 
-                                                                                                  self.g.stock_chan_type.keys()))
+                                                                                                  g.stock_chan_type.keys()))
         return chan_stock_list if len(chan_stock_list) >= self.min_stock_num else []
     
     def __str__(self):
@@ -897,7 +897,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.price_revert_range = params.get('price_revert_range', 0.055)
     
     def check_guide_price_reached(self, stock, context):
-        current_profile = self.g.stock_chan_type[stock][1]
+        current_profile = g.stock_chan_type[stock][1]
         current_chan_t = current_profile[0]
         current_chan_p = current_profile[2]
         current_start_time = current_profile[5]
@@ -941,7 +941,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         for stock in self.tentative_stage_I:
             
-            if len(self.g.stock_chan_type[stock]) > 1: # we have check it before
+            if len(g.stock_chan_type[stock]) > 1: # we have check it before
                 if self.check_guide_price_reached(stock, context):
                     stocks_to_remove_I.add(stock)
                     if self.use_all_stocks_4_A and self.use_stage_A:
@@ -966,9 +966,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
         for stock in self.tentative_stage_II:
             check_result = self.check_stage_II(stock, context)
             if check_result:
-                top_profile = self.g.stock_chan_type[stock][0]
-                cur_profile = self.g.stock_chan_type[stock][1]
-                sub_profile = self.g.stock_chan_type[stock][2]
+                top_profile = g.stock_chan_type[stock][0]
+                cur_profile = g.stock_chan_type[stock][1]
+                sub_profile = g.stock_chan_type[stock][2]
                 
                 top_chan_t = top_profile[0]
                 cur_chan_t = cur_profile[0]
@@ -1057,14 +1057,14 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                           slope_only=False)
             result = cur_result and (cur_xd_result or self.ignore_xd)
             if result or after_stage_III:
-                if len(self.g.stock_chan_type[stock]) > 1:
-                    old_current_profile = self.g.stock_chan_type[stock][1]
+                if len(g.stock_chan_type[stock]) > 1:
+                    old_current_profile = g.stock_chan_type[stock][1]
                     if old_current_profile[0] in self.stage_A_types:
                         old_current_p = old_current_profile[2][0] if type(old_current_profile[2]) is list else old_current_profile[2]
                         current_p = cur_profile[0][2][0] if type(cur_profile[0][2]) is list else cur_profile[0][2]
                         zhongshu_changed = current_p != old_current_p
         
-                self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + cur_profile
+                g.stock_chan_type[stock] = [g.stock_chan_type[stock][0]] + cur_profile
                 
                 
         
@@ -1072,7 +1072,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
     
     def check_internal_vol_money(self, stock, context):
         
-        current_profile = self.g.stock_chan_type[stock][1]
+        current_profile = g.stock_chan_type[stock][1]
         current_zoushi_start_time = current_profile[5]
         cur_chan_type = current_profile[0]
 
@@ -1130,7 +1130,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return False
     
     def check_vol_money(self, stock, context):
-        sub_profile = self.g.stock_chan_type[stock][2]
+        sub_profile = g.stock_chan_type[stock][2]
         sub_effective_time = sub_profile[6]
 
         stock_data = get_bars(stock, 
@@ -1175,7 +1175,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return False
     
     def check_bot_shape(self, stock, context, from_local_max=False, ignore_bot_shape=True):
-        current_profile = self.g.stock_chan_type[stock][1]
+        current_profile = g.stock_chan_type[stock][1]
         current_start_time = current_profile[5]
         current_effective_time = current_profile[6]
         
@@ -1282,7 +1282,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                               ignore_sub_xd=False)
         exhaustion_result = result and (xd_result or self.ignore_xd)
         
-        self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0], self.g.stock_chan_type[stock][1]] +\
+        g.stock_chan_type[stock] = [g.stock_chan_type[stock][0], g.stock_chan_type[stock][1]] +\
                                                                 s_profile
         return exhaustion_result
     
@@ -1310,15 +1310,15 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                               ignore_sub_xd=False)
         exhaustion_result = result and (xd_result or self.ignore_xd)
         
-        old_current_profile = self.g.stock_chan_type[stock][1]
-        if len(self.g.stock_chan_type[stock]) > 1 and\
+        old_current_profile = g.stock_chan_type[stock][1]
+        if len(g.stock_chan_type[stock]) > 1 and\
             old_current_profile[0] in self.stage_A_types:
             old_current_p = old_current_profile[2][0] if type(old_current_profile[2]) is list else old_current_profile[2]
             current_p = c_profile[0][2][0] if type(c_profile[0][2]) is list else c_profile[0][2]
             zhongshu_changed = current_p != old_current_p
 
         if c_profile[0][0] in self.stage_A_types and stock not in context.portfolio.positions.keys():
-            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] +\
+            g.stock_chan_type[stock] = [g.stock_chan_type[stock][0]] +\
                                                                     c_profile +\
                                             [(Chan_Type.INVALID,
                                                TopBotType.top2bot,
@@ -1356,8 +1356,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                              ignore_sub_xd=self.bi_level_precision,
                                              enable_ac_opposite_direction=True)
         
-        old_current_profile = self.g.stock_chan_type[stock][1]
-        if len(self.g.stock_chan_type[stock]) > 1 and\
+        old_current_profile = g.stock_chan_type[stock][1]
+        if len(g.stock_chan_type[stock]) > 1 and\
             old_current_profile[0] in self.stage_A_types:
             old_current_p = old_current_profile[2][0] if type(old_current_profile[2]) is list else old_current_profile[2]
             current_p = profile[0][2][0] if type(profile[0][2]) is list else profile[0][2]
@@ -1365,8 +1365,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
 
         # only update cache when we don't hold it in pos
         if profile[0][0] in self.stage_A_types and stock not in context.portfolio.positions.keys():
-            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile if len(profile) > 1 else\
-                                            [self.g.stock_chan_type[stock][0]] + profile +\
+            g.stock_chan_type[stock] = [g.stock_chan_type[stock][0]] + profile if len(profile) > 1 else\
+                                            [g.stock_chan_type[stock][0]] + profile +\
                                                 [(Chan_Type.INVALID,
                                                TopBotType.top2bot,
                                                0,
@@ -1383,7 +1383,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
     def check_structure_sub_only(self, stock, context):
         zhongshu_changed = False
 
-        old_current_profile = self.g.stock_chan_type[stock][1]
+        old_current_profile = g.stock_chan_type[stock][1]
         old_chan_type = old_current_profile[0]
         enable_ac_op_direction = old_chan_type == Chan_Type.III or old_chan_type == Chan_Type.III_strong
 
@@ -1407,9 +1407,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                                 enable_ac_opposite_direction=enable_ac_op_direction)
         
         if sub_profile:
-            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0], self.g.stock_chan_type[stock][1]] + sub_profile
+            g.stock_chan_type[stock] = [g.stock_chan_type[stock][0], g.stock_chan_type[stock][1]] + sub_profile
         else:
-            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0], self.g.stock_chan_type[stock][1]] +\
+            g.stock_chan_type[stock] = [g.stock_chan_type[stock][0], g.stock_chan_type[stock][1]] +\
                                             [(Chan_Type.INVALID,
                                                TopBotType.top2bot,
                                                0,
@@ -1463,21 +1463,21 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                                                       slope_only=False)
         result = cur_result and (cur_xd_result or self.ignore_xd)
         if result or after_stage_III:
-            if len(self.g.stock_chan_type[stock]) > 1:
-                old_current_profile = self.g.stock_chan_type[stock][1]
+            if len(g.stock_chan_type[stock]) > 1:
+                old_current_profile = g.stock_chan_type[stock][1]
                 if old_current_profile[0] in self.stage_A_types:
                     old_current_p = old_current_profile[2][0] if type(old_current_profile[2]) is list else old_current_profile[2]
                     current_p = cur_profile[0][2][0] if type(cur_profile[0][2]) is list else cur_profile[0][2]
                     zhongshu_changed = current_p != old_current_p
     
-            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + cur_profile
+            g.stock_chan_type[stock] = [g.stock_chan_type[stock][0]] + cur_profile
             
         return result, zhongshu_changed
 
     def check_structure_sub_full(self, stock, context):
         zhongshu_changed = False
 
-        old_current_profile = self.g.stock_chan_type[stock][1]
+        old_current_profile = g.stock_chan_type[stock][1]
         old_chan_type = old_current_profile[0]
         enable_ac_op_direction = old_chan_type == Chan_Type.III or old_chan_type == Chan_Type.III_strong
 
@@ -1504,9 +1504,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
 
         if len(profile) > 1:
-            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0]] + profile
+            g.stock_chan_type[stock] = [g.stock_chan_type[stock][0]] + profile
         else:
-            self.g.stock_chan_type[stock] = [self.g.stock_chan_type[stock][0], self.g.stock_chan_type[stock][1]] +\
+            g.stock_chan_type[stock] = [g.stock_chan_type[stock][0], g.stock_chan_type[stock][1]] +\
                                             [(Chan_Type.INVALID,
                                                TopBotType.top2bot,
                                                0,
@@ -1577,7 +1577,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
     def filter_enhanced_stock_by_return(self, stocks):
         qualified_stocks = set()
         for stock in stocks:
-            stock_chan_cur_type = self.g.stock_chan_type[stock][1][0]
+            stock_chan_cur_type = g.stock_chan_type[stock][1][0]
             if stock in self.g.all_pos_return_stocks and stock_chan_cur_type in self.stage_A_pos_return_types:
                 qualified_stocks.add(stock)
             if stock in self.g.all_neg_return_stocks and stock_chan_cur_type in self.stage_A_neg_return_types:
@@ -1601,17 +1601,17 @@ class Filter_Chan_Stocks(Filter_stock_list):
     def after_trading_end(self, context):
         holding_pos = context.portfolio.positions.keys()
         
-        stored_stocks = list(self.g.stock_chan_type.keys())
+        stored_stocks = list(g.stock_chan_type.keys())
         to_be_removed = [stock for stock in stored_stocks if (stock not in holding_pos and\
                                                               stock not in self.tentative_stage_I and\
                                                               stock not in self.tentative_stage_II and\
                                                               stock not in self.tentative_stage_III and\
                                                               stock not in self.tentative_stage_A and\
                                                               stock not in self.tentative_stage_B)]
-        [self.g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
+        [g.stock_chan_type.pop(stock, None) for stock in to_be_removed]
         self.g.enchanced_long_stocks = self.g.enchanced_long_stocks.intersection(set(holding_pos))
         
-        self.log.info("position chan info: {0}".format(self.g.stock_chan_type.keys()))
+        self.log.info("position chan info: {0}".format(g.stock_chan_type.keys()))
 
 class Filter_Pair_Trading(Filter_stock_list):
     def __init__(self, params):
