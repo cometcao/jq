@@ -482,7 +482,7 @@ class Pick_Rank_Factor(Create_stock_list):
 #         self.regress_profit = params.get('regress_profit', False)
     
     def before_trading_start(self, context):
-        from ml_factor_rank import ML_Dynamic_Factor_Rank
+        from ml_factor_rank import ML_Dynamic_Factor_Rank, ML_Factor_Rank
         if self.use_enhanced:
             mdfr = ML_Dynamic_Factor_Rank({'stock_num':self.stock_num, 
                                   'index_scope':self.index_scope,
