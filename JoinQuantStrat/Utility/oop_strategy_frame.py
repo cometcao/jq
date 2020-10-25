@@ -45,11 +45,6 @@ class Global_variable(object):
     context = None
     _owner = None
     
-    print("DEBUG CALLED")
-    import traceback
-    for line in traceback.format_stack():
-        print(line.strip())
-    
     stock_pindexs = [0]  # 指示是属于股票性质的子仓列表
     op_pindexs = [0]  # 提示当前操作的股票子仓Id
     buy_stocks = []  # 选股列表

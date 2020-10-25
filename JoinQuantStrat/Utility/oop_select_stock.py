@@ -54,17 +54,17 @@ class Pick_stocks2(Group_rules):
             # self.log.info('设置一天只选一次，跳过选股。')
             return
 
-        self.log.debug("DEBUG 4: stock cache: {0}, stock list: {1}".format(g.stock_chan_type.keys(), 
-                                                                           self.g.buy_stocks))
+        self.log.debug("DEBUG 4: stock cache: {0}, stock list: {1}, monitor_list: {2}, filtered_sectors: {3}, industry_sector_list: {4}".format(g.stock_chan_type.keys(), 
+                                                                           self.g.buy_stocks,
+                                                                           self.g.monitor_buy_list,
+                                                                           self.g.filtered_sectors,
+                                                                           self.g.industry_sector_list))
 
         stock_list = self.g.buy_stocks
         for rule in self.rules:
             if isinstance(rule, Filter_stock_list):
                 stock_list = rule.filter(context, data, stock_list)
                 
-        self.log.debug("DEBUG 5: stock cache: {0}, stock list: {1}".format(g.stock_chan_type.keys(), 
-                                                                           self.g.buy_stocks))
-    
         # add the ETF index into list this is already done in oop_stop_loss, dirty hack
         self.g.monitor_buy_list = stock_list 
         self.log.info('今日选股:\n' + join_list(["[%s]" % (show_stock(x)) for x in stock_list], ' ', 10))
@@ -87,8 +87,11 @@ class Pick_stocks2(Group_rules):
             if isinstance(rule, Early_Filter_stock_list):
                 self.g.buy_stocks = rule.filter(context, self.g.buy_stocks)
                 
-        self.log.debug("DEBUG 3: stock cache: {0}, stock list: {1}".format(g.stock_chan_type.keys(), 
-                                                                           self.g.buy_stocks))
+        self.log.debug("DEBUG 3: stock cache: {0}, stock list: {1}, monitor_list: {2}, filtered_sectors: {3}, industry_sector_list: {4}".format(g.stock_chan_type.keys(), 
+                                                                           self.g.buy_stocks,
+                                                                           self.g.monitor_buy_list,
+                                                                           self.g.filtered_sectors,
+                                                                           self.g.industry_sector_list))
     
         checking_stocks = [stock for stock in list(set(self.g.buy_stocks+list(context.portfolio.positions.keys()))) if stock not in g.money_fund]
         if self.add_etf:
