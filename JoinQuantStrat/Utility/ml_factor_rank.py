@@ -775,8 +775,9 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         df = self.get_df_predict(self.feasible_stocks, context.current_dt, 2 if self.regress_profit else 1) # only take yesterday 
         df = self.prepare_df_train(df)
 
-#         print(df_train)
-#         print(df)
+#         if self.is_debug:
+#             print(df_train)
+#             print(df)
 
         #训练集（包括验证集）
         X_trainval = df_train[self.train_list]
@@ -795,8 +796,9 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         y.index = df['stock_code']
         y = y.fillna(0)
  
-#         print(X_trainval, y_trainval)
-#         print(X, y)
+#         if self.is_debug:
+#             print(X_trainval, y_trainval)
+#             print(X, y)
  
         kfold = KFold(n_splits=4)        
         
@@ -857,13 +859,14 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
             #对新的因子，即残差进行排序（按照从小到大）
             factor = factor.sort_values(by = 'market_cap')
         
-#         if self.is_debug:
-#             print("y value: {0}".format(y))
-#             print("y_pred value: {0}".format(y_pred))
-#             print("factor value: {0}".format(factor))
-        
-        
         stockset = list(factor.index[:self.stock_num])
+
+        if self.is_debug:
+            print("y value: {0}".format(y))
+            print("y_pred value: {0}".format(y_pred))
+            print("factor value: {0}".format(factor))
+            print("stock set: {0}".format(stockset))
+        
         return stockset       
 
     def get_df_predict(self, stocks, end_date,trainlength=2):

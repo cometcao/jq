@@ -77,7 +77,7 @@ class Pick_stocks2(Group_rules):
             if isinstance(rule, Create_stock_list):
                 self.g.buy_stocks = self.g.buy_stocks + rule.before_trading_start(context)
 
-        self.g.buy_stocks = list(set(self.g.buy_stocks))
+#         self.g.buy_stocks = list(set(self.g.buy_stocks))
         
         for rule in self.rules:
             if isinstance(rule, Early_Filter_stock_list):
@@ -1192,17 +1192,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                       skip_paused=True, 
                       panel=False, 
                       fields=['high', 'low', 'close', 'open'])
-        
-#         stock_data = get_bars_new(stock, 
-#                             start_dt=current_start_time,
-#                             unit='1d',
-#                             fields=['date','high', 'low', 'close', 'open'],
-#                             include_now=True, 
-#                             end_dt=context.current_dt, 
-#                             fq_ref_date=context.current_dt.date(), 
-#                             df=False)
 
-        
         if from_local_max:
             max_time = stock_data.loc[current_effective_time:,'high'].idxmax()
             stock_data = stock_data.loc[max_time:,]
@@ -1212,7 +1202,20 @@ class Filter_Chan_Stocks(Filter_stock_list):
         kb_chan = KBarChan(working_data_np, isdebug=False)
         
         result, check = kb_chan.formed_tb(tb=TopBotType.bot)
-        # avoid the case of big down stick!
+        
+        ###### DOUBLE CHECK #########
+#         stock_data2 = get_bars_new(stock, 
+#                             start_dt=current_start_time,
+#                             unit='1d',
+#                             fields=['date','high', 'low', 'close', 'open'],
+#                             include_now=True, 
+#                             end_dt=context.current_dt, 
+#                             fq_ref_date=context.current_dt.date(), 
+#                             df=False)
+#         kb_chan2 = KBarChan(stock_data2, isdebug=False)
+#         
+#         result2, check2 = kb_chan2.formed_tb(tb=TopBotType.bot)
+        
         return result and\
             (ignore_bot_shape or\
             not self.is_big_negative_stick(stock_data['open'][-1], 
@@ -1865,6 +1868,7 @@ class Filter_common(Filter_stock_list):
         return unsuspened_stocks
 
     def filter(self, context, data, stock_list):
+#         print("before filter list: {0}".format(stock_list))
         current_data = get_current_data()
         
         # filter out paused stocks
