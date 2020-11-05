@@ -238,7 +238,7 @@ class Buy_stocks(Rule):
             position_count = len(context.subportfolios[pindex].long_positions)
             if self.buy_count > position_count:
                 buy_stocks = [stock for stock in buy_stocks if stock not in self.g.sell_stocks and stock not in context.subportfolios[pindex].long_positions.keys()]
-                buy_stocks = context.subportfolios[pindex].long_positions.keys() + buy_stocks
+                buy_stocks = list(context.subportfolios[pindex].long_positions.keys()) + buy_stocks
                 
         avg_value = context.portfolio.total_value / self.buy_count
         for pindex in self.g.op_pindexs:
