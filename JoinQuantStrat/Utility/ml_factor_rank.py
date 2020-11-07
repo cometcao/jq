@@ -898,14 +898,16 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
             if fac in self.y_column and self.regress_profit:
                 continue
             factor_val_by_factor[fac] = get_factor_values(securities = stocks, factors = fac, end_date = end_date, count = trainlength)[fac]
+#             print("factor_val_by_factor: {0}-{1}".format(fac, factor_val_by_factor))
         
         factor_val_by_date = self.transform_df(factor_val_by_factor)
+#         print("factor_val_by_date: {0}".format(factor_val_by_date))
         
         # for remove duplicated factor values
         all_factors = get_all_factors()
         
         selected_fac = all_factors[all_factors['factor'].isin(self.pure_train_list)]
-        selected_cat = selected_fac[selected_fac['category'].isin(['basic', 'quality', 'growth', 'pershare'])]
+        selected_cat = selected_fac[selected_fac['category'].isin(self.factor_category)]
         for_drop_duplicates = selected_cat['factor'].tolist()
         
         # concat dataset 
@@ -941,26 +943,24 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
 
 
     def prepare_df_train(self, data_df):
-    
         excluded_columns = data_df[self.y_column]
         stock_code_col = data_df['stock_code']
         
-        df_train = data_df.loc[:, self.train_list]
-
-        # 离散值处理
-        df_train = winsorize_med(df_train, scale=5, inclusive=True, inf2nan=True, axis=0)     
+        df_train = data_df
         
-        # 标准化处理        
-        df_train = standardlize(df_train, inf2nan=True, axis=0)
+        for fac in self.factor_list:
+            if fac in df_train.columns:
+                df_train[fac] = winsorize_med(df_train[fac], scale=5, inclusive=True, inf2nan=True, axis=0)    
+        
+        for fac in self.factor_list:
+            if fac in df_train.columns:
+                df_train[fac] = standardlize(df_train[fac], inf2nan=True, axis=0)
 
         # 中性化处理（行业中性化）
-        df_train['stock_code'] = stock_code_col
-        df_train = df_train[['stock_code'] + df_train.columns.difference(['stock_code']).tolist()]
+#         df_train['stock_code'] = stock_code_col
+#         df_train = df_train[['stock_code'] + df_train.columns.difference(['stock_code']).tolist()]
         df_train = self.neutralize(df_train,self.industry_set)
 
-#         if self.is_debug:
-#             print(df_train[['stock_code']+self.industry_set].head(20))        
-        
         # add the columns back with log
         df_train[self.y_column] = excluded_columns if self.regress_profit else np.log(excluded_columns) 
         
