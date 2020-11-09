@@ -479,8 +479,8 @@ class Pick_Rank_Factor(Create_stock_list):
         self.period = params.get('period', 'month_3')
         pass
     
-    def update_params(self, context, params):
-        self.period = params.get('period', 'month_3')
+#     def update_params(self, context, params):
+#         self.period = params.get('period', 'month_3')
     
     def before_trading_start(self, context):
         from ml_factor_rank import ML_Dynamic_Factor_Rank, ML_Factor_Rank
@@ -492,7 +492,8 @@ class Pick_Rank_Factor(Create_stock_list):
                                   'use_dynamic_factors': True, 
                                   'context': context, 
                                   'regress_profit': self.regress_profit,
-                                  'factor_category':self.factor_category})
+                                  'factor_category':self.factor_category, 
+                                  'trainlength': 55})
             new_list = mdfr.gaugeStocks_byfactors(context)
 
         else:

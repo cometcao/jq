@@ -861,11 +861,11 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         
         stockset = list(factor.index[:self.stock_num])
 
-        if self.is_debug:
-            print("y value: {0}".format(y))
-            print("y_pred value: {0}".format(y_pred))
-            print("factor value: {0}".format(factor))
-            print("stock set: {0}".format(stockset))
+#         if self.is_debug:
+#             print("y value: {0}".format(y))
+#             print("y_pred value: {0}".format(y_pred))
+#             print("factor value: {0}".format(factor))
+#             print("stock set: {0}".format(stockset))
         
         return stockset       
 
@@ -886,6 +886,8 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
                 factor_val_by_date[stock] = self.prepare_data_delta(factor_val_by_date[stock])
             factor_val_by_date[stock]['stock_code'] = stock
             data_df = pd.concat([data_df, factor_val_by_date[stock]], ignore_index=True)
+            
+        
         data_df = data_df[['stock_code'] + self.factor_list]
         return data_df           
 
@@ -926,7 +928,7 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
             factor_val_by_date[stock]['stock_code'] = stock
             data_df = pd.concat([data_df, factor_val_by_date[stock]], ignore_index=True)
         
-        # move stock_code to the front column
+#         # move stock_code to the front column
         data_df = data_df[['stock_code'] + self.factor_list]
         return data_df
         

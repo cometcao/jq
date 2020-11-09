@@ -68,9 +68,9 @@ class Dynamic_factor_based_stock_ranking(object):
         
         full_factor_list = factor_rank.reindex(factor_rank[self.factor_gauge].abs().sort_values(ascending=False).index)['code'].head(num_fac).tolist() # sort by abs ascending
         
-        if self.is_debug:
-            print(factor_rank.tail(5))
-            print(factor_rank.reindex(factor_rank[self.factor_gauge].abs().sort_values(ascending=False).index).head(5))
+#         if self.is_debug:
+#             print(factor_rank.tail(5))
+#             print(factor_rank.reindex(factor_rank[self.factor_gauge].abs().sort_values(ascending=False).index).head(5))
             
         pos_list, neg_list = [factor for factor in factor_code_list_positive if factor in full_factor_list], [factor for factor in factor_code_list_negative if factor in full_factor_list]
         
