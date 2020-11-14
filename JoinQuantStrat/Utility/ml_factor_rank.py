@@ -931,6 +931,16 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
 #         # move stock_code to the front column
         data_df = data_df[['stock_code'] + self.factor_list]
         return data_df
+    
+    def get_df_train_np(self,stocks, end_date,trainlength=89):
+        factor_val_by_factor = {}
+        for fac in self.factor_list:
+            if fac in self.y_column and self.regress_profit:
+                continue
+            factor_val_by_factor[fac] = get_factor_values(securities = stocks, factors = fac, end_date = end_date, count = trainlength)[fac].to_records()
+            
+        factor_val_by_date = self.transform_df_np(factor_val_by_factor)
+        
         
     def prepare_data_delta(self, df_train):
         # work out the percentage change in terms of past data
@@ -980,5 +990,33 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
                     date_factorcode[stock_code] = pd.DataFrame(index = date_code_df.index) 
                                     
                 date_factorcode[stock_code][factor_code] = date_code_df[stock_code]
+        return date_factorcode
+    
+    def transform_df_np(self, factor_df):
+        from numpy.lib.recfunctions import append_fields
+        date_factorcode = {}
+        
+        for factor_code in factor_df:
+            date_code_df = factor_df[factor_code]
+            all_date_fields = date_code_df['index']
+            all_stocks = list(date_code_df.dtype.names)
+            all_stocks.remove('index')
+            for dd in all_date_fields:
+                dtype = [('code', 'U11')]
+                if dd not in date_factorcode:
+                    date_factorcode[dd] = np.array(all_stocks, dtype=dtype)
+                    
+                date_factorcode[dd] = append_fields(
+                                            date_factorcode[dd], 
+                                            factor_code,
+                                            [0]*date_factorcode[dd].size,
+                                            [float],
+                                            usemask=False
+                                            )
+            
+                for stock_code in all_stocks:
+                    stock_code_loc = np.where(all_stocks==stock_code)[0]
+                    date_loc = np.where(date_code_df['index']==dd)[0][0]
+                    date_factorcode[dd][stock_code_loc] = date_code_df[stock_code][date_loc]
         return date_factorcode
         
