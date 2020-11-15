@@ -494,7 +494,7 @@ class Pick_Rank_Factor(Create_stock_list):
                                   'regress_profit': self.regress_profit,
                                   'factor_category':self.factor_category, 
                                   'trainlength': 55})
-            new_list = mdfr.gaugeStocks_byfactors(context)
+            new_list = mdfr.gaugeStocks_byfactors_np(context)
 
         else:
             mfr = ML_Factor_Rank({'stock_num':self.stock_num, 

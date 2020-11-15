@@ -582,6 +582,24 @@ class ML_Factor_Rank(object):
                     
         return df   
     
+    def neutralize_np(self, df, industry_set):
+        from numpy.lib.recfunctions import append_fields
+        for i in range(len(industry_set)):
+            df = append_fields(
+                                df, 
+                                industry_set[i],
+                                [0]*df.size,
+                                [int],
+                                usemask=False
+                                )
+    
+            industry_stock = get_industry_stocks(industry_set[i])
+            for j in range(df.size):
+                if df['stock_code'][j] in industry_stock:
+                    df[industry_set[i]][j] = 1
+                    
+        return df   
+    
     def set_feasible_stocks(self, initial_stocks,context):
         # 判断初始股票池的股票是否停牌，返回list
         paused_info = []
@@ -941,6 +959,31 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
             
         factor_val_by_date = self.transform_df_np(factor_val_by_factor)
         
+        # concat dataset 
+        data_df = None
+        for dd in factor_val_by_date:
+            if data_df is None:
+                data_df = factor_val_by_date[dd]
+            else:
+                data_df = np.concatenate((data_df, factor_val_by_date[dd]))
+        return data_df
+    
+    def get_df_predict_np(self, stocks, end_date,trainlength=2):
+        factor_val_by_factor = {}
+        for fac in self.factor_list:
+            if fac in self.y_column and self.regress_profit:
+                continue
+            factor_val_by_factor[fac] = get_factor_values(securities = stocks, factors = fac, end_date = end_date, count = trainlength)[fac].to_records()
+        
+        factor_val_by_date = self.transform_df_np(factor_val_by_factor)
+        # concat dataset 
+        data_df = None
+        for dd in factor_val_by_date:
+            if data_df is None:
+                data_df = factor_val_by_date[dd]
+            else:
+                data_df = np.concatenate((data_df, factor_val_by_date[dd]))
+        return data_df           
         
     def prepare_data_delta(self, df_train):
         # work out the percentage change in terms of past data
@@ -977,6 +1020,25 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         df_train[self.y_column] = excluded_columns if self.regress_profit else np.log(excluded_columns) 
         
         return df_train
+    
+    def prepare_df_train_np(self, df_train):
+        excluded_columns = df_train[self.y_column[0]]
+        
+        for fac in self.factor_list:
+            if fac in df_train.dtype.names:
+                df_train[fac] = winsorize_med(df_train[fac], scale=5, inclusive=True, inf2nan=True, axis=0)    
+        
+        for fac in self.factor_list:
+            if fac in df_train.dtype.names:
+                df_train[fac] = standardlize(df_train[fac], inf2nan=True, axis=0)
+
+        # 中性化处理（行业中性化）
+        df_train = self.neutralize_np(df_train,self.industry_set)
+
+        # add the columns back with log
+        df_train[self.y_column] = np.nan_to_num(np.log(excluded_columns))
+        
+        return df_train
 
 
 
@@ -999,13 +1061,14 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         for factor_code in factor_df:
             date_code_df = factor_df[factor_code]
             all_date_fields = date_code_df['index']
-            all_stocks = list(date_code_df.dtype.names)
+            all_date_code_col = date_code_df.dtype.names
+            all_stocks = list(all_date_code_col)
             all_stocks.remove('index')
             for dd in all_date_fields:
-                dtype = [('code', 'U11')]
+                dtype = [('stock_code', 'U11')]
                 if dd not in date_factorcode:
                     date_factorcode[dd] = np.array(all_stocks, dtype=dtype)
-                    
+                
                 date_factorcode[dd] = append_fields(
                                             date_factorcode[dd], 
                                             factor_code,
@@ -1013,10 +1076,119 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
                                             [float],
                                             usemask=False
                                             )
-            
+                
                 for stock_code in all_stocks:
-                    stock_code_loc = np.where(all_stocks==stock_code)[0]
+                    stock_code_loc = all_stocks.index(stock_code)
                     date_loc = np.where(date_code_df['index']==dd)[0][0]
-                    date_factorcode[dd][stock_code_loc] = date_code_df[stock_code][date_loc]
+                    date_factorcode[dd][factor_code][stock_code_loc] = np.nan_to_num(date_code_df[stock_code][date_loc])
         return date_factorcode
         
+    def gaugeStocks_byfactors_np(self, context):
+        # traing from past date (up to yesterday)
+        sample = []
+        if isinstance(self.index_scope, list):
+            for idx in self.index_scope:
+                sample = sample +  get_index_stocks(idx, date = None)
+        else:
+            sample = get_index_stocks(self.index_scope, date = None)
+        sample = list(set(sample))
+        # 设置可交易股票池
+        self.feasible_stocks = self.set_feasible_stocks(sample,context)
+        
+        yesterday = context.previous_date
+        
+        df_train = self.get_df_train_np(self.feasible_stocks, yesterday,self.trainlength)
+        df_train = self.prepare_df_train_np(df_train)
+        
+        # today's data
+        df = self.get_df_predict_np(self.feasible_stocks, context.current_dt, 2 if self.regress_profit else 1) # only take yesterday 
+        df = self.prepare_df_train_np(df)
+        
+#         df_train = np.nan_to_num(df_train)
+#         df = np.nan_to_num(df)
+
+#         if self.is_debug:
+#             print(df_train)
+#             print(df)
+
+        #训练集（包括验证集）
+        X_trainval = df_train[self.train_list]
+        X_trainval = X_trainval.view((X_trainval.dtype[0], len(X_trainval.dtype.names)))
+        
+        #定义机器学习训练集输出
+        y_trainval = df_train[self.y_column]
+        y_trainval = y_trainval.view((y_trainval.dtype[0], len(y_trainval.dtype.names)))
+ 
+        #测试集
+        X = df[self.train_list]
+        X = X.view((X.dtype[0], len(X.dtype.names)))
+        
+        #定义机器学习测试集输出
+        y = df[self.y_column[0]]
+ 
+#         if self.is_debug:
+#             print(X_trainval, y_trainval)
+#             print(X, y)
+ 
+        kfold = KFold(n_splits=4)        
+        
+        if self.gridserach == False:
+            #不带网格搜索的机器学习
+            if self.method == 'svr': #SVR
+                from sklearn.svm import SVR
+                model = SVR(C=100, gamma=1)
+            elif self.method == 'lr':
+                from sklearn.linear_model import LinearRegression
+                model = LinearRegression()
+            elif self.method == 'ridge': #岭回归
+                from sklearn.linear_model import Ridge
+                model = Ridge(random_state=42,alpha=100)
+            elif self.method == 'rf': #随机森林
+                from sklearn.ensemble import RandomForestRegressor
+                model = RandomForestRegressor(random_state=42,n_estimators=500,n_jobs=-1)
+            else:
+                self.scoreWrite = False
+        else:
+            # 带网格搜索的机器学习
+            para_grid = {}
+            if self.method == 'svr':
+                from sklearn.svm import SVR  
+                para_grid = {'C':[10,100],'gamma':[0.1,1,10]}
+                grid_search_model = SVR()
+            elif self.method == 'lr':
+                from sklearn.linear_model import LinearRegression
+                grid_search_model = LinearRegression()
+            elif self.method == 'ridge':
+                from sklearn.linear_model import Ridge
+                para_grid = {'alpha':[1,10,100]}
+                grid_search_model = Ridge()
+            elif self.method == 'rf':
+                from sklearn.ensemble import RandomForestRegressor
+                para_grid = {'n_estimators':[100,500,1000]}
+                grid_search_model = RandomForestRegressor()
+            else:
+                self.scoreWrite = False
+    
+            from sklearn.model_selection import GridSearchCV
+            model = GridSearchCV(grid_search_model,para_grid,cv=kfold,n_jobs=-1)
+        
+        # 拟合训练集，生成模型
+        model.fit(X_trainval,y_trainval)
+        # 预测值
+        y_pred = model.predict(X)
+        
+        
+        # 新的因子：实际值与预测值之差    
+        factor = y - y_pred
+        factor_array = list(zip(df['stock_code'], factor))
+        #对新的因子，即残差进行排序（按照从小到大）
+        factor_array = sorted(factor_array, key = lambda x: x[1])
+        
+        stockset = [x[0] for x in factor_array][:self.stock_num]
+
+#         if self.is_debug:
+#             print("y value: {0}".format(y))
+#             print("y_pred value: {0}".format(y_pred))
+#             print("factor value: {0}".format(factor_array))
+        
+        return stockset       
