@@ -955,7 +955,8 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         for fac in self.factor_list:
             if fac in self.y_column and self.regress_profit:
                 continue
-            factor_val_by_factor[fac] = get_factor_values(securities = stocks, factors = fac, end_date = end_date, count = trainlength)[fac].to_records()
+            fac_data_df = get_factor_values(securities = stocks, factors = fac, end_date = end_date, count = trainlength)[fac]
+            factor_val_by_factor[fac] = fac_data_df.iloc[[0, int(trainlength/3), int(trainlength*2/3)], :].to_records()
             
         factor_val_by_date = self.transform_df_np(factor_val_by_factor)
         
@@ -1024,11 +1025,11 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
     def prepare_df_train_np(self, df_train):
         excluded_columns = df_train[self.y_column[0]]
         
-        for fac in self.factor_list:
+        for fac in self.pure_train_list:
             if fac in df_train.dtype.names:
                 df_train[fac] = winsorize_med(df_train[fac], scale=5, inclusive=True, inf2nan=True, axis=0)    
         
-        for fac in self.factor_list:
+        for fac in self.pure_train_list:
             if fac in df_train.dtype.names:
                 df_train[fac] = standardlize(df_train[fac], inf2nan=True, axis=0)
 
@@ -1036,7 +1037,7 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         df_train = self.neutralize_np(df_train,self.industry_set)
 
         # add the columns back with log
-        df_train[self.y_column] = np.nan_to_num(np.log(excluded_columns))
+        df_train[self.y_column[0]] = np.nan_to_num(np.log(excluded_columns))
         
         return df_train
 
@@ -1099,36 +1100,36 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         
         df_train = self.get_df_train_np(self.feasible_stocks, yesterday,self.trainlength)
         df_train = self.prepare_df_train_np(df_train)
+        if self.is_debug:
+            print(df_train)
         
         # today's data
         df = self.get_df_predict_np(self.feasible_stocks, context.current_dt, 2 if self.regress_profit else 1) # only take yesterday 
         df = self.prepare_df_train_np(df)
         
-#         df_train = np.nan_to_num(df_train)
-#         df = np.nan_to_num(df)
-
-#         if self.is_debug:
-#             print(df_train)
-#             print(df)
+        if self.is_debug:
+            print(df)
 
         #训练集（包括验证集）
         X_trainval = df_train[self.train_list]
-        X_trainval = X_trainval.view((X_trainval.dtype[0], len(X_trainval.dtype.names)))
+        X_trainval = X_trainval.tolist()
+#         X_trainval = X_trainval.view((X_trainval.dtype[0], len(X_trainval.dtype.names)))
         
         #定义机器学习训练集输出
-        y_trainval = df_train[self.y_column]
-        y_trainval = y_trainval.view((y_trainval.dtype[0], len(y_trainval.dtype.names)))
- 
+        y_trainval = df_train[self.y_column[0]]
+#         y_trainval = y_trainval.view((y_trainval.dtype[0], len(y_trainval.dtype.names)))
+
         #测试集
         X = df[self.train_list]
-        X = X.view((X.dtype[0], len(X.dtype.names)))
+        X = X.tolist()
+#         X = X.view((X.dtype[0], len(X.dtype.names)))
         
         #定义机器学习测试集输出
         y = df[self.y_column[0]]
  
-#         if self.is_debug:
-#             print(X_trainval, y_trainval)
-#             print(X, y)
+        if self.is_debug:
+            print(X_trainval, y_trainval)
+            print(X, y)
  
         kfold = KFold(n_splits=4)        
         
@@ -1177,7 +1178,6 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         # 预测值
         y_pred = model.predict(X)
         
-        
         # 新的因子：实际值与预测值之差    
         factor = y - y_pred
         factor_array = list(zip(df['stock_code'], factor))
@@ -1186,9 +1186,9 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         
         stockset = [x[0] for x in factor_array][:self.stock_num]
 
-#         if self.is_debug:
-#             print("y value: {0}".format(y))
-#             print("y_pred value: {0}".format(y_pred))
-#             print("factor value: {0}".format(factor_array))
+        if self.is_debug:
+            print("y value: {0}".format(y))
+            print("y_pred value: {0}".format(y_pred))
+            print("factor value: {0}".format(factor_array))
         
         return stockset       
