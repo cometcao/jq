@@ -974,7 +974,7 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         for fac in self.factor_list:
             if fac in self.y_column and self.regress_profit:
                 continue
-            factor_val_by_factor[fac] = get_factor_values(securities = stocks, factors = fac, end_date = end_date, count = trainlength)[fac].to_records()
+            factor_val_by_factor[fac] = get_factor_values(securities = stocks, factors = fac, end_date = end_date, count = trainlength)[fac].fillna(0).to_records()
         
         factor_val_by_date = self.transform_df_np(factor_val_by_factor)
         # concat dataset 
