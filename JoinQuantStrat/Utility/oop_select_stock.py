@@ -954,6 +954,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             if stock not in g.stock_chan_type:
                 print("{0} not in stock_chan_type cache, we ignore it".format(stock))
                 stocks_to_remove_I.add(stock)
+                continue
             
             if len(g.stock_chan_type[stock]) > 1: # we have check it before
                 if self.check_guide_price_reached(stock, context):
