@@ -956,7 +956,7 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
             if fac in self.y_column and self.regress_profit:
                 continue
             fac_data_df = get_factor_values(securities = stocks, factors = fac, end_date = end_date, count = trainlength)[fac].fillna(0)
-            factor_val_by_factor[fac] = fac_data_df.iloc[[0, int(trainlength/3), int(trainlength*2/3)], :].to_records()
+            factor_val_by_factor[fac] = fac_data_df.iloc[:int(trainlength*2/3), :].to_records()
             
         factor_val_by_date = self.transform_df_np(factor_val_by_factor)
         
@@ -969,12 +969,13 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
                 data_df = np.concatenate((data_df, factor_val_by_date[dd]))
         return data_df
     
-    def get_df_predict_np(self, stocks, end_date,trainlength=2):
+    def get_df_predict_np(self, stocks, end_date,trainlength=89):
         factor_val_by_factor = {}
         for fac in self.factor_list:
             if fac in self.y_column and self.regress_profit:
                 continue
-            factor_val_by_factor[fac] = get_factor_values(securities = stocks, factors = fac, end_date = end_date, count = trainlength)[fac].fillna(0).to_records()
+            fac_data_df = get_factor_values(securities = stocks, factors = fac, end_date = end_date, count = trainlength)[fac].fillna(0)
+            factor_val_by_factor[fac] = fac_data_df.iloc[int(trainlength*2/3):, :].to_records()
         
         factor_val_by_date = self.transform_df_np(factor_val_by_factor)
         # concat dataset 
@@ -1039,8 +1040,7 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         # add the columns back with log
         df_train[self.y_column[0]] = np.nan_to_num(np.log(excluded_columns))
         
-        return df_train
-
+        return df_train[-len(self.feasible_stocks):] # take latest data for predict
 
 
     def transform_df(self, factor_df):
@@ -1096,7 +1096,7 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         # 设置可交易股票池
         self.feasible_stocks = self.set_feasible_stocks(sample,context)
         
-        yesterday = context.previous_date
+        yesterday = context.previous_date # we always trade at the start of the day
         
         df_train = self.get_df_train_np(self.feasible_stocks, yesterday,self.trainlength)
         df_train = self.prepare_df_train_np(df_train)
@@ -1104,7 +1104,7 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
             print(df_train)
         
         # today's data
-        df = self.get_df_predict_np(self.feasible_stocks, context.current_dt, 2 if self.regress_profit else 1) # only take yesterday 
+        df = self.get_df_predict_np(self.feasible_stocks, yesterday, self.trainlength) # only take yesterday 
         df = self.prepare_df_train_np(df)
         
         if self.is_debug:
