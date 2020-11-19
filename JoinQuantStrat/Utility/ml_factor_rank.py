@@ -980,7 +980,9 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         factor_val_by_date = self.transform_df_np(factor_val_by_factor)
         # concat dataset 
         data_df = None
-        for dd in factor_val_by_date:
+        factor_val_by_date_list_sorted = sorted(factor_val_by_date.keys())
+        # make sure we have sorted date, so that we use latest data for prediction
+        for dd in factor_val_by_date_list_sorted:
             if data_df is None:
                 data_df = factor_val_by_date[dd]
             else:
