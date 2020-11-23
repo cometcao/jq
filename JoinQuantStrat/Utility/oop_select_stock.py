@@ -1724,7 +1724,7 @@ class Filter_Industry_Sector(Early_Filter_stock_list):
     
     def filter(self, context, stock_list):
         # keep sector strength order
-        return [stock for stock in self.new_list if stock in stock_list]
+        return [stock for stock in stock_list if stock in self.new_list]
 
     def before_trading_start(self, context):
         if self.g.isFirstNTradingDayOfPeriod(context, num_of_day=1, period=self.period_frequency) or not self.new_list or self.isDaily:
@@ -1884,7 +1884,7 @@ class Filter_common(Filter_stock_list):
         current_data = get_current_data()
         
         # filter out paused stocks
-        stock_list = self.set_feasible_stocks(stock_list, current_data)
+#         stock_list = self.set_feasible_stocks(stock_list, current_data)
         
         if 'st' in self.filters:
             stock_list = [stock for stock in stock_list
