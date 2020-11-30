@@ -767,7 +767,7 @@ class Pick_stock_from_file_chan(Create_stock_list):
                                                        datetime.datetime.strptime(s_time, "%Y-%m-%d %H:%M:%S"), 
                                                        )]
             self.log.info("filtered data read from file: {0} stocks info. cache info: {1}".format(len(chan_stock_list), 
-                                                                                                  g.stock_chan_type.keys()))
+                                                                                                  len(g.stock_chan_type)))
         return chan_stock_list if len(chan_stock_list) >= self.min_stock_num else []
     
     def __str__(self):
@@ -1112,19 +1112,22 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         cur_ratio = cur_latest_money / cur_past_money
         
-#         self.log.debug("candidate stock {0} cur: {1} cur_intern: {2}".format(stock, cur_ratio, cur_internal_ratio))
+#         self.log.debug("candidate stock {0} cur: {1} cur_intern: {2}, chan type: {3}".format(stock, 
+#                                                                                         cur_ratio, 
+#                                                                                         cur_internal_ratio,
+#                                                                                         cur_chan_type))
+        
         if cur_chan_type == Chan_Type.I or cur_chan_type == Chan_Type.I_weak:
             if float_less_equal(cur_ratio, 0.809) or\
                 (float_more_equal(cur_ratio, 1.191) and float_less_equal(cur_internal_ratio, 0.809)):
                 return True
-        elif cur_chan_type == Chan_Type.III or cur_chan_type == Chan_Type.III_strong:
-            if float_less_equal(cur_ratio, 0.618) or\
-                float_less_equal(cur_internal_ratio, 0.618):
+        elif cur_chan_type == Chan_Type.III or cur_chan_type == Chan_Type.III_strong or cur_chan_type == Chan_Type.INVALID:
+            if float_less_equal(cur_internal_ratio, 0.618):
                 return True
-        elif cur_chan_type == Chan_Type.INVALID:
-            if float_less_equal(cur_ratio, 0.809) or\
-                float_less_equal(cur_internal_ratio, 0.809):
-                result = True
+#         elif cur_chan_type == Chan_Type.INVALID:
+#             if float_less_equal(cur_ratio, 0.809) or\
+#                 float_less_equal(cur_internal_ratio, 0.809):
+#                 return True
         return False
     
     def check_daily_vol_money(self, stock, context):
