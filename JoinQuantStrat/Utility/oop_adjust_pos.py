@@ -1053,12 +1053,13 @@ class Short_Chan(Sell_stocks):
         sub_zoushi_start_time = sub_profile[5]
         effective_time = sub_profile[6]
         
-        if current_chan_t == Chan_Type.I or current_chan_t == Chan_Type.I_weak:
+        if current_chan_t == Chan_Type.I or\
+            current_chan_t == Chan_Type.I_weak or\
+            current_chan_t == Chan_Type.INVALID:
             working_period = self.current_period
         elif current_chan_t == Chan_Type.III or\
             current_chan_t == Chan_Type.III_strong or\
-            current_chan_t == Chan_Type.III_weak or\
-            current_chan_t == Chan_Type.INVALID:
+            current_chan_t == Chan_Type.III_weak:
             working_period = self.sub_period
         
         data_start_time = current_zoushi_start_time - pd.Timedelta(minutes=200)
