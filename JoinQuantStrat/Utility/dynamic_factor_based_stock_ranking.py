@@ -90,6 +90,9 @@ class Dynamic_factor_based_stock_ranking(object):
             factor_rank = factor_rank[factor_rank['date'] == str(working_date)] if working_date is not None else factor_rank            
         
         num_fac = int(np.ceil(self.factor_num / len(self.category)))
+#         print("num_fac is: {0}, self.factor_num: {1}, len(self.category): {2}".format(num_fac, 
+#                                                                                       self.factor_num,
+#                                                                                       len(self.category)))
         full_list = []
         for cat in self.category:
             sub_factor_rank = factor_rank[factor_rank['category']==cat]

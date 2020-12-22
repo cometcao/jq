@@ -631,6 +631,7 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         self.period = params.get('period', 'month_3')
         self.factor_result_file = params.get('factor_result_file', None)
         self.factor_category = params.get('factor_category', ['basics'])
+        self.factor_num = params.get('factor_num', 10)
 
         # 网格搜索是否开启
         self.gridserach = False
@@ -755,7 +756,7 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         if self.use_dynamic_factors:
             dfbsr = Dynamic_factor_based_stock_ranking({'stock_num':self.stock_num, 
                                                     'index_scope':self.get_index_pinyin(self.index_scope),
-                                                    'factor_num':10,
+                                                    'factor_num':self.factor_num,
                                                     'is_debug':self.is_debug, 
                                                     'category':self.factor_category})
             self.pure_train_list = dfbsr.get_ranked_factors_by_category(self.factor_result_file, self.context.previous_date)
