@@ -1041,7 +1041,10 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         df_train = self.neutralize_np(df_train,self.industry_set)
 
         # add the columns back with log
-        df_train[self.y_column[0]] = np.nan_to_num(np.log(excluded_columns))
+        df_train[self.y_column[0]] = np.log(excluded_columns)
+        
+        # remove invalid data
+        df_train = np.nan_to_num(df_train)
         
         return df_train[-len(self.feasible_stocks):] # take latest data for predict
 
