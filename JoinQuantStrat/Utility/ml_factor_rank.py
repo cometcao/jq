@@ -760,6 +760,7 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
                                                     'is_debug':self.is_debug, 
                                                     'category':self.factor_category})
             self.pure_train_list = dfbsr.get_ranked_factors_by_category(self.factor_result_file, self.context.previous_date)
+            self.pure_train_list = [fac for fac in self.pure_train_list if fac not in self.y_column]
             self.factor_list = self.y_column + self.pure_train_list
             self.train_list = self.pure_train_list + self.industry_set
             
@@ -968,6 +969,7 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
                 data_df = factor_val_by_date[dd]
             else:
                 data_df = np.concatenate((data_df, factor_val_by_date[dd]))
+
         return data_df
     
     def get_df_predict_np(self, stocks, end_date,trainlength=89):
@@ -1027,21 +1029,24 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         return df_train
     
     def prepare_df_train_np(self, df_train):
-        excluded_columns = df_train[self.y_column[0]]
-        
+        from scipy import stats
         for fac in self.pure_train_list:
             if fac in df_train.dtype.names:
-                df_train[fac] = winsorize_med(df_train[fac], scale=5, inclusive=True, inf2nan=True, axis=0)    
-        
-        for fac in self.pure_train_list:
-            if fac in df_train.dtype.names:
-                df_train[fac] = standardlize(df_train[fac], inf2nan=True, axis=0)
+                df_train[fac] = stats.zscore(df_train[fac])
+
+#         for fac in self.pure_train_list:
+#             if fac in df_train.dtype.names:
+#                 df_train[fac] = winsorize_med(df_train[fac], scale=5, inclusive=True, inf2nan=True, axis=0)    
+#         
+#         for fac in self.pure_train_list:
+#             if fac in df_train.dtype.names:
+#                 df_train[fac] = standardlize(df_train[fac], inf2nan=True, axis=0)
 
         # 中性化处理（行业中性化）
         df_train = self.neutralize_np(df_train,self.industry_set)
 
         # add the columns back with log
-        df_train[self.y_column[0]] = np.log(excluded_columns)
+        df_train[self.y_column[0]] = np.log(df_train[self.y_column[0]])
         
         # remove invalid data
         df_train = np.nan_to_num(df_train)
@@ -1107,14 +1112,14 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         df_train = self.get_df_train_np(self.feasible_stocks, yesterday,self.trainlength)
         df_train = self.prepare_df_train_np(df_train)
         if self.is_debug:
-            print(df_train)
+            print("df_train: {0}".format(df_train))
         
         # today's data
         df = self.get_df_predict_np(self.feasible_stocks, yesterday, self.trainlength) # only take yesterday 
         df = self.prepare_df_train_np(df)
         
         if self.is_debug:
-            print(df)
+            print("df: {0}".format(df))
 
         #训练集（包括验证集）
         X_trainval = df_train[self.train_list]
@@ -1134,8 +1139,10 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         y = df[self.y_column[0]]
  
         if self.is_debug:
-            print(X_trainval, y_trainval)
-            print(X, y)
+            print("X_trainval: {0}".format(X_trainval))
+            print("y_trainval: {0}".format(y_trainval))
+            print("X: {0}".format(X))
+            print("y: {0}".format(y))
  
         kfold = KFold(n_splits=4)        
         
