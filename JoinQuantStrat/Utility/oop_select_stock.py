@@ -872,6 +872,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.sup_chan_type = params.get('sup_chan_type', [Chan_Type.I, Chan_Type.INVALID])
         self.current_chan_type = params.get('current_chan_type', [Chan_Type.I])
         self.sub_chan_type = params.get('sub_chan_type', [Chan_Type.INVALID, Chan_Type.I])
+        self.sup_period = params.get('sup_period', '30m')
         self.periods = params.get('periods', ['5m', '1m'])
         self.num_of_data = params.get('num_of_data', 2500)
         self.sub_force_zhongshu = params.get('sub_force_zhongshu', True)
@@ -1247,7 +1248,57 @@ class Filter_Chan_Stocks(Filter_stock_list):
     def check_stage_II(self, stock, context):
 #         result, _ = self.check_structure_sub_only(stock, context)
 #         return result or self.check_daily_vol_money(stock, context)
-        return True
+        return self.check_ma_region_cross(stock, context)
+#         return True
+    
+    def check_ma_region_cross(self, stock, context, check_long=True):
+        current_profile = g.stock_chan_type[stock][1]
+        current_effective_time = current_profile[6]
+        
+        ma_8 = 8
+        ma_13 = 13
+        ma_21 = 21
+        ma_34 = 34
+        ma_55 = 55
+        ma_89 = 89
+        ma_144 = 144
+        ma_233 = 233
+        ma_377 = 377
+        ma_sequence = np.array([ma_8, ma_13, ma_21, ma_34, ma_55, ma_89, ma_144, ma_233, ma_377])
+        
+        stock_data = get_bars(stock,
+                               count=ma_377,
+                               end_dt=context.current_dt, 
+                               unit=self.sup_period, # use super level
+                               include_now=True, 
+                               fields=('date', 'close', 'low', 'high'), 
+                               fq_ref_date=context.current_dt.date(),
+                               df=False)
+        
+        cutting_loc = np.where(stock_data['date']>=current_effective_time)[0][0]
+        period_num = ma_377 - cutting_loc
+        period_num_idx = np.where(ma_sequence >= period_num)[0][0]
+        
+        print("check period: {0} check ma idx: {1}".format(period_num, period_num_idx))
+        
+        if period_num_idx < len(ma_sequence)-1:
+            previous_ma = sum(stock_data['close'][-ma_sequence[period_num_idx]:])/ma_sequence[period_num_idx]
+            
+            period_check_cross = ma_sequence[period_num_idx+1]
+            sma_period_check_cross = np.nan_to_num(talib.SMA(stock_data['close'], period_check_cross))
+            print(period_check_cross)
+            print(sma_period_check_cross)
+            
+            cut_stock_data = stock_data['close'][cutting_loc:]
+            cut_sma_period_check_cross = sma_period_check_cross[cutting_loc:]
+            return (np.any(cut_stock_data >= cut_sma_period_check_cross) and\
+                    sma_period_check_cross[-1] > pervious_ma) if check_long else\
+                    (np.any(cut_stock_data <= cut_sma_period_check_cross) and\
+                     sma_period_check_cross[-1] < pervious_ma)
+            
+        else:
+            return False
+        
     
     def check_stage_III(self, stock, context):
         if self.stage_III_timing and\
