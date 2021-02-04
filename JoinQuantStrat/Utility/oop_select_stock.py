@@ -1292,9 +1292,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
             cut_stock_data = stock_data['close'][cutting_loc:]
             cut_sma_period_check_cross = sma_period_check_cross[cutting_loc:]
             return (np.any(cut_stock_data >= cut_sma_period_check_cross) and\
-                    sma_period_check_cross[-1] > pervious_ma) if check_long else\
+                    sma_period_check_cross[-1] > previous_ma) if check_long else\
                     (np.any(cut_stock_data <= cut_sma_period_check_cross) and\
-                     sma_period_check_cross[-1] < pervious_ma)
+                     sma_period_check_cross[-1] < previous_ma)
             
         else:
             return False
