@@ -928,9 +928,9 @@ class KBarChan(object):
         if self.isdebug:
             print("getPureBi:{0}".format(self.kDataFrame_marked[['date', 'chan_price', 'tb', 'real_loc']][-20:]))
 
-    def getFenBi(self, initial_state=TopBotType.noTopBot):
+    def getFenBi(self, initial_state=TopBotType.noTopBot, mark_last_kbar=True):
         self.standardize(initial_state)
-        self.markTopBot(initial_state)
+        self.markTopBot(initial_state, mark_last_kbar=mark_last_kbar)
         self.defineBi()
         self.getPureBi()
         return self.kDataFrame_marked

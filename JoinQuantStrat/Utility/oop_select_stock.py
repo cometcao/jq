@@ -973,10 +973,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         if len(stock_data) > 1:
             if check_new_bot:
-                self.log.info("{0} reached new low price:{1} -> {2}".format(stock, 
-                                                                     stock_data['low'][0],
-                                                                     min(stock_data['low'][1:])))
-                return np.any(stock_data['low'][0] > stock_data['low'][1:])
+                new_low_found = np.any(stock_data['low'][0] > stock_data['low'][1:])
+                if new_low_found:
+                    self.log.info("{0} reached new low price:{1} -> {2}".format(stock, 
+                                                                         stock_data['low'][0],
+                                                                         min(stock_data['low'][1:])))
+                return new_low_found
             else:
                 return np.any(stock_data['high'][0] < stock_data['high'][1:])
         return False
@@ -995,12 +997,13 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 stocks_to_remove_I.add(stock)
                 continue
             
-            if len(g.stock_chan_type[stock]) > 1: # we have check it before
-                if self.check_guide_price_reached(stock, context):
-                    stocks_to_remove_I.add(stock)
-                    if self.use_all_stocks_4_A and self.use_stage_A:
-                        self.tentative_stage_A.add(stock) # skip first phase
-                    continue
+            # we don't need to do this check in operation, as reaching guide price is a theoretical result
+#             if len(g.stock_chan_type[stock]) > 1: # we have check it before
+#                 if self.check_guide_price_reached(stock, context):
+#                     stocks_to_remove_I.add(stock)
+#                     if self.use_all_stocks_4_A and self.use_stage_A:
+#                         self.tentative_stage_A.add(stock) # skip first phase
+#                     continue
             
             check_result, zhongshu_changed = self.check_stage_I(stock, context)
             if zhongshu_changed:
@@ -1290,8 +1293,25 @@ class Filter_Chan_Stocks(Filter_stock_list):
     def check_stage_II(self, stock, context):
 #         result, _ = self.check_structure_sub_only(stock, context)
 #         return result or self.check_daily_vol_money(stock, context)
-        return self.check_ma_region_cross(stock, context)
+        return self.check_bi_zhongshu_formed(stock, context) and self.check_ma_region_cross(stock, context)
 #         return True
+
+    def check_bi_zhongshu_formed(self, stock, context):
+        current_profile = g.stock_chan_type[stock][1]
+        current_effective_time = current_profile[6]
+        
+        working_data_np = get_bars_new(stock,
+                               start_dt=current_effective_time,
+                               end_dt=context.current_dt, 
+                               unit=self.sup_period, # use super level
+                               include_now=True, 
+                               fields=('date', 'close', 'low', 'high'), 
+                               fq_ref_date=context.current_dt.date(),
+                               df=False)
+        kb_chan = KBarChan(working_data_np, isdebug=False)
+        fenbi_data = kb_chan.getFenBi(initial_state=TopBotType.bot, mark_last_kbar=False)
+        return len(fenbi_data) >= 4
+        
     
     def check_ma_region_cross(self, stock, context, check_long=True):
         self.sup_period = '30m'
@@ -1354,7 +1374,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             return False, False, True
         
         bot_result, checked = self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=True)
-        boll_result, in_region = self.check_daily_boll_lower(stock, context)
+#         boll_result, in_region = self.check_daily_boll_lower(stock, context)
+        boll_result, in_region = True, True # shortcut boll check
 #         print("{0} {1}, {2}, {3}, {4}".format(stock, bot_result, checked, boll_result, in_region))
         return bot_result and boll_result, checked, in_region
     
