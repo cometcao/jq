@@ -944,7 +944,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return False
     
     def check_tentative_stocks(self, context):
-        self.sup_period = '30m'
+
         stocks_to_long = set()
         stocks_to_remove_I = set()
         stage_B_long = set()
@@ -1255,6 +1255,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #         return True
     
     def check_ma_region_cross(self, stock, context, check_long=True):
+        self.sup_period = '30m'
         current_profile = g.stock_chan_type[stock][1]
         current_effective_time = current_profile[6]
         
@@ -1289,11 +1290,11 @@ class Filter_Chan_Stocks(Filter_stock_list):
             
             period_check_cross = ma_sequence[period_num_idx+1]
             sma_period_check_cross = np.nan_to_num(talib.SMA(stock_data['close'], period_check_cross))
-            print(period_check_cross)
-            print(sma_period_check_cross)
             
             cut_stock_data = stock_data['close'][cutting_loc:]
             cut_sma_period_check_cross = sma_period_check_cross[cutting_loc:]
+            print(cut_stock_data)
+            print(cut_sma_period_check_cross)
             return (np.any(cut_stock_data >= cut_sma_period_check_cross) and\
                     sma_period_check_cross[-1] > previous_ma) if check_long else\
                     (np.any(cut_stock_data <= cut_sma_period_check_cross) and\
