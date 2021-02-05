@@ -981,6 +981,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 
         for stock in self.tentative_stage_II:
             check_result = self.check_stage_II(stock, context)
+            
+            # TODO: if new low reached, we need to discard the stock
+            
             if check_result:
                 top_profile = g.stock_chan_type[stock][0]
                 cur_profile = g.stock_chan_type[stock][1]
