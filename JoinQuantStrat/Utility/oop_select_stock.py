@@ -944,7 +944,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return False
     
     def check_tentative_stocks(self, context):
-        
+        self.sup_period = '30m'
         stocks_to_long = set()
         stocks_to_remove_I = set()
         stage_B_long = set()
