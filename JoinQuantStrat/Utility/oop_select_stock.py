@@ -914,33 +914,71 @@ class Filter_Chan_Stocks(Filter_stock_list):
         current_chan_p = current_profile[2]
         current_start_time = current_profile[5]
         current_effective_time = current_profile[6]
-        stock_data = get_price(stock,
-                               start_date=current_start_time, 
-                               end_date=context.current_dt, 
-                               frequency=self.periods[0], 
-                               fields=('high', 'low', 'close', 'money'), 
-                               skip_paused=False)
+        
+#         stock_data = get_price(stock,
+#                                start_date=current_start_time, 
+#                                end_date=context.current_dt, 
+#                                frequency=self.periods[0], 
+#                                fields=('high', 'low', 'close', 'money'), 
+#                                skip_paused=False)
+#         
+#         if current_chan_t == Chan_Type.I or current_chan_t == Chan_Type.I_weak:
+#             max_price_after_long = stock_data.loc[current_effective_time:, 'high'].max()
+#             if float_more_equal(max_price_after_long, current_chan_p):
+#                 self.log.info("{0} reached target price:{1}, max: {2}".format(stock, 
+#                                                                               current_chan_p, 
+#                                                                               max_price_after_long))
+#                 return True
+#         elif current_chan_t == Chan_Type.III or current_chan_t == Chan_Type.III_strong:
+#             min_price_after_long = stock_data.loc[current_effective_time:, 'low'].min()
+#             if float_less_equal(min_price_after_long, current_chan_p):
+#                 return True
+#         return False
+#=========================
+        stock_data = get_bars_new(stock, 
+                            start_dt=current_start_time,
+                            unit=self.periods[0],
+                            fields=['date','high', 'low', 'close', 'open'],
+                            include_now=True, 
+                            end_dt=context.current_dt, 
+                            fq_ref_date=context.current_dt.date(), 
+                            df=False)
+        cutting_loc = np.where(stock_data['date']>=current_effective_time)[0][0]
         if current_chan_t == Chan_Type.I or current_chan_t == Chan_Type.I_weak:
-            max_price_after_long = stock_data.loc[current_effective_time:, 'high'].max()
-            if float_more_equal(max_price_after_long, current_chan_p):
+            all_high_after_long = stock_data['high'][cutting_loc:]
+            if np.any(all_high_after_long >= current_chan_p):
                 self.log.info("{0} reached target price:{1}, max: {2}".format(stock, 
                                                                               current_chan_p, 
-                                                                              max_price_after_long))
+                                                                              max(all_high_after_long)))
                 return True
-
-#             min_time = stock_data.loc[current_effective_time:, 'low'].idxmin()
-#             min_price = stock_data.loc[min_time,'low']
-#             max_price = stock_data.loc[min_time:, 'high'].max()
-#             if float_more_equal(max_price / min_price - 1, self.price_revert_range):
-#                 self.log.info("{0} price reverted:{1}, max: {2}".format(stock, 
-#                                                                       min_price, 
-#                                                                       max_price))
-#                 return True
-
         elif current_chan_t == Chan_Type.III or current_chan_t == Chan_Type.III_strong:
-            min_price_after_long = stock_data.loc[current_effective_time:, 'low'].min()
-            if float_less_equal(min_price_after_long, current_chan_p):
+            all_low_after_long = stock_data['low'][cutting_loc:]
+            if np.any(all_low_after_long <= current_chan_p):
                 return True
+        return False
+        
+    
+    def check_reached_new_tb(self, stock, context, check_new_bot=True):
+        current_profile = g.stock_chan_type[stock][1]
+        current_effective_time = current_profile[6]
+        
+        stock_data = get_bars_new(stock, 
+                            start_dt=current_effective_time,
+                            unit=self.periods[0],
+                            fields=['high', 'low'],
+                            include_now=True, 
+                            end_dt=context.current_dt, 
+                            fq_ref_date=context.current_dt.date(), 
+                            df=False)
+        
+        if len(stock_data) > 1:
+            if check_new_bot:
+                self.log.info("{0} reached new low price:{1} -> {2}".format(stock, 
+                                                                     stock_data['low'][0],
+                                                                     min(stock_data['low'][1:])))
+                return np.any(stock_data['low'][0] > stock_data['low'][1:])
+            else:
+                return np.any(stock_data['high'][0] < stock_data['high'][1:])
         return False
     
     def check_tentative_stocks(self, context):
@@ -980,11 +1018,11 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                 
         for stock in self.tentative_stage_II:
-            check_result = self.check_stage_II(stock, context)
+            if self.check_reached_new_tb(stock, context, check_new_bot=True):
+                stocks_to_remove_II.add(stock)
+                continue
             
-            # TODO: if new low reached, we need to discard the stock
-            
-            if check_result:
+            if self.check_stage_II(stock, context):
                 top_profile = g.stock_chan_type[stock][0]
                 cur_profile = g.stock_chan_type[stock][1]
                 sub_profile = g.stock_chan_type[stock][2]
@@ -997,6 +1035,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 if self.force_chan_type and (chan_type_list not in self.force_chan_type):
                     stocks_to_remove_II.add(stock)
                     continue
+                
                 stocks_to_long.add(stock)
                 
         self.tentative_stage_II = self.tentative_stage_II.difference(stocks_to_remove_II)
@@ -1281,24 +1320,28 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         cutting_loc = np.where(stock_data['date']>=current_effective_time)[0][0]
         period_num = ma_377 - cutting_loc
-        period_num_idx = np.where(ma_sequence >= period_num)[0][0]
+        if period_num < ma_13:
+            return False
         
-        print("check period: {0} check ma idx: {1}".format(period_num, period_num_idx))
+        period_num_idx = np.where(ma_sequence > period_num)[0][0]
+        
+#         print("check period: {0}".format(period_num))
         
         if period_num_idx < len(ma_sequence)-1:
             previous_ma = sum(stock_data['close'][-ma_sequence[period_num_idx]:])/ma_sequence[period_num_idx]
             
             period_check_cross = ma_sequence[period_num_idx+1]
+#             print("check ma range: {0}".format(ma_sequence[period_num_idx+1]))
             sma_period_check_cross = np.nan_to_num(talib.SMA(stock_data['close'], period_check_cross))
             
             cut_stock_data = stock_data['close'][cutting_loc:]
             cut_sma_period_check_cross = sma_period_check_cross[cutting_loc:]
-            print(cut_stock_data)
-            print(cut_sma_period_check_cross)
+#             print(cut_stock_data)
+#             print(cut_sma_period_check_cross)
             return (np.any(cut_stock_data >= cut_sma_period_check_cross) and\
-                    sma_period_check_cross[-1] > previous_ma) if check_long else\
+                    float_more(sma_period_check_cross[-1], previous_ma)) if check_long else\
                     (np.any(cut_stock_data <= cut_sma_period_check_cross) and\
-                     sma_period_check_cross[-1] < previous_ma)
+                     float_less(sma_period_check_cross[-1], previous_ma))
             
         else:
             return False
