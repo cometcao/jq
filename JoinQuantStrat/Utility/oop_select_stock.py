@@ -750,9 +750,6 @@ class Pick_stock_from_file_chan(Create_stock_list):
                 if z_time is None:
                     continue
                 
-                if stock != "600793.XSHG":
-                    continue
-                
                 chan_stock_list.append(stock)
                 if stock not in g.stock_chan_type:
                     g.stock_chan_type[stock] = [(Chan_Type.value2type(top_type_value), 
