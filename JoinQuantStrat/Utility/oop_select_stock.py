@@ -279,6 +279,7 @@ class Filter_black_stocks(Early_Filter_stock_list):
                                            panel=False)
         df = df[df['np_parent_company_owners'] < 0]
         result_df = df.groupby('code').nunique()
+        print(result_df)
         remove_list = result_df[result_df['np_parent_company_owners'] >= 3].index.tolist()
         print("{0} filtered OUT".format(remove_list))
 
@@ -749,6 +750,9 @@ class Pick_stock_from_file_chan(Create_stock_list):
                 if z_time is None:
                     continue
                 
+                if stock != "600793.XSHG":
+                    continue
+                
                 chan_stock_list.append(stock)
                 if stock not in g.stock_chan_type:
                     g.stock_chan_type[stock] = [(Chan_Type.value2type(top_type_value), 
@@ -965,7 +969,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         stock_data = get_bars_new(stock, 
                             start_dt=current_effective_time,
                             unit=self.periods[0],
-                            fields=['high', 'low'],
+                            fields=['date','high', 'low'],
                             include_now=True, 
                             end_dt=context.current_dt, 
                             fq_ref_date=context.current_dt.date(), 
@@ -975,9 +979,20 @@ class Filter_Chan_Stocks(Filter_stock_list):
             if check_new_bot:
                 new_low_found = np.any(stock_data['low'][0] > stock_data['low'][1:])
                 if new_low_found:
-                    self.log.info("{0} reached new low price:{1} -> {2}".format(stock, 
+                    min_date_time = stock_data['date'][stock_data['low'].argmin(axis=0)]
+                    self.log.info("{0} reached new low price:{1} -> {2} at {3}".format(stock, 
                                                                          stock_data['low'][0],
-                                                                         min(stock_data['low'][1:])))
+                                                                         min(stock_data['low'][1:]),
+                                                                         min_date_time))
+                    g.stock_chan_type[stock][1] = (
+                                                    g.stock_chan_type[stock][1][0],
+                                                    g.stock_chan_type[stock][1][1],
+                                                    g.stock_chan_type[stock][1][2],
+                                                    g.stock_chan_type[stock][1][3],
+                                                    g.stock_chan_type[stock][1][4],
+                                                    g.stock_chan_type[stock][1][5],
+                                                    min_date_time
+                                                    )
                 return new_low_found
             else:
                 return np.any(stock_data['high'][0] < stock_data['high'][1:])
@@ -1022,7 +1037,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 
         for stock in self.tentative_stage_II:
             if self.check_reached_new_tb(stock, context, check_new_bot=True):
-                stocks_to_remove_II.add(stock)
+#                 stocks_to_remove_II.add(stock)
+#                 self.tentative_stage_I.add(stock)
                 continue
             
             if self.check_stage_II(stock, context):
@@ -1052,7 +1068,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
             check_result, checked, in_region = self.check_stage_III(stock, context)
             if not in_region:
                 stocks_to_remove_III.add(stock)
-            elif check_result and checked:
+            elif check_result: #and checked
                 stocks_to_long.add(stock)
                 
         self.tentative_stage_III = self.tentative_stage_III.difference(stocks_to_remove_III)
@@ -1354,7 +1370,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #             print("check ma range: {0}".format(ma_sequence[period_num_idx+1]))
             sma_period_check_cross = np.nan_to_num(talib.SMA(stock_data['close'], period_check_cross))
             
-            cut_stock_data = stock_data['close'][cutting_loc:]
+            cut_stock_data = stock_data['high'][cutting_loc:] if check_long else stock_data['low'][cutting_loc:]
             cut_sma_period_check_cross = sma_period_check_cross[cutting_loc:]
 #             print(cut_stock_data)
 #             print(cut_sma_period_check_cross)
@@ -1374,8 +1390,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             return False, False, True
         
         bot_result, checked = self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=True)
-#         boll_result, in_region = self.check_daily_boll_lower(stock, context)
-        boll_result, in_region = True, True # shortcut boll check
+        boll_result, in_region = self.check_daily_boll_lower(stock, context)
+#         boll_result, in_region = True, True # shortcut boll check
 #         print("{0} {1}, {2}, {3}, {4}".format(stock, bot_result, checked, boll_result, in_region))
         return bot_result and boll_result, checked, in_region
     
