@@ -935,8 +935,8 @@ class KBarChan(object):
         self.getPureBi()
         return self.kDataFrame_marked
 
-    def getFenDuan(self, initial_state=TopBotType.noTopBot):
-        temp_df = self.getFenBi(initial_state)
+    def getFenDuan(self, initial_state=TopBotType.noTopBot, mark_last_kbar=True):
+        temp_df = self.getFenBi(initial_state, mark_last_kbar=mark_last_kbar)
         if temp_df.size==0:
             return temp_df
         self.defineXD(initial_state)

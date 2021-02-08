@@ -750,6 +750,9 @@ class Pick_stock_from_file_chan(Create_stock_list):
                 if z_time is None:
                     continue
                 
+#                 if stock != '600291.XSHG':
+#                     continue
+                
                 chan_stock_list.append(stock)
                 if stock not in g.stock_chan_type:
                     g.stock_chan_type[stock] = [(Chan_Type.value2type(top_type_value), 
@@ -1316,14 +1319,15 @@ class Filter_Chan_Stocks(Filter_stock_list):
         working_data_np = get_bars_new(stock,
                                start_dt=current_effective_time,
                                end_dt=context.current_dt, 
-                               unit=self.sup_period, # use super level
+                               unit=self.periods[0], # use super level
                                include_now=True, 
                                fields=('date', 'close', 'low', 'high'), 
                                fq_ref_date=context.current_dt.date(),
                                df=False)
         kb_chan = KBarChan(working_data_np, isdebug=False)
-        fenbi_data = kb_chan.getFenBi(initial_state=TopBotType.bot, mark_last_kbar=False)
-        return len(fenbi_data) >= 4
+#         fenbi_data = kb_chan.getFenBi(initial_state=TopBotType.bot, mark_last_kbar=False)
+        fenduan_data = kb_chan.getFenDuan(initial_state=TopBotType.bot, mark_last_kbar=False)
+        return len(fenduan_data) >= 4
         
     
     def check_ma_region_cross(self, stock, context, check_long=True):
