@@ -1082,9 +1082,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 if self.check_reached_new_tb(stock, context, check_new_bot=True):
                     continue
                 if stock not in context.portfolio.positions.keys():
-                    ready = self.check_stage_A(stock, context)
-#                     if zhongshu_changed:
-#                         stocks_to_remove_A.add(stock)
+                    ready, max_reached = self.check_stage_A(stock, context)
+                    if max_reached:
+                        stocks_to_remove_A.add(stock)
                     if ready:
                         stage_A_long.add(stock)
                     
@@ -1345,10 +1345,11 @@ class Filter_Chan_Stocks(Filter_stock_list):
         ma_144 = 144
         ma_233 = 233
         ma_377 = 377
-        ma_sequence = np.array([ma_8, ma_13, ma_21, ma_34, ma_55, ma_89, ma_144, ma_233, ma_377])
+        ma_610 = 610
+        ma_sequence = np.array([ma_8, ma_13, ma_21, ma_34, ma_55, ma_89, ma_144, ma_233, ma_377, ma_610])
         
         stock_data = get_bars(stock,
-                               count=ma_377,
+                               count=ma_sequence[-1],
                                end_dt=context.current_dt, 
                                unit=self.sup_period, # use super level
                                include_now=True, 
@@ -1357,13 +1358,17 @@ class Filter_Chan_Stocks(Filter_stock_list):
                                df=False)
         
         cutting_loc = np.where(stock_data['date']>=current_effective_time)[0][0]
-        period_num = ma_377 - cutting_loc
+        period_num = ma_sequence[-1] - cutting_loc
         if period_num < ma_13:
-            return False
+            return False, False
         
-        period_num_idx = np.where(ma_sequence > period_num)[0][0]
+        period_num_idx_result = np.where(ma_sequence > period_num)[0]
         
 #         print("check period: {0}".format(period_num))
+        if not period_num_idx_result:
+            return False, True
+        
+        period_num_idx = period_num_idx_result[0]
         
         if period_num_idx < len(ma_sequence)-1:
 #             previous_ma = sum(stock_data['close'][-ma_sequence[period_num_idx]:])/ma_sequence[period_num_idx]
@@ -1385,10 +1390,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
             return float_more_equal(cut_stock_data[cross_check_idx], cut_sma_period_check_cross[cross_check_idx]) and\
                     float_more(cut_sma_period_check_cross[cross_check_idx],cut_previous_ma[cross_check_idx]) if check_long else\
                     float_less_equal(cut_stock_data[cross_check_idx], cut_sma_period_check_cross[cross_check_idx]) and\
-                    float_less(cut_sma_period_check_cross[cross_check_idx],cut_previous_ma[cross_check_idx])
+                    float_less(cut_sma_period_check_cross[cross_check_idx],cut_previous_ma[cross_check_idx]), False
             
         else:
-            return False
+            return False, True
         
     
     def check_stage_III(self, stock, context):
@@ -1414,7 +1419,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return bot_result, checked, in_region
     
     def check_stage_A(self, stock, context):
-        return self.check_bi_zhongshu_formed(stock, context) and self.check_ma_region_cross(stock, context)
+        crossed, max_reached = self.check_ma_region_cross(stock, context)
+        return self.check_bi_zhongshu_formed(stock, context) and crossed, max_reached
 #         return self.check_stage_A_boll(stock, context) and self.check_stage_A_vol(stock, context)
     
     def check_stage_A_boll(self, stock, context):
