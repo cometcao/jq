@@ -1079,8 +1079,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stage_A_long = set()
             stocks_to_remove_A = set()
             for stock in self.tentative_stage_A:
-#                 if self.check_reached_new_tb(stock, context, check_new_bot=True):
-#                     continue
+                if self.check_reached_new_tb(stock, context, check_new_bot=True):
+                    continue
                 if stock not in context.portfolio.positions.keys():
                     ready = self.check_stage_A(stock, context)
 #                     if zhongshu_changed:
