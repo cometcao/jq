@@ -750,7 +750,7 @@ class Pick_stock_from_file_chan(Create_stock_list):
                 if z_time is None:
                     continue
                 
-#                 if stock != '600291.XSHG':
+#                 if stock != '600793.XSHG':
 #                     continue
                 
                 chan_stock_list.append(stock)
@@ -1013,12 +1013,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
                 continue
             
             # we don't need to do this check in operation, as reaching guide price is a theoretical result
-#             if len(g.stock_chan_type[stock]) > 1: # we have check it before
-#                 if self.check_guide_price_reached(stock, context):
-#                     stocks_to_remove_I.add(stock)
-#                     if self.use_all_stocks_4_A and self.use_stage_A:
-#                         self.tentative_stage_A.add(stock) # skip first phase
-#                     continue
+            if len(g.stock_chan_type[stock]) > 1: # we have check it before
+                if self.check_guide_price_reached(stock, context):
+                    stocks_to_remove_I.add(stock)
+                    if self.use_all_stocks_4_A and self.use_stage_A:
+                        self.tentative_stage_A.add(stock) # skip first phase
+                    continue
             
             check_result, zhongshu_changed = self.check_stage_I(stock, context)
             if zhongshu_changed:
@@ -1036,11 +1036,6 @@ class Filter_Chan_Stocks(Filter_stock_list):
         self.tentative_stage_II = self.tentative_stage_II.difference(set(context.portfolio.positions.keys()))
                 
         for stock in self.tentative_stage_II:
-            if self.check_reached_new_tb(stock, context, check_new_bot=True):
-#                 stocks_to_remove_II.add(stock)
-#                 self.tentative_stage_I.add(stock)
-                continue
-            
             if self.check_stage_II(stock, context):
                 top_profile = g.stock_chan_type[stock][0]
                 cur_profile = g.stock_chan_type[stock][1]
@@ -1068,8 +1063,12 @@ class Filter_Chan_Stocks(Filter_stock_list):
             check_result, checked, in_region = self.check_stage_III(stock, context)
             if not in_region:
                 stocks_to_remove_III.add(stock)
-            elif check_result: #and checked
+            elif check_result and checked: #and checked
                 stocks_to_long.add(stock)
+            elif check_result:
+                stocks_to_remove_III.add(stock)
+                if self.use_stage_A:
+                    self.tentative_stage_A.add(stock)
                 
         self.tentative_stage_III = self.tentative_stage_III.difference(stocks_to_remove_III)
         self.log.info("stocks removed from stage III: {0}".format(stocks_to_remove_III))
@@ -1080,6 +1079,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stage_A_long = set()
             stocks_to_remove_A = set()
             for stock in self.tentative_stage_A:
+#                 if self.check_reached_new_tb(stock, context, check_new_bot=True):
+#                     continue
                 if stock not in context.portfolio.positions.keys():
                     ready = self.check_stage_A(stock, context)
 #                     if zhongshu_changed:
@@ -1309,8 +1310,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
     def check_stage_II(self, stock, context):
 #         result, _ = self.check_structure_sub_only(stock, context)
 #         return result or self.check_daily_vol_money(stock, context)
-        return self.check_bi_zhongshu_formed(stock, context) and self.check_ma_region_cross(stock, context)
-#         return True
+#         return self.check_bi_zhongshu_formed(stock, context) and self.check_ma_region_cross(stock, context)
+        return True
 
     def check_bi_zhongshu_formed(self, stock, context):
         current_profile = g.stock_chan_type[stock][1]
@@ -1365,7 +1366,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
 #         print("check period: {0}".format(period_num))
         
         if period_num_idx < len(ma_sequence)-1:
-            previous_ma = sum(stock_data['close'][-ma_sequence[period_num_idx]:])/ma_sequence[period_num_idx]
+#             previous_ma = sum(stock_data['close'][-ma_sequence[period_num_idx]:])/ma_sequence[period_num_idx]
+            previous_ma = np.nan_to_num(talib.SMA(stock_data['close'], ma_sequence[period_num_idx]))
             
             period_check_cross = ma_sequence[period_num_idx+1]
 #             print("check ma range: {0}".format(ma_sequence[period_num_idx+1]))
@@ -1373,12 +1375,17 @@ class Filter_Chan_Stocks(Filter_stock_list):
             
             cut_stock_data = stock_data['high'][cutting_loc:] if check_long else stock_data['low'][cutting_loc:]
             cut_sma_period_check_cross = sma_period_check_cross[cutting_loc:]
+            cut_previous_ma = previous_ma[cutting_loc:]
 #             print(cut_stock_data)
 #             print(cut_sma_period_check_cross)
-            return (np.any(cut_stock_data >= cut_sma_period_check_cross) and\
-                    float_more(sma_period_check_cross[-1], previous_ma)) if check_long else\
-                    (np.any(cut_stock_data <= cut_sma_period_check_cross) and\
-                     float_less(sma_period_check_cross[-1], previous_ma))
+            
+            cross_check_idx = np.where(cut_stock_data == max(cut_stock_data))[0][0] if check_long else\
+                                np.where(cut_stock_data == min(cut_stock_data))[0][0]
+            
+            return float_more_equal(cut_stock_data[cross_check_idx], cut_sma_period_check_cross[cross_check_idx]) and\
+                    float_more(cut_sma_period_check_cross[cross_check_idx],cut_previous_ma[cross_check_idx]) if check_long else\
+                    float_less_equal(cut_stock_data[cross_check_idx], cut_sma_period_check_cross[cross_check_idx]) and\
+                    float_less(cut_sma_period_check_cross[cross_check_idx],cut_previous_ma[cross_check_idx])
             
         else:
             return False
@@ -1407,7 +1414,8 @@ class Filter_Chan_Stocks(Filter_stock_list):
         return bot_result, checked, in_region
     
     def check_stage_A(self, stock, context):
-        return self.check_stage_A_boll(stock, context) and self.check_stage_A_vol(stock, context)
+        return self.check_bi_zhongshu_formed(stock, context) and self.check_ma_region_cross(stock, context)
+#         return self.check_stage_A_boll(stock, context) and self.check_stage_A_vol(stock, context)
     
     def check_stage_A_boll(self, stock, context):
         stock_data = get_bars(stock,
