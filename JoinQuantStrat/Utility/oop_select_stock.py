@@ -1346,7 +1346,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         ma_233 = 233
         ma_377 = 377
         ma_610 = 610
-        ma_sequence = np.array([ma_8, ma_13, ma_21, ma_34, ma_55, ma_89, ma_144, ma_233, ma_377, ma_610])
+        ma_sequence = [ma_8, ma_13, ma_21, ma_34, ma_55, ma_89, ma_144, ma_233, ma_377, ma_610]
         
         stock_data = get_bars(stock,
                                count=ma_sequence[-1],
@@ -1362,10 +1362,10 @@ class Filter_Chan_Stocks(Filter_stock_list):
         if period_num < ma_13:
             return False, False
         
-        period_num_idx_result = np.where(ma_sequence > period_num)[0]
+        period_num_idx_result = np.where(np.array(ma_sequence) > period_num)[0]
         
-#         print("check period: {0}".format(period_num))
-        if not period_num_idx_result:
+#         print("period_num_idx_result: {0}".format(period_num_idx_result))
+        if len(period_num_idx_result) == 0:
             return False, True
         
         period_num_idx = period_num_idx_result[0]
