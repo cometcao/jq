@@ -1104,7 +1104,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
                     stage_B_long.add(stock)
                 elif check_result and stock in self.g.all_pos_return_stocks:
                     stage_B_long.add(stock)
-                elif check_result:
+                elif check_result and not in_region:
                     stocks_to_remove_B.add(stock)
                     
             self.tentative_stage_B = self.tentative_stage_B.difference(stage_B_long)
@@ -1416,7 +1416,7 @@ class Filter_Chan_Stocks(Filter_stock_list):
         
         bot_result, checked = self.check_bot_shape(stock, context, from_local_max=False, ignore_bot_shape=False)
         boll_result, in_region = self.check_daily_boll_lower(stock, context)
-        return bot_result, checked, in_region
+        return bot_result and boll_result, checked, in_region
     
     def check_stage_A(self, stock, context):
         crossed, max_reached = self.check_ma_region_cross(stock, context)
