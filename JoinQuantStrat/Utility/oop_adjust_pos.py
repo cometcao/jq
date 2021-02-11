@@ -1035,12 +1035,6 @@ class Short_Chan(Sell_stocks):
             print("stock {0} ZHANGTING, we hold it".format(stock))
             return False
         
-        if stock not in self.tentative_II and self.check_3_day_boll_upper(stock, context) and self.check_3_day_vol_money(stock, context):
-            print("stock {0} price reached upper bound THREE TIMES promote to stage II".format(stock))
-            self.tentative_II.add(stock)
-            self.tentative_I.discard(stock)
-            return
-        
         position_time = context.portfolio.positions[stock].transact_time
         current_profile = g.stock_chan_type[stock][1]
         sub_profile = g.stock_chan_type[stock][2]
@@ -1072,6 +1066,12 @@ class Short_Chan(Sell_stocks):
         min_time = stock_data.loc[sub_zoushi_start_time:, 'low'].idxmin()
         if stock not in self.tentative_I and stock not in self.tentative_II:
             self.process_stage_I(stock, context, min_time, working_period)
+        
+        if stock not in self.tentative_II and self.check_3_day_boll_upper(stock, context) and self.check_3_day_vol_money(stock, context):
+            print("stock {0} price reached upper bound THREE TIMES promote to stage II".format(stock))
+            self.tentative_II.add(stock)
+            self.tentative_I.discard(stock)
+            return
         
         if stock in self.tentative_I and stock not in self.tentative_II:
             c_profile = self.short_stock_info[stock]
