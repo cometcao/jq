@@ -1100,9 +1100,9 @@ class Filter_Chan_Stocks(Filter_stock_list):
             stocks_to_remove_B = set()
             for stock in self.tentative_stage_B:
                 check_result, price_checked, in_region = self.check_stage_B(stock, context)
-                if check_result and price_checked and stock in self.g.all_neg_return_stocks:
+                if in_region and check_result and price_checked and stock in self.g.all_neg_return_stocks:
                     stage_B_long.add(stock)
-                elif check_result and stock in self.g.all_pos_return_stocks:
+                elif in_region and check_result and stock in self.g.all_pos_return_stocks:
                     stage_B_long.add(stock)
                 elif check_result and not in_region:
                     stocks_to_remove_B.add(stock)
