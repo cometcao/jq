@@ -62,9 +62,9 @@ class Dynamic_factor_based_stock_ranking(object):
 
         factor_code_list_negative = factor_rank['code'].head(num_fac).tolist()
         
-        if self.is_debug:
-            print("positive factor candidates: {0}".format(factor_code_list_positive))
-            print("negative factor candidates: {0}".format(factor_code_list_negative))
+#         if self.is_debug:
+#             print("positive factor candidates: {0}".format(factor_code_list_positive))
+#             print("negative factor candidates: {0}".format(factor_code_list_negative))
         
         full_factor_list = factor_rank.reindex(factor_rank[self.factor_gauge].abs().sort_values(ascending=False).index)['code'].head(num_fac).tolist() # sort by abs ascending
         
@@ -74,12 +74,26 @@ class Dynamic_factor_based_stock_ranking(object):
             
         pos_list, neg_list = [factor for factor in factor_code_list_positive if factor in full_factor_list], [factor for factor in factor_code_list_negative if factor in full_factor_list]
         
-        if self.is_debug:
-            print("positive factor list: {0}".format(pos_list))
-            print("negative factor list: {0}".format(neg_list))
-            print("full factor list: {0}".format(full_factor_list))
+#         if self.is_debug:
+#             print("positive factor list: {0}".format(pos_list))
+#             print("negative factor list: {0}".format(neg_list))
+#             print("full factor list: {0}".format(full_factor_list))
         
         return pos_list, neg_list, full_factor_list
+
+    def get_ranked_factors_by_category_old(self):
+        factor_rank = get_factor_kanban_values(universe=self.index_scope, bt_cycle=self.period, model = self.model, category=self.category)  
+        
+        cat_list = factor_rank['category'].unique().tolist()
+        num_fac = int(np.ceil(self.factor_num / len(cat_list)))
+        full_list = []
+        for cat in cat_list:
+            sub_factor_rank = factor_rank[factor_rank['category']==cat]
+            _, _, sub_list = self.get_pos_neg_factors(sub_factor_rank, num_fac)
+#             print("category {0}: {1}".format(cat, sub_list))
+            full_list = full_list + sub_list
+        print("full combined factor list: {0}".format(full_list))
+        return full_list
 
     def get_ranked_factors_by_category(self, factor_result_file_path=None, working_date=None):
         if factor_result_file_path is None:
@@ -97,7 +111,7 @@ class Dynamic_factor_based_stock_ranking(object):
         for cat in self.category:
             sub_factor_rank = factor_rank[factor_rank['category']==cat]
             _, _, sub_list = self.get_pos_neg_factors(sub_factor_rank, num_fac)
-#             print("category {0}: {1}".format(cat, sub_list))
+#             print("category {0}: {1}: {2}: {3}".format(cat, sub_list, num_fac, sub_factor_rank))
             full_list = full_list + sub_list
         print("full combined factor list: {0}".format(full_list))
         return full_list

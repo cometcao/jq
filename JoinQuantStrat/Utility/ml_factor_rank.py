@@ -760,6 +760,7 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
                                                     'is_debug':self.is_debug, 
                                                     'category':self.factor_category})
             self.pure_train_list = dfbsr.get_ranked_factors_by_category(self.factor_result_file, self.context.previous_date)
+#             self.pure_train_list = dfbsr.get_ranked_factors_by_category_old()
             self.pure_train_list = [fac for fac in self.pure_train_list if fac not in self.y_column]
             self.factor_list = self.y_column + self.pure_train_list
             self.train_list = self.pure_train_list + self.industry_set
@@ -957,8 +958,14 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         for fac in self.factor_list:
             if fac in self.y_column and self.regress_profit:
                 continue
-            fac_data_df = get_factor_values(securities = stocks, factors = fac, end_date = end_date, count = trainlength)[fac].fillna(0)
-            factor_val_by_factor[fac] = fac_data_df.iloc[:int(trainlength*2/3), :].to_records()
+            fac_data_df = None 
+            for stock_chunk in np.array_split(stocks,5):
+                if fac_data_df is None:
+                    fac_data_df = get_factor_values(securities = stock_chunk.tolist(), factors = fac, end_date = end_date, count = trainlength)[fac].fillna(0)
+                else:
+                    fac_data_df = pd.concat([fac_data_df, get_factor_values(securities = stock_chunk.tolist(), factors = fac, end_date = end_date, count = trainlength)[fac].fillna(0)], axis=1)
+                                             
+            factor_val_by_factor[fac] = fac_data_df.to_records()
             
         factor_val_by_date = self.transform_df_np(factor_val_by_factor)
         
@@ -977,8 +984,14 @@ class ML_Dynamic_Factor_Rank(ML_Factor_Rank):
         for fac in self.factor_list:
             if fac in self.y_column and self.regress_profit:
                 continue
-            fac_data_df = get_factor_values(securities = stocks, factors = fac, end_date = end_date, count = trainlength)[fac].fillna(0)
-            factor_val_by_factor[fac] = fac_data_df.iloc[int(trainlength*2/3):, :].to_records()
+            
+            fac_data_df = None
+            for stock_chunk in np.array_split(stocks,5):
+                if fac_data_df is None:
+                    fac_data_df = get_factor_values(securities = stock_chunk.tolist(), factors = fac, end_date = end_date, count = trainlength)[fac].fillna(0)
+                else:
+                    fac_data_df = pd.concat([fac_data_df, get_factor_values(securities = stock_chunk.tolist(), factors = fac, end_date = end_date, count = trainlength)[fac].fillna(0)], axis=1)
+            factor_val_by_factor[fac] = fac_data_df.to_records()
         
         factor_val_by_date = self.transform_df_np(factor_val_by_factor)
         # concat dataset 
