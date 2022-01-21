@@ -33,6 +33,7 @@ def float_equal(a, b):
 ######################## chan_kbar_filter ##########################
 TYPE_III_NUM = 7
 TYPE_I_NUM = 10
+TYPE_III_STRONG_NUM = 34
 
 ######################## kBarprocessor #############################
 GOLDEN_RATIO = 0.618

@@ -81,7 +81,7 @@ def filter_high_level_by_stock(stock,
                                result_stocks_III,
                                result_stocks_PB):
     stock_high = get_bars(stock, 
-                           count=max(TYPE_I_NUM, TYPE_III_NUM), 
+                           count=max(TYPE_I_NUM, TYPE_III_NUM, TYPE_III_STRONG_NUM), 
                            end_dt=end_dt, 
                            unit=period,
                            fields= ['open',  'high', 'low','close'], 
@@ -94,7 +94,7 @@ def filter_high_level_by_stock(stock,
                                    chan_types=chan_types)
     if Chan_Type.I in chan_type_results or Chan_Type.I_weak in chan_type_results:
         result_stocks_I.add(stock)
-    elif Chan_Type.III in chan_type_results:
+    elif Chan_Type.III in chan_type_results or Chan_Type.III_strong in chan_type_results:
         result_stocks_III.add(stock)
     elif Chan_Type.INVALID in chan_type_results:
         result_stocks_PB.add(stock)
@@ -128,7 +128,9 @@ class KBar(object):
         3. the same kbar or next kbar's return attempt never touch the previous zhongshu (only strong case)
         '''
         chan_type_result = []
-        num_of_kbar = TYPE_I_NUM if Chan_Type.I in chan_types else TYPE_III_NUM
+        num_of_kbar = TYPE_I_NUM if Chan_Type.I in chan_types else\
+                    TYPE_III_NUM if Chan_Type.III in chan_types else\
+                    TYPE_III_STRONG_NUM
         if df:
             if high_df.shape[0] >= num_of_kbar:
                 i = -num_of_kbar
@@ -147,7 +149,7 @@ class KBar(object):
                 
         if Chan_Type.III in chan_types and cls.chan_type_III_check(kbar_list, direction):
             chan_type_result.append(Chan_Type.III)
-        elif Chan_Type.III_strong in chan_types and cls.chan_type_III_strong_check(kbar_list, direction):
+        elif Chan_Type.III_strong in chan_types and cls.chan_type_III_strong_check(kbar_list, direction, high_df):
             chan_type_result.append(Chan_Type.III_strong)
         elif (Chan_Type.I in chan_types or Chan_Type.I_weak in chan_types) and cls.chan_type_I_check(kbar_list, direction):
             chan_type_result.append(Chan_Type.I)
@@ -245,8 +247,36 @@ class KBar(object):
         return result
         
     @classmethod
-    def chan_type_III_strong_check(cls, kbar_list, direction):
-        result = False
+    def chan_type_III_strong_check(cls, kbar_list, direction, high_df):
+        '''
+        We only use this check at high level 1w or 1d. with 34 K-bars. We look for simple pattern
+        '''
+        if direction == TopBotType.top2bot and kbar_list[0].low < kbar_list[-1].low:
+            high_max_loc = high_df['high'].argmax()
+            if high_max_loc == 0 or high_max_loc == len(high_df['high'])-1:
+                return False
+            first_min_loc = high_df['low'][:high_max_loc].argmin()
+            second_min_loc = high_df['low'][high_max_loc:].argmin()
+            
+            result = second_min_loc > high_max_loc > first_min_loc and\
+                     high_max_loc/ (second_min_loc + first_min_loc) > 0.382 and\
+                     kbar_list[high_max_loc].high > kbar_list[first_min_loc].low and\
+                     kbar_list[high_max_loc].high > kbar_list[second_min_loc].low
+        
+        elif direction == TopBotType.bot2top and kbar_list[0].high > kbar_list[-1].high:
+            high_min_loc = high_df['low'].argmin()
+            if high_min_loc == 0 or high_min_loc == len(high_df['low'])-1:
+                return False
+            first_max_loc = high_df['high'].argmax()
+            second_max_loc = high_df['high'].argmax()
+            result = second_max_loc > high_min_loc > first_max_loc and\
+                    high_min_loc / (second_max_loc + first_max_loc) > 0.382 and\
+                    kbar_list[high_min_loc].low < kbar_list[first_max_loc].low and\
+                    kbar_list[high_min_loc].low < kbar_list[second_min_loc].low
+        
+        else:
+            result = False
+        
         return result
         
     @classmethod
