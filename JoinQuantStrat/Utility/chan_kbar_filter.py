@@ -256,7 +256,7 @@ class KBar(object):
             if high_max_loc == 0 or high_max_loc == len(high_df['high'])-1:
                 return False
             first_min_loc = high_df['low'][:high_max_loc].argmin()
-            second_min_loc = high_df['low'][high_max_loc:].argmin()
+            second_min_loc = high_df['low'][high_max_loc:].argmin() + high_max_loc
             
             result = second_min_loc > high_max_loc > first_min_loc and\
                      high_max_loc/ (second_min_loc + first_min_loc) > 0.382 and\
@@ -268,7 +268,7 @@ class KBar(object):
             if high_min_loc == 0 or high_min_loc == len(high_df['low'])-1:
                 return False
             first_max_loc = high_df['high'].argmax()
-            second_max_loc = high_df['high'].argmax()
+            second_max_loc = high_df['high'].argmax() + high_min_loc
             result = second_max_loc > high_min_loc > first_max_loc and\
                     high_min_loc / (second_max_loc + first_max_loc) > 0.382 and\
                     kbar_list[high_min_loc].low < kbar_list[first_max_loc].low and\
