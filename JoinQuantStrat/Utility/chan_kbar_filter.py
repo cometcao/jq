@@ -8,11 +8,11 @@ try:
     from kuanke.user_space_api import *
 except ImportError as ie:
     print(str(ie))
+import talib
 from jqdata import *
 import numpy as np
 import pandas as pd
 from biaoLiStatus import TopBotType
-
 from chan_common_include import *
 
 def filter_high_level_by_index(direction=TopBotType.top2bot, 
@@ -101,6 +101,66 @@ def filter_high_level_by_stock(stock,
     
     return result_stocks_I, result_stocks_III, result_stocks_PB
 
+LONG_MA_NUM = 13
+SHORT_MA_NUM = 5
+
+def analyze_MA_form_ZhongShu(stock_high, start_idx, end_idx):
+    # Zhongshu formed only if we found a kbar with range cover both cross
+    # we only check k bars between two crosses
+    s_idx = abs(start_idx)
+    e_idx = abs(end_idx)
+    first_cross_price = (stock_high['ma_long'][s_idx] + stock_high['ma_long'][s_idx+1]) / 2
+    second_cross_price = (stock_high['ma_long'][e_idx] + stock_high['ma_long'][e_idx+1]) / 2
+    i = s_idx+1
+    while i <= e_idx:
+        if stock_high[i]['high'] > max(first_cross_price, second_cross_price) and\
+            stock_high[i]['low'] < min(first_cross_price, second_cross_price):
+            return True
+        i = i + 1
+    return False
+            
+
+def analyze_MA_zoushi_by_stock(stock,
+                              period, 
+                              count,
+                               end_dt, 
+                               df, 
+                               chan_types, 
+                               direction,
+                               result_stocks_I, 
+                               result_stocks_III,
+                               result_stocks_PB):
+    stock_high = get_bars(stock, 
+                           count=count+LONG_MA_NUM, 
+                           end_dt=end_dt, 
+                           unit=period,
+                           fields= ['open',  'high', 'low','close'], 
+                           df = df,
+                           include_now=True)
+    
+    ma_long = talib.MA(stock_high['close'], LONG_MA_NUM)
+    ma_short = talib.MA(stock_high['close'], SHORT_MA_NUM)
+    ma_long[np.isnan(ma_long)] = 0
+    ma_short[np.isnan(ma_short)] = 0
+    self.kDataFrame_origin = append_fields(stock_high,
+                                            ['ma_long', 'ma_short'],
+                                            [ma_long, ma_short],
+                                            [float, float],
+                                            usemask=False)
+    
+    chan_type_results = KBar.analyze_kbar_MA_zoushi(stock_high, 
+                                          direction=direction, 
+                                          df=df, 
+                                          chan_types=chan_types)
+    
+    if Chan_Type.I in chan_type_results or Chan_Type.I_weak in chan_type_results:
+        result_stocks_I.add(stock)
+    elif Chan_Type.III in chan_type_results or Chan_Type.III_strong in chan_type_results:
+        result_stocks_III.add(stock)
+    elif Chan_Type.INVALID in chan_type_results:
+        result_stocks_PB.add(stock)
+    return result_stocks_I, result_stocks_III, result_stocks_PB
+
 class KBar(object):
     '''
     used for initial filter with OCHL
@@ -114,6 +174,69 @@ class KBar(object):
     def __repr__(self):
         return "\nOPEN:{0} CLOSE:{1} HIGH:{2} LOW:{3}".format(self.open, self.close, self.high, self.low)
 
+    @classmethod
+    def analyze_kbar_MA_zoushi(cls, stock_high, 
+                      direction=direction, 
+                      df=df, 
+                      chan_types=chan_types):
+        '''
+        We expect input stock data to be only one ZouShi
+        '''
+        # find all gold/death MA cross
+        ma_diff = stock_high['ma_short'] - stock_high['ma_long']
+        i = 0 
+        ma_cross = [] # store the starting index of the cross + for gold - for death
+        for i in range(len(ma_diff)-1):
+            if ma_diff[i] < 0 and ma_diff[i+1] > 0: # gold
+                ma_cross.append[i]
+            elif ma_diff[i] > 0 and ma_diff[i+1] < 0: # death
+                ma_cross.append[-i]
+        
+        # find all ZhongShu 
+        zhongshu = []
+        current_zs = []
+        i = current_idx = 0
+        while i < len(ma_cross) - 1:
+            current_idx = i + 1
+            while current_idx < len(ma_cross):
+                if current_zs:
+                    if analyze_MA_form_ZhongShu(stock_high, 
+                                                ma_cross[i], 
+                                                ma_cross[current_idx]):
+                        current_zs.append(ma_cross[current_idx])
+                        current_idx = current_idx + 1
+                    else:
+                        zhongshu.append(current_zs)
+                        current_zs = []
+                        i = current_idx
+                        break
+                    
+                else:
+                    if analyze_MA_form_ZhongShu(stock_high, 
+                                ma_cross[i], 
+                                ma_cross[current_idx]):
+                        current_zs.append(ma_cross[i])
+                        current_zs.append(ma_cross[current_idx])
+                        current_idx = current_idx + 1
+                    else:
+                        zhongshu.append(current_zs)
+                        current_zs = []
+                        i = current_idx
+                        break
+            
+            if current_zs:
+                zhongshu.append(current_zs)
+                current_zs = []
+            
+            i = i + 1
+            
+        # determine ZouShi
+        
+        
+    
+    @classmethod
+    def analyze_kbar_MA_zoushi_exhaustion():
+        return
 
     @classmethod
     def filter_high_level_kbar(cls, high_df, direction=TopBotType.top2bot, df=False, chan_types=[Chan_Type.III]):
