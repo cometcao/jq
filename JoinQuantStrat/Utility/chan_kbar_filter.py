@@ -251,7 +251,7 @@ class KBar(object):
         '''
         We only use this check at high level 1w or 1d. with 34 K-bars. We look for simple pattern
         '''
-        if direction == TopBotType.top2bot and kbar_list[0].low < kbar_list[-1].low:
+        if direction == TopBotType.top2bot:
             high_max_loc = high_df['high'].argmax()
             if high_max_loc == 0 or high_max_loc == len(high_df['high'])-1:
                 return False
@@ -260,10 +260,9 @@ class KBar(object):
             
             result = second_min_loc > high_max_loc > first_min_loc and\
                      high_max_loc/ (second_min_loc + first_min_loc) > 0.382 and\
-                     kbar_list[high_max_loc].high > kbar_list[first_min_loc].low and\
-                     kbar_list[high_max_loc].high > kbar_list[second_min_loc].low
+                     kbar_list[high_max_loc].high > kbar_list[second_min_loc].low > kbar_list[first_min_loc].low
         
-        elif direction == TopBotType.bot2top and kbar_list[0].high > kbar_list[-1].high:
+        elif direction == TopBotType.bot2top:
             high_min_loc = high_df['low'].argmin()
             if high_min_loc == 0 or high_min_loc == len(high_df['low'])-1:
                 return False
@@ -271,8 +270,7 @@ class KBar(object):
             second_max_loc = high_df['high'].argmax() + high_min_loc
             result = second_max_loc > high_min_loc > first_max_loc and\
                     high_min_loc / (second_max_loc + first_max_loc) > 0.382 and\
-                    kbar_list[high_min_loc].low < kbar_list[first_max_loc].low and\
-                    kbar_list[high_min_loc].low < kbar_list[second_min_loc].low
+                    kbar_list[high_min_loc].low < kbar_list[second_min_loc].low < kbar_list[first_max_loc].low
         
         else:
             result = False
