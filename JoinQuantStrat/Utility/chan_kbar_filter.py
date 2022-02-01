@@ -111,8 +111,8 @@ def analyze_MA_form_ZhongShu(stock_high, start_idx, end_idx):
     e_idx = abs(end_idx)
     first_cross_price = (stock_high['ma_long'][s_idx] + stock_high['ma_long'][s_idx+1]) / 2
     second_cross_price = (stock_high['ma_long'][e_idx] + stock_high['ma_long'][e_idx+1]) / 2
-    i = s_idx+1
-    while i <= e_idx:
+    i = s_idx+1 # start the range after first cross
+    while i <= e_idx: # end the range before second cross
         if stock_high[i]['high'] > max(first_cross_price, second_cross_price) and\
             stock_high[i]['low'] < min(first_cross_price, second_cross_price):
             return True
@@ -148,10 +148,14 @@ def analyze_MA_zoushi_by_stock(stock,
                                             [float, float],
                                             usemask=False)
     
-    chan_type_results = KBar.analyze_kbar_MA_zoushi(stock_high, 
+    zhongshu_results = KBar.analyze_kbar_MA_zoushi(stock_high, 
                                           direction=direction, 
                                           df=df, 
                                           chan_types=chan_types)
+    
+    chan_type_results = KBar.analyze_kbar_MA_zoushi_exhaustion(stock_high,
+                                                               direction=direction,
+                                                               zhongshu=zhongshu_results)
     
     if Chan_Type.I in chan_type_results or Chan_Type.I_weak in chan_type_results:
         result_stocks_I.add(stock)
@@ -198,44 +202,31 @@ class KBar(object):
         i = current_idx = 0
         while i < len(ma_cross) - 1:
             current_idx = i + 1
-            while current_idx < len(ma_cross):
-                if current_zs:
-                    if analyze_MA_form_ZhongShu(stock_high, 
-                                                ma_cross[i], 
-                                                ma_cross[current_idx]):
-                        current_zs.append(ma_cross[current_idx])
-                        current_idx = current_idx + 1
-                    else:
-                        zhongshu.append(current_zs)
-                        current_zs = []
-                        i = current_idx
-                        break
-                    
-                else:
-                    if analyze_MA_form_ZhongShu(stock_high, 
-                                ma_cross[i], 
-                                ma_cross[current_idx]):
-                        current_zs.append(ma_cross[i])
-                        current_zs.append(ma_cross[current_idx])
-                        current_idx = current_idx + 1
-                    else:
-                        zhongshu.append(current_zs)
-                        current_zs = []
-                        i = current_idx
-                        break
-            
             if current_zs:
-                zhongshu.append(current_zs)
-                current_zs = []
-            
+                if analyze_MA_form_ZhongShu(stock_high, 
+                                            ma_cross[i], 
+                                            ma_cross[current_idx]):
+                    current_zs.append(ma_cross[current_idx])
+                else:
+                    zhongshu.append(current_zs)
+                    current_zs = []
+                
+            else:
+                if analyze_MA_form_ZhongShu(stock_high, 
+                            ma_cross[i], 
+                            ma_cross[current_idx]):
+                    current_zs.append(ma_cross[i])
+                    current_zs.append(ma_cross[current_idx])
+                    
             i = i + 1
             
         # determine ZouShi
-        
+        return zhongshu
         
     
     @classmethod
-    def analyze_kbar_MA_zoushi_exhaustion():
+    def analyze_kbar_MA_zoushi_exhaustion(cls, stock_high, direction, zhongshu):
+        
         return
 
     @classmethod
