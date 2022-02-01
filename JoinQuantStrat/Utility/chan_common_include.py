@@ -64,6 +64,22 @@ class ZhongShuLevel(Enum):
         else:
             return cls.current
     
+class ZouShi_Type(Enum):
+    Qu_Shi_Down = -1
+    Pan_Zheng = 0
+    Qu_Shi_Up = 1
+    Pan_Zheng_Composite = 2
+    @classmethod
+    def value2type(cls,val):
+        if val == 0:
+            return cls.Pan_Zheng
+        elif val == 1:
+            return cls.Qu_Shi_Up
+        elif val == -1:
+            return cls.Qu_Shi_Down
+        elif val == 2:
+            return cls.Pan_Zheng_Composite
+
     
 class Chan_Type(Enum):
     INVALID = 0
@@ -74,6 +90,7 @@ class Chan_Type(Enum):
     II_weak = 5
     III_strong = 6
     I_weak = 7
+    PANBEI = 8
     
     @classmethod
     def value2type(cls, val):
@@ -93,6 +110,8 @@ class Chan_Type(Enum):
             return cls.III_strong
         elif val == 7:
             return cls.I_weak
+        elif val == 8:
+            return cls.PANBEI
         else:
             return cls.INVALID
         
