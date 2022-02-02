@@ -65,6 +65,7 @@ class ZhongShuLevel(Enum):
             return cls.current
     
 class ZouShi_Type(Enum):
+    INVALID = -2
     Qu_Shi_Down = -1
     Pan_Zheng = 0
     Qu_Shi_Up = 1
@@ -79,6 +80,8 @@ class ZouShi_Type(Enum):
             return cls.Qu_Shi_Down
         elif val == 2:
             return cls.Pan_Zheng_Composite
+        elif val == -2:
+            return cls.INVALID
 
     
 class Chan_Type(Enum):

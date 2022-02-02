@@ -250,7 +250,9 @@ class KBar(object):
     def analyze_kbar_MA_zoushi_exhaustion(cls, stock_high, zoushi_types, direction, zhongshu):
         # gold cross -> downwards zhongshu 
         # death cross -> upwards zhongshu
-        zoushi_result = ZouShi_Type.Pan_Zheng
+        zoushi_result = ZouShi_Type.INVALID
+        exhaustion_result = Chan_Type.INVALID
+        
         if len(zhongshu) > 1:
             if direction == TopBotType.top2bot and all([a[0] > 0 for a in zhongshu]):
                 zoushi_result = ZouShi_Type.Qu_Shi_Down
@@ -258,10 +260,11 @@ class KBar(object):
                  zoushi_result = ZouShi_Type.Qu_Shi_Up
             else:
                 zoushi_result = ZouShi_Type.Pan_Zheng_Composite
-        else:
+        elif len(zhongshu) == 1:
             zoushi_result = ZouShi_Type.Pan_Zheng
+        else:
+            return zoushi_result, exhaustion_result
             
-        exhaustion_result = Chan_Type.INVALID
         
         if zoushi_result not in zoushi_types:
             return zoushi_result, exhaustion_result
