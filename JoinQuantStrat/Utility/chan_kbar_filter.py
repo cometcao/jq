@@ -130,7 +130,7 @@ def analyze_MA_zoushi_by_stock(stock,
                                zoushi_types, 
                                direction):
     stock_high = get_bars(stock, 
-                           count=count+LONG_MA_NUM+1, 
+                           count=count+LONG_MA_NUM, 
                            end_dt=end_dt, 
                            unit=period,
                            fields= ['date','open',  'high', 'low','close'], 
@@ -162,11 +162,20 @@ def analyze_MA_exhaustion(zoushi_result, first, second):
     # work out the slope return true if the slope exhausted
     # print(first)
     # print(second)
+    
+    if int(first['low'].argmin()) == int(first['high'].argmax()) or\
+        int(second['low'].argmin()) == int(second['high'].argmax()):
+        return False
+    
     if zoushi_result == ZouShi_Type.Qu_Shi_Down:
+        first=first[int(first['high'].argmax()):] # cut the data
+        second=second[int(second['high'].argmax()):]
         first_slope = (max(first['high']) - min(first['low'])) / (first['low'].argmin()-first['high'].argmax()) 
         second_slope = (max(second['high']) - min(second['low'])) / (second['low'].argmin()-second['high'].argmax()) 
         return abs(second_slope) < abs(first_slope)
     elif zoushi_result == ZouShi_Type.Qu_Shi_Up:
+        first=first[int(first['low'].argmin()):] # cut the data
+        second=second[int(second['low'].argmin()):]
         first_slope = (max(first['high']) - min(first['low'])) / (first['high'].argmax() - first['low'].argmin()) 
         second_slope = (max(second['high']) - min(second['low'])) / (second['high'].argmax() - second['low'].argmin()) 
         return abs(second_slope) < abs(first_slope)
@@ -178,6 +187,29 @@ def analyze_MA_exhaustion(zoushi_result, first, second):
     else:
         return False
 
+def zhongshu_range_nointeraction(stock_high, direction, zhongshu):
+    '''
+    make sure we have independent zhongshu along the QuShi direction
+    only check the last two
+    '''
+    first_zs = zhongshu[-2]
+    second_zs = zhongshu[-1]
+    if direction == TopBotType.top2bot and first_zs[0] > 0 and second_zs[0] > 0:
+        first_zs_range = [(stock_high['ma_long'][first_zs[0]] + stock_high['ma_long'][first_zs[0]+1]) / 2,
+                          (stock_high['ma_long'][-first_zs[1]] + stock_high['ma_long'][-first_zs[1]+1]) / 2]
+        second_zs_range = [(stock_high['ma_long'][second_zs[0]] + stock_high['ma_long'][second_zs[0]+1]) / 2,
+                           (stock_high['ma_long'][-second_zs[1]] + stock_high['ma_long'][-second_zs[1]+1]) / 2]
+        return min(first_zs_range) > max(second_zs_range) or max(first_zs_range) < min(second_zs_range)
+        
+    elif direction == TopBotType.bot2top and first_zs[0] < 0 and second_zs[0] < 0:
+        first_zs_range = [(stock_high['ma_long'][-first_zs[0]] + stock_high['ma_long'][-first_zs[0]+1]) / 2,
+                          (stock_high['ma_long'][first_zs[1]] + stock_high['ma_long'][first_zs[1]+1]) / 2]
+        second_zs_range = [(stock_high['ma_long'][-second_zs[0]] + stock_high['ma_long'][-second_zs[0]+1]) / 2,
+                           (stock_high['ma_long'][second_zs[1]] + stock_high['ma_long'][second_zs[1]+1]) / 2]
+        return min(first_zs_range) > max(second_zs_range) or max(first_zs_range) < min(second_zs_range)
+    else:
+        return False
+        
 
 class KBar(object):
     '''
@@ -254,10 +286,12 @@ class KBar(object):
         exhaustion_result = Chan_Type.INVALID
         
         if len(zhongshu) > 1:
-            if direction == TopBotType.top2bot and all([a[0] > 0 for a in zhongshu]):
+            if direction == TopBotType.top2bot and\
+                zhongshu_range_nointeraction(stock_high, direction, zhongshu):
                 zoushi_result = ZouShi_Type.Qu_Shi_Down
-            elif direction == TopBotType.bot2top and all([a[0] < 0 for a in zhongshu]):
-                 zoushi_result = ZouShi_Type.Qu_Shi_Up
+            elif direction == TopBotType.bot2top and\
+                zhongshu_range_nointeraction(stock_high, direction, zhongshu):
+                zoushi_result = ZouShi_Type.Qu_Shi_Up
             else:
                 zoushi_result = ZouShi_Type.Pan_Zheng_Composite
         elif len(zhongshu) == 1:
