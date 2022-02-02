@@ -113,11 +113,6 @@ def analyze_MA_form_ZhongShu(stock_high, start_idx, end_idx):
     first_cross_price = (stock_high['ma_long'][s_idx] + stock_high['ma_long'][s_idx+1]) / 2
     second_cross_price = (stock_high['ma_long'][e_idx] + stock_high['ma_long'][e_idx+1]) / 2
     
-    print(s_idx)
-    print(e_idx)
-    print(first_cross_price)
-    print(second_cross_price)
-    
     i = s_idx+1 # start the range after first cross
     while i <= e_idx: # end the range before second cross
         if stock_high[i]['high'] > max(first_cross_price, second_cross_price) and\
@@ -135,7 +130,7 @@ def analyze_MA_zoushi_by_stock(stock,
                                zoushi_types, 
                                direction):
     stock_high = get_bars(stock, 
-                           count=count+LONG_MA_NUM, 
+                           count=count+LONG_MA_NUM+1, 
                            end_dt=end_dt, 
                            unit=period,
                            fields= ['date','open',  'high', 'low','close'], 
@@ -153,12 +148,10 @@ def analyze_MA_zoushi_by_stock(stock,
                                 usemask=False)
     
     stock_high = stock_high[LONG_MA_NUM:] # remove extra data
-    
-    print(stock_high)
-    
+        
     zhongshu_results = KBar.analyze_kbar_MA_zoushi(stock_high)
     
-    print(zhongshu_results)
+    # print(zhongshu_results)
     
     return KBar.analyze_kbar_MA_zoushi_exhaustion(stock_high,
                                           zoushi_types=zoushi_types,
@@ -167,6 +160,8 @@ def analyze_MA_zoushi_by_stock(stock,
     
 def analyze_MA_exhaustion(zoushi_result, first, second):
     # work out the slope return true if the slope exhausted
+    # print(first)
+    # print(second)
     if zoushi_result == ZouShi_Type.Qu_Shi_Down:
         first_slope = max(first['high']) - min(first['low']) / (first['low'].argmin()-first['high'].argmax()) 
         second_slope = max(second['high']) - min(second['low']) / (second['low'].argmin()-second['high'].argmax()) 
@@ -205,7 +200,6 @@ class KBar(object):
         # find all gold/death MA cross
         ma_diff = stock_high['ma_short'] - stock_high['ma_long']
         
-        print(ma_diff)
         
         i = 0 
         ma_cross = [] # store the starting index of the cross + for gold - for death
@@ -215,7 +209,6 @@ class KBar(object):
             elif ma_diff[i] > 0 and ma_diff[i+1] < 0: # death
                 ma_cross.append(-i)
         
-        print(ma_cross)
         
         # find all ZhongShu 
         zhongshu = []
