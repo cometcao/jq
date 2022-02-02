@@ -163,17 +163,17 @@ def analyze_MA_exhaustion(zoushi_result, first, second):
     # print(first)
     # print(second)
     if zoushi_result == ZouShi_Type.Qu_Shi_Down:
-        first_slope = max(first['high']) - min(first['low']) / (first['low'].argmin()-first['high'].argmax()) 
-        second_slope = max(second['high']) - min(second['low']) / (second['low'].argmin()-second['high'].argmax()) 
+        first_slope = (max(first['high']) - min(first['low'])) / (first['low'].argmin()-first['high'].argmax()) 
+        second_slope = (max(second['high']) - min(second['low'])) / (second['low'].argmin()-second['high'].argmax()) 
         return abs(second_slope) < abs(first_slope)
     elif zoushi_result == ZouShi_Type.Qu_Shi_Up:
-        first_slope = max(first['high']) - min(first['low']) / (first['high'].argmax() - first['low'].argmin()) 
-        second_slope = max(second['high']) - min(second['low']) / (second['high'].argmax() - second['low'].argmin()) 
+        first_slope = (max(first['high']) - min(first['low'])) / (first['high'].argmax() - first['low'].argmin()) 
+        second_slope = (max(second['high']) - min(second['low'])) / (second['high'].argmax() - second['low'].argmin()) 
         return abs(second_slope) < abs(first_slope)
         
     elif zoushi_result == ZouShi_Type.Pan_Zheng:
-        first_slope = max(first['high']) - min(first['low']) / (first['low'].argmin()-first['high'].argmax()) 
-        second_slope = max(second['high']) - min(second['low']) / (second['low'].argmin()-second['high'].argmax()) 
+        first_slope = (max(first['high']) - min(first['low'])) / (first['low'].argmin()-first['high'].argmax()) 
+        second_slope = (max(second['high']) - min(second['low'])) / (second['low'].argmin()-second['high'].argmax()) 
         return abs(second_slope) < abs(first_slope)
     else:
         return False
