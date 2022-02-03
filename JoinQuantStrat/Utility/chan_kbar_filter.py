@@ -193,11 +193,11 @@ def zhongshu_qushi_qualified(stock_high, direction, zhongshu):
     '''
     # check special case of initial zhongshu formed by a higher level zhongshu
     # we take the last two cross indices of the complex zhongshu
-    if len(zhongshu[0]) > 2:
-        if direction == TopBotType.top2bot and zhongshu[0][-2] > 0:
-            zhongshu[0] = zhongshu[0][-2:]
-        elif direction == TopBotType.bot2top and zhongshu[0][-2] < 0:
-            zhongshu[0] = zhongshu[0][-2:]
+    # if len(zhongshu[0]) > 2:
+    #     if direction == TopBotType.top2bot and zhongshu[0][-2] > 0:
+    #         zhongshu[0] = zhongshu[0][-2:]
+    #     elif direction == TopBotType.bot2top and zhongshu[0][-2] < 0:
+    #         zhongshu[0] = zhongshu[0][-2:]
     # print(zhongshu)
     
     first_idx = 0
