@@ -190,26 +190,34 @@ def analyze_MA_exhaustion(zoushi_result, first, second):
 def zhongshu_range_nointeraction(stock_high, direction, zhongshu):
     '''
     make sure we have independent zhongshu along the QuShi direction
-    only check the last two
+    check every zhongshu
     '''
-    first_zs = zhongshu[-2]
-    second_zs = zhongshu[-1]
-    if direction == TopBotType.top2bot and first_zs[0] > 0 and second_zs[0] > 0:
-        first_zs_range = [(stock_high['ma_long'][first_zs[0]] + stock_high['ma_long'][first_zs[0]+1]) / 2,
-                          (stock_high['ma_long'][-first_zs[1]] + stock_high['ma_long'][-first_zs[1]+1]) / 2]
-        second_zs_range = [(stock_high['ma_long'][second_zs[0]] + stock_high['ma_long'][second_zs[0]+1]) / 2,
-                           (stock_high['ma_long'][-second_zs[1]] + stock_high['ma_long'][-second_zs[1]+1]) / 2]
-        return min(first_zs_range) > max(second_zs_range) or max(first_zs_range) < min(second_zs_range)
-        
-    elif direction == TopBotType.bot2top and first_zs[0] < 0 and second_zs[0] < 0:
-        first_zs_range = [(stock_high['ma_long'][-first_zs[0]] + stock_high['ma_long'][-first_zs[0]+1]) / 2,
-                          (stock_high['ma_long'][first_zs[1]] + stock_high['ma_long'][first_zs[1]+1]) / 2]
-        second_zs_range = [(stock_high['ma_long'][-second_zs[0]] + stock_high['ma_long'][-second_zs[0]+1]) / 2,
-                           (stock_high['ma_long'][second_zs[1]] + stock_high['ma_long'][second_zs[1]+1]) / 2]
-        return min(first_zs_range) > max(second_zs_range) or max(first_zs_range) < min(second_zs_range)
-    else:
-        return False
-        
+    first_idx = 0
+    while first_idx < len(zhongshu) - 1:
+        first_zs = zhongshu[first_idx]
+        second_idx = first_idx + 1
+        while second_idx < len(zhongshu):
+            second_zs = zhongshu[second_idx]
+            if direction == TopBotType.top2bot and first_zs[0] > 0 and second_zs[0] > 0:
+                first_zs_range = [(stock_high['ma_long'][first_zs[0]] + stock_high['ma_long'][first_zs[0]+1]) / 2,
+                                  (stock_high['ma_long'][-first_zs[1]] + stock_high['ma_long'][-first_zs[1]+1]) / 2]
+                second_zs_range = [(stock_high['ma_long'][second_zs[0]] + stock_high['ma_long'][second_zs[0]+1]) / 2,
+                                   (stock_high['ma_long'][-second_zs[1]] + stock_high['ma_long'][-second_zs[1]+1]) / 2]
+                if not (min(first_zs_range) > max(second_zs_range) or max(first_zs_range) < min(second_zs_range)):
+                    return False
+                
+            elif direction == TopBotType.bot2top and first_zs[0] < 0 and second_zs[0] < 0:
+                first_zs_range = [(stock_high['ma_long'][-first_zs[0]] + stock_high['ma_long'][-first_zs[0]+1]) / 2,
+                                  (stock_high['ma_long'][first_zs[1]] + stock_high['ma_long'][first_zs[1]+1]) / 2]
+                second_zs_range = [(stock_high['ma_long'][-second_zs[0]] + stock_high['ma_long'][-second_zs[0]+1]) / 2,
+                                   (stock_high['ma_long'][second_zs[1]] + stock_high['ma_long'][second_zs[1]+1]) / 2]
+                if not (min(first_zs_range) > max(second_zs_range) or max(first_zs_range) < min(second_zs_range)):
+                    return False
+            else:
+                return False
+            second_idx += 1
+        first_idx += 1
+    return True
 
 class KBar(object):
     '''
