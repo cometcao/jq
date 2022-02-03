@@ -161,26 +161,29 @@ def analyze_MA_exhaustion(zoushi_result, first, second):
     # print(first)
     # print(second)
     
-    if int(first['low'].argmin()) == int(first['high'].argmax()) or\
-        int(second['low'].argmin()) == int(second['high'].argmax()):
+    fst_max_idx = np.where(first['high'] == max(first['high']))[0][0]
+    fst_min_idx = np.where(first['low'] == min(first['low']))[0][-1]
+    snd_max_idx = np.where(second['high'] == max(second['high']))[0][0]
+    snd_min_idx = np.where(second['low'] == min(second['low']))[0][-1]
+    
+    if int(fst_min_idx) == int(fst_max_idx) or\
+        int(snd_min_idx) == int(snd_max_idx):
         return False
     
     if zoushi_result == ZouShi_Type.Qu_Shi_Down:
-        first=first[int(first['high'].argmax()):] # cut the data
-        second=second[int(second['high'].argmax()):]
-        first_slope = (max(first['high']) - min(first['low'])) / (first['low'].argmin()-first['high'].argmax()) 
-        second_slope = (max(second['high']) - min(second['low'])) / (second['low'].argmin()-second['high'].argmax()) 
+        first_slope = (max(first['high']) - min(first['low'])) / (fst_min_idx-fst_max_idx) 
+        second_slope = (max(second['high']) - min(second['low'])) / (snd_min_idx-snd_max_idx) 
         return abs(second_slope) < abs(first_slope)
     elif zoushi_result == ZouShi_Type.Qu_Shi_Up:
         first=first[int(first['low'].argmin()):] # cut the data
         second=second[int(second['low'].argmin()):]
-        first_slope = (max(first['high']) - min(first['low'])) / (first['high'].argmax() - first['low'].argmin()) 
-        second_slope = (max(second['high']) - min(second['low'])) / (second['high'].argmax() - second['low'].argmin()) 
+        first_slope = (max(first['high']) - min(first['low'])) / (fst_max_idx - fst_min_idx) 
+        second_slope = (max(second['high']) - min(second['low'])) / (snd_max_idx - snd_min_idx) 
         return abs(second_slope) < abs(first_slope)
         
     elif zoushi_result == ZouShi_Type.Pan_Zheng:
-        first_slope = (max(first['high']) - min(first['low'])) / (first['low'].argmin()-first['high'].argmax()) 
-        second_slope = (max(second['high']) - min(second['low'])) / (second['low'].argmin()-second['high'].argmax()) 
+        first_slope = (max(first['high']) - min(first['low'])) / (fst_min_idx-fst_max_idx) 
+        second_slope = (max(second['high']) - min(second['low'])) / (snd_min_idx-snd_max_idx) 
         return abs(second_slope) < abs(first_slope)
     else:
         return False
