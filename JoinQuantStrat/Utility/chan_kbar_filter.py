@@ -151,8 +151,6 @@ def analyze_MA_zoushi_by_stock(stock,
         
     zhongshu_results = KBar.analyze_kbar_MA_zoushi(stock_high)
     
-    # print(zhongshu_results)
-    
     return KBar.analyze_kbar_MA_zoushi_exhaustion(stock_high,
                                           zoushi_types=zoushi_types,
                                            direction=direction,
@@ -187,11 +185,21 @@ def analyze_MA_exhaustion(zoushi_result, first, second):
     else:
         return False
 
-def zhongshu_range_nointeraction(stock_high, direction, zhongshu):
+def zhongshu_qushi_qualified(stock_high, direction, zhongshu):
     '''
+    input zhongshu must have length of 2 or above
     make sure we have independent zhongshu along the QuShi direction
     check every zhongshu
     '''
+    # check special case of initial zhongshu formed by a higher level zhongshu
+    # we take the last two cross indices of the complex zhongshu
+    if len(zhongshu[0]) > 2:
+        if direction == TopBotType.top2bot and zhongshu[0][-2] > 0:
+            zhongshu[0] = zhongshu[0][-2:]
+        elif direction == TopBotType.bot2top and zhongshu[0][-2] < 0:
+            zhongshu[0] = zhongshu[0][-2:]
+    # print(zhongshu)
+    
     first_idx = 0
     while first_idx < len(zhongshu) - 1:
         first_zs = zhongshu[first_idx]
@@ -295,10 +303,10 @@ class KBar(object):
         
         if len(zhongshu) > 1:
             if direction == TopBotType.top2bot and\
-                zhongshu_range_nointeraction(stock_high, direction, zhongshu):
+                zhongshu_qushi_qualified(stock_high, direction, zhongshu):
                 zoushi_result = ZouShi_Type.Qu_Shi_Down
             elif direction == TopBotType.bot2top and\
-                zhongshu_range_nointeraction(stock_high, direction, zhongshu):
+                zhongshu_qushi_qualified(stock_high, direction, zhongshu):
                 zoushi_result = ZouShi_Type.Qu_Shi_Up
             else:
                 zoushi_result = ZouShi_Type.Pan_Zheng_Composite
