@@ -187,6 +187,11 @@ def analyze_MA_exhaustion(zoushi_result, first, second):
         return abs(second_slope) < abs(first_slope)
     else:
         return False
+    
+def check_direction_match_zhongshu_cross(direction, zhongshu, allow_ext = False):
+    return (direction == TopBotType.top2bot and zhongshu[0] > 0) or\
+           (direction == TopBotType.bot2top and zhongshu[0] < 0) or\
+           (allow_ext and len(zhongshu) > 2)
 
 def zhongshu_qushi_qualified(stock_high, direction, zhongshu):
     '''
@@ -209,7 +214,8 @@ def zhongshu_qushi_qualified(stock_high, direction, zhongshu):
         second_idx = first_idx + 1
         while second_idx < len(zhongshu):
             second_zs = zhongshu[second_idx]
-            if direction == TopBotType.top2bot and first_zs[0] > 0 and second_zs[0] > 0:
+            if check_direction_match_zhongshu_cross(direction, first_zs) and\
+               check_direction_match_zhongshu_cross(direction, second_zs):
                 first_zs_range = [(stock_high['ma_long'][first_zs[0]] + stock_high['ma_long'][first_zs[0]+1]) / 2,
                                   (stock_high['ma_long'][-first_zs[1]] + stock_high['ma_long'][-first_zs[1]+1]) / 2]
                 second_zs_range = [(stock_high['ma_long'][second_zs[0]] + stock_high['ma_long'][second_zs[0]+1]) / 2,
@@ -217,7 +223,8 @@ def zhongshu_qushi_qualified(stock_high, direction, zhongshu):
                 if not (min(first_zs_range) > max(second_zs_range) or max(first_zs_range) < min(second_zs_range)):
                     return False
                 
-            elif direction == TopBotType.bot2top and first_zs[0] < 0 and second_zs[0] < 0:
+            elif check_direction_match_zhongshu_cross(direction, first_zs) and\
+                 check_direction_match_zhongshu_cross(direction, second_zs):
                 first_zs_range = [(stock_high['ma_long'][-first_zs[0]] + stock_high['ma_long'][-first_zs[0]+1]) / 2,
                                   (stock_high['ma_long'][first_zs[1]] + stock_high['ma_long'][first_zs[1]+1]) / 2]
                 second_zs_range = [(stock_high['ma_long'][-second_zs[0]] + stock_high['ma_long'][-second_zs[0]+1]) / 2,
@@ -313,7 +320,7 @@ class KBar(object):
                 zoushi_result = ZouShi_Type.Qu_Shi_Up
             else:
                 zoushi_result = ZouShi_Type.Pan_Zheng_Composite
-        elif len(zhongshu) == 1:
+        elif len(zhongshu) == 1 and check_direction_match_zhongshu_cross(direction, zhongshu[0]):
             zoushi_result = ZouShi_Type.Pan_Zheng
         else:
             return zoushi_result, exhaustion_result
