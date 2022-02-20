@@ -128,7 +128,8 @@ def analyze_MA_zoushi_by_stock(stock,
                                end_dt, 
                                df, 
                                zoushi_types, 
-                               direction):
+                               direction,
+                               debug=False):
     stock_high = get_bars(stock, 
                            count=count+LONG_MA_NUM, 
                            end_dt=end_dt, 
@@ -148,18 +149,23 @@ def analyze_MA_zoushi_by_stock(stock,
                                 usemask=False)
     
     stock_high = stock_high[LONG_MA_NUM:] # remove extra data
-        
+    
     zhongshu_results = KBar.analyze_kbar_MA_zoushi(stock_high)
+    
+    if debug:
+        print(zhongshu_results)
     
     return KBar.analyze_kbar_MA_zoushi_exhaustion(stock_high,
                                           zoushi_types=zoushi_types,
                                            direction=direction,
-                                           zhongshu=zhongshu_results)
+                                           zhongshu=zhongshu_results,
+                                           debug=debug)
     
-def analyze_MA_exhaustion(zoushi_result, first, second):
+def analyze_MA_exhaustion(zoushi_result, first, second,debug=False):
     # work out the slope return true if the slope exhausted
-    # print(first)
-    # print(second)
+    if debug:
+        print(first)
+        print(second)
     
     fst_max_idx = np.where(first['high'] == max(first['high']))[0][0]
     fst_min_idx = np.where(first['low'] == min(first['low']))[0][-1]
@@ -267,7 +273,6 @@ class KBar(object):
             elif ma_diff[i] > 0 and ma_diff[i+1] < 0: # death
                 ma_cross.append(-i)
         
-        
         # find all ZhongShu 
         zhongshu = []
         current_zs = []
@@ -305,7 +310,7 @@ class KBar(object):
         
     
     @classmethod
-    def analyze_kbar_MA_zoushi_exhaustion(cls, stock_high, zoushi_types, direction, zhongshu):
+    def analyze_kbar_MA_zoushi_exhaustion(cls, stock_high, zoushi_types, direction, zhongshu, debug=False):
         # gold cross -> downwards zhongshu 
         # death cross -> upwards zhongshu
         zoushi_result = ZouShi_Type.INVALID
@@ -320,7 +325,7 @@ class KBar(object):
                 zoushi_result = ZouShi_Type.Qu_Shi_Up
             else:
                 zoushi_result = ZouShi_Type.Pan_Zheng_Composite
-        elif len(zhongshu) == 1 and check_direction_match_zhongshu_cross(direction, zhongshu[0]):
+        elif len(zhongshu) == 1 and check_direction_match_zhongshu_cross(direction, zhongshu[0], allow_ext=True):
             zoushi_result = ZouShi_Type.Pan_Zheng
         else:
             return zoushi_result, exhaustion_result
@@ -334,14 +339,14 @@ class KBar(object):
             zs = zhongshu[0]
             first_part = stock_high[:abs(zs[0])+1]
             second_part = stock_high[abs(zs[-1])+1:]
-            if analyze_MA_exhaustion(zoushi_result, first_part, second_part):
+            if analyze_MA_exhaustion(zoushi_result, first_part, second_part,debug):
                 exhaustion_result = Chan_Type.PANBEI
         else:
             zs1 = zhongshu[-2]
             zs2 = zhongshu[-1]
             first_part = stock_high[abs(zs1[-1])+1:abs(zs2[0])+1]
             second_part = stock_high[abs(zs2[-1])+1:]
-            if analyze_MA_exhaustion(zoushi_result, first_part, second_part):
+            if analyze_MA_exhaustion(zoushi_result, first_part, second_part,debug):
                 exhaustion_result = Chan_Type.BEICHI
         
         return zoushi_result, exhaustion_result
