@@ -150,7 +150,7 @@ def analyze_MA_zoushi_by_stock(stock,
     
     stock_high = stock_high[LONG_MA_NUM:] # remove extra data
     
-    zhongshu_results = KBar.analyze_kbar_MA_zoushi(stock_high)
+    zhongshu_results, all_cross = KBar.analyze_kbar_MA_zoushi(stock_high)
     
     if debug:
         print(zhongshu_results)
@@ -159,6 +159,7 @@ def analyze_MA_zoushi_by_stock(stock,
                                           zoushi_types=zoushi_types,
                                            direction=direction,
                                            zhongshu=zhongshu_results,
+                                           all_cross=all_cross,
                                            debug=debug)
     
 def analyze_MA_exhaustion(zoushi_result, first, second,debug=False):
@@ -306,11 +307,11 @@ class KBar(object):
             i = current_idx
             
         # determine ZouShi
-        return zhongshu
+        return zhongshu, ma_cross
         
     
     @classmethod
-    def analyze_kbar_MA_zoushi_exhaustion(cls, stock_high, zoushi_types, direction, zhongshu, debug=False):
+    def analyze_kbar_MA_zoushi_exhaustion(cls, stock_high, zoushi_types, direction, zhongshu, all_cross, debug=False):
         # gold cross -> downwards zhongshu 
         # death cross -> upwards zhongshu
         zoushi_result = ZouShi_Type.INVALID
@@ -332,6 +333,11 @@ class KBar(object):
             
         
         if zoushi_result not in zoushi_types:
+            return zoushi_result, exhaustion_result
+        
+        # make sure we have the right direction
+        if (direction == TopBotType.top2bot and all_cross[-1] > 0) or\
+            (direction == TopBotType.bot2top and all_cross[-1] < 0):
             return zoushi_result, exhaustion_result
         
         # only check exhaustion by last ZhongShu
