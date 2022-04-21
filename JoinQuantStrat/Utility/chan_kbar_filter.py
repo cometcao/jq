@@ -121,6 +121,40 @@ def analyze_MA_form_ZhongShu(stock_high, start_idx, end_idx):
         i = i + 1
     return False
             
+            
+def analyze_MA_zoushi_ZhongShuAD_by_stock(stock,
+                                          period, 
+                                          count,
+                                           end_dt, 
+                                           df, 
+                                           direction,
+                                           debug=False):
+    stock_high = get_bars(stock, 
+                           count=count+LONG_MA_NUM, 
+                           end_dt=end_dt, 
+                           unit=period,
+                           fields= ['date','open',  'high', 'low','close'], 
+                           df = df,
+                           include_now=True)
+    
+    ma_long = talib.MA(stock_high['close'], LONG_MA_NUM)
+    ma_short = talib.MA(stock_high['close'], SHORT_MA_NUM)
+    ma_long[np.isnan(ma_long)] = 0
+    ma_short[np.isnan(ma_short)] = 0
+    stock_high = append_fields(stock_high,
+                                ['ma_long', 'ma_short'],
+                                [ma_long, ma_short],
+                                [float, float],
+                                usemask=False)
+    
+    stock_high = stock_high[LONG_MA_NUM:] # remove extra data
+    
+    zhongshu_results, all_cross = KBar.analyze_kbar_MA_zoushi(stock_high)
+    
+    return KBar.analyze_kbar_MA_zhongshu_advance(stock_high, 
+                                          direction=direction, 
+                                          zhongshu=zhongshu_results, 
+                                          debug=debug)
 
 def analyze_MA_zoushi_by_stock(stock,
                               period, 
@@ -192,6 +226,41 @@ def analyze_MA_exhaustion(zoushi_result, first, second,debug=False):
         first_slope = (max(first['high']) - min(first['low'])) / (fst_min_idx-fst_max_idx) 
         second_slope = (max(second['high']) - min(second['low'])) / (snd_min_idx-snd_max_idx) 
         return abs(second_slope) < abs(first_slope)
+    else:
+        return False
+    
+def check_zhongshu_advance(direction, zs1, zs2, stock_high, debug=False):
+    first_zhongshu_data = stock_high[abs(zs1[0])+1:abs(zs1[-1])+1]
+    second_zhongshu_data = stock_high[abs(zs2[0])+1:abs(zs2[-1])+1]
+    
+    if debug:
+        pass
+    
+    if direction == TopBotType.top2bot and zs2[0] > 0:
+        return min(first_zhongshu_data['low']) > max(second_zhongshu_data['high'])
+        
+    elif direction == TopBotType.bot2top and zs2[0] < 0:
+        return max(first_zhongshu_data['high']) < min(second_zhongshu_data['low'])
+    
+    else:
+        return False
+
+def check_zhongshu_strong(direction, zs, stock_high, debug=False):
+    
+    zhongshu_cross_data = stock_high[abs(zs[0]):abs(zs[-1])+1]
+    
+    if len(zs) > 2:
+        return False
+    
+    first_cross_price = (zhongshu_cross_data[0]['ma_short'] + zhongshu_cross_data[1]['ma_short']) / 2
+    second_cross_price = (zhongshu_cross_data[-2]['ma_short'] + zhongshu_cross_data[-1]['ma_short']) / 2
+    
+    if direction == TopBotType.top2bot:
+        return first_cross_price > second_cross_price
+    
+    elif direction == TopBotType.bot2top:
+        return first_cross_price < second_cross_price
+    
     else:
         return False
     
@@ -309,6 +378,23 @@ class KBar(object):
         # determine ZouShi
         return zhongshu, ma_cross
         
+        
+    @classmethod
+    def analyze_kbar_MA_zhongshu_advance(cls, stock_high, direction, zhongshu, debug=False):
+        '''
+        find advancing zhongshu
+        '''
+        zhongshu_advance = False
+        zhongshu_strong = False
+        
+        if len(zhongshu) < 2:
+            return zhongshu_advance, zhongshu_strong
+        
+        # only check if the latest ZhongShu advanced
+        zhongshu_advance = check_zhongshu_advance(direction, zhongshu[-2], zhongshu[-1], stock_high, debug=debug)
+        zhongshu_strong = check_zhongshu_strong(direction, zhongshu[-1], stock_high, debug=debug)
+        return zhongshu_advance, zhongshu_strong
+            
     
     @classmethod
     def analyze_kbar_MA_zoushi_exhaustion(cls, stock_high, zoushi_types, direction, zhongshu, all_cross, debug=False):
