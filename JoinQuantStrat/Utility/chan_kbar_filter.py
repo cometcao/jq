@@ -234,7 +234,10 @@ def check_zhongshu_advance(direction, zs1, zs2, stock_high, debug=False):
     second_zhongshu_data = stock_high[abs(zs2[0])+1:abs(zs2[-1])+1]
     
     if debug:
-        pass
+        print(zs1)
+        print(zs2)
+        print(first_zhongshu_data)
+        print(second_zhongshu_data)
     
     if direction == TopBotType.top2bot and zs2[0] > 0:
         return min(first_zhongshu_data['low']) > max(second_zhongshu_data['high'])
@@ -389,6 +392,9 @@ class KBar(object):
         
         if len(zhongshu) < 2:
             return zhongshu_advance, zhongshu_strong
+        
+        if debug:
+            pass
         
         # only check if the latest ZhongShu advanced
         zhongshu_advance = check_zhongshu_advance(direction, zhongshu[-2], zhongshu[-1], stock_high, debug=debug)
