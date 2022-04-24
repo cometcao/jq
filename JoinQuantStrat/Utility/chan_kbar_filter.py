@@ -152,6 +152,7 @@ def analyze_MA_zoushi_ZhongShuAD_by_stock(stock,
     zhongshu_results, all_cross = KBar.analyze_kbar_MA_zoushi(stock_high)
     
     return KBar.analyze_kbar_MA_zhongshu_advance(stock_high, 
+                                          all_cross=all_cross,
                                           direction=direction, 
                                           zhongshu=zhongshu_results, 
                                           debug=debug)
@@ -383,7 +384,7 @@ class KBar(object):
         
         
     @classmethod
-    def analyze_kbar_MA_zhongshu_advance(cls, stock_high, direction, zhongshu, debug=False):
+    def analyze_kbar_MA_zhongshu_advance(cls, stock_high, all_cross, direction, zhongshu, debug=False):
         '''
         find advancing zhongshu
         '''
@@ -395,6 +396,10 @@ class KBar(object):
         
         if debug:
             pass
+        
+        if all_cross[-1] != zhongshu[-1][-1]:
+            # make sure last cross is the zhongshu last cross
+            return zhongshu_advance, zhongshu_strong
         
         # only check if the latest ZhongShu advanced
         zhongshu_advance = check_zhongshu_advance(direction, zhongshu[-2], zhongshu[-1], stock_high, debug=debug)
