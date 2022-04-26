@@ -107,7 +107,7 @@ SHORT_MA_NUM = 5
 
 def analyze_MA_form_ZhongShu(stock_high, start_idx, end_idx):
     # Zhongshu formed only if we found a kbar with range cover both cross
-    # we only check k bars between two crosses
+    # we only check k bars between two crosses, at least three k bars
     s_idx = abs(start_idx)
     e_idx = abs(end_idx)
     first_cross_price = (stock_high['ma_long'][s_idx] + stock_high['ma_long'][s_idx+1]) / 2
@@ -363,10 +363,10 @@ class KBar(object):
                     else:
                         break
                     
-                else:
-                    if analyze_MA_form_ZhongShu(stock_high, 
-                                                ma_cross[i], 
-                                                ma_cross[current_idx]):
+                else: # make sure we have at least three bars between two crosses to start with
+                    if abs(ma_cross[current_idx]) - abs(ma_cross[i]) >= 3 and analyze_MA_form_ZhongShu(stock_high, 
+                                                                    ma_cross[i], 
+                                                                    ma_cross[current_idx]):
                         current_zs.append(ma_cross[i])
                         current_zs.append(ma_cross[current_idx])
                         current_idx = current_idx + 1
