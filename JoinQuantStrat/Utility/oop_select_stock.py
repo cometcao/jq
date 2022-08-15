@@ -498,6 +498,7 @@ class Pick_Rank_ETF(Create_stock_list):
                         query(
                             finance.FUND_PORTFOLIO_STOCK.symbol,
                             finance.FUND_PORTFOLIO_STOCK.proportion,
+                            finance.FUND_PORTFOLIO_STOCK.pub_date,
                         ).filter(
                             finance.FUND_PORTFOLIO_STOCK.code == etf[:6]
                         ).order_by(
@@ -508,10 +509,14 @@ class Pick_Rank_ETF(Create_stock_list):
                 if symbol_df.empty:
                     # print('etf: {0} 成分股获取失败'.format(etf))
                     continue
+                
+                symbol_df = symbol_df[symbol_df['pub_date']==symbol_df['pub_date'][0]]
+                
                 try:
                     symbol_list = [normalize_code(sy) for sy in symbol_df['symbol'].values]
                 except Exception:
                     continue
+                
                 symbol_df['symbol'] = symbol_df['symbol'].apply(normalize_code)
                 symbol_df = symbol_df.set_index('symbol')
                 etf_info[etf] = symbol_df
@@ -528,9 +533,9 @@ class Pick_Rank_ETF(Create_stock_list):
         for etf in etf_info:
             etf_df = etf_info[etf]
             etf_df = etf_df.join(stock_value_df)
-            if etf_df['proportion'].sum() > 95: # make sure we got most stock info
-                etf_df['valuation_param'] = etf_df['proportion'] * etf_df['log_mcap']
-                etf_value.append((etf, etf_df['valuation_param'].sum()))
+
+            etf_df['valuation_param'] = etf_df['proportion'] * etf_df['log_mcap']
+            etf_value.append((etf, etf_df['valuation_param'].sum()))
             
         etf_value = sorted(etf_value, key = lambda x: x[1])
         
