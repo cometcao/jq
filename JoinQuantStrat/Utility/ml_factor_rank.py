@@ -256,7 +256,7 @@ class ML_Factor_Rank(object):
         return stockset
     
     
-    def gaugeStocks_new(self, context):
+    def gaugeStocks_new_df(self, context):
         # 设置初始股票池
         sample = []
         if isinstance(self.index_scope, list):
@@ -366,8 +366,10 @@ class ML_Factor_Rank(object):
         
         #对新的因子，即残差进行排序（按照从小到大）
         factor = factor.sort_values(by = 'log_mcap')        
-        
-#         print(factor)
+        return factor
+    
+    def gaugeStocks_new(self, context):
+        factor = self.gaugeStocks_new_df(context)
         
         stockset = list(factor.index[:self.stock_num])
         return stockset
@@ -449,7 +451,7 @@ class ML_Factor_Rank(object):
             # 9个周期作为训练集
             df_train = pd.concat([d1,d2,d3,d4,d5,d6,d7,d8,d9],ignore_index=True)
         else:
-            pass
+            df_train = d1
         
         return df_train
     

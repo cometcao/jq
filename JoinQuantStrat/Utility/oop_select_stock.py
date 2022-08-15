@@ -468,6 +468,60 @@ class Pick_rank_sector(Create_stock_list):
         else:
             return '弱势板块股票 %s%% 阈值 %s' % (self.sector_limit_pct, self.strength_threthold)
 
+class Pick_Rank_ETF(Create_stock_list):
+    def __init__(self, params):
+        self.etf_num = params.get('etf_num', 20)
+        self.is_debug = params.get('is_debug', False)
+        self.regress_profit = params.get('regress_profit', False)
+        self.period = params.get('period', 'month_3')
+        self.trainlength = params.get('train_length', 55)
+        self.use_np = params.get("use_np", False)
+        self.factor_num = params.get('factor_num', 10)
+        self.min_money_boundary = params.get('min_money_boundary', 100000000)
+        pass
+    
+    def find_suitable_etf(self):
+        # 找到所有etf
+        etf_vol_list = list()
+        etf_list = get_all_securities(['etf']).index.values
+        etf_info = {}
+        
+        for etf in etf_list:
+            df = get_bars(etf, 30, '1d', ['money'])
+            money = df['money'].mean()
+            if money > self.min_money_boundary: 
+                etf_vol_list.append((etf, money))
+                # 获取etf的成分股
+                symbol_df = finance.run_query(
+                        query(
+                            finance.FUND_PORTFOLIO_STOCK.symbol,
+                            finance.FUND_PORTFOLIO_STOCK.proportion,
+                        ).filter(
+                            finance.FUND_PORTFOLIO_STOCK.code == etf[:6]
+                        ).order_by(
+                            finance.FUND_PORTFOLIO_STOCK.pub_date.desc(),
+                            finance.FUND_PORTFOLIO_STOCK.proportion.desc(),
+                        )
+                    )
+                if symbol_df.empty:
+                    # print('etf: {0} 成分股获取失败'.format(etf))
+                    continue
+                try:
+                    symbol_list = [normalize_code(sy) for sy in symbol_df['symbol'].values]
+                except Exception:
+                    continue
+                etf_info[etf] = symbol_df
+        return etf_info
+    
+    def before_trading_start(self, context):
+        from ml_factor_rank import ML_Factor_Rank
+        mfr = ML_Factor_Rank({'stock_num':self.stock_num, 
+                              'index_scope':self.index_scope})
+        new_list = mfr.gaugeStocks_new(context)
+        return new_list
+
+    def __str__(self):
+        return "低估值回归公式选ETF"
 
 class Pick_Rank_Factor(Create_stock_list):
     def __init__(self, params):
