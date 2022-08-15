@@ -262,6 +262,8 @@ class ML_Factor_Rank(object):
         if isinstance(self.index_scope, list):
             for idx in self.index_scope:
                 sample = sample +  get_index_stocks(idx, date = None)
+        elif self.index_scope == 'all':
+            sample = get_all_securities(['stock']).index
         else:
             sample = get_index_stocks(self.index_scope, date = None)
         # 设置可交易股票池

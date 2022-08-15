@@ -527,12 +527,13 @@ class Pick_Rank_ETF(Create_stock_list):
         for etf in etf_info:
             etf_df = etf_info[etf]
             etf_df = etf_df.join(stock_value_df)
-            etf_df['valuation_param'] = etf_df['proportion'] * etf_df['log_mcap']
-            etf_value.append((etf, etf_df['valuation_param'].sum()))
+            if etf_df['proportion'].sum() > 95: # make sure we got most stock info
+                etf_df['valuation_param'] = etf_df['proportion'] * etf_df['log_mcap']
+                etf_value.append((etf, etf_df['valuation_param'].sum()))
             
-        etf_list = sorted(etf_list, key = lambda x: x[1])
+        etf_value = sorted(etf_value, key = lambda x: x[1])
         
-        return [x[0] for x in etf_list][:self.etf_num]
+        return [x[0] for x in etf_value][:self.etf_num]
 
     def __str__(self):
         return "低估值回归公式选ETF"
