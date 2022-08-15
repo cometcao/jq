@@ -365,7 +365,8 @@ class ML_Factor_Rank(object):
         factor = y - pd.DataFrame(y_pred, index = y.index, columns = ['log_mcap'])
         
         #对新的因子，即残差进行排序（按照从小到大）
-        factor = factor.sort_values(by = 'log_mcap')        
+        # factor = factor.sort_values(by = 'log_mcap')        
+        factor = factor.sort(columns=['log_mcap']) 
         return factor
     
     def gaugeStocks_new(self, context):

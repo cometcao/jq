@@ -471,6 +471,7 @@ class Pick_rank_sector(Create_stock_list):
 class Pick_Rank_ETF(Create_stock_list):
     def __init__(self, params):
         self.etf_num = params.get('etf_num', 20)
+        self.index_scope = params.get('index_scope', '000985.XSHG')
         self.is_debug = params.get('is_debug', False)
         self.regress_profit = params.get('regress_profit', False)
         self.period = params.get('period', 'month_3')
@@ -510,15 +511,28 @@ class Pick_Rank_ETF(Create_stock_list):
                     symbol_list = [normalize_code(sy) for sy in symbol_df['symbol'].values]
                 except Exception:
                     continue
+                symbol_df['symbol'] = symbol_df['symbol'].apply(normalize_code)
+                symbol_df = symbol_df.set_index('symbol')
                 etf_info[etf] = symbol_df
+        print("targeting ETF: {0}".format(etf_info.keys()))
         return etf_info
     
     def before_trading_start(self, context):
         from ml_factor_rank import ML_Factor_Rank
         mfr = ML_Factor_Rank({'stock_num':self.stock_num, 
                               'index_scope':self.index_scope})
-        new_list = mfr.gaugeStocks_new(context)
-        return new_list
+        stock_value_df = mfr.gaugeStocks_new_df(context)
+        etf_info = self.find_suitable_etf()
+        etf_value = []
+        for etf in etf_info:
+            etf_df = etf_info[etf]
+            etf_df = etf_df.join(stock_value_df)
+            etf_df['valuation_param'] = etf_df['proportion'] * etf_df['log_mcap']
+            etf_value.append((etf, etf_df['valuation_param'].sum()))
+            
+        etf_list = sorted(etf_list, key = lambda x: x[1])
+        
+        return [x[0] for x in etf_list][:self.etf_num]
 
     def __str__(self):
         return "低估值回归公式选ETF"
