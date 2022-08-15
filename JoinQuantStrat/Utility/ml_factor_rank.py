@@ -47,9 +47,9 @@ class ML_Factor_Rank(object):
         ## 机器学习验证集及测试集评分记录之用（实际交易策略中不需要，请设定为False）#####
     
         # 训练集长度
-        self.trainlength = params.get('stock_num', 3)
+        self.trainlength = params.get('trainlength', 4)
         # 训练集合成间隔周期（交易日）
-        self.intervals = params.get('stock_num', 21)
+        self.intervals = params.get('intervals', 21)
     
         # 离散值处理列表
         self.winsorizeList = ['log_NC', 'LEV', 'NI_p', 'NI_n', 'g', 'RD',
@@ -263,7 +263,11 @@ class ML_Factor_Rank(object):
             for idx in self.index_scope:
                 sample = sample +  get_index_stocks(idx, date = None)
         elif self.index_scope == 'all':
-            sample = get_all_securities(['stock']).index
+            # at least half a year old!
+            all_stock_df = get_all_securities(types=['stock'])
+            all_stock_df['yesterday'] = pd.to_datetime(context.previous_date)
+            all_stock_df = all_stock_df[(all_stock_df['yesterday']-pd.to_datetime(all_stock_df['start_date'])).map(lambda x:x/np.timedelta64(1, 'D')) >= 180]
+            sample = all_stock_df.index
         else:
             sample = get_index_stocks(self.index_scope, date = None)
         # 设置可交易股票池

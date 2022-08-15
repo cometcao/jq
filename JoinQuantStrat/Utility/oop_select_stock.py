@@ -471,6 +471,7 @@ class Pick_rank_sector(Create_stock_list):
 class Pick_Rank_ETF(Create_stock_list):
     def __init__(self, params):
         self.etf_num = params.get('etf_num', 20)
+        self.stock_num = params.get('stock_num', 10000)
         self.index_scope = params.get('index_scope', '000985.XSHG')
         self.is_debug = params.get('is_debug', False)
         self.regress_profit = params.get('regress_profit', False)
