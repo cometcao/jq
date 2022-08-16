@@ -477,9 +477,10 @@ class Pick_Rank_ETF(Create_stock_list):
         self.regress_profit = params.get('regress_profit', False)
         self.period = params.get('period', 'month_3')
         self.trainlength = params.get('train_length', 55)
-        self.use_np = params.get("use_np", False)
+        self.use_new_gauge = params.get("use_new_gauge", False)
         self.factor_num = params.get('factor_num', 10)
         self.min_money_boundary = params.get('min_money_boundary', 100000000)
+        self.proportion_limit = params.get('proportion_limit', 50)
         pass
     
     def find_suitable_etf(self):
@@ -527,15 +528,15 @@ class Pick_Rank_ETF(Create_stock_list):
         from ml_factor_rank import ML_Factor_Rank
         mfr = ML_Factor_Rank({'stock_num':self.stock_num, 
                               'index_scope':self.index_scope})
-        stock_value_df = mfr.gaugeStocks_new_df(context)
+        stock_value_df = mfr.gaugeStocks_new_df(context) if self.use_new_gauge else mfr.gaugeStocks_df(context)
         etf_info = self.find_suitable_etf()
         etf_value = []
         for etf in etf_info:
             etf_df = etf_info[etf]
             etf_df = etf_df.join(stock_value_df)
-
-            etf_df['valuation_param'] = etf_df['proportion'] * etf_df['log_mcap']
-            etf_value.append((etf, etf_df['valuation_param'].sum()))
+            if etf_df.dropna()['proportion'].sum() > self.proportion_limit:
+                etf_df['valuation_param'] = etf_df['proportion'] * etf_df['log_mcap']
+                etf_value.append((etf, etf_df['valuation_param'].sum()))
             
         etf_value = sorted(etf_value, key = lambda x: x[1])
         

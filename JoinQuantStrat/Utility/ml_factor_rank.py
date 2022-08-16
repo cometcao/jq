@@ -193,7 +193,7 @@ class ML_Factor_Rank(object):
                         #行业哑变量
                         'HY001', 'HY002', 'HY003', 'HY004', 'HY005', 'HY006', 'HY007', 'HY008', 'HY009', 'HY010', 'HY011']
     
-    def gaugeStocks(self, context):
+    def gaugeStocks_df(self, context):
         sample = get_index_stocks(self.index_scope, date = None)
         if not sample:
             print("empty stock list")
@@ -251,6 +251,11 @@ class ML_Factor_Rank(object):
         factor = Y - pd.DataFrame(svr.predict(X), index = Y.index, columns = ['log_mcap'])
 #         factor = factor.sort_index(by = 'log_mcap')
         factor = factor.sort_values(by = 'log_mcap')
+        
+        return factor
+    
+    def gaugeStocks(self, context):
+        factor = self.gaugeStocks_df(context)
         stockset = list(factor.index[:self.stock_num])
         
         return stockset
