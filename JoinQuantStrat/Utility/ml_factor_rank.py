@@ -194,7 +194,10 @@ class ML_Factor_Rank(object):
                         'HY001', 'HY002', 'HY003', 'HY004', 'HY005', 'HY006', 'HY007', 'HY008', 'HY009', 'HY010', 'HY011']
     
     def gaugeStocks_df(self, context):
-        sample = get_index_stocks(self.index_scope, date = None)
+        if self.index_scope == 'all':
+            sample = list(get_all_securities(types=['stock']).index)
+        else:
+            sample = get_index_stocks(self.index_scope, date = None)
         if not sample:
             print("empty stock list")
             return []
