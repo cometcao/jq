@@ -200,7 +200,7 @@ class ML_Factor_Rank(object):
             sample = get_index_stocks(self.index_scope, date = None)
         if not sample:
             print("empty stock list")
-            return []
+            return None
         q = query(valuation.code, valuation.market_cap, 
                   balance.total_assets - balance.total_liability,
                   balance.total_assets / balance.total_liability, 
@@ -250,6 +250,11 @@ class ML_Factor_Rank(object):
         X = X.fillna(0)
         Y = Y.fillna(0)
         svr = SVR(kernel='rbf', gamma=0.1) 
+
+        if X.empty or Y.empty:
+            print("empty stock data")
+            return None
+
         model = svr.fit(X, Y)
         factor = Y - pd.DataFrame(svr.predict(X), index = Y.index, columns = ['log_mcap'])
 #         factor = factor.sort_index(by = 'log_mcap')
@@ -259,6 +264,8 @@ class ML_Factor_Rank(object):
     
     def gaugeStocks(self, context):
         factor = self.gaugeStocks_df(context)
+        if factor is None:
+            return []
         stockset = list(factor.index[:self.stock_num])
         
         return stockset
