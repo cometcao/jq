@@ -2158,3 +2158,68 @@ class Filter_common(Filter_stock_list):
 
     def __str__(self):
         return '一般性股票过滤器:%s' % (str(self.filters))
+
+#######################################################
+class Filter_MA_CHAN(Filter_stock_list):
+    def __init__(self, params):
+        self.expected_zoushi_down = params.get("expected_zoushi_down", [ZouShi_Type.Pan_Zheng]) # ZouShi_Type.Qu_Shi_Down, 
+        self.expected_exhaustion_down = params.get("expected_exhaustion_down", [Chan_Type.PANBEI, Chan_Type.BEICHI])
+        self.expected_zoushi_up = params.get("expected_zoushi_up", [ZouShi_Type.Qu_Shi_Up, ZouShi_Type.Pan_Zheng]) # ZouShi_Type.Pan_Zheng_Composite, ZouShi_Type.Pan_Zheng
+        self.expected_exhaustion_up = params.get("expected_exhaustion_up", [Chan_Type.PANBEI, Chan_Type.BEICHI])
+        self.check_level = params.get("check_level", ["5m", "30m"])
+
+    def get_count(self, period):
+        if period == '1d':
+            return 180
+        elif period == '120m':
+            return 237
+        elif period == '90m':
+            return 356
+        elif period == '60m':
+            return 712
+        elif period == '30m':
+            return 1200
+        elif period == '15m':
+            return 1500
+        elif period == '5m':
+            return 1800
+        else:
+            return 1800
+    
+    def filter(self, context, data, stock_list):
+        # filter out any stock that are at sell point!
+        
+        stock_to_remove = []
+        for stock in stock_list:
+            for level in self.check_level:
+                
+                stock_data = get_bars(stock, 
+                                       count=self.get_count(level), 
+                                       end_dt=None, 
+                                       unit=level,
+                                       fields= ['date','high', 'low'], 
+                                       df = False,
+                                       include_now=True)
+                
+                min_loc = int(np.where(stock_data['low'] == min(stock_data['low']))[0][-1])
+                bot_time = stock_data[min_loc]['date']
+                bot_count = len(stock_data['low']) - min_loc
+                if bot_count <= 0:
+                    continue
+                
+                result_zoushi_up, result_exhaustion_up = analyze_MA_zoushi_by_stock(stock=stock,
+                                                                  period=level, 
+                                                                  count=bot_count,
+                                                                   end_dt=None, 
+                                                                   df=False, 
+                                                                   zoushi_types=self.expected_zoushi_up, 
+                                                                   direction=TopBotType.bot2top)
+                if result_zoushi_up in self.expected_zoushi_up and result_exhaustion_up in self.expected_exhaustion_up:
+                    print("zoushi: {0} exhaustion:{1} level:{2}".format(result_zoushi_up, result_exhaustion_up, level))
+                    stock_to_remove.append(stock)
+                    break
+        return [stock for stock in stock_list if stock not in stock_to_remove]
+                    
+    
+    def __str__(self):
+        return '缠论分析过滤: {0}, {1}, {2}'.format(self.expected_zoushi_up, self.expected_exhaustion_up, self.check_level) 
