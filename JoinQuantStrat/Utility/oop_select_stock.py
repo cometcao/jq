@@ -2215,7 +2215,7 @@ class Filter_MA_CHAN(Filter_stock_list):
                                                                    zoushi_types=self.expected_zoushi_up, 
                                                                    direction=TopBotType.bot2top)
                 if result_zoushi_up in self.expected_zoushi_up and result_exhaustion_up in self.expected_exhaustion_up:
-                    print("zoushi: {0} exhaustion:{1} level:{2}".format(result_zoushi_up, result_exhaustion_up, level))
+                    print("{0} zoushi: {1} exhaustion:{2} level:{3}".format(stock, result_zoushi_up, result_exhaustion_up, level))
                     stock_to_remove.append(stock)
                     break
         return [stock for stock in stock_list if stock not in stock_to_remove]
