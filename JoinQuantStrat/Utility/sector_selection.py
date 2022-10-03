@@ -130,6 +130,20 @@ class SectorSelection(object):
             return (self.ss.getSectorCodeName('sw2', self.filtered_industry).tolist(), self.ss.getSectorCodeName('gn', self.filtered_concept).tolist())
         else:
             return (self.filtered_industry, self.filtered_concept)
+        
+    def get_market_avg_strength(self, display=False):
+        industryStrength = self.processIndustrySectors()
+        conceptStrength = self.processConceptSectors()
+        if display:
+            self.displayResult(industryStrength)
+            self.displayResult(conceptStrength, True)
+        concept_limit_value = int(self.top_limit * len(self.conceptSectors))
+        industry_limit_value = int(self.top_limit * len(self.jqIndustry))
+        filtered_industry = [(sector, strength) for sector, strength in industryStrength[:industry_limit_value] if (strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)] 
+        filtered_concept = [(sector, strength) for sector, strength in conceptStrength[:concept_limit_value] if (strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)]
+        avg_industry_strength = sum([x[1] for x in filtered_industry]) / len(filtered_industry)
+        avg_concept_strength = sum([x[1] for x in filtered_concept]) / len(filtered_concept)
+        return avg_industry_strength, avg_concept_strength
     
     def processAllIndustrySectorStocks(self, isDisplay=False):
         industry = self.processAllIndustrySectors(isDisplay=isDisplay)

@@ -12,6 +12,7 @@ from jqdata import *
 from ta_analysis import *
 from oop_strategy_frame import *
 from common_include import *
+from sector_selection import *
 import statsmodels.api as sm
 from pandas import Series, DataFrame
 # from ML_main import *
@@ -926,6 +927,39 @@ class Mul_index_stop_loss_avg(Rule):
 
     def __str__(self):
         return '多指数平均止损[指数:%s] [Number of days:%s]' % (str(self._indexs), self._n)
+
+'''-------------缠论走势强弱--------------'''
+class Chan_market_timing(Rule):
+    def __init__(self, params):
+        self.strong_sector = params.get('strong_sector', True)
+        self.sector_limit_pct = params.get('sector_limit_pct', 80)
+        self.strength_threthold = params.get('strength_threthold', 100)
+        self.period_frequency = params.get('period_frequency', 'W')
+        self.useAvg = params.get('useAvg', False)
+        self.isDaily = params.get('isDaily', True)
+        self.avgPeriod = params.get('avgPeriod', 10)
+        self.overheat_value = params.get('overheat_value', 144)
+    
+    def handle_data(self, context, data):
+        ss = SectorSelection(limit_pct=self.sector_limit_pct, 
+                isStrong=self.strong_sector, 
+                min_max_strength=self.strength_threthold, 
+                useIntradayData=False,
+                useAvg=self.useAvg,
+                avgPeriod=self.avgPeriod,
+                isWeighted=self.isWeighted,
+                effective_date=context.previous_date)
+        ind, _ = ss.get_market_avg_strength(display=False)
+        self.is_to_return = ind > self.overheat_value 
+    
+    def on_clear_position(self, context, pindexs=[0]):
+        self.g.monitor_buy_list = []
+
+    def after_trading_end(self, context):
+        Rule.after_trading_end(self, context)
+        
+    def __str__(self):
+        return '缠论强弱择时'
 
 # '''-------------RSRS------------'''
 class RSRS_timing(Rule):
