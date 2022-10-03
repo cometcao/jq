@@ -2162,10 +2162,10 @@ class Filter_common(Filter_stock_list):
 #######################################################
 class Filter_MA_CHAN(Filter_stock_list):
     def __init__(self, params):
-        self.expected_zoushi_down = params.get("expected_zoushi_down", [ZouShi_Type.Pan_Zheng]) # ZouShi_Type.Qu_Shi_Down, 
-        self.expected_exhaustion_down = params.get("expected_exhaustion_down", [Chan_Type.PANBEI, Chan_Type.BEICHI])
-        self.expected_zoushi_up = params.get("expected_zoushi_up", [ZouShi_Type.Qu_Shi_Up, ZouShi_Type.Pan_Zheng]) # ZouShi_Type.Pan_Zheng_Composite, ZouShi_Type.Pan_Zheng
-        self.expected_exhaustion_up = params.get("expected_exhaustion_up", [Chan_Type.PANBEI, Chan_Type.BEICHI])
+        self.expected_zoushi_down = params.get("expected_zoushi_down", []) # ZouShi_Type.Pan_ZhengZouShi_Type.Qu_Shi_Down, 
+        self.expected_exhaustion_down = params.get("expected_exhaustion_down", []) #Chan_Type.PANBEI, Chan_Type.BEICHI
+        self.expected_zoushi_up = params.get("expected_zoushi_up", []) # ZouShi_Type.Pan_Zheng_Composite, ZouShi_Type.Pan_Zheng
+        self.expected_exhaustion_up = params.get("expected_exhaustion_up", []) # Chan_Type.PANBEI, Chan_Type.BEICHI
         self.check_level = params.get("check_level", ["5m", "30m"])
 
     def get_count(self, period):
@@ -2201,12 +2201,27 @@ class Filter_MA_CHAN(Filter_stock_list):
                                        df = False,
                                        include_now=True)
                 
+                max_loc = int(np.where(stock_data['high'] == max(stock_data['high']))[0][-1])
+                top_time = stock_data[max_loc]['date']
+                top_count = len(stock_data['high']) - max_loc
+                if top_count > 0:
+                    result_zoushi_down, result_exhaustion_down = analyze_MA_zoushi_by_stock(stock=stock,
+                                                                      period=level, 
+                                                                      count=top_count,
+                                                                       end_dt=None, 
+                                                                       df=False, 
+                                                                       zoushi_types=self.expected_zoushi_down, 
+                                                                       direction=TopBotType.top2bot)
+                    if result_zoushi_down in self.expected_zoushi_down and result_exhaustion_down in self.expected_exhaustion_down:
+                        print("{0} zoushi: {1} exhaustion:{2} level:{3}".format(stock, result_zoushi_down, result_exhaustion_down, level))
+                        stock_to_remove.append(stock)
+                        break
+                
                 min_loc = int(np.where(stock_data['low'] == min(stock_data['low']))[0][-1])
                 bot_time = stock_data[min_loc]['date']
                 bot_count = len(stock_data['low']) - min_loc
                 if bot_count <= 0:
                     continue
-                
                 result_zoushi_up, result_exhaustion_up = analyze_MA_zoushi_by_stock(stock=stock,
                                                                   period=level, 
                                                                   count=bot_count,
@@ -2218,8 +2233,10 @@ class Filter_MA_CHAN(Filter_stock_list):
                     print("{0} zoushi: {1} exhaustion:{2} level:{3}".format(stock, result_zoushi_up, result_exhaustion_up, level))
                     stock_to_remove.append(stock)
                     break
+                
+        
         return [stock for stock in stock_list if stock not in stock_to_remove]
                     
     
     def __str__(self):
-        return '缠论分析过滤: {0}, {1}, {2}'.format(self.expected_zoushi_up, self.expected_exhaustion_up, self.check_level) 
+        return '缠论分析过滤: {0}'.format(self.check_level) 

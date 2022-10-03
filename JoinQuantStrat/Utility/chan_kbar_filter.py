@@ -102,7 +102,7 @@ def filter_high_level_by_stock(stock,
     
     return result_stocks_I, result_stocks_III, result_stocks_PB
 
-LONG_MA_NUM = 13
+LONG_MA_NUM = 10
 SHORT_MA_NUM = 5
 
 def analyze_MA_form_ZhongShu(stock_high, start_idx, end_idx):
