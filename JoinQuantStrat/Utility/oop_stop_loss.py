@@ -950,7 +950,10 @@ class Chan_market_timing(Rule):
                 isWeighted=self.isWeighted,
                 effective_date=context.previous_date)
         ind, _ = ss.get_market_avg_strength(display=False)
-        self.is_to_return = ind > self.overheat_value 
+        if ind > self.overheat_value:
+            self.log.warn('不符合持仓条件，清仓. value: {0}'.format(ind))
+            self.g.clear_position(self, context, self.g.op_pindexs)
+            self.is_to_return = True
     
     def on_clear_position(self, context, pindexs=[0]):
         self.g.monitor_buy_list = []
