@@ -678,6 +678,9 @@ class equity_curve_protect(Rule):
         self.is_day_curve_protect = False
         self.port_value_record = []
         self.debug = params.get('debug', False)
+        self.use_std = params.get('use_std', 35)
+        self.use_zscore = params.get('use_zscore', -2.58) # left tail 99% -1.96 95%
+        self.use_pct = params.get('use_pct', True)
     
     def update_params(self, context, params):
 #         self.percent = params.get('percent', self.percent)
@@ -685,10 +688,37 @@ class equity_curve_protect(Rule):
 #         self.use_avg = params.get('use_avg', self.use_avg)
         self.debug = params.get('debug', False)
 
+    def portvalue_change_by_stats_toomuch(self, new_port_val):
+        port_data_stats = []
+        if self.use_pct:
+            i = 0
+            while i < len(self.port_value_record) - 1:
+                port_data_stats.append((self.port_value_record[i+1] - self.port_value_record[i]) / self.port_value_record[i])
+                i += 1
+                
+            port_data_stats = np.array(port_data_stats)
+            new_change = (new_port_val - self.port_value_record[-1]) / self.port_value_record[-1]
+        else:
+            port_data_stats = np.array(self.port_value_record)
+            new_change = new_port_val
+        
+        ppc_std = np.std(port_data_stats)
+        ppc_mean = np.mean(port_data_stats)
+        nc_zscore = (new_change - ppc_mean) / ppc_std
+        
+        return nc_zscore <= self.use_zscore, nc_zscore
+    
     def handle_data(self, context, data):
         if not self.is_day_curve_protect :
             cur_value = context.portfolio.total_value
-            if len(self.port_value_record) >= self.day_count:
+            
+            if self.use_std > 0 and len(self.port_value_record) >= self.use_std:
+                changed_toomuch, zscore = self.portvalue_change_by_stats_toomuch(cur_value)
+                if changed_toomuch:
+                    self.log.info("==> 启动资金曲线保护, 当前资产: %f zscore: %f" %(cur_value, zscore))
+                    self.is_day_curve_protect = True
+                    self.is_to_return=True
+            elif len(self.port_value_record) >= self.day_count:
                 market_growth_rate = get_growth_rate(self.market_index) if self.market_index else 0
                 last_value = self.port_value_record[-self.day_count]
                 if self.debug:
@@ -719,7 +749,7 @@ class equity_curve_protect(Rule):
         if self.is_day_curve_protect:
             self.g.curve_protect = True
             self.g.clear_position(self, context, self.g.op_pindexs)
-#             self.port_value_record = []
+            self.port_value_record = []
             self.is_day_curve_protect = False
 
     def on_clear_position(self, context, pindexs=[0]):
