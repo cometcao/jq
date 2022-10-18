@@ -679,7 +679,8 @@ class equity_curve_protect(Rule):
         self.port_value_record = []
         self.debug = params.get('debug', False)
         self.use_std = params.get('use_std', 35)
-        self.use_zscore = params.get('use_zscore', -2.58) # left tail 99% -1.96 95%
+        self.use_zscore_left = params.get('use_zscore_left', -2.58) # left tail 99% -1.96 95%
+        self.use_zscore_right = params.get('use_zscore_right', 2.807) # 99.5%
         self.use_pct = params.get('use_pct', True)
         self.use_log = params.get('use_log', True)
         self.clear_count = params.get('clear_count', 20)
@@ -711,7 +712,7 @@ class equity_curve_protect(Rule):
         ppc_mean = np.mean(port_data_stats)
         nc_zscore = (new_change - ppc_mean) / ppc_std
         
-        return nc_zscore <= self.use_zscore, nc_zscore
+        return nc_zscore <= self.use_zscore_left or nc_zscore >= self.use_zscore_right, nc_zscore
     
     def handle_data(self, context, data):
         if not self.is_day_curve_protect :
