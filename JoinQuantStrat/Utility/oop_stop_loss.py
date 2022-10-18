@@ -681,6 +681,8 @@ class equity_curve_protect(Rule):
         self.use_std = params.get('use_std', 35)
         self.use_zscore = params.get('use_zscore', -2.58) # left tail 99% -1.96 95%
         self.use_pct = params.get('use_pct', True)
+        self.use_log = params.get('use_log', True)
+        self.clear_count = params.get('clear_count', 20)
     
     def update_params(self, context, params):
 #         self.percent = params.get('percent', self.percent)
@@ -698,6 +700,9 @@ class equity_curve_protect(Rule):
                 
             port_data_stats = np.array(port_data_stats)
             new_change = (new_port_val - self.port_value_record[-1]) / self.port_value_record[-1]
+        elif self.use_log:
+            port_data_stats = np.log(self.port_value_record)
+            new_change = np.log(new_port_val)
         else:
             port_data_stats = np.array(self.port_value_record)
             new_change = new_port_val
@@ -749,7 +754,7 @@ class equity_curve_protect(Rule):
         if self.is_day_curve_protect:
             self.g.curve_protect = True
             self.g.clear_position(self, context, self.g.op_pindexs)
-            self.port_value_record = []
+            self.port_value_record = self.port_value_record[self.clear_count:]
             self.is_day_curve_protect = False
 
     def on_clear_position(self, context, pindexs=[0]):
