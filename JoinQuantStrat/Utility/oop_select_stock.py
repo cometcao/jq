@@ -2240,3 +2240,39 @@ class Filter_MA_CHAN(Filter_stock_list):
     
     def __str__(self):
         return '缠论分析过滤: {0}'.format(self.check_level) 
+    
+#######################################################
+class Filter_SD_CHAN(Filter_stock_list):
+    def __init__(self, params):
+        self.check_level = params.get("check_level", ["1m"])
+        self.expected_current_types = params.get('expected_current_types', [Chan_Type.I, Chan_Type.I_weak])
+        pass
+    
+    def filter(self, context, data, stock_list):
+        stock_to_remove = []
+
+        for stock in stock_list:
+            for cl in self.check_level:
+                c_result, xd_c_result, c_profile, current_zhongshu_formed = check_stock_sub(stock=stock, 
+                                                                            end_time=None, 
+                                                                            periods=[cl], 
+                                                                            count=4800, 
+                                                                            direction=TopBotType.bot2top, 
+                                                                            chan_types=self.expected_current_types, 
+                                                                            isdebug=False, 
+                                                                            is_anal=False, 
+                                                                            is_description=False,
+                                                                            split_time=None,
+                                                                            check_bi=False,
+                                                                            force_zhongshu=True,
+                                                                            force_bi_zhongshu=True,
+                                                                            ignore_sub_xd=True)
+    
+                if c_profile and c_profile[0][0]  in self.expected_current_types:
+                    print("{0} zoushi: exhaustion:{1} level:{2}".format(stock, c_profile[0][0], cl))
+                    stock_to_remove.append(stock)
+                    break
+        return [stock for stock in stock_list if stock not in stock_to_remove]
+    
+    def __str__(self):
+        return '缠论标准分析过滤: {0}'.format(self.check_level) 
