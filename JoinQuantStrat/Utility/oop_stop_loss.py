@@ -24,13 +24,13 @@ import math
 class Stop_loss_by_price(Rule):
     def __init__(self, params):
         self.index = params.get('index', '000001.XSHG')
-        self.day_count = params.get('day_count', 160)
+        self.num_of_days = params.get('num_of_days', 160)
         self.multiple = params.get('multiple', 2.2)
         self.is_day_stop_loss_by_price = False
 
     def update_params(self, context, params):
         self.index = params.get('index', self.index)
-        self.day_count = params.get('day_count', self.day_count)
+        self.num_of_days = params.get('num_of_days', self.num_of_days)
         self.multiple = params.get('multiple', self.multiple)
 
     def handle_data(self, context, data):
@@ -39,7 +39,7 @@ class Stop_loss_by_price(Rule):
         # 增加此止损，回撤降低，收益降低
 
         if not self.is_day_stop_loss_by_price:
-            h = attribute_history(self.index, self.day_count, unit='1d', fields=('close', 'high', 'low'),
+            h = attribute_history(self.index, self.num_of_days, unit='1d', fields=('close', 'high', 'low'),
                                   skip_paused=True)
             low_price_130 = h.low.min()
             high_price_130 = h.high.max()
@@ -60,7 +60,7 @@ class Stop_loss_by_price(Rule):
 
     def __str__(self):
         return '大盘高低价比例止损器:[指数: %s] [参数: %s日内最高最低价: %s倍] [当前状态: %s]' % (
-            self.index, self.day_count, self.multiple, self.is_day_stop_loss_by_price)
+            self.index, self.num_of_days, self.multiple, self.is_day_stop_loss_by_price)
 
 ''' ----------------------三乌鸦止损------------------------------'''
 class Stop_loss_by_3_black_crows(Rule):
@@ -671,7 +671,7 @@ class ATR_stoploss(Rule):
 class equity_curve_protect(Rule):
     def __init__(self, params):
         Rule.__init__(self, params)
-        self.day_count = params.get('day_count', 20)
+        self.num_of_days = params.get('num_of_days', 20)
         self.percent = params.get('percent', 0.01)
         self.use_avg = params.get('use_avg', False)
         self.market_index = params.get('market_index', None)
@@ -687,9 +687,9 @@ class equity_curve_protect(Rule):
     
     def update_params(self, context, params):
 #         self.percent = params.get('percent', self.percent)
-#         self.day_count = params.get('day_count', self.day_count)
+#         self.num_of_days = params.get('num_of_days', self.num_of_days)
 #         self.use_avg = params.get('use_avg', self.use_avg)
-        self.debug = params.get('debug', False)
+        pass
 
     def portvalue_change_by_stats_toomuch(self, new_port_val):
         port_data_stats = []
@@ -712,7 +712,11 @@ class equity_curve_protect(Rule):
         ppc_mean = np.mean(port_data_stats)
         nc_zscore = (new_change - ppc_mean) / ppc_std
         
-        return nc_zscore <= self.use_zscore_left or nc_zscore >= self.use_zscore_right, nc_zscore
+        if self.debug:
+            self.log.info("zscore:{0}".format(nc_zscore))        
+
+        return (nc_zscore <= self.use_zscore_left or nc_zscore >= self.use_zscore_right) and\
+            (self.port_value_record[-1] > self.port_value_record[0] if not self.use_pct else len([x for x in port_data_stats if x > 0]) > self.use_std * 2 // 3), nc_zscore
     
     def handle_data(self, context, data):
         if not self.is_day_curve_protect :
@@ -724,32 +728,32 @@ class equity_curve_protect(Rule):
                     self.log.info("==> 启动资金曲线保护, 当前资产: %f zscore: %f" %(cur_value, zscore))
                     self.is_day_curve_protect = True
                     self.is_to_return=True
-            elif len(self.port_value_record) >= self.day_count:
+            elif len(self.port_value_record) >= self.num_of_days:
                 market_growth_rate = get_growth_rate(self.market_index) if self.market_index else 0
-                last_value = self.port_value_record[-self.day_count]
+                last_value = self.port_value_record[-self.num_of_days]
                 if self.debug:
                     self.g.log("current_value:{0}".format(cur_value))
                     self.g.log("last_value:{0}".format(last_value))
                     self.g.log("market_growth_rate:{0}".format(market_growth_rate))
                 if self.use_avg:
-                    avg_value = sum(self.port_value_record[-self.day_count:]) / self.day_count
+                    avg_value = sum(self.port_value_record[-self.num_of_days:]) / self.num_of_days
                     if cur_value < avg_value:
-                        self.log.info("==> 启动资金曲线保护, %s日平均资产: %f, 当前资产: %f" %(self.day_count, avg_value, cur_value))
+                        self.log.info("==> 启动资金曲线保护, %s日平均资产: %f, 当前资产: %f" %(self.num_of_days, avg_value, cur_value))
                         self.is_day_curve_protect = True  
                         self.is_to_return=True
                 elif self.market_index:
                     if cur_value/last_value-1 >= 0: #持仓
                         pass
                     elif market_growth_rate < 0 and cur_value/last_value-1 < -self.percent: #清仓 今日不再买入
-                        self.log.info("==> 启动资金曲线保护清仓, %s日资产增长: %f, 大盘增长: %f" %(self.day_count, cur_value/last_value-1, market_growth_rate))
+                        self.log.info("==> 启动资金曲线保护清仓, %s日资产增长: %f, 大盘增长: %f" %(self.num_of_days, cur_value/last_value-1, market_growth_rate))
                         self.is_day_curve_protect = True
                         self.is_to_return=True
                     elif market_growth_rate > 0 and cur_value/last_value-1 < -self.percent: # 换股
-                        self.log.info("==> 启动资金曲线保护换股, %s日资产增长: %f, 大盘增长: %f" %(self.day_count, cur_value/last_value-1, market_growth_rate))
+                        self.log.info("==> 启动资金曲线保护换股, %s日资产增长: %f, 大盘增长: %f" %(self.num_of_days, cur_value/last_value-1, market_growth_rate))
                         self.is_day_curve_protect = True
                 else:
                     if cur_value <= last_value*(1-self.percent): 
-                        self.log.info("==> 启动资金曲线保护, %s日前资产: %f, 当前资产: %f" %(self.day_count, last_value, cur_value))
+                        self.log.info("==> 启动资金曲线保护, %s日前资产: %f, 当前资产: %f" %(self.num_of_days, last_value, cur_value))
                         self.is_day_curve_protect = True
                         self.is_to_return=True
         if self.is_day_curve_protect:
@@ -762,15 +766,16 @@ class equity_curve_protect(Rule):
         pass
 
     def before_trading_start(self, context):
-        self.port_value_record.append(context.portfolio.total_value)
-        if len(self.port_value_record) > self.day_count:
+        if not self.is_to_return:
+            self.port_value_record.append(context.portfolio.total_value)
+        if len(self.port_value_record) > self.num_of_days:
             self.port_value_record.pop(0)
         self.is_to_return=False
         self.g.curve_protect = False
 
     def __str__(self):
         return '大盘资金比例止损器:[参数: %s日前资产] [保护百分数: %s]' % (
-            self.day_count, self.percent)
+            self.num_of_days, self.percent)
 
 ''' ----------------------最高价最低价比例止损------------------------------'''
 class Stop_loss_by_growth_rate(Rule):
