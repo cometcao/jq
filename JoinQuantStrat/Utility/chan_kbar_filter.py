@@ -444,6 +444,8 @@ class KBar(object):
             second_part = stock_high[abs(zs[-1])+1:]
             if analyze_MA_exhaustion(zoushi_result, first_part, second_part,debug):
                 exhaustion_result = Chan_Type.PANBEI
+            else:
+                exhaustion_result = Chan_Type.INVIGORATE
         else:
             zs1 = zhongshu[-2]
             zs2 = zhongshu[-1]
@@ -451,6 +453,8 @@ class KBar(object):
             second_part = stock_high[abs(zs2[-1])+1:]
             if analyze_MA_exhaustion(zoushi_result, first_part, second_part,debug):
                 exhaustion_result = Chan_Type.BEICHI
+            else:
+                exhaustion_result = Chan_Type.INVIGORATE
         
         return zoushi_result, exhaustion_result
 
