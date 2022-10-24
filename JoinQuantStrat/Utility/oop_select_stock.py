@@ -2206,7 +2206,7 @@ class Filter_MA_CHAN_UP(Filter_stock_list):
                 bot_time = stock_data[min_loc]['date']
                 bot_count = len(stock_data['low']) - min_loc
                 if bot_count <= 0:
-                    continue
+                    break
                 result_zoushi_up, result_exhaustion_up = analyze_MA_zoushi_by_stock(stock=stock,
                                                                   period=level, 
                                                                   count=bot_count,
@@ -2289,6 +2289,8 @@ class Filter_MA_CHAN_DOWN(Filter_stock_list):
                         self.stock_remove_list[stock] = self.onhold_days * self.get_count("") // self.get_count(level)
                     else:
                         break
+                else:
+                    break
         
         return [stock for stock in stock_list if stock not in stock_to_remove and stock not in self.stock_remove_list]
                     
