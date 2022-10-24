@@ -2160,13 +2160,84 @@ class Filter_common(Filter_stock_list):
         return '一般性股票过滤器:%s' % (str(self.filters))
 
 #######################################################
-class Filter_MA_CHAN(Filter_stock_list):
+class Filter_MA_CHAN_UP(Filter_stock_list):
+    def __init__(self, params):
+        self.expected_zoushi_up = params.get("expected_zoushi_up", []) # ZouShi_Type.Pan_Zheng_Composite, ZouShi_Type.Pan_Zheng
+        self.expected_exhaustion_up = params.get("expected_exhaustion_up", []) # Chan_Type.PANBEI, Chan_Type.BEICHI
+        # order small -> big
+        self.check_level = params.get("check_level", ["5m", "30m"])
+        self.onhold_days = params.get('onhold_days', 2)
+        self.stock_remove_list = {}
+
+    def get_count(self, period):
+        if period == '1d':
+            return 180
+        elif period == '120m':
+            return 237
+        elif period == '90m':
+            return 356
+        elif period == '60m':
+            return 712
+        elif period == '30m':
+            return 1200
+        elif period == '15m':
+            return 1500
+        elif period == '5m':
+            return 1800
+        else:
+            return 1800
+    
+    def filter(self, context, data, stock_list):
+        # filter out any stock that are at sell point!
+        
+        stock_to_remove = []
+        for stock in stock_list:
+            for level in self.check_level:
+                
+                stock_data = get_bars(stock, 
+                                       count=self.get_count(level), 
+                                       end_dt=None, 
+                                       unit=level,
+                                       fields= ['date','high', 'low'], 
+                                       df = False,
+                                       include_now=True)
+                
+                min_loc = int(np.where(stock_data['low'] == min(stock_data['low']))[0][-1])
+                bot_time = stock_data[min_loc]['date']
+                bot_count = len(stock_data['low']) - min_loc
+                if bot_count <= 0:
+                    continue
+                result_zoushi_up, result_exhaustion_up = analyze_MA_zoushi_by_stock(stock=stock,
+                                                                  period=level, 
+                                                                  count=bot_count,
+                                                                   end_dt=None, 
+                                                                   df=False, 
+                                                                   zoushi_types=self.expected_zoushi_up, 
+                                                                   direction=TopBotType.bot2top)
+                if result_zoushi_up in self.expected_zoushi_up and result_exhaustion_up in self.expected_exhaustion_up:
+                    print("{0} zoushi: {1} exhaustion UP:{2} level:{3}".format(stock, result_zoushi_up, result_exhaustion_up, level))
+                    stock_to_remove.append(stock)
+                    self.stock_remove_list[stock] = self.onhold_days * self.get_count("") // self.get_count(level)
+                else:
+                    break
+        
+        return [stock for stock in stock_list if stock not in stock_to_remove and stock not in self.stock_remove_list]
+                    
+    def after_trading_end(self, context):
+        # auto increment and delete entries over the onhold days
+        self.stock_remove_list = {a:(b-1) for a, b in self.stock_remove_list.items() if b-1 > 0}
+        print(self.stock_remove_list)
+    
+    def __str__(self):
+        return '缠论分析过滤UP: {0}'.format(self.check_level) 
+    
+class Filter_MA_CHAN_DOWN(Filter_stock_list):
     def __init__(self, params):
         self.expected_zoushi_down = params.get("expected_zoushi_down", []) # ZouShi_Type.Pan_ZhengZouShi_Type.Qu_Shi_Down, 
         self.expected_exhaustion_down = params.get("expected_exhaustion_down", []) #Chan_Type.PANBEI, Chan_Type.BEICHI
-        self.expected_zoushi_up = params.get("expected_zoushi_up", []) # ZouShi_Type.Pan_Zheng_Composite, ZouShi_Type.Pan_Zheng
-        self.expected_exhaustion_up = params.get("expected_exhaustion_up", []) # Chan_Type.PANBEI, Chan_Type.BEICHI
         self.check_level = params.get("check_level", ["5m", "30m"])
+        self.onhold_days = params.get('onhold_days', 2)
+        self.stock_remove_list = {}
 
     def get_count(self, period):
         if period == '1d':
@@ -2213,49 +2284,72 @@ class Filter_MA_CHAN(Filter_stock_list):
                                                                        zoushi_types=self.expected_zoushi_down, 
                                                                        direction=TopBotType.top2bot)
                     if result_zoushi_down in self.expected_zoushi_down and result_exhaustion_down in self.expected_exhaustion_down:
-                        print("{0} zoushi: {1} exhaustion:{2} level:{3}".format(stock, result_zoushi_down, result_exhaustion_down, level))
+                        print("{0} zoushi: {1} exhaustion down:{2} level:{3}".format(stock, result_zoushi_down, result_exhaustion_down, level))
                         stock_to_remove.append(stock)
+                        self.stock_remove_list[stock] = self.onhold_days * self.get_count("") // self.get_count(level)
+                    else:
                         break
-                
-                min_loc = int(np.where(stock_data['low'] == min(stock_data['low']))[0][-1])
-                bot_time = stock_data[min_loc]['date']
-                bot_count = len(stock_data['low']) - min_loc
-                if bot_count <= 0:
-                    continue
-                result_zoushi_up, result_exhaustion_up = analyze_MA_zoushi_by_stock(stock=stock,
-                                                                  period=level, 
-                                                                  count=bot_count,
-                                                                   end_dt=None, 
-                                                                   df=False, 
-                                                                   zoushi_types=self.expected_zoushi_up, 
-                                                                   direction=TopBotType.bot2top)
-                if result_zoushi_up in self.expected_zoushi_up and result_exhaustion_up in self.expected_exhaustion_up:
-                    print("{0} zoushi: {1} exhaustion:{2} level:{3}".format(stock, result_zoushi_up, result_exhaustion_up, level))
-                    stock_to_remove.append(stock)
-                    break
-                
         
-        return [stock for stock in stock_list if stock not in stock_to_remove]
+        return [stock for stock in stock_list if stock not in stock_to_remove and stock not in self.stock_remove_list]
                     
+    def after_trading_end(self, context):
+        # auto increment and delete entries over the onhold days
+        self.stock_remove_list = {a:(b-1) for a, b in self.stock_remove_list.items() if b-1 > 0}
+        print(self.stock_remove_list)
     
     def __str__(self):
-        return '缠论分析过滤: {0}'.format(self.check_level) 
+        return '缠论分析过滤DOWN: {0}'.format(self.check_level) 
     
 #######################################################
 class Filter_SD_CHAN(Filter_stock_list):
     def __init__(self, params):
-        self.check_level = params.get("check_level", ["1m"])
-        self.expected_current_types = params.get('expected_current_types', [Chan_Type.I, Chan_Type.I_weak])
+        self.check_level = params.get("check_level", ["30m", "5m"])
+        self.expected_current_types = params.get('expected_current_types', [Chan_Type.I, Chan_Type.I_weak, Chan_Type.INVALID])
+        self.onhold_days = params.get('onhold_days', 20)
+        self.stock_remove_list = {}
         pass
     
     def filter(self, context, data, stock_list):
         stock_to_remove = []
 
         for stock in stock_list:
-            for cl in self.check_level:
+            # for cl in self.check_level:
+            #     c_result, xd_c_result, c_profile, current_zhongshu_formed = check_stock_sub(stock=stock, 
+            #                                                                 end_time=None, 
+            #                                                                 periods=[cl], 
+            #                                                                 count=4800, 
+            #                                                                 direction=TopBotType.bot2top, 
+            #                                                                 chan_types=self.expected_current_types, 
+            #                                                                 isdebug=False, 
+            #                                                                 is_anal=False, 
+            #                                                                 is_description=False,
+            #                                                                 split_time=None,
+            #                                                                 check_bi=False,
+            #                                                                 force_zhongshu=True,
+            #                                                                 force_bi_zhongshu=True,
+            #                                                                 ignore_sub_xd=True)
+            #
+            #     if c_profile and c_profile[0][0]  in self.expected_current_types:
+            #         print("{0} zoushi: exhaustion:{1} level:{2}".format(stock, c_profile[0][0], cl))
+            #         stock_to_remove.append(stock)
+            #         break
+            if stock in self.stock_remove_list:
+                print("{0} already in remove list {1} days left".format(stock, self.stock_remove_list[stock]))
+                continue
+            m_result, xd_m_result, m_profile = check_chan_by_type_exhaustion(stock=stock, 
+                                                                      end_time=None, 
+                                                                      count=3000, 
+                                                                      periods=[self.check_level[0]], 
+                                                                      direction=TopBotType.bot2top, 
+                                                                      chan_type=self.expected_current_types, 
+                                                                      isdebug=False, 
+                                                                      is_description=False,
+                                                                      check_structure=True)
+            
+            if m_result and xd_m_result:
                 c_result, xd_c_result, c_profile, current_zhongshu_formed = check_stock_sub(stock=stock, 
                                                                             end_time=None, 
-                                                                            periods=[cl], 
+                                                                            periods=[self.check_level[1]], 
                                                                             count=4800, 
                                                                             direction=TopBotType.bot2top, 
                                                                             chan_types=self.expected_current_types, 
@@ -2267,12 +2361,17 @@ class Filter_SD_CHAN(Filter_stock_list):
                                                                             force_zhongshu=True,
                                                                             force_bi_zhongshu=True,
                                                                             ignore_sub_xd=True)
-    
-                if c_profile and c_profile[0][0]  in self.expected_current_types:
-                    print("{0} zoushi: exhaustion:{1} level:{2}".format(stock, c_profile[0][0], cl))
+                
+                if c_profile and c_profile[0][0] in self.expected_current_types:
+                    print("{0} zoushi: exhaustion on:{1} {2}".format(stock, m_profile, c_profile))
+                    self.stock_remove_list[stock] = self.onhold_days
                     stock_to_remove.append(stock)
-                    break
-        return [stock for stock in stock_list if stock not in stock_to_remove]
+        return [stock for stock in stock_list if stock not in stock_to_remove and stock not in self.stock_remove_list]
+    
+    def after_trading_end(self, context):
+        # auto increment and delete entries over the onhold days
+        self.stock_remove_list = {a:(b-1) for a, b in self.stock_remove_list.items() if b-1 > 0}
+        print(self.stock_remove_list)
     
     def __str__(self):
         return '缠论标准分析过滤: {0}'.format(self.check_level) 

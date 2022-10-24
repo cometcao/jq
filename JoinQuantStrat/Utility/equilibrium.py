@@ -176,7 +176,7 @@ def check_stock_full(stock,
     # use the start of beichiduan
     splitTime = chan_profile[0][5] if use_sub_split else None# split time and force sub level with zhongshu formed
     
-    if exhausted and (xd_exhausted or ignore_cur_xd) and sanity_check(stock, chan_profile, end_time, cur_pe, direction):
+    if exhausted and (xd_exhausted or ignore_cur_xd): # and sanity_check(stock, chan_profile, end_time, cur_pe, direction)
         sub_exhausted, sub_xd_exhausted, sub_profile, zhongshu_completed = check_stock_sub(stock=stock, 
                                                                                 end_time=end_time, 
                                                                                 periods=[sub_pe], 
