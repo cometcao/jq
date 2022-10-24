@@ -2160,6 +2160,28 @@ class Filter_common(Filter_stock_list):
         return '一般性股票过滤器:%s' % (str(self.filters))
 
 #######################################################
+class Filter_Money_Flow(Filter_stock_list):
+    def __init__(self, params):
+        self.start_time_range = params.get("start_time_range", 60) # days
+        
+    
+    def filter(self, context, data, stock_list):
+        stock_money_data = get_money_flow(security_list=stock_list, 
+                                          end_date=None, 
+                                          fields=['sec_code','net_amount_main'], 
+                                          count=self.start_time_range)
+        stock_money_data_net = stock_money_data.groupby("sec_code").sum()
+        stock_to_remove = stock_money_data_net[stock_money_data_net['net_amount_main'] < 0].index.tolist()
+        # self.log.info("选股过滤:\n{0}, total: {1}".format(join_list(["[%s]" % (show_stock(x)) for x in stock_to_remove], ' ', 10), len(stock_to_remove)))
+        self.log.info("stocks to remove: {0} total: {1}".format(stock_to_remove, len(stock_to_remove)))
+        
+        return [stock for stock in stock_list if stock not in stock_to_remove]
+
+    def __str__(self):
+        return '过滤主力净流入负数的股票'
+
+
+#######################################################
 class Filter_MA_CHAN_UP(Filter_stock_list):
     def __init__(self, params):
         self.expected_zoushi_up = params.get("expected_zoushi_up", []) # ZouShi_Type.Pan_Zheng_Composite, ZouShi_Type.Pan_Zheng
