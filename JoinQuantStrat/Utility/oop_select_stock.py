@@ -2163,16 +2163,35 @@ class Filter_common(Filter_stock_list):
 class Filter_Money_Flow(Filter_stock_list):
     def __init__(self, params):
         self.start_time_range = params.get("start_time_range", 60) # days
+        self.use_method = params.get("use_method", 1)
         
     
     def filter(self, context, data, stock_list):
-        stock_money_data = get_money_flow(security_list=stock_list, 
-                                          end_date=None, 
-                                          fields=['sec_code','net_amount_main'], 
-                                          count=self.start_time_range)
-        stock_money_data_net = stock_money_data.groupby("sec_code").sum()
-        stock_to_remove = stock_money_data_net[stock_money_data_net['net_amount_main'] < 0].index.tolist()
-        # self.log.info("选股过滤:\n{0}, total: {1}".format(join_list(["[%s]" % (show_stock(x)) for x in stock_to_remove], ' ', 10), len(stock_to_remove)))
+        stock_to_remove = []
+        if self.use_method == 1:
+            stock_money_data = get_money_flow(security_list=stock_list, 
+                                              end_date=None, 
+                                              fields=['sec_code','net_amount_main'], 
+                                              count=self.start_time_range)
+            stock_money_data_net = stock_money_data.groupby("sec_code").sum()
+            stock_to_remove = stock_money_data_net[stock_money_data_net['net_amount_main'] < 0].index.tolist()
+            
+        elif self.use_method == 2:
+            for stock in stock_list: 
+                # have to use this version of pd for auto trading
+                stock_money_data = get_money_flow(security_list=stock, 
+                                                  end_date=None, 
+                                                  fields=['sec_code','net_amount_main'], 
+                                                  count=self.start_time_range*2+1)
+                money_chg = stock_money_data.groupby("sec_code")['net_amount_main'].apply(pd.rolling_sum, self.start_time_range)
+                if not money_chg.empty and money_chg.iloc[-1] < money_chg.iloc[-self.start_time_range-1]: # net main shrink
+                    stock_to_remove.append(stock) 
+                    
+            # stock_money_data = get_money_flow(security_list=stock_list, 
+            #                       end_date=None, 
+            #                       fields=['sec_code','net_amount_main'], 
+            #                       count=self.start_time_range+2)
+            # net_data= stock_money_data.groupby("sec_code")['net_amount_main'].rolling(self.start_time_range).sum()
         self.log.info("stocks to remove: {0} total: {1}".format(stock_to_remove, len(stock_to_remove)))
         
         return [stock for stock in stock_list if stock not in stock_to_remove]
@@ -2214,6 +2233,7 @@ class Filter_MA_CHAN_UP(Filter_stock_list):
         
         stock_to_remove = []
         for stock in stock_list:
+            fullfill_condition = True
             for level in self.check_level:
                 
                 stock_data = get_bars(stock, 
@@ -2228,6 +2248,7 @@ class Filter_MA_CHAN_UP(Filter_stock_list):
                 bot_time = stock_data[min_loc]['date']
                 bot_count = len(stock_data['low']) - min_loc
                 if bot_count <= 0:
+                    fullfill_condition = False
                     break
                 result_zoushi_up, result_exhaustion_up = analyze_MA_zoushi_by_stock(stock=stock,
                                                                   period=level, 
@@ -2238,11 +2259,14 @@ class Filter_MA_CHAN_UP(Filter_stock_list):
                                                                    direction=TopBotType.bot2top)
                 if result_zoushi_up in self.expected_zoushi_up and result_exhaustion_up in self.expected_exhaustion_up:
                     print("{0} zoushi: {1} exhaustion UP:{2} level:{3}".format(stock, result_zoushi_up, result_exhaustion_up, level))
-                    stock_to_remove.append(stock)
-                    self.stock_remove_list[stock] = self.onhold_days * self.get_count("") // self.get_count(level)
                 else:
+                    fullfill_condition = False
                     break
-        
+                
+            if fullfill_condition:
+                stock_to_remove.append(stock)
+                self.stock_remove_list[stock] = self.onhold_days * self.get_count("") // self.get_count(self.check_level[-1])
+        self.log.info("stocks removed: {0}".format(stock_to_remove))
         return [stock for stock in stock_list if stock not in stock_to_remove and stock not in self.stock_remove_list]
                     
     def after_trading_end(self, context):
@@ -2284,6 +2308,7 @@ class Filter_MA_CHAN_DOWN(Filter_stock_list):
         
         stock_to_remove = []
         for stock in stock_list:
+            fullfill_condition = True
             for level in self.check_level:
                 
                 stock_data = get_bars(stock, 
@@ -2307,13 +2332,16 @@ class Filter_MA_CHAN_DOWN(Filter_stock_list):
                                                                        direction=TopBotType.top2bot)
                     if result_zoushi_down in self.expected_zoushi_down and result_exhaustion_down in self.expected_exhaustion_down:
                         print("{0} zoushi: {1} exhaustion down:{2} level:{3}".format(stock, result_zoushi_down, result_exhaustion_down, level))
-                        stock_to_remove.append(stock)
-                        self.stock_remove_list[stock] = self.onhold_days * self.get_count("") // self.get_count(level)
                     else:
+                        fullfill_condition = False
                         break
                 else:
+                    fullfill_condition = False
                     break
-        
+            if fullfill_condition:
+                stock_to_remove.append(stock)
+                self.stock_remove_list[stock] = self.onhold_days * self.get_count("") // self.get_count(self.check_level[-1])
+        self.log.info("stocks removed: {0}".format(stock_to_remove))
         return [stock for stock in stock_list if stock not in stock_to_remove and stock not in self.stock_remove_list]
                     
     def after_trading_end(self, context):
