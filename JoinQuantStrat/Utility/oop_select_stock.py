@@ -2167,31 +2167,36 @@ class Filter_Money_Flow(Filter_stock_list):
         
     
     def filter(self, context, data, stock_list):
+        
         stock_to_remove = []
         if self.use_method == 1:
             stock_money_data = get_money_flow(security_list=stock_list, 
-                                              end_date=None, 
+                                              end_date=context.previous_date, 
                                               fields=['sec_code','net_amount_main'], 
                                               count=self.start_time_range)
             stock_money_data_net = stock_money_data.groupby("sec_code").sum()
             stock_to_remove = stock_money_data_net[stock_money_data_net['net_amount_main'] < 0].index.tolist()
             
         elif self.use_method == 2:
-            for stock in stock_list: 
-                # have to use this version of pd for auto trading
-                stock_money_data = get_money_flow(security_list=stock, 
-                                                  end_date=None, 
-                                                  fields=['sec_code','net_amount_main'], 
-                                                  count=self.start_time_range*2+1)
-                money_chg = stock_money_data.groupby("sec_code")['net_amount_main'].apply(pd.rolling_sum, self.start_time_range)
-                if not money_chg.empty and money_chg.iloc[-1] < money_chg.iloc[-self.start_time_range-1]: # net main shrink
-                    stock_to_remove.append(stock) 
+            # for stock in stock_list: 
+            #     # have to use this version of pd for auto trading
+            #     stock_money_data = get_money_flow(security_list=stock, 
+            #                                       end_date=context.previous_date, 
+            #                                       fields=['sec_code','net_amount_main'], 
+            #                                       count=self.start_time_range*2+1)
+            #     money_chg = stock_money_data.groupby("sec_code")['net_amount_main'].apply(pd.rolling_sum, self.start_time_range)
+            #     if not money_chg.empty and money_chg.iloc[-1] < money_chg.iloc[-self.start_time_range-1]: # net main shrink
+            #         stock_to_remove.append(stock) 
                     
-            # stock_money_data = get_money_flow(security_list=stock_list, 
-            #                       end_date=None, 
-            #                       fields=['sec_code','net_amount_main'], 
-            #                       count=self.start_time_range+2)
-            # net_data= stock_money_data.groupby("sec_code")['net_amount_main'].rolling(self.start_time_range).sum()
+            stock_money_data = get_money_flow(security_list=stock_list, 
+                                  end_date=context.previous_date, 
+                                  fields=['sec_code','net_amount_main'], 
+                                  count=self.start_time_range*2+1)
+            net_data= stock_money_data.groupby("sec_code")['net_amount_main'].rolling(self.start_time_range).sum()
+            for stock in stock_list:
+                if not stock_net_data.empty and net_data[stock].iloc[-1] < net_data[stock].iloc[-self.start_time_range-1]:
+                    stock_to_remove.append(stock) 
+                
         self.log.info("stocks to remove: {0} total: {1}".format(stock_to_remove, len(stock_to_remove)))
         
         return [stock for stock in stock_list if stock not in stock_to_remove]
