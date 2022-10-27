@@ -2,7 +2,7 @@ from jqdata import *
 import pandas as pd
 
 def get_main_money_inflow_over_circulating_mcap(stock_list, 
-                                                context, 
+                                                prv_date, 
                                                 period_count, 
                                                 price_change_filter=None,
                                                 adjust_concentrated=False, 
@@ -21,7 +21,7 @@ def get_main_money_inflow_over_circulating_mcap(stock_list,
     
     
     # circulating mcap
-    cir_mcap = get_valuation(stock_list, end_date=context.previous_date, 
+    cir_mcap = get_valuation(stock_list, end_date=prv_date, 
                         count=1, fields=['circulating_market_cap'])
     # cir_mcap = get_fundamentals(query(
     #         valuation.code,
@@ -39,7 +39,7 @@ def get_main_money_inflow_over_circulating_mcap(stock_list,
         for stock in stock_list:
             q=query(finance.STK_SHAREHOLDER_FLOATING_TOP10).filter(
                 finance.STK_SHAREHOLDER_FLOATING_TOP10.code==stock,
-                finance.STK_SHAREHOLDER_FLOATING_TOP10.pub_date>'2015-01-01').limit(10)
+                finance.STK_SHAREHOLDER_FLOATING_TOP10.pub_date<=prv_date.strftime('%Y-%m-%d')).limit(10)
             top_10_gd=finance.run_query(q)
             circulating_concentrated_pct = top_10_gd[top_10_gd['share_ratio']>=5]['share_ratio'].sum()
             cir_mcap.loc[cir_mcap['code'] == stock, 'concentrated_ratio'] = circulating_concentrated_pct
@@ -48,7 +48,7 @@ def get_main_money_inflow_over_circulating_mcap(stock_list,
     
     # main money inflow
     stock_money_data = get_money_flow(security_list=stock_list, 
-                          end_date=context.previous_date, 
+                          end_date=prv_date, 
                           fields=['sec_code','net_amount_main'], 
                           count=period_count)
     net_data= stock_money_data.groupby("sec_code")['net_amount_main'].sum()

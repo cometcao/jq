@@ -672,7 +672,7 @@ class Pick_Money_Input(Create_stock_list):
         #     cir_mcap['mfc'] = cir_mcap['net_amount_main']/cir_mcap['circulating_market_cap']
         from strat_common_include import get_main_money_inflow_over_circulating_mcap
         cir_mcap = get_main_money_inflow_over_circulating_mcap(stock_list, 
-                                                               context, 
+                                                               context.previous_date, 
                                                                price_change_filter = self.price_chg_limit,
                                                                period_count=self.translation_time_period(self.period),
                                                                adjust_concentrated=self.adjust_top_10, 

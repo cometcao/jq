@@ -368,7 +368,7 @@ class Sort_main_money_inflow(SortBase):
     def sort(self, context, data, stock_list):
         from strat_common_include import get_main_money_inflow_over_circulating_mcap
         cir_mcap = get_main_money_inflow_over_circulating_mcap(stock_list, 
-                                                               context, 
+                                                               context.previous_date, 
                                                                period_count=60,
                                                                price_change_filter=None,
                                                                adjust_concentrated=True, 
