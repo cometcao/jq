@@ -1,7 +1,25 @@
 from jqdata import *
 import pandas as pd
 
-def get_main_money_inflow_over_circulating_mcap(stock_list, context, period_count, adjust_concentrated=False, is_debug=False):
+def get_main_money_inflow_over_circulating_mcap(stock_list, 
+                                                context, 
+                                                period_count, 
+                                                price_change_filter=None,
+                                                adjust_concentrated=False, 
+                                                is_debug=False):
+    
+    if price_change_filter is not None:
+        # filter by past time price change
+        history_price = history(count=self.translation_time_period(self.period), 
+                                field='close', 
+                                security_list = stock_list, 
+                                skip_paused = True,
+                                df=False)
+        stock_list = [x for x in stock_list if (history_price[x][-1]-history_price[x][0])/history_price[x][0] < price_change_filter / 100]
+        if self.is_debug:
+            print(stock_list[:10], len(stock_list))
+    
+    
     # circulating mcap
     cir_mcap = get_valuation(stock_list, end_date=context.previous_date, 
                         count=1, fields=['circulating_market_cap'])

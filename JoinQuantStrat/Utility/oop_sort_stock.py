@@ -370,6 +370,7 @@ class Sort_main_money_inflow(SortBase):
         cir_mcap = get_main_money_inflow_over_circulating_mcap(stock_list, 
                                                                context, 
                                                                period_count=60,
+                                                               price_change_filter=None,
                                                                adjust_concentrated=True, 
                                                                is_debug=False)
         

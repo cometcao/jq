@@ -620,15 +620,15 @@ class Pick_Money_Input(Create_stock_list):
         # l_stock_list = np.array_split(stock_list, 500)
         # for sl in l_stock_list:
         
-        # filter by past time price change
-        history_price = history(count=self.translation_time_period(self.period), 
-                                field='close', 
-                                security_list = stock_list, 
-                                skip_paused = True,
-                                df=False)
-        stock_list = [x for x in stock_list if (history_price[x][-1]-history_price[x][0])/history_price[x][0] < self.price_chg_limit / 100]
-        if self.is_debug:
-            print(stock_list[:10], len(stock_list))
+        # # filter by past time price change
+        # history_price = history(count=self.translation_time_period(self.period), 
+        #                         field='close', 
+        #                         security_list = stock_list, 
+        #                         skip_paused = True,
+        #                         df=False)
+        # stock_list = [x for x in stock_list if (history_price[x][-1]-history_price[x][0])/history_price[x][0] < self.price_chg_limit / 100]
+        # if self.is_debug:
+        #     print(stock_list[:10], len(stock_list))
 
         # # circulating mcap
         # cir_mcap = get_valuation(stock_list, end_date=context.previous_date, 
@@ -673,6 +673,7 @@ class Pick_Money_Input(Create_stock_list):
         from strat_common_include import get_main_money_inflow_over_circulating_mcap
         cir_mcap = get_main_money_inflow_over_circulating_mcap(stock_list, 
                                                                context, 
+                                                               price_change_filter = self.price_chg_limit,
                                                                period_count=self.translation_time_period(self.period),
                                                                adjust_concentrated=self.adjust_top_10, 
                                                                is_debug=self.is_debug)
