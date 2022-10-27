@@ -629,9 +629,18 @@ class Pick_Money_Input(Create_stock_list):
         stock_list = [x for x in stock_list if (history_price[x][-1]-history_price[x][0])/history_price[x][0] < self.price_chg_limit / 100]
         if self.is_debug:
             print(stock_list[:10], len(stock_list))
-        # main money 
-        cir_mcap = get_valuation(stock_list, end_date=context.previous_date, 
-                            count=1, fields=['circulating_market_cap'])
+
+        # circulating mcap
+        # cir_mcap = get_valuation(stock_list, end_date=context.previous_date, 
+        #                     count=1, fields=['circulating_market_cap'])
+        cir_mcap = get_fundamentals(query(
+                valuation.code,
+                valuation.day,
+                valuation.circulating_market_cap
+            ).filter(
+                # 这里不能使用 in 操作, 要使用in_()函数
+                valuation.code.in_(stock_list)
+            ), date=context.previous_date)
 
         if self.is_debug:
             print(cir_mcap.head(10))
@@ -648,6 +657,7 @@ class Pick_Money_Input(Create_stock_list):
             if self.is_debug:
                 print(cir_mcap.head(10))
         
+        # main money 
         stock_money_data = get_money_flow(security_list=stock_list, 
                               end_date=context.previous_date, 
                               fields=['sec_code','net_amount_main'], 
