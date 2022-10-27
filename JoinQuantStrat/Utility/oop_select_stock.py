@@ -630,46 +630,52 @@ class Pick_Money_Input(Create_stock_list):
         if self.is_debug:
             print(stock_list[:10], len(stock_list))
 
-        # circulating mcap
+        # # circulating mcap
         # cir_mcap = get_valuation(stock_list, end_date=context.previous_date, 
         #                     count=1, fields=['circulating_market_cap'])
-        cir_mcap = get_fundamentals(query(
-                valuation.code,
-                valuation.day,
-                valuation.circulating_market_cap
-            ).filter(
-                # 这里不能使用 in 操作, 要使用in_()函数
-                valuation.code.in_(stock_list)
-            ), date=context.previous_date)
-
-        if self.is_debug:
-            print(cir_mcap.head(10))
-        
-        if self.adjust_top_10:
-            cir_mcap['concentrated_ratio'] = 0
-            for stock in stock_list:
-                q=query(finance.STK_SHAREHOLDER_FLOATING_TOP10).filter(
-                    finance.STK_SHAREHOLDER_FLOATING_TOP10.code==stock,
-                    finance.STK_SHAREHOLDER_FLOATING_TOP10.pub_date>'2015-01-01').limit(10)
-                top_10_gd=finance.run_query(q)
-                circulating_concentrated_pct = top_10_gd[top_10_gd['share_ratio']>=5]['share_ratio'].sum()
-                cir_mcap.loc[cir_mcap['code'] == stock, 'concentrated_ratio'] = circulating_concentrated_pct
-            if self.is_debug:
-                print(cir_mcap.head(10))
-        
-        # main money 
-        stock_money_data = get_money_flow(security_list=stock_list, 
-                              end_date=context.previous_date, 
-                              fields=['sec_code','net_amount_main'], 
-                              count=self.translation_time_period(self.period))
-        net_data= stock_money_data.groupby("sec_code")['net_amount_main'].sum()
-        cir_mcap = cir_mcap.merge(net_data.to_frame(), left_on='code', right_on='sec_code')
-        if self.is_debug:
-            print(cir_mcap.head(10))
-        if self.adjust_top_10:
-            cir_mcap['mfc'] = cir_mcap['net_amount_main']/(cir_mcap['circulating_market_cap'] * (100 - cir_mcap['concentrated_ratio']) / 100)
-        else:
-            cir_mcap['mfc'] = cir_mcap['net_amount_main']/cir_mcap['circulating_market_cap']
+        # # cir_mcap = get_fundamentals(query(
+        # #         valuation.code,
+        # #         valuation.day,
+        # #         valuation.circulating_market_cap
+        # #     ).filter(
+        # #         # 这里不能使用 in 操作, 要使用in_()函数
+        # #         valuation.code.in_(stock_list)
+        # #     ), date=context.previous_date)
+        #
+        # if self.is_debug:
+        #     print(cir_mcap.head(10))
+        #
+        # if self.adjust_top_10:
+        #     cir_mcap['concentrated_ratio'] = 0
+        #     for stock in stock_list:
+        #         q=query(finance.STK_SHAREHOLDER_FLOATING_TOP10).filter(
+        #             finance.STK_SHAREHOLDER_FLOATING_TOP10.code==stock,
+        #             finance.STK_SHAREHOLDER_FLOATING_TOP10.pub_date>'2015-01-01').limit(10)
+        #         top_10_gd=finance.run_query(q)
+        #         circulating_concentrated_pct = top_10_gd[top_10_gd['share_ratio']>=5]['share_ratio'].sum()
+        #         cir_mcap.loc[cir_mcap['code'] == stock, 'concentrated_ratio'] = circulating_concentrated_pct
+        #     if self.is_debug:
+        #         print(cir_mcap.head(10))
+        #
+        # # main money 
+        # stock_money_data = get_money_flow(security_list=stock_list, 
+        #                       end_date=context.previous_date, 
+        #                       fields=['sec_code','net_amount_main'], 
+        #                       count=self.translation_time_period(self.period))
+        # net_data= stock_money_data.groupby("sec_code")['net_amount_main'].sum()
+        # cir_mcap = cir_mcap.merge(net_data.to_frame(), left_on='code', right_on='sec_code')
+        # if self.is_debug:
+        #     print(cir_mcap.head(10))
+        # if self.adjust_top_10:
+        #     cir_mcap['mfc'] = cir_mcap['net_amount_main']/(cir_mcap['circulating_market_cap'] * (100 - cir_mcap['concentrated_ratio']) / 100)
+        # else:
+        #     cir_mcap['mfc'] = cir_mcap['net_amount_main']/cir_mcap['circulating_market_cap']
+        from strat_common_include import get_main_money_inflow_over_circulating_mcap
+        cir_mcap = get_main_money_inflow_over_circulating_mcap(stock_list, 
+                                                               context, 
+                                                               period_count=self.translation_time_period(self.period),
+                                                               adjust_concentrated=self.adjust_top_10, 
+                                                               is_debug=self.is_debug)
         
         cir_mcap = cir_mcap.sort_values(by='mfc', ascending=False)
         if self.is_debug:

@@ -364,7 +364,20 @@ class Sort_rank_stock(SortBase):
     def __str__(self):
         return '[权重: %s ] [排序: %s ] %s' % (self.weight, self._sort_type_str(), self.memo)
 
+class Sort_main_money_inflow(SortBase):
+    def sort(self, context, data, stock_list):
+        from strat_common_include import get_main_money_inflow_over_circulating_mcap
+        cir_mcap = get_main_money_inflow_over_circulating_mcap(stock_list, 
+                                                               context, 
+                                                               period_count=60,
+                                                               adjust_concentrated=True, 
+                                                               is_debug=False)
+        
+        cir_mcap = cir_mcap.sort_values(by='mfc', ascending=self.is_asc)
+        return cir_mcap['code'].values.tolist()
 
+    def __str__(self):
+        return '[权重: %s ] [排序: %s ] %s' % (self.weight, self._sort_type_str(), self.memo)
 # '''------------------截取欲购股票数-----------------'''
 class Filter_buy_count(Filter_stock_list):
     def __init__(self, params):
