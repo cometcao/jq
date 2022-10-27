@@ -590,6 +590,89 @@ class Pick_Rank_Factor(Create_stock_list):
     def __str__(self):
         return "多因子回归公式选股"
     
+####################################################
+class Pick_Money_Input(Create_stock_list):
+    def __init__(self, params):
+        self.stock_num = params.get('stock_num', 20)
+        self.index_scope = params.get('index_scope', '000985.XSHG')
+        self.is_debug = params.get('is_debug', False)
+        self.period = params.get('period', 'month_3')
+        self.adjust_top_10 = params.get("adjust_top_10", False)
+        self.price_chg_limit = params.get('price_chg_limit', 8)
+        pass
+    
+    def translation_time_period(self, p):
+        pp = p.split('_')
+        if pp[0] == 'day':
+            return int(pp[1])
+        elif pp[0] == 'month':
+            return int(pp[1]) * 20
+
+        print("Invalid peiod")
+        return -1
+    
+    def before_trading_start(self, context):
+        if self.index_scope == 'all':
+            stock_list = get_all_securities(['stock'], date=context.previous_date).index.values.tolist()
+        else:
+            stock_list = get_index_stocks(self.index_scope)
+        
+        # l_stock_list = np.array_split(stock_list, 500)
+        # for sl in l_stock_list:
+        
+        # filter by past time price change
+        history_price = history(count=self.translation_time_period(self.period), 
+                                field='close', 
+                                security_list = stock_list, 
+                                skip_paused = True,
+                                df=False)
+        stock_list = [x for x in stock_list if (history_price[x][-1]-history_price[x][0])/history_price[x][0] < self.price_chg_limit / 100]
+        if self.is_debug:
+            print(stock_list[:10], len(stock_list))
+        # main money 
+        cir_mcap = get_valuation(stock_list, end_date=context.previous_date, 
+                            count=1, fields=['circulating_market_cap'])
+
+        if self.is_debug:
+            print(cir_mcap.head(10))
+        
+        if self.adjust_top_10:
+            cir_mcap['concentrated_ratio'] = 0
+            for stock in stock_list:
+                q=query(finance.STK_SHAREHOLDER_FLOATING_TOP10).filter(
+                    finance.STK_SHAREHOLDER_FLOATING_TOP10.code==stock,
+                    finance.STK_SHAREHOLDER_FLOATING_TOP10.pub_date>'2015-01-01').limit(10)
+                top_10_gd=finance.run_query(q)
+                circulating_concentrated_pct = top_10_gd[top_10_gd['share_ratio']>=5]['share_ratio'].sum()
+                cir_mcap.loc[cir_mcap['code'] == stock, 'concentrated_ratio'] = circulating_concentrated_pct
+            if self.is_debug:
+                print(cir_mcap.head(10))
+        
+        stock_money_data = get_money_flow(security_list=stock_list, 
+                              end_date=context.previous_date, 
+                              fields=['sec_code','net_amount_main'], 
+                              count=self.translation_time_period(self.period))
+        net_data= stock_money_data.groupby("sec_code")['net_amount_main'].sum()
+        cir_mcap = cir_mcap.merge(net_data.to_frame(), left_on='code', right_on='sec_code')
+        if self.is_debug:
+            print(cir_mcap.head(10))
+        if self.adjust_top_10:
+            cir_mcap['mfc'] = cir_mcap['net_amount_main']/(cir_mcap['circulating_market_cap'] * (100 - cir_mcap['concentrated_ratio']) / 100)
+        else:
+            cir_mcap['mfc'] = cir_mcap['net_amount_main']/cir_mcap['circulating_market_cap']
+        
+        cir_mcap = cir_mcap.sort_values(by='mfc', ascending=False)
+        if self.is_debug:
+            print(cir_mcap.head(10))
+            print(cir_mcap.head(self.stock_num)['code'].values.tolist())
+
+        return cir_mcap.head(self.stock_num)['code'].values.tolist()
+
+    def __str__(self):
+        return "过去{0}，主力资金净流入比流通市值".format(self.period)
+
+
+####################################################
 
 class Pick_Dynamic_Rank_Factor(Create_stock_list):
     def __init__(self, params):
@@ -2094,6 +2177,15 @@ class Filter_gem(Early_Filter_stock_list):
     def __str__(self):
         return '过滤创业板股票'
 
+##########################################################
+# '''------------------科创板过滤器-----------------'''
+class Filter_sti(Early_Filter_stock_list):
+    def filter(self, context, stock_list):
+        self.log.info("过滤科创板股票")
+        return [stock for stock in stock_list if stock[0:3] != '688']
+
+    def __str__(self):
+        return '过滤科创板股票'
 
 class Filter_common(Filter_stock_list):
     def __init__(self, params):
@@ -2110,7 +2202,7 @@ class Filter_common(Filter_stock_list):
         return unsuspened_stocks
 
     def filter(self, context, data, stock_list):
-#         print("before filter list: {0}".format(stock_list))
+        # print("before common filter list: {0}".format(stock_list))
         current_data = get_current_data()
         
         # filter out paused stocks
@@ -2164,7 +2256,6 @@ class Filter_Money_Flow(Filter_stock_list):
     def __init__(self, params):
         self.start_time_range = params.get("start_time_range", 60) # days
         self.use_method = params.get("use_method", 1)
-        
     
     def filter(self, context, data, stock_list):
         
@@ -2195,7 +2286,7 @@ class Filter_Money_Flow(Filter_stock_list):
             net_data= stock_money_data.groupby("sec_code")['net_amount_main'].rolling(self.start_time_range).sum()
             for stock in stock_list:
                 if not stock_net_data.empty and net_data[stock].iloc[-1] < net_data[stock].iloc[-self.start_time_range-1]:
-                    stock_to_remove.append(stock) 
+                    stock_to_remove.append(stock)
                 
         self.log.info("stocks to remove: {0} total: {1}".format(stock_to_remove, len(stock_to_remove)))
         
@@ -2432,3 +2523,6 @@ class Filter_SD_CHAN(Filter_stock_list):
     
     def __str__(self):
         return '缠论标准分析过滤: {0}'.format(self.check_level) 
+    
+################################################################################
+

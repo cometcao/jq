@@ -207,7 +207,7 @@ class ML_Factor_Rank(object):
                   income.net_profit, income.net_profit + 1, 
                   indicator.inc_revenue_year_on_year, 
                   balance.development_expenditure).filter(valuation.code.in_(sample))
-        df = get_fundamentals(q, date = None)
+        df = get_fundamentals(q, date = context.previous_date)
         df.columns = ['code', 'log_mcap', 'log_NC', 'LEV', 'NI_p', 'NI_n', 'g', 'log_RD']
         
         df['log_mcap'] = np.log(df['log_mcap'])
