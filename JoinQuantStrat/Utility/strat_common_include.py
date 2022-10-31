@@ -20,7 +20,10 @@ def get_main_money_inflow_over_circulating_mcap(stock_list,
                                 security_list = stock_list, 
                                 skip_paused = True,
                                 df=False)
-        stock_list = [x for x in stock_list if (history_price[x][-1]-history_price[x][0])/history_price[x][0] < price_change_filter / 100]
+        # remove nan values so that only stocks with data more than period count remains
+        history_price = {x:y for x,y in history_price.items() if len(y[~np.isnan(y)]) >= period_count}
+        
+        stock_list = [x for x in stock_list if x in history_price and (history_price[x][-1]-history_price[x][0])/history_price[x][0] < price_change_filter / 100]
         if is_debug:
             print(stock_list[:10], len(stock_list))
     
