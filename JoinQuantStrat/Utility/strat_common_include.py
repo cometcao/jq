@@ -1,5 +1,9 @@
 # -*- encoding: utf8 -*-
 from jqdata import *
+try:
+    from kuanke.user_space_api import *
+except:
+    pass
 import pandas as pd
 
 def get_main_money_inflow_over_circulating_mcap(stock_list, 
