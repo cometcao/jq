@@ -591,6 +591,26 @@ class Pick_Rank_Factor(Create_stock_list):
         return "多因子回归公式选股"
     
 ####################################################
+    
+class Filter_Rank_Factor(Filter_stock_list):
+    def __init__(self, params):
+        self.stock_num = params.get('stock_num', 20)
+        self.index_scope = params.get('index_scope', '000985.XSHG')
+        pass
+    
+    def filter(self, context, data, stock_list):
+        from ml_factor_rank import ML_Factor_Rank
+        mfr = ML_Factor_Rank({'stock_num':self.stock_num, 
+                              'index_scope':self.index_scope})
+#             new_list = mfr.gaugeStocks_new(context)
+        new_list = mfr.gaugeStocks(context)
+        return new_list
+
+    def __str__(self):
+        return "多因子回归公式选股"
+    
+    
+####################################################
 class Pick_Money_Input(Create_stock_list):
     def __init__(self, params):
         self.stock_num = params.get('stock_num', 20)
@@ -2346,7 +2366,7 @@ class Filter_MA_CHAN_UP(Filter_stock_list):
         
         stock_to_remove = []
         for stock in stock_list:
-            fullfill_condition = True
+            fullfill_condition = ""
             for level in self.check_level:
                 
                 stock_data = get_bars(stock, 
@@ -2361,7 +2381,6 @@ class Filter_MA_CHAN_UP(Filter_stock_list):
                 bot_time = stock_data[min_loc]['date']
                 bot_count = len(stock_data['low']) - min_loc
                 if bot_count <= 0:
-                    fullfill_condition = False
                     break
                 result_zoushi_up, result_exhaustion_up = analyze_MA_zoushi_by_stock(stock=stock,
                                                                   period=level, 
@@ -2372,13 +2391,13 @@ class Filter_MA_CHAN_UP(Filter_stock_list):
                                                                    direction=TopBotType.bot2top)
                 if result_zoushi_up in self.expected_zoushi_up and result_exhaustion_up in self.expected_exhaustion_up:
                     print("{0} zoushi: {1} exhaustion UP:{2} level:{3}".format(stock, result_zoushi_up, result_exhaustion_up, level))
+                    fullfill_condition = level
                 else:
-                    fullfill_condition = False
                     break
                 
             if fullfill_condition:
                 stock_to_remove.append(stock)
-                self.stock_remove_list[stock] = self.onhold_days * self.get_count("") // self.get_count(self.check_level[-1])
+                self.stock_remove_list[stock] = self.onhold_days * self.get_count("") // self.get_count(level)
         self.log.info("stocks removed: {0}".format(stock_to_remove))
         return [stock for stock in stock_list if stock not in stock_to_remove and stock not in self.stock_remove_list]
                     
