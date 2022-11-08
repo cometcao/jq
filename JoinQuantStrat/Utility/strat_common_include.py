@@ -30,23 +30,36 @@ def get_main_money_inflow_over_circulating_mcap(stock_list,
     
     # circulating mcap
     cir_mcap = get_valuation(stock_list, end_date=prv_date, 
-                        count=1, fields=['circulating_market_cap'])
+                        count=1, fields=['circulating_market_cap', 'market_cap'])
     # cir_mcap = get_fundamentals(query(
     #         valuation.code,
     #         valuation.day,
-    #         valuation.circulating_market_cap
+    #         valuation.circulating_market_cap,
+    #         valuation.total_market_cap.lable('market_cap')
     #     ).filter(
     #         valuation.code.in_(stock_list)
     #     ), date=prv_date)
+    
     if is_debug:
         print(cir_mcap.head(10))
     
     if adjust_concentrated:
+        cir_mcap['cir_total'] = cir_mcap['circulating_market_cap'] / cir_mcap['market_cap']
         cir_mcap['concentrated_ratio'] = 0
         for stock in stock_list:
+            q0=query(finance.STK_SHAREHOLDER_FLOATING_TOP10).filter(
+                finance.STK_SHAREHOLDER_FLOATING_TOP10.code==stock,
+                finance.STK_SHAREHOLDER_FLOATING_TOP10.pub_date<=prv_date.strftime('%Y-%m-%d')
+            ).order_by(finance.STK_SHAREHOLDER_FLOATING_TOP10.pub_date.desc()).limit(10)
+            latest_date_df = finance.run_query(q0)
+            
+            if latest_date_df.empty:
+                continue
+            
             q=query(finance.STK_SHAREHOLDER_FLOATING_TOP10).filter(
                 finance.STK_SHAREHOLDER_FLOATING_TOP10.code==stock,
-                finance.STK_SHAREHOLDER_FLOATING_TOP10.pub_date<=prv_date.strftime('%Y-%m-%d')).limit(10)
+                finance.STK_SHAREHOLDER_FLOATING_TOP10.pub_date==latest_date_df['pub_date'].values[0]
+                ).order_by(finance.STK_SHAREHOLDER_FLOATING_TOP10.share_ratio.desc()).limit(10)
             top_10_gd=finance.run_query(q)
             circulating_concentrated_pct = top_10_gd[top_10_gd['share_ratio']>=5]['share_ratio'].sum()
             cir_mcap.loc[cir_mcap['code'] == stock, 'concentrated_ratio'] = circulating_concentrated_pct
@@ -63,7 +76,7 @@ def get_main_money_inflow_over_circulating_mcap(stock_list,
     if is_debug:
         print(cir_mcap.head(10))
     if adjust_concentrated:
-        cir_mcap['mfc'] = cir_mcap['net_amount_main']/(cir_mcap['circulating_market_cap'] * (100 - cir_mcap['concentrated_ratio']) / 100)
+        cir_mcap['mfc'] = cir_mcap['net_amount_main']/(cir_mcap['circulating_market_cap'] * (1-cir_mcap['concentrated_ratio']/100/cir_mcap['cir_total']))
     else:
         cir_mcap['mfc'] = cir_mcap['net_amount_main']/cir_mcap['circulating_market_cap']
     return cir_mcap
