@@ -58,6 +58,7 @@ def get_main_money_inflow_over_circulating_mcap(stock_list,
             
             q=query(finance.STK_SHAREHOLDER_FLOATING_TOP10).filter(
                 finance.STK_SHAREHOLDER_FLOATING_TOP10.code==stock,
+                finance.STK_SHAREHOLDER_FLOATING_TOP10.sharesnature=='流通A股',
                 finance.STK_SHAREHOLDER_FLOATING_TOP10.pub_date==latest_date_df['pub_date'].values[0]
                 ).order_by(finance.STK_SHAREHOLDER_FLOATING_TOP10.share_ratio.desc()).limit(10)
             top_10_gd=finance.run_query(q)
