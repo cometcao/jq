@@ -11,6 +11,7 @@ def get_main_money_inflow_over_circulating_mcap(stock_list,
                                                 period_count, 
                                                 price_change_filter=None,
                                                 adjust_concentrated=False, 
+                                                force_positive_inflow=True,
                                                 is_debug=False):
     
     if price_change_filter is not None:
@@ -74,6 +75,8 @@ def get_main_money_inflow_over_circulating_mcap(stock_list,
                           count=period_count)
     net_data= stock_money_data.groupby("sec_code")['net_amount_main'].sum()
     cir_mcap = cir_mcap.merge(net_data.to_frame(), left_on='code', right_on='sec_code')
+    if force_positive_inflow:
+        cir_mcap = cir_mcap[cir_mcap['net_amount_main'] > 0]
     if is_debug:
         print(cir_mcap.head(10))
     if adjust_concentrated:
