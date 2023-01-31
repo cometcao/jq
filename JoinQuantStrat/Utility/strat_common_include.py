@@ -84,3 +84,62 @@ def get_main_money_inflow_over_circulating_mcap(stock_list,
     else:
         cir_mcap['mfc'] = cir_mcap['net_amount_main']/cir_mcap['circulating_market_cap']
     return cir_mcap
+
+
+############################
+############################
+############################
+# single stock analysis 
+
+# from jqdata import *
+# from datetime import datetime, timedelta
+# import pandas as pd
+# pd.set_option('display.max_columns', 500)
+# pd.set_option('display.max_rows', 500)
+#
+# stocks = ['301035.XSHE']
+# working_date = datetime.today()# - timedelta(days=1)
+# # working_date = datetime.strptime('2022-10-11', "%Y-%m-%d")
+# inflow_count = 2
+# display_count = 10
+#
+# cir_mcap = get_valuation(stocks, 
+#                          end_date=working_date, 
+#                         count=display_count, fields=['circulating_market_cap','market_cap'])
+# cir_mcap['cir_total'] = cir_mcap['circulating_market_cap'] / cir_mcap['market_cap']
+# cir_mcap['concentrated_ratio'] = 0
+# for stock in stocks:
+#     q0=query(finance.STK_SHAREHOLDER_FLOATING_TOP10).filter(
+#         finance.STK_SHAREHOLDER_FLOATING_TOP10.code==stock,
+#         finance.STK_SHAREHOLDER_FLOATING_TOP10.pub_date<=working_date.strftime('%Y-%m-%d')
+#     ).order_by(finance.STK_SHAREHOLDER_FLOATING_TOP10.pub_date.desc()).limit(10)
+#     latest_date_df = finance.run_query(q0)
+#
+#     q=query(finance.STK_SHAREHOLDER_FLOATING_TOP10).filter(
+#         finance.STK_SHAREHOLDER_FLOATING_TOP10.code==stock,
+#         finance.STK_SHAREHOLDER_FLOATING_TOP10.sharesnature=='流通A股',
+#         finance.STK_SHAREHOLDER_FLOATING_TOP10.pub_date==latest_date_df['pub_date'].values[0]
+#     ).order_by(finance.STK_SHAREHOLDER_FLOATING_TOP10.share_ratio.desc() ).limit(10)
+#     top_10_gd=finance.run_query(q)
+# #     print(top_10_gd)
+#
+#     circulating_concentrated_pct = top_10_gd[top_10_gd['share_ratio']>=5]['share_ratio'].sum()
+#     cir_mcap.loc[cir_mcap['code'] == stock, 'concentrated_ratio'] = circulating_concentrated_pct
+#
+# cir_mcap['day'] = cir_mcap['day'].apply(lambda x: pd.Timestamp(x))
+#
+# stock_money_data = get_money_flow(security_list=stocks, 
+#                       end_date=working_date, 
+#                       fields=['sec_code','net_amount_main', 'date'], 
+#                       count=display_count)
+#
+# cir_mcap = cir_mcap.merge(stock_money_data, 
+#                           left_on=['code','day'], right_on=['sec_code', 'date'])
+# cir_mcap = cir_mcap.sort_values(by=['code', 'day'])
+#
+# net_amount_roll = cir_mcap.groupby("sec_code")['net_amount_main'].rolling(inflow_count).sum()
+# # print(net_amount_roll)
+# cir_mcap['net_amount_main_roll'] = net_amount_roll.values
+# cir_mcap['mfc'] = cir_mcap['net_amount_main_roll']/(cir_mcap['circulating_market_cap'] * (1-cir_mcap['concentrated_ratio'] / 100/cir_mcap['cir_total']))/10000
+#
+# print(cir_mcap[['code', 'day', 'net_amount_main', 'net_amount_main_roll', 'mfc']])
