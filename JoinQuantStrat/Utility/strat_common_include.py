@@ -8,16 +8,18 @@ import pandas as pd
 
 
 def filter_stocks_by_price_change(stock_list, period_count, price_change_filter, is_debug=False):
-    # filter by past time price change
-    history_price = history(count=period_count, 
-                            field='close', 
-                            security_list = stock_list, 
-                            skip_paused = True,
+    # filter by past time price change history doesn't contain today's data
+    history_price = get_bars(stock_list,
+                            count=period_count, 
+                            unit='1d', 
+                            fields='close',
+                            include_now = True,
                             df=False)
     # remove nan values so that only stocks with data more than period count remains
-    history_price = {x:y for x,y in history_price.items() if len(y[~np.isnan(y)]) >= period_count}
+    history_price = {x:y for x,y in history_price.items() if len(y[~np.isnan(y['close'])]) >= period_count}
     
-    stock_list = [x for x in stock_list if x in history_price and (history_price[x][-1]-history_price[x][0])/history_price[x][0] < price_change_filter / 100]
+    stock_list = [x for x in stock_list 
+                  if x in history_price and (history_price[x]['close'][-1]-history_price[x]['close'][0])/history_price[x]['close'][0] < price_change_filter / 100]
     if is_debug:
         print(stock_list[:10], len(stock_list))
     return stock_list
@@ -113,7 +115,6 @@ def get_main_money_inflow_over_time_over_circulating_mcap(
     else:
         cir_mcap['mfc'] = cir_mcap['net_amount_main']/cir_mcap['sum_count']/cir_mcap['circulating_market_cap']
     return cir_mcap
-    
 
 def get_main_money_inflow_over_circulating_mcap(stock_list, 
                                                 prv_date, 
@@ -125,15 +126,17 @@ def get_main_money_inflow_over_circulating_mcap(stock_list,
     
     if price_change_filter is not None:
         # filter by past time price change
-        history_price = history(count=period_count, 
-                                field='close', 
-                                security_list = stock_list, 
-                                skip_paused = True,
+        history_price = get_bars(stock_list, 
+                                count=period_count, 
+                                unit='1d', 
+                                fields='close',
+                                include_now = True,
                                 df=False)
         # remove nan values so that only stocks with data more than period count remains
-        history_price = {x:y for x,y in history_price.items() if len(y[~np.isnan(y)]) >= period_count}
+        history_price = {x:y for x,y in history_price.items() if len(y[~np.isnan(y['close'])]) >= period_count}
         
-        stock_list = [x for x in stock_list if x in history_price and (history_price[x][-1]-history_price[x][0])/history_price[x][0] < price_change_filter / 100]
+        stock_list = [x for x in stock_list 
+                      if x in history_price and (history_price[x]['close'][-1]-history_price[x]['close'][0])/history_price[x]['close'][0] < price_change_filter / 100]
         if is_debug:
             print(stock_list[:10], len(stock_list))
     
@@ -194,6 +197,49 @@ def get_main_money_inflow_over_circulating_mcap(stock_list,
         cir_mcap['mfc'] = cir_mcap['net_amount_main']/cir_mcap['circulating_market_cap']
     return cir_mcap
 
+def get_main_money_inflow_over_total_money_over_time(
+                                                stock_count_dict,
+                                                current_time, 
+                                                force_positive_inflow=True,
+                                                is_debug=False):
+    stock_list = list(stock_count_dict.keys())
+    
+    # all traded money over the designated period
+    stock_money_data = {}
+    for stock in stock_list:
+        money_data = get_bars(stock, 
+                               count=stock_count_dict[stock], 
+                               end_dt=current_time, 
+                               unit = '1d',
+                               fields = ['money'], 
+                               df = False,
+                               include_now=True)
+        stock_money_data[stock] = money_data['money'].sum()
+    cir_mcap = pd.DataFrame.from_dict(stock_money_data, orient='index', columns=['money'])    
+    cir_mcap.index.name = 'code'
+    if is_debug:
+        print(cir_mcap.head(10))
+        
+    # main money inflow
+    stock_money_data_list = []
+    for stock in stock_list:
+        stock_money_data = get_money_flow(security_list=stock, 
+                              end_date=current_time, 
+                              fields=['sec_code','net_amount_main'], 
+                              count=stock_count_dict[stock])
+        stock_money_data_list.append(stock_money_data)
+    
+    net_data= pd.concat(stock_money_data_list).groupby("sec_code")['net_amount_main'].sum()
+        
+    cir_mcap = cir_mcap.merge(net_data.to_frame(), left_on='code', right_on='sec_code')
+    cir_mcap['sum_count'] = cir_mcap['code'].map(stock_count_dict)
+    if force_positive_inflow:
+        cir_mcap = cir_mcap[cir_mcap['net_amount_main'] > 0]
+    if is_debug:
+        print(cir_mcap.head(10))
+
+    cir_mcap['mfc'] = cir_mcap['net_amount_main']/cir_mcap['money']/cir_mcap['sum_count']
+    return cir_mcap
 
 ############################
 ############################
