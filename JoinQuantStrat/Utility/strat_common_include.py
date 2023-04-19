@@ -47,9 +47,9 @@ def get_main_money_inflow_over_circulating_mcap(stock_list,
     if is_debug:
         print(cir_mcap.head(10))
     if adjust_concentrated:
-        cir_mcap['mfc'] = cir_mcap['net_amount_main']/(cir_mcap['circulating_market_cap'] * (1-cir_mcap['concentrated_ratio']/100/cir_mcap['cir_total']))
+        cir_mcap['mfc'] = cir_mcap['net_amount_main']/(cir_mcap['circulating_market_cap'] * (1-cir_mcap['concentrated_ratio']/100/cir_mcap['cir_total']))/10000
     else:
-        cir_mcap['mfc'] = cir_mcap['net_amount_main']/cir_mcap['circulating_market_cap']
+        cir_mcap['mfc'] = cir_mcap['net_amount_main']/cir_mcap['circulating_market_cap']/10000
     return cir_mcap
 
 
@@ -177,9 +177,9 @@ def get_main_money_inflow_over_time_over_circulating_mcap(
     if is_debug:
         print(cir_mcap.head(10))
     if adjust_concentrated:
-        cir_mcap['mfc'] = cir_mcap['net_amount_main']/cir_mcap['sum_count']/(cir_mcap['circulating_market_cap'] * (1-cir_mcap['concentrated_ratio']/100/cir_mcap['cir_total']))
+        cir_mcap['mfc'] = cir_mcap['net_amount_main']/cir_mcap['sum_count']/(cir_mcap['circulating_market_cap'] * (1-cir_mcap['concentrated_ratio']/100/cir_mcap['cir_total'])) / 10000
     else:
-        cir_mcap['mfc'] = cir_mcap['net_amount_main']/cir_mcap['sum_count']/cir_mcap['circulating_market_cap']
+        cir_mcap['mfc'] = cir_mcap['net_amount_main']/cir_mcap['sum_count']/(cir_mcap['circulating_market_cap']) / 10000
     return cir_mcap
 
 
@@ -189,6 +189,7 @@ def get_main_money_inflow_over_total_money_over_time(
                                                 current_time, 
                                                 force_positive_inflow=True,
                                                 adjust_concentrated=True,
+                                                use_cir_mcap=True,
                                                 is_debug=False):
     stock_list = list(stock_count_dict.keys())
     
@@ -216,17 +217,20 @@ def get_main_money_inflow_over_total_money_over_time(
     # main money inflow
     net_data = get_main_money_inflow(stock_list, current_time, stock_count_dict)
     
-
     
     cir_mcap = cir_mcap.merge(net_data.to_frame(), left_index=True, right_index=True)
     cir_mcap['sum_count'] = pd.Series(stock_count_dict)
     if force_positive_inflow:
         cir_mcap = cir_mcap[cir_mcap['net_amount_main'] > 0]
-    if is_debug:
-        print(cir_mcap.head(10))
 
-    cir_mcap['mfc'] = cir_mcap['net_amount_main']*cir_mcap['money']/cir_mcap['circulating_market_cap']/cir_mcap['sum_count']
+    if use_cir_mcap:
+        cir_mcap['mfc'] = (cir_mcap['net_amount_main']*10000+cir_mcap['money'])/(cir_mcap['circulating_market_cap']*(1-cir_mcap['concentrated_ratio']/100/cir_mcap['cir_total'])*100000000)/cir_mcap['sum_count']
+    else:
+        cir_mcap['mfc'] = (cir_mcap['net_amount_main']*10000+cir_mcap['money'])/cir_mcap['sum_count']
+    
     cir_mcap.index.name = 'code'
+    if is_debug:
+        print(cir_mcap.head(10))    
     return cir_mcap
 
 ############################
