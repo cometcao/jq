@@ -222,6 +222,8 @@ def get_main_money_inflow_over_total_money_over_time(
     cir_mcap['sum_count'] = pd.Series(stock_count_dict)
     if force_positive_inflow:
         cir_mcap = cir_mcap[cir_mcap['net_amount_main'] > 0]
+    else:
+        cir_mcap.loc[:, 'net_amount_main'] = abs(cir_mcap['net_amount_main'])
 
     if use_cir_mcap:
         cir_mcap['mfc'] = (cir_mcap['net_amount_main']*10000+cir_mcap['money'])/(cir_mcap['circulating_market_cap']*(1-cir_mcap['concentrated_ratio']/100/cir_mcap['cir_total'])*100000000)/cir_mcap['sum_count']
