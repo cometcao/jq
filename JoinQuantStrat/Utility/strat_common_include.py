@@ -326,10 +326,6 @@ def get_main_money_inflow_over_total_money_over_time(
 # print(cir_mcap[['code', 'day', 'net_amount_main', 'net_amount_main_roll', 'mfc']])
 
 
-
-
-
-
 #############################
 #############################
 #############################
@@ -363,16 +359,16 @@ def get_main_money_inflow_over_total_money_over_time(
 #     stock_count = get_stock_downwards_count(
 #         stock_list, period_count, current_time, '1d', downwards_count_limit, 0, debug)
 #
-#     # II: find positive top money inflow / free share portion ######################################
+#     # II: find positive top money inflow / free share portion ##########
 #     # check all stocks
-#     # cir_mcap = get_main_money_inflow_over_time_over_circulating_mcap(stock_count, 
-#     #                                                                current_time, 
+#     # cir_mcap = get_main_money_inflow_over_time_over_circulating_mcap(stock_count,
+#     #                                                                current_time,
 #     #                                                                price_change_filter = 0,
-#     #                                                                adjust_concentrated=True, 
+#     #                                                                adjust_concentrated=True,
 #     #                                                                force_positive_inflow=True,
 #     #                                                                is_debug=debug)
-#     cir_mcap = get_main_money_inflow_over_total_money_over_time(stock_count, 
-#                                                                current_time, 
+#     cir_mcap = get_main_money_inflow_over_total_money_over_time(stock_count,
+#                                                                current_time,
 #                                                                force_positive_inflow=False,
 #                                                                use_cir_mcap=True,
 #                                                                use_money=use_money,
@@ -401,15 +397,15 @@ def get_main_money_inflow_over_total_money_over_time(
 #
 # money_inflow_list = stock_value_list
 #
-# # III: apply zoushi analysis ##################################################################
-# expected_zoushi_down = [ZouShi_Type.Pan_Zheng, ZouShi_Type.Qu_Shi_Down] #  
+# # III: apply zoushi analysis ###########################################
+# expected_zoushi_down = [ZouShi_Type.Pan_Zheng, ZouShi_Type.Qu_Shi_Down] #
 # expected_exhaustion_down = [Chan_Type.PANBEI, Chan_Type.BEICHI] #Chan_Type.INVIGORATE
 #
 # def get_translated_count(count, level):
 #     if count <= 20 and level == '1d':
 #         return [(count * 4, '60m'), (count * 8, '30m')]
 #     elif count <= 60 and level == '1d':
-#         return [(count, '1d')] 
+#         return [(count, '1d')]
 #     else:
 #         return [(count, level)]
 # picked_stocks = []
@@ -417,11 +413,11 @@ def get_main_money_inflow_over_total_money_over_time(
 #     current_time=pd.datetime.now()
 #
 #     for check_count_level, level in get_translated_count(period_count, '1d'):
-#         stock_data = get_bars(stock, 
-#                                count=check_count_level, 
-#                                end_dt=current_time, 
+#         stock_data = get_bars(stock,
+#                                count=check_count_level,
+#                                end_dt=current_time,
 #                                unit=level,
-#                                fields= ['date','high', 'low'], 
+#                                fields= ['date','high', 'low'],
 #                                df = False,
 #                                include_now=True)
 #
@@ -432,11 +428,11 @@ def get_main_money_inflow_over_total_money_over_time(
 #             continue
 #
 #         result_zoushi, result_exhaustion = analyze_MA_zoushi_by_stock(stock=stock,
-#                                                                   period=level, 
+#                                                                   period=level,
 #                                                                   count=peak_count,
-#                                                                   end_dt=current_time, 
-#                                                                   df=False, 
-#                                                                   zoushi_types=expected_zoushi_down, 
+#                                                                   end_dt=current_time,
+#                                                                   df=False,
+#                                                                   zoushi_types=expected_zoushi_down,
 #                                                                   direction=TopBotType.top2bot)
 #         if result_zoushi in expected_zoushi_down and result_exhaustion in expected_exhaustion_down:
 #             print("stock: {0} zoushi: {1} exhaustion:{2} level:{3}".format(stock, result_zoushi, result_exhaustion, level))
