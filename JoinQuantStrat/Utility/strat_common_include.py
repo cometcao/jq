@@ -100,6 +100,8 @@ def get_stock_downwards_count(stock_list,
                               fields=['date', 'high', 'low'],
                               df=False,
                               include_now=True)
+        if stock_data.size == 0:
+            continue
 
         max_loc = int(
             np.where(stock_data['high'] == max(stock_data['high']))[0][-1])
@@ -255,8 +257,12 @@ def get_main_money_inflow_over_total_money_over_time(
     else:
         cir_mcap.loc[:, 'net_amount_main'] = abs(cir_mcap['net_amount_main'])
 
-    capital_size = (cir_mcap['circulating_market_cap'] * (1 - cir_mcap['concentrated_ratio'] / 100 /
-                                                          cir_mcap['cir_total']) * 100000000) if use_cir_mcap else cir_mcap['circulating_market_cap']
+    capital_size = (cir_mcap['circulating_market_cap']
+                    * (1 - cir_mcap['concentrated_ratio']
+                       / 100
+                       / cir_mcap['cir_total']
+                       ) 
+                    * 100000000) if use_cir_mcap else cir_mcap['circulating_market_cap']
 
     money_flow = cir_mcap['money'] if use_money else cir_mcap['net_amount_main'] * 10000
 
