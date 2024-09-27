@@ -279,40 +279,16 @@ class Filter_black_stocks(Early_Filter_stock_list):
                                            panel=False)
         df = df[df['np_parent_company_owners'] < 0]
         result_df = df.groupby('code').nunique()
-        print(result_df)
+        # print(result_df)
         remove_list = result_df[result_df['np_parent_company_owners'] >= 3].index.tolist()
-        print("{0} filtered OUT".format(remove_list))
+        print("{0} filtered OUT for more than 3 negative contribution to parents' company".format(remove_list))
 
         stock_list = [stock for stock in stock_list if stock not in remove_list]
 #         print("after filter: {0}".format(stock_list))
         return stock_list
 
     def __str__(self):
-        s = ''
-        for fd_param in self._params.get('factors', []):
-            if not isinstance(fd_param, FD_Factor):
-                continue
-            if fd_param.min is None and fd_param.max is None:
-                continue
-            s += '\n\t\t\t\t---'
-            if fd_param.min is not None and fd_param.max is not None:
-                s += '[ %s < %s < %s ]' % (fd_param.min, fd_param.factor, fd_param.max)
-            elif fd_param.min is not None:
-                s += '[ %s < %s ]' % (fd_param.min, fd_param.factor)
-            elif fd_param.max is not None:
-                s += '[ %s > %s ]' % (fd_param.factor, fd_param.max)
-
-        order_by = self._params.get('order_by', None)
-        sort_type = self._params.get('sort', SortType.asc)
-        if order_by is not None:
-            s += '\n\t\t\t\t---'
-            sort_type = '从小到大' if sort_type == SortType.asc else '从大到小'
-            s += '[排序:%s %s]' % (order_by, sort_type)
-        limit = self._params.get('limit', None)
-        if limit is not None:
-            s += '\n\t\t\t\t---'
-            s += '[限制选股数:%s]' % (limit)
-        return '多因子筛选:' + s
+        return '剔除过去一年报表归母数字３次或者以上为负数者'
 
 
 class Filter_FX_data(Early_Filter_stock_list):
