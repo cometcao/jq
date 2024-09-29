@@ -11,7 +11,7 @@ from chan_kbar_filter import analyze_MA_zoushi_by_stock
 
 # current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 current_time = datetime.now()
-working_date = datetime.today()# - timedelta(days=1)
+# working_date = datetime.today()# - timedelta(days=1)
 print("current time: {0}".format(current_time))
 # working_date = datetime.strptime('2022-04-28', "%Y-%m-%d")
 
@@ -20,12 +20,12 @@ level_check = '1d'
 stock_list = get_all_securities(['stock']).index.values.tolist()
 
 
-def filter_out_stock_by_mfc(period_count, current_time, use_money, debug):
+def filter_out_stock_by_mfc(work_stock_list, period_count, current_time, use_money, debug):
     downwards_count_limit = 10 if period_count == 60 else 5
     print("period count: {0}, limit: {1}, use_money: {2}".format(period_count, downwards_count_limit, use_money))
     # I: find a rough downwards movement and worm out the period
     stock_count = get_stock_downwards_count(
-        stock_list, period_count, current_time, '1d', downwards_count_limit, 0, debug)
+        work_stock_list, period_count, current_time, '1d', downwards_count_limit, 0, debug)
 
     # II: find positive top money inflow / free share portion ######################################
     # check all stocks
@@ -54,14 +54,26 @@ def filter_out_stock_by_mfc(period_count, current_time, use_money, debug):
     print(stock_value_list)
     return stock_value_list
 
-stock_list_20 = filter_out_stock_by_mfc(20, current_time, False, debug)
-stock_list_60 = filter_out_stock_by_mfc(60, current_time, True, debug)
-stock_list_20 = [stock for stock,_ in stock_list_20]
-stock_list_60 = [stock for stock,_ in stock_list_60]
-stock_value_list = [stock for stock in stock_list_20 if stock in stock_list_60]
+# False True 17
+# False False 21
+# True True 28 26 27 30jul 56 1Aug 50  2Aug 50
+# True False 19
 
+stock_list_20_val = filter_out_stock_by_mfc(stock_list, 20, current_time, True, debug)
+stock_list_20 = [stock for stock,_ in stock_list_20_val]
+stock_list_60_val = filter_out_stock_by_mfc(stock_list_20, 60, current_time, True, debug)
+stock_value_list = []
+for stock_60, stock_60_val in stock_list_60_val:
+    for stock_20, stock_20_val in stock_list_20_val:
+        if stock_60 == stock_20 and stock_60_val > stock_20_val:
+            stock_value_list.append(stock_60)
+            break
+        elif stock_60 == stock_20:
+            break
 ####################################################################################################
-print("final list: {0}".format(stock_value_list))
+intermediate_list = [stock for stock, _ in stock_list_60_val if stock in stock_list_20]
+print("Intermediate list: {0} {1}".format(intermediate_list, len(intermediate_list)))
+print("final list 60 > 20: {0} {1}".format(stock_value_list, len(stock_value_list)))
 money_inflow_list = stock_value_list
 
 # III: apply zoushi analysis ##################################################################
