@@ -17,7 +17,7 @@ print("current time: {0}".format(current_time))
 
 debug = False
 level_check = '1d'
-stock_list = get_all_securities(['stock']).index.values.tolist()
+stock_list = get_all_securities(['stock'], date=current_time).index.values.tolist()
 
 
 def filter_out_stock_by_mfc(work_stock_list, period_count, current_time, use_money, only_downward_slope, output, debug):

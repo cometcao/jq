@@ -195,9 +195,9 @@ class ML_Factor_Rank(object):
     
     def gaugeStocks_df(self, context):
         if self.index_scope == 'all':
-            sample = list(get_all_securities(types=['stock']).index)
+            sample = list(get_all_securities(types=['stock'], date=context.previous_date).index)
         else:
-            sample = get_index_stocks(self.index_scope, date = None)
+            sample = get_index_stocks(self.index_scope, date = context.previous_date)
         if not sample:
             print("empty stock list")
             return None
@@ -279,7 +279,7 @@ class ML_Factor_Rank(object):
                 sample = sample +  get_index_stocks(idx, date = None)
         elif self.index_scope == 'all':
             # at least half a year old!
-            all_stock_df = get_all_securities(types=['stock'])
+            all_stock_df = get_all_securities(types=['stock'], date=context.previous_date)
             all_stock_df['yesterday'] = pd.to_datetime(context.previous_date)
             all_stock_df = all_stock_df[(all_stock_df['yesterday']-pd.to_datetime(all_stock_df['start_date'])).map(lambda x:x/np.timedelta64(1, 'D')) >= 180]
             sample = all_stock_df.index

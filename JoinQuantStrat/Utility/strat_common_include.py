@@ -75,7 +75,7 @@ def filter_stocks_by_price_change(stock_list, period_count, price_change_filter,
     stock_list = [x for x in stock_list
                   if x in history_price and (history_price[x]['close'][-1] - history_price[x]['close'][0]) / history_price[x]['close'][0] < price_change_filter / 100]
     if is_debug:
-        print(stock_list[:10], len(stock_list))
+        print(f"filter_stocks_by_price_change with size: {len(stock_list)}")
     return stock_list
 
 
@@ -130,9 +130,6 @@ def get_cir_mcap(stock_list,
     #         valuation.code.in_(stock_list)
     #     ), date=prv_date)
 
-    if is_debug:
-        print(cir_mcap.head(10))
-
     if adjust_concentrated:
         cir_mcap['cir_total'] = cir_mcap['circulating_market_cap'] / \
             cir_mcap['market_cap']
@@ -160,7 +157,7 @@ def get_cir_mcap(stock_list,
             cir_mcap.loc[cir_mcap['code'] == stock,
                          'concentrated_ratio'] = circulating_concentrated_pct
         if is_debug:
-            print(cir_mcap.head(10))
+            print(f"get_cir_mcap after size: {cir_mcap.shape[0]}")
     return cir_mcap
 
 
@@ -242,9 +239,6 @@ def get_main_money_inflow_over_total_money_over_time(
     # results in real money number
     cir_mcap['money'] = pd.Series(stock_money_data)
 
-    if is_debug:
-        print(cir_mcap.head(10))
-
     # main money inflow
     net_data = get_main_money_inflow(
         stock_list, current_time, stock_count_dict)
@@ -270,5 +264,5 @@ def get_main_money_inflow_over_total_money_over_time(
 
     cir_mcap.index.name = 'code'
     if is_debug:
-        print(cir_mcap.head(10))
+        print(f"get_main_money_inflow_over_total_money_over_time cir_mcap size: {cir_mcap.shape[0]}")
     return cir_mcap
