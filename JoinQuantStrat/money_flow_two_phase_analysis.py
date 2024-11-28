@@ -11,7 +11,7 @@ from chan_kbar_filter import analyze_MA_zoushi_by_stock
 
 # current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 current_time = datetime.now()
-# current_time = datetime.now() - timedelta(days=30)
+# current_time = datetime.now() - timedelta(days=69)
 print("current time: {0}".format(current_time))
 # working_date = datetime.strptime('2022-04-28', "%Y-%m-%d")
 
@@ -33,7 +33,7 @@ def filter_out_stock_by_mfc(work_stock_list, period_count, current_time, use_mon
     # II: find positive top money inflow / free share portion ######################################
     cir_mcap = get_main_money_inflow_over_total_money_over_time(stock_count, 
                                                                current_time, 
-                                                               force_positive_inflow=True,
+                                                               force_positive_inflow=not use_money,
                                                                use_cir_mcap=True,
                                                                use_money=use_money,
                                                                is_debug=debug)
@@ -49,26 +49,26 @@ def filter_out_stock_by_mfc(work_stock_list, period_count, current_time, use_mon
         print(stock_value_dict)
     return stock_value_dict
 
-# False True 17
-# False False 21
-# True True 28 26 27 30jul 56 1Aug 50  2Aug 50
-# True False 19
+# F, T, 1000 | F, F, 1000
+# F, T, 500 | T, F, 50 | T, F, 50
 
-stock_list_5_val = filter_out_stock_by_mfc(stock_list, 5, current_time, False, True, 1000, debug)
-stock_list_5 = list(stock_list_5_val.keys())
-stock_list_20_val = filter_out_stock_by_mfc(stock_list_5, 20, current_time, False, False, 1000, debug)
-stock_list_20 = list(stock_list_20_val.keys())
-# stock_list_60_val = filter_out_stock_by_mfc(stock_list_5, 60, current_time, False, False, 1000, debug)
-# stock_list_60 = [stock for stock,_ in stock_list_60_val]
-# stock_list_120_val = filter_out_stock_by_mfc(stock_list, 120, current_time, False, False, debug)
-# stock_list_120 = [stock for stock,_ in stock_list_120_val]
-final_list = [stock for stock in stock_list_20 if stock_list_5_val[stock] < stock_list_20_val[stock]]
-# final_list = list(set(stock_list_5) & set(stock_list_20) & set(stock_list_60))
+
+stock_list_a_val = filter_out_stock_by_mfc(stock_list, 13, current_time, False, True, 1000, debug)
+stock_list_a = list(stock_list_a_val.keys())
+stock_list_b_val = filter_out_stock_by_mfc(stock_list_a, 21, current_time, False, False, 1000, debug)
+stock_list_b = list(stock_list_b_val.keys())
+stock_list_c_val = filter_out_stock_by_mfc(stock_list_b, 55, current_time, False, False, 1000, debug)
+stock_list_c = list(stock_list_c_val.keys())
+# stock_list_d_val = filter_out_stock_by_mfc(stock_list, 89, current_time, False, False, debug)
+# stock_list_d = [stock for stock,_ in stock_list_c_val]
+# final_list = [stock for stock in stock_list_b if stock_list_a_val[stock] < stock_list_b_val[stock]]
+
+final_list = list(set(stock_list_a) & set(stock_list_b) & set(stock_list_c))
 ####################################################################################################
-print("Intermediate list 5: {0}".format(len(stock_list_5)))
-print("Intermediate list 20: {0}".format(len(stock_list_20)))
-# print("Intermediate list 60: {0}".format(len(stock_list_60)))
-# print("Intermediate list 120: {0}".format(len(stock_list_120)))
+print("Intermediate list a: {0}".format(len(stock_list_a)))
+print("Intermediate list b: {0}".format(len(stock_list_b)))
+print("Intermediate list c: {0}".format(len(stock_list_c)))
+# print("Intermediate list d: {0}".format(len(stock_list_d)))
 print("Final list: {0} {1}".format(final_list, len(final_list)))
 
 # money_inflow_list = stock_value_list

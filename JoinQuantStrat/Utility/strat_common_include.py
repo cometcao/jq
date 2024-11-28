@@ -110,6 +110,8 @@ def get_stock_downwards_count(stock_list,
         if peak_count < downwards_count_limit:
             continue
         stock_count[stock] = peak_count
+    if is_debug:
+        print(f"get_stock_downwards_count with size: {len(stock_count.keys())}")
     return stock_count
 
 
@@ -129,7 +131,8 @@ def get_cir_mcap(stock_list,
     #     ).filter(
     #         valuation.code.in_(stock_list)
     #     ), date=prv_date)
-
+    if is_debug:
+        print(f"get_cir_mcap get_valuation size: {cir_mcap.shape[0]}")
     if adjust_concentrated:
         cir_mcap['cir_total'] = cir_mcap['circulating_market_cap'] / \
             cir_mcap['market_cap']
@@ -156,8 +159,8 @@ def get_cir_mcap(stock_list,
             )
             cir_mcap.loc[cir_mcap['code'] == stock,
                          'concentrated_ratio'] = circulating_concentrated_pct
-        if is_debug:
-            print(f"get_cir_mcap after size: {cir_mcap.shape[0]}")
+    if is_debug:
+        print(f"get_cir_mcap after size: {cir_mcap.shape[0]}")
     return cir_mcap
 
 
