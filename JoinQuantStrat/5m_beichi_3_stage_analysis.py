@@ -123,11 +123,11 @@ while True:
         td = datetime.datetime.combine(today, startTime) - datetime.datetime.combine(today, now)
         print("sleep till starting time for {0} seconds".format(td.total_seconds()))
         time.sleep(int(td.total_seconds()))
-        
-    run_initial_scan()
-    
-    print("finished wait for next trading day")
-    if now < endTime:
-        time.sleep(72000) # sleep for 20 hours
     else:
-        time.sleep(32400) # sleep for 9 hours
+        run_initial_scan()
+        
+        print("finished wait for next trading day")
+        if now < endTime:
+            time.sleep(72000) # sleep for 20 hours
+        else:
+            time.sleep(32400) # sleep for 9 hours
