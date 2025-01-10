@@ -10,7 +10,6 @@ pd.set_option('display.max_rows', 500)
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.width', 1000)
 
-  
 # 不同步的白名单，主要用于实盘易同步持仓时，不同步中的新股，需把新股代码添加到这里。https://www.joinquant.com/algorithm/index/edit?algorithmId=23c589f4594f827184d4f6f01a11b2f2
 # 可把while_list另外放到研究的一个py文件里
 def while_list():
@@ -24,6 +23,7 @@ def select_strategy(context):
     g.port_pos_control = 1.0 # 组合仓位控制参数
     g.monitor_levels = ['5d','1d','60m']
     g.buy_count = 8
+    g.money_fund = []
 
     ''' ---------------------配置 调仓条件判断规则-----------------------'''
     # 调仓条件判断

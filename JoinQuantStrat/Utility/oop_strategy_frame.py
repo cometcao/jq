@@ -76,18 +76,11 @@ class Global_variable(object):
     # 报单成功并成交（包括全部成交或部分成交，此时成交量大于0），返回True
     # 报单失败或者报单成功但被取消（此时成交量等于0），返回False
     # 报单成功，触发所有规则的when_buy_stock函数
-    def open_position(self, sender, security, value, pindex=0):
-        cur_price = get_close_price(security, 1, '1m')
-        if math.isnan(cur_price):
-            return False
-        # 通过当前价，四乘五入的计算要买的股票数。
-        amount = int(round(value / cur_price / 100) * 100)
-        new_value = amount * cur_price
-
-        order = order_target_value(security, new_value, pindex=pindex)
+    def open_position(self, sender, security, value):
+        order = order_value(security, value)
         if order != None and order.filled > 0:
             # 订单成功，则调用规则的买股事件 。（注：这里只适合市价，挂价单不适合这样处理）
-            self._owner.on_buy_stock(security, order, pindex,self.context)
+            self._owner.on_buy_stock(security, order, self.context)
             return True
         return False
 
