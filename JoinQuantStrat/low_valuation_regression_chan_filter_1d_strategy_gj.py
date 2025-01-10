@@ -1,7 +1,6 @@
 from common_include import *
 from oop_strategy_frame import *
 from oop_adjust_pos import *
-from oop_stop_loss import *
 from oop_select_stock import *
 from oop_sort_stock import *
 from oop_record_stats import *
@@ -15,28 +14,17 @@ pd.set_option('display.width', 1000)
 # 不同步的白名单，主要用于实盘易同步持仓时，不同步中的新股，需把新股代码添加到这里。https://www.joinquant.com/algorithm/index/edit?algorithmId=23c589f4594f827184d4f6f01a11b2f2
 # 可把while_list另外放到研究的一个py文件里
 def while_list():
-    return ['000001.XSHE']
+    return []
 
 # ==================================策略配置==============================================
 def select_strategy(context):
     g.strategy_memo = '混合策略'
     # **** 这里定义log输出的类类型,重要，一定要写。假如有需要自定义log，可更改这个变量
     g.log_type = Rule_loger
-    # 判断是运行回测还是运行模拟
-    g.is_sim_trade = context.run_params.type == 'sim_trade'
     g.port_pos_control = 1.0 # 组合仓位控制参数
     g.monitor_levels = ['5d','1d','60m']
     g.buy_count = 8
-    g.pb_limit = 5
-    g.ps_limit = 2.5
-    g.pe_limit = 200
-    g.evs_limit = 5
-    g.eve_limit = 5
-    index2 = '000971.XSHG'  # 大盘指数
-    index8 = '000842.XSHG'  # 小盘指数
-    g.money_fund = ['511880.XSHG','511010.XSHG','511220.XSHG']
-    g.etf = ["510050.XSHG","510180.XSHG","510300.XSHG", "159915.XSHE"]#"512880.XSHG","512660.XSHG",  "518880.XSHG", "510900.XSHG", "159901.XSHE"
-    
+
     ''' ---------------------配置 调仓条件判断规则-----------------------'''
     # 调仓条件判断
     adjust_condition_config = [
@@ -59,7 +47,6 @@ def select_strategy(context):
     pick_config = [
         [True, '', '多因子回归公式选股', Pick_Rank_Factor,{
                         'stock_num':34,
-                        # 'index_scope':['000016.XSHG','000300.XSHG', '000905.XSHG', '399673.XSHE','399005.XSHE'],
                         'index_scope':'all',
                         'use_np':False,
                         'use_enhanced':False,
@@ -110,10 +97,6 @@ def select_strategy(context):
     ]
 
     ''' --------------------------配置 4 调仓规则------------------ '''
-    # # 通达信持仓字段不同名校正
-    col_names = {'可用': u'可用', '市值': u'参考市值', '证券名称': u'证券名称', '资产': u'资产'
-        , '证券代码': u'证券代码', '证券数量': u'证券数量', '可卖数量': u'可卖数量', '当前价': u'当前价', '成本价': u'成本价'
-                 }
     adjust_position_config = [
         [True, '', '卖出股票', Sell_stocks, {}],
         [True, '', '买入股票', Buy_stocks, {
@@ -243,12 +226,6 @@ class Update_Params_Auto(Rule):
 
     def before_trading_start(self, context):
         if self.g.isFirstTradingDayOfWeek(context):
-            g.ps_limit = self.g.getFundamentalThrethold('valuation.ps_ratio', self.ps_threthold)
-            g.pb_limit = self.g.getFundamentalThrethold('valuation.pb_ratio', self.pb_threthold)
-            g.pe_limit = self.g.getFundamentalThrethold('valuation.pe_ratio', self.pe_threthold)
-            g.evs_limit = self.g.getFundamentalThrethold(evs_query_string, self.evs_threthold)
-            g.eve_limit = self.g.getFundamentalThrethold(eve_query_string, self.eve_threthold)
-            
             self.dynamicBuyCount(context)
             self.log.info("每周修改全局参数: ps_limit: %s pb_limit: %s pe_limit: %s buy_count: %s evs_limit: %s eve_limit: %s" % (g.ps_limit, g.pb_limit, g.pe_limit, g.buy_count, g.evs_limit, g.eve_limit))
         
