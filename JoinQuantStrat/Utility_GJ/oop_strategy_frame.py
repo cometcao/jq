@@ -71,88 +71,71 @@ class Global_variable(object):
         self._owner = owner
 
     ''' ==============================持仓操作函数，共用================================'''
+    def workout_num_hand(self, security, data, value):
+        cur_price = data[security]['close']
+        if math.isnan(cur_price):
+            return False, 0
+        amount = int(round(value / cur_price / 100) * 100)
+        new_value = amount * cur_price
+        return True, new_value
 
     # 开仓，买入指定价值的证券
     # 报单成功并成交（包括全部成交或部分成交，此时成交量大于0），返回True
     # 报单失败或者报单成功但被取消（此时成交量等于0），返回False
     # 报单成功，触发所有规则的when_buy_stock函数
-    def open_position(self, sender, security, value):
-        order = order_value(security, value)
-        if order != None and order.filled > 0:
+    def open_position(self, sender, security, value, data):
+        order_id = order_value(security, value)
+        if order_id != None:
+            order = get_order(order_id)[0]
+            if order.filled > 0:
             # 订单成功，则调用规则的买股事件 。（注：这里只适合市价，挂价单不适合这样处理）
-            self._owner.on_buy_stock(security, order, self.context)
-            return True
+                self._owner.on_buy_stock(security, order, self.context)
+                return True
         return False
 
-
-    def adjust_position(self, context, security, value, pindex=0):
-        cur_price = get_close_price(security, 1, '1m')
-        if math.isnan(cur_price):
-            return False
-        # 通过当前价，四乘五入的计算要买的股票数。
-        amount = int(round(value / cur_price / 100) * 100)
-        new_value = amount * cur_price
-
-        if security in context.subportfolios[pindex].long_positions.keys() and\
-            abs(1 - context.subportfolios[pindex].long_positions[security].value/new_value) <= 0.055:
+    def adjust_position(self, context, security, value):
+        if get_position(security).amount > 0:
+            pos_value = get_position(security).amount * get_position(security).last_sale_price
+            abs(1 - pos_value/value) <= 0.055:
             return True # don't need to make adjustments
 
-        order = order_target_value(security, new_value, pindex=pindex)
-        if order != None and order.filled > 0:
-            # 订单成功，则调用规则的买股事件 。（注：这里只适合市价，挂价单不适合这样处理）
-            self._owner.on_buy_stock(security, order, pindex,self.context)
-            return True
-        return False        
+        order_id = order_target_value(security, value)
+        if order_id != None:
+            order = get_order(order_id)[0]
+            if order.filled > 0:
+                # 订单成功，则调用规则的买股事件 。（注：这里只适合市价，挂价单不适合这样处理）
+                self._owner.on_buy_stock(security, order, self.context)
+                return True
+        return False
 
-
-
-    # 按指定股数下单
-    def order(self, sender, security, amount, pindex=0):
-        cur_price = get_close_price(security, 1, '1m')
-        if math.isnan(cur_price):
-            return False
-        position = self.context.subportfolios[pindex].long_positions[security] if self.context is not None else None
-        _order = order(security, amount, pindex=pindex)
-        if _order != None and _order.filled > 0:
-            # 订单成功，则调用规则的买股事件 。（注：这里只适合市价，挂价单不适合这样处理）
-            if amount > 0:
-                self._owner.on_buy_stock(security, _order, pindex,self.context)
-            elif position is not None:
-                self._owner.on_sell_stock(position, _order, pindex,self.context)
-            return _order
-        return _order
 
     # 平仓，卖出指定持仓
     # 平仓成功并全部成交，返回True
     # 报单失败或者报单成功但被取消（此时成交量等于0），或者报单非全部成交，返回False
     # 报单成功，触发所有规则的when_sell_stock函数
-    def close_position(self, sender, position, is_normal=True, pindex=0):
-        security = position.security
-        order = order_target_value(security, 0, pindex=pindex)  # 可能会因停牌失败
+    def close_position(self, sender, position, is_normal=True):
+        security = position.sid
+        order_id = order_target_value(security, 0)  # 可能会因停牌失败
         if order != None:
-            if order.filled > 0:
-                self._owner.on_sell_stock(position, order, is_normal, pindex,self.context)
+            order = get_order(order_id)[0]
+            if order.filled != 0: #成交数量，买入时为正数，卖出时为负数
+                self._owner.on_sell_stock(position, order, is_normal,self.context)
                 if security not in self.sell_stocks:
                     self.sell_stocks.append(security)
                 return True
             else:
                 print("卖出%s失败, 尝试跌停价挂单" % (security))
-                current_data = get_current_data()
-                lo = LimitOrderStyle(current_data[security].low_limit)
-                order_target_value(security, 0, style=lo, pindex=pindex) # 尝试跌停卖出
+                snap_shot =get_snapshot(security)
+                order_target_value(security, 0, limit_price=snap_shot.low_limit) # 尝试跌停卖出
         return False
 
     # 清空卖出所有持仓
     # 清仓时，调用所有规则的 when_clear_position
-    def clear_position(self, sender, context, pindexs=[0]):
-        pindexs = self._owner.before_clear_position(context, pindexs)
-        # 对传入的子仓集合进行遍历清仓
-        for pindex in pindexs:
-            if context.subportfolios[pindex].long_positions:
-                sender.log.info(("[%d]==> 清仓，卖出所有股票") % (pindex))
-                for stock in context.subportfolios[pindex].long_positions.keys():
-                    position = context.subportfolios[pindex].long_positions[stock]
-                    self.close_position(sender, position, False, pindex)
+    def clear_position(self, sender, context):
+        if context.porfolio.positions_value > 0:
+            sender.log.info(("清仓，卖出所有股票"))
+            for position in context.portfolio.positions:
+                self.close_position(sender, position, False)
         # 调用规则器的清仓事件
         self._owner.on_clear_position(context, pindexs)
         
@@ -160,10 +143,10 @@ class Global_variable(object):
         self.send_port_info(context)
         
     def send_port_info(self, context):
-        port_msg = [(context.portfolio.positions[stock].security, context.portfolio.positions[stock].total_amount * context.portfolio.positions[stock].price / context.portfolio.total_value) for stock in context.portfolio.positions]
+        port_msg = self.getCurrentPosRatio(context)
         print(str(port_msg))
-        if context.run_params.type == 'sim_trade':
-            send_message(port_msg, channel='weixin')
+        if is_trade():
+            pass
 
     # 通过对象名 获取对象
     def get_obj_by_name(self, name):
@@ -223,25 +206,12 @@ class Global_variable(object):
             return False
     
     def getCurrentPosRatio(self, context):
-        total_value = context.portfolio.total_value
+        total_value = context.portfolio.positions_value
         pos_ratio = {}
-        for stock in context.portfolio.positions:
+        for stock in context.portfolio.positions.keys():
             pos = context.portfolio.positions[stock]
-            pos_ratio[stock] = (pos.total_amount * pos.price) / total_value
+            pos_ratio[stock] = (pos.amount * pos.last_sale_price) / total_value
         return pos_ratio
-    
-    def getFundamentalThrethold(self, factor, threthold = 0.95):
-        eval_factor = eval(factor)
-        queryDf = get_fundamentals(query(
-            eval_factor, valuation.code
-            ).order_by(
-                eval_factor.asc()
-            ))
-        queryDf = queryDf.dropna()
-        total_num = queryDf.shape[0]
-        threthold_index = int(total_num * threthold)
-        return queryDf[queryDf.columns.values[0]][threthold_index]  
-
 
 # ''' ==============================规则基类================================'''
 class Rule(object):
