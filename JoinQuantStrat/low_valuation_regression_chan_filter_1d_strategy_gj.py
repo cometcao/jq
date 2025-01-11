@@ -65,23 +65,13 @@ def select_strategy(context):
             'check_level':["1m", "5m", "30m", "60m", "1d"],
             'onhold_days': 2,
             }],
-        # [False, '2', '缠论卖点过滤', Filter_MA_CHAN_UP, {
-        #     'expected_zoushi_up':[ZouShi_Type.Qu_Shi_Up],
-        #     'expected_exhaustion_up':[Chan_Type.BEICHI],
-        #     'onhold_days': 2,
-        #     'check_level':["5m", "30m"],
-        #     }],
+
         [True, '2', '缠论卖点过滤', Filter_MA_CHAN_DOWN, {
             'expected_zoushi_down':[ZouShi_Type.Qu_Shi_Down, ZouShi_Type.Pan_Zheng], #ZouShi_Type.Qu_Shi_Down ZouShi_Type.Pan_Zheng
             'expected_exhaustion_down':[Chan_Type.INVIGORATE], #Chan_Type.PANBEI 
             'check_level':["1d"],
             'onhold_days': 1,
             }],
-        # [True, '', '缠论卖点过滤', Filter_SD_CHAN, {
-        #     'expected_current_types':[Chan_Type.I, Chan_Type.I_weak], 
-        #     'check_level':["30m", "5m"],
-        #     'onhold_days': 15
-        #     }],
 
         [True, '', '获取最终选股数', Filter_buy_count, {
             'buy_count': 13  # 最终入选股票数
@@ -121,15 +111,7 @@ def select_strategy(context):
         [True, '', '手续费设置器', Set_slip_fee, {}],
         [True, '', '持仓信息打印器', Show_position, {}],
         [True, '', '统计执行器', Stat, {'trade_stats':False}],
-        [False, '', '自动调参器', Update_Params_Auto, {
-            'ps_threthold':0.618,
-            'pb_threthold':0.618,
-            'pe_threthold':0.809,
-            'buy_threthold':0.809,
-            'evs_threthold':0.618,
-            'eve_threthold':0.618,
-            'pos_control_value': 1.0
-        }],
+        [False, '', '自动调参器', Update_Params_Auto, {}],
     ]
     common_config = [
         [True, '_other_pre_', '预先处理的辅助规则', Group_rules, {
@@ -216,56 +198,15 @@ def after_code_changed(context):
 class Update_Params_Auto(Rule):
     def __init__(self, params):
         Rule.__init__(self, params)
-        self.ps_threthold = params.get('ps_threthold',0.8)
-        self.pb_threthold = params.get('pb_threthold',0.618)
-        self.pe_threthold = params.get('pe_threthold',0.8)
-        self.evs_threthold = params.get('evs_threthold',0.618)
-        self.eve_threthold = params.get('eve_threthold',0.618)
-        self.buy_threthold = params.get('buy_threthold', 0.9)
-        self.pos_control_value = params.get('pos_control_value', 0.5)
 
     def before_trading_start(self, context):
         if self.g.isFirstTradingDayOfWeek(context):
             self.dynamicBuyCount(context)
             self.log.info("每周修改全局参数: ps_limit: %s pb_limit: %s pe_limit: %s buy_count: %s evs_limit: %s eve_limit: %s" % (g.ps_limit, g.pb_limit, g.pe_limit, g.buy_count, g.evs_limit, g.eve_limit))
-        
-        # self.log.info("每日修改全局参数: port_pos_control: %s" % (g.port_pos_control))
-        #self.updateRelaventRules(context)
     
     def dynamicBuyCount(self, context):
         import math
         g.buy_count = int(math.ceil(math.log(context.portfolio.portfolio_value/10000)))
-        # stock_list = get_index_stocks('000300.XSHG')
-        # stock_list_df = history(1, unit='1d', field='avg', security_list=stock_list, df=True, skip_paused=False, fq='pre')
-        # stock_list_df = stock_list_df.transpose()
-        # stock_list_df = stock_list_df.sort(stock_list_df.columns.values[0], ascending=True, axis=0)
-        # threthold_price = stock_list_df.iloc[int(self.buy_threthold * 300),0] # 000300
-        # g.buy_count = int(context.portfolio.portfolio_value / (threthold_price * 1000)) # 10手
-        
-
-    def updateRelaventRules(self, context):
-        # print g.main.rules
-        # update everything
-        for rule in g.main.rules:
-            if isinstance(rule, Pick_stocks2):
-                for r2 in rule.rules:
-                    if isinstance(r2, Filter_financial_data2):
-                        r2.update_params(context, {
-                            'factors': [
-                                        FD_Factor('valuation.ps_ratio', min=0, max=g.ps_limit),
-                                        FD_Factor('valuation.pe_ratio', min=0, max=g.pe_limit),
-                                        FD_Factor('valuation.pb_ratio', min=0, max=g.pb_limit),
-                                        # FD_Factor(evs_query_string, min=0, max=g.evs_limit, isComplex=True),
-                                        # FD_Factor(eve_query_string, min=0, max=g.eve_limit, isComplex=True),
-                                        ],
-                            'order_by': 'valuation.circulating_market_cap',
-                            'sort': SortType.asc,
-                            'by_sector':False,
-                            'limit':50})
-            if isinstance(rule, Adjust_position):
-                for r3 in rule.rules:
-                    if isinstance(r3, Buy_stocks_chan) or isinstance(r3, Buy_stocks_var):
-                        r3.update_params(context, {'buy_count': g.buy_count, 'pos_control': g.port_pos_control})
 
     def __str__(self):
         return '参数自动调整'
