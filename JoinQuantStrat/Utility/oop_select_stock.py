@@ -44,6 +44,8 @@ class Pick_stocks2(Group_rules):
         self.has_run = False
         self.file_path = params.get('write_to_file', None)
         self.add_etf = params.get('add_etf', False)
+        self.send_email = params.get('send_email', False) # email json config
+        self.email_file_name = params.get('email_file_name', self.file_path)
 
     def handle_data(self, context, data):
         try:
@@ -102,6 +104,10 @@ class Pick_stocks2(Group_rules):
             else:
                 write_file(self.file_path, ",".join(checking_stocks))
                 self.log.info('file written:{0}'.format(self.file_path))
+            if self.send_email:
+                from ttc_email import save_list_as_json, send_email_with_attachment
+                save_list_as_json(checking_stocks, self.email_file_name)
+                send_email_with_attachment(self.send_email, self.email_file_name)
         
     def __str__(self):
         return self.memo
