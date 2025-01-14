@@ -5,11 +5,7 @@ from email.mime.base import MIMEBase
 from email.mime.text import MIMEText
 from email import encoders
 
-def save_list_as_json(data, filename):
-    with open(filename, 'w') as f:
-        json.dump(data, f)
-
-def send_email_with_attachment(email_config_filename, attachment_filename):
+def send_email_with_attachment(email_config_filename):
     # Load email configuration from JSON file
     with open(email_config_filename, 'r') as f:
         email_config = json.load(f)
@@ -21,6 +17,7 @@ def send_email_with_attachment(email_config_filename, attachment_filename):
     body = email_config['body']
     smtp_address = email_config["smtp_address"]
     smtp_port = email_config["smtp_port"]
+    attachment_filename = email_config["attachment_filename"]
 
     # Create a multipart message
     msg = MIMEMultipart()
@@ -50,10 +47,6 @@ def send_email_with_attachment(email_config_filename, attachment_filename):
         except:
             print("Email failed")
 # Example usage:
-# data = ["string1", "string2", "string3"]
 
 # email_config_filename = "email_config.json"
-# data_json_file = "email_test.json"
-# save_list_as_json(data, data_json_file)
-
 # send_email_with_attachment(email_config_filename)

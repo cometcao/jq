@@ -24,21 +24,40 @@ def select_mailbox(mail, mailbox="INBOX"):
     if status != "OK":
         raise Exception(f"Failed to select mailbox '{mailbox}'")
 
-def search_emails(mail, target_subject):
-    today = datetime.now().strftime("%d-%b-%Y")
-    status, messages = mail.search(None, f'(SUBJECT "{target_subject}" SINCE {today})')
-    # status, messages = mail.search(None, "Unseen")
+def search_emails(mail):
+    status, messages = mail.search(None, "Unseen")
     if status != "OK":
-        print(messages)
-        raise Exception(f"Failed to search emails with subject '{target_subject}' received today")
+        raise Exception("Failed to search for unseen emails")
     return messages[0].split()
 
-def fetch_latest_email(mail, email_ids):
-    latest_email_id = email_ids[-1]
-    status, msg_data = mail.fetch(latest_email_id, "(RFC822)")
-    if status != "OK":
-        raise Exception(f"Failed to fetch email ID {latest_email_id}")
-    return latest_email_id, msg_data
+def fetch_latest_email(mail, email_ids, target_subject):
+    latest_email_id = None
+    latest_email_date = None
+    latest_msg_data = None
+
+    for email_id in email_ids:
+        status, msg_data = mail.fetch(email_id, "(RFC822)")
+        if status != "OK":
+            continue
+        
+        msg = email.message_from_bytes(msg_data[0][1])
+        subject, encoding = decode_header(msg["Subject"])[0]
+        if isinstance(subject, bytes):
+            subject = subject.decode(encoding if encoding else "utf-8")
+        
+        if target_subject in subject:
+            date = msg["Date"]
+            msg_date = datetime.strptime(date[:25], "%a, %d %b %Y %H:%M:%S")
+            
+            if latest_email_date is None or msg_date > latest_email_date:
+                latest_email_id = email_id
+                latest_email_date = msg_date
+                latest_msg_data = msg_data
+
+    if latest_email_id is None:
+        raise Exception(f"No emails found with subject '{target_subject}'")
+
+    return latest_email_id, latest_msg_data
 
 def process_email(msg_data, save_directory):
     for response_part in msg_data:
@@ -64,17 +83,18 @@ def check_email_and_save_attachment(config_filename):
     try_count = 0
     max_retries = 3
     while try_count < max_retries:
+        try_count += 1
         try:
             config = load_config(config_filename)
             mail = connect_to_mail_server(config['imap_server'], config['email_user'], config['email_pass'])
-            select_mailbox(mail, "INBOX")  # Ensure the mailbox is selected before searching
-            email_ids = search_emails(mail, config['target_subject'])
+            select_mailbox(mail, "INBOX") # Ensure the mailbox is selected before searching
+            email_ids = search_emails(mail)
             
             if not email_ids:
-                print("No emails found for today.")
-                raise Exception("No emails found for today.")
+                print("No unseen emails found.")
+                return
             
-            latest_email_id, msg_data = fetch_latest_email(mail, email_ids)
+            latest_email_id, msg_data = fetch_latest_email(mail, email_ids, config['target_subject'])
             process_email(msg_data, config['save_directory'])
             
             mail.store(latest_email_id, "+FLAGS", "\\Deleted")
@@ -83,15 +103,17 @@ def check_email_and_save_attachment(config_filename):
             break  # Exit the loop if successful
         except imaplib.IMAP4.error as e:
             print(f"IMAP error: {e}")
+            traceback.print_exc()
         except FileNotFoundError as e:
             print(f"File not found: {e}")
+            traceback.print_exc()
         except json.JSONDecodeError as e:
             print(f"JSON decode error: {e}")
+            traceback.print_exc()
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
-            # traceback.print_exc()
-        finally:
-            try_count += 1
+            traceback.print_exc()
+        
         print(f"Retrying... ({try_count}/{max_retries})")
         time.sleep(10)  # Wait for 10 seconds before retrying
 
@@ -114,20 +136,6 @@ def run_daily_at_specific_time(config_filename, run_time=None):
             check_email_and_save_attachment(config_filename)
 
 if __name__ == "__main__":
-    config = {
-        "imap_server": "imap.163.com",
-        "email_user": "17317768857@163.com",
-        "email_pass": "DJiYmKrzUj842sg8",
-        "save_directory": ".",
-        "target_subject": "TTC1"
-    }
-
-    config_filename = "config.json"
-    
-    with open(config_filename, 'w') as f:
-        json.dump(config, f)
-
-    os.makedirs(config['save_directory'], exist_ok=True)
-
+    config_filename = "email_reader_config.json"
     run_time = None
     run_daily_at_specific_time(config_filename, run_time)
