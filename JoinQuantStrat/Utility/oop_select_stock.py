@@ -37,6 +37,10 @@ def sort_by_sector_try(sector_list, value):
     except:
         return 999
 
+def save_data_as_json(data, filename):
+    result_json=json.dumps(data)
+    write_file(filename, result_json)
+
 # '''-----------------选股组合器2-----------------------'''
 class Pick_stocks2(Group_rules):
     def __init__(self, params):
@@ -45,7 +49,6 @@ class Pick_stocks2(Group_rules):
         self.file_path = params.get('write_to_file', None)
         self.add_etf = params.get('add_etf', False)
         self.send_email = params.get('send_email', False) # email json config
-        self.email_file_name = params.get('email_file_name', self.file_path)
 
     def handle_data(self, context, data):
         try:
@@ -99,15 +102,11 @@ class Pick_stocks2(Group_rules):
         if self.add_etf:
             checking_stocks = checking_stocks + g.etf
         if self.file_path:
-            if self.file_path == "daily":
-                write_file("daily_stocks/{0}.txt".format(str(context.current_dt.date())), ",".join(checking_stocks))    
-            else:
-                write_file(self.file_path, ",".join(checking_stocks))
-                self.log.info('file written:{0}'.format(self.file_path))
+            save_data_as_json(checking_stocks, self.file_path)
+            self.log.info('file written:{0}'.format(self.file_path))
             if self.send_email:
-                from ttc_email import save_list_as_json, send_email_with_attachment
-                save_list_as_json(checking_stocks, self.email_file_name)
-                send_email_with_attachment(self.send_email, self.email_file_name)
+                from ttc_email import send_email_with_attachment
+                send_email_with_attachment(self.send_email, self.file_path)
         
     def __str__(self):
         return self.memo
