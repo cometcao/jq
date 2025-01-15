@@ -71,7 +71,15 @@ class Pick_stocks2(Group_rules):
                 stock_list = rule.filter(context, data, stock_list)
                 
         # add the ETF index into list this is already done in oop_stop_loss, dirty hack
-        self.g.monitor_buy_list = stock_list 
+        self.g.monitor_buy_list = stock_list
+        
+        if self.file_path:
+            save_data_as_json(stock_list, self.file_path)
+            self.log.info('file written:{0}'.format(self.file_path))
+            if self.send_email:
+                from ttc_email import send_email_with_attachment
+                send_email_with_attachment(self.send_email)
+
         self.log.info('今日选股:\n' + join_list(["[%s]" % (show_stock(x)) for x in stock_list], ' ', 10))
         self.has_run = True
 
@@ -101,13 +109,7 @@ class Pick_stocks2(Group_rules):
         checking_stocks = [stock for stock in list(set(self.g.buy_stocks+list(context.portfolio.positions.keys()))) if stock not in g.money_fund]
         if self.add_etf:
             checking_stocks = checking_stocks + g.etf
-        if self.file_path:
-            save_data_as_json(checking_stocks, self.file_path)
-            self.log.info('file written:{0}'.format(self.file_path))
-            if self.send_email:
-                from ttc_email import send_email_with_attachment
-                send_email_with_attachment(self.send_email, self.file_path)
-        
+
     def __str__(self):
         return self.memo
 
