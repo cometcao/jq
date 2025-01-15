@@ -76,7 +76,7 @@ class Pick_stocks2(Group_rules):
         if self.file_path:
             save_data_as_json(stock_list, self.file_path)
             self.log.info('file written:{0}'.format(self.file_path))
-            if self.send_email:
+            if self.send_email and g.is_sim_trade:
                 from ttc_email import send_email_with_attachment
                 send_email_with_attachment(self.send_email)
 
