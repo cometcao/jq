@@ -50,6 +50,9 @@ class Pick_stocks2(Group_rules):
         self.add_etf = params.get('add_etf', False)
         self.send_email = params.get('send_email', False) # email json config
 
+    def update_params(self, context, params):
+        self.send_email = params.get('send_email', False)
+
     def handle_data(self, context, data):
         try:
             to_run_one = self._params.get('day_only_run_one', False)
