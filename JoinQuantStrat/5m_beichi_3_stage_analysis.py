@@ -122,7 +122,7 @@ while True:
     if now < startTime:
         td = datetime.datetime.combine(today, startTime) - datetime.datetime.combine(today, now)
         print("sleep till starting time for {0} seconds".format(td.total_seconds()))
-        time.sleep(int(td.total_seconds()))
+        time.sleep(int(td.total_seconds()) + 5)
     else:
         run_initial_scan()
         
