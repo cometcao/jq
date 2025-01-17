@@ -75,14 +75,6 @@ class Pick_stocks2(Group_rules):
                 
         # add the ETF index into list this is already done in oop_stop_loss, dirty hack
         self.g.monitor_buy_list = stock_list
-        
-        if self.file_path:
-            save_data_as_json(stock_list, self.file_path)
-            self.log.info('file written:{0}'.format(self.file_path))
-            if self.send_email and g.is_sim_trade:
-                from ttc_email import send_email_with_attachment
-                send_email_with_attachment(self.send_email)
-
         self.log.info('今日选股:\n' + join_list(["[%s]" % (show_stock(x)) for x in stock_list], ' ', 10))
         self.has_run = True
 
@@ -112,6 +104,12 @@ class Pick_stocks2(Group_rules):
         checking_stocks = [stock for stock in list(set(self.g.buy_stocks+list(context.portfolio.positions.keys()))) if stock not in g.money_fund]
         if self.add_etf:
             checking_stocks = checking_stocks + g.etf
+        if self.file_path:
+            save_data_as_json(checking_stocks, self.file_path)
+            self.log.info('file written:{0}'.format(self.file_path))
+            if self.send_email and g.is_sim_trade:
+                from ttc_email import send_email_with_attachment
+                send_email_with_attachment(self.send_email)
 
     def __str__(self):
         return self.memo
@@ -2210,6 +2208,70 @@ class Filter_sti(Early_Filter_stock_list):
     def __str__(self):
         return '过滤科创板股票'
 
+class Filter_common_early(Early_Filter_stock_list):
+    def __init__(self, params):
+        self.filters = params.get('filters', ['st', 'high_limit', 'low_limit', 'pause','ban'])
+
+    def set_feasible_stocks(self, initial_stocks, current_data):
+        # 判断初始股票池的股票是否停牌，返回list
+        paused_info = []
+        
+        for i in initial_stocks:
+            paused_info.append(current_data[i].paused)
+        df_paused_info = pd.DataFrame({'paused_info':paused_info},index = initial_stocks)
+        unsuspened_stocks =list(df_paused_info.index[df_paused_info.paused_info == False])
+        return unsuspened_stocks
+
+    def filter(self, context, stock_list):
+        # print("before common filter list: {0}".format(stock_list))
+        current_data = get_current_data()
+        
+        # filter out paused stocks
+#         stock_list = self.set_feasible_stocks(stock_list, current_data)
+        
+        if 'st' in self.filters:
+            stock_list = [stock for stock in stock_list
+                          if not current_data[stock].is_st
+                          and 'ST' not in current_data[stock].name
+                          and '*' not in current_data[stock].name
+                          and '退' not in current_data[stock].name]
+        try:
+            if 'high_limit' in self.filters:
+                stock_list = [stock for stock in stock_list if stock in context.portfolio.positions.keys()
+                              or current_data[stock].last_price < current_data[stock].high_limit]
+            if 'low_limit' in self.filters:
+                stock_list = [stock for stock in stock_list if stock in context.portfolio.positions.keys()
+                              or current_data[stock].last_price > current_data[stock].low_limit]
+        except Exception as e:
+            self.log.error(str(e))
+            
+        if 'pause' in self.filters:
+            stock_list = [stock for stock in stock_list if not current_data[stock].paused]
+            
+        try:
+            if 'ban' in self.filters:
+                ban_shares = self.get_ban_shares(context)
+                stock_list = [stock for stock in stock_list if stock[:6] not in ban_shares]
+        except Exception as e:
+            self.log.error(str(e))
+        
+        self.log.info("选股过滤（显示前五）:\n{0}, total: {1}".format(join_list(["[%s]" % (show_stock(x)) for x in stock_list[:5]], ' ', 10), len(stock_list)))
+        return stock_list
+
+    #获取解禁股列表
+    def get_ban_shares(self, context):
+        curr_year = context.current_dt.year
+        curr_month = context.current_dt.month
+        jj_range = [((curr_year*12+curr_month+i-1)/12,curr_year*12+curr_month+i-(curr_year*12+curr_month+i-1)/12*12) for i in range(-1,1)] #range 可指定解禁股的时间范围，单位为月
+        df_jj = reduce(lambda x,y:pd.concat([x,y],axis=0), [ts.xsg_data(year=y, month=m) for (y,m) in jj_range])
+        return df_jj.code.values
+
+    def update_params(self, context, params):
+        self.filters = params.get('filters', ['st', 'high_limit', 'low_limit', 'pause']) # ,'ban'
+
+    def __str__(self):
+        return '一般性股票过滤器:%s' % (str(self.filters))
+
 class Filter_common(Filter_stock_list):
     def __init__(self, params):
         self.filters = params.get('filters', ['st', 'high_limit', 'low_limit', 'pause','ban'])
@@ -2318,7 +2380,157 @@ class Filter_Money_Flow(Filter_stock_list):
     def __str__(self):
         return '过滤主力净流入负数的股票'
 
+#######################################################
+class Filter_MA_CHAN_UP_EARLY(Early_Filter_stock_list):
+    def __init__(self, params):
+        self.expected_zoushi_up = params.get("expected_zoushi_up", []) # ZouShi_Type.Pan_Zheng_Composite, ZouShi_Type.Pan_Zheng
+        self.expected_exhaustion_up = params.get("expected_exhaustion_up", []) # Chan_Type.PANBEI, Chan_Type.BEICHI
+        # order small -> big
+        self.check_level = params.get("check_level", ["5m", "30m"])
+        self.onhold_days = params.get('onhold_days', 2)
+        self.stock_remove_list = {}
 
+    def get_count(self, period):
+        if period == '1d':
+            return 180
+        elif period == '120m':
+            return 237
+        elif period == '90m':
+            return 356
+        elif period == '60m':
+            return 712
+        elif period == '30m':
+            return 1200
+        elif period == '15m':
+            return 1500
+        elif period == '5m':
+            return 1800
+        else:
+            return 1800
+    
+    def filter(self, context, stock_list):
+        # filter out any stock that are at sell point!
+        
+        stock_to_remove = []
+        for stock in stock_list:
+            fullfill_condition = ""
+            for level in self.check_level:
+                
+                stock_data = get_bars(stock, 
+                                       count=self.get_count(level), 
+                                       end_dt=None, 
+                                       unit=level,
+                                       fields= ['date','high', 'low'], 
+                                       df = False,
+                                       include_now=True)
+                
+                min_loc = int(np.where(stock_data['low'] == min(stock_data['low']))[0][-1])
+                bot_time = stock_data[min_loc]['date']
+                bot_count = len(stock_data['low']) - min_loc
+                if bot_count <= 0:
+                    break
+                result_zoushi_up, result_exhaustion_up = analyze_MA_zoushi_by_stock(stock=stock,
+                                                                  period=level, 
+                                                                  count=bot_count,
+                                                                   end_dt=None, 
+                                                                   df=False, 
+                                                                   zoushi_types=self.expected_zoushi_up, 
+                                                                   direction=TopBotType.bot2top)
+                if result_zoushi_up in self.expected_zoushi_up and result_exhaustion_up in self.expected_exhaustion_up:
+                    print("{0} zoushi: {1} exhaustion UP:{2} level:{3}".format(stock, result_zoushi_up, result_exhaustion_up, level))
+                    fullfill_condition = level
+                else:
+                    break
+                
+            if fullfill_condition:
+                stock_to_remove.append(stock)
+                self.stock_remove_list[stock] = self.onhold_days * self.get_count("") // self.get_count(level)
+        self.log.info("stocks removed: {0}".format(stock_to_remove))
+        return [stock for stock in stock_list if stock not in stock_to_remove and stock not in self.stock_remove_list]
+                    
+    def after_trading_end(self, context):
+        # auto increment and delete entries over the onhold days
+        self.stock_remove_list = {a:(b-1) for a, b in self.stock_remove_list.items() if b-1 > 0}
+        print(self.stock_remove_list)
+    
+    def __str__(self):
+        return '缠论分析过滤UP: {0}'.format(self.check_level) 
+    
+class Filter_MA_CHAN_DOWN_EARLY(Early_Filter_stock_list):
+    def __init__(self, params):
+        self.expected_zoushi_down = params.get("expected_zoushi_down", []) # ZouShi_Type.Pan_ZhengZouShi_Type.Qu_Shi_Down, 
+        self.expected_exhaustion_down = params.get("expected_exhaustion_down", []) #Chan_Type.PANBEI, Chan_Type.BEICHI
+        self.check_level = params.get("check_level", ["5m", "30m"])
+        self.onhold_days = params.get('onhold_days', 2)
+        self.stock_remove_list = {}
+
+    def get_count(self, period):
+        if period == '1d':
+            return 180
+        elif period == '120m':
+            return 237
+        elif period == '90m':
+            return 356
+        elif period == '60m':
+            return 712
+        elif period == '30m':
+            return 1200
+        elif period == '15m':
+            return 1500
+        elif period == '5m':
+            return 1800
+        else:
+            return 1800
+    
+    def filter(self, context, stock_list):
+        # filter out any stock that are at sell point!
+        
+        stock_to_remove = []
+        for stock in stock_list:
+            fullfill_condition = True
+            for level in self.check_level:
+                
+                stock_data = get_bars(stock, 
+                                       count=self.get_count(level), 
+                                       end_dt=None, 
+                                       unit=level,
+                                       fields= ['date','high', 'low'], 
+                                       df = False,
+                                       include_now=True)
+                
+                max_loc = int(np.where(stock_data['high'] == max(stock_data['high']))[0][-1])
+                top_time = stock_data[max_loc]['date']
+                top_count = len(stock_data['high']) - max_loc
+                if top_count > 0:
+                    result_zoushi_down, result_exhaustion_down = analyze_MA_zoushi_by_stock(stock=stock,
+                                                                      period=level, 
+                                                                      count=top_count,
+                                                                       end_dt=None, 
+                                                                       df=False, 
+                                                                       zoushi_types=self.expected_zoushi_down, 
+                                                                       direction=TopBotType.top2bot)
+                    if result_zoushi_down in self.expected_zoushi_down and result_exhaustion_down in self.expected_exhaustion_down:
+                        print("{0} zoushi: {1} exhaustion down:{2} level:{3}".format(stock, result_zoushi_down, result_exhaustion_down, level))
+                    else:
+                        fullfill_condition = False
+                        break
+                else:
+                    fullfill_condition = False
+                    break
+            if fullfill_condition:
+                stock_to_remove.append(stock)
+                self.stock_remove_list[stock] = self.onhold_days * self.get_count("") // self.get_count(self.check_level[-1])
+        self.log.info("stocks removed: {0}".format(stock_to_remove))
+        return [stock for stock in stock_list if stock not in stock_to_remove and stock not in self.stock_remove_list]
+                    
+    def after_trading_end(self, context):
+        # auto increment and delete entries over the onhold days
+        self.stock_remove_list = {a:(b-1) for a, b in self.stock_remove_list.items() if b-1 > 0}
+        print(self.stock_remove_list)
+    
+    def __str__(self):
+        return '缠论分析过滤DOWN: {0}'.format(self.check_level) 
+    
 #######################################################
 class Filter_MA_CHAN_UP(Filter_stock_list):
     def __init__(self, params):
