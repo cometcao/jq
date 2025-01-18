@@ -27,7 +27,7 @@ def select_mailbox(mail, mailbox="INBOX"):
 def search_emails(mail):
     status, messages = mail.search(None, "Unseen")
     if status != "OK":
-        raise Exception("Failed to search for unseen emails")
+        print("Failed to search for unseen emails")
     return messages[0].split()
 
 def fetch_latest_email(mail, email_ids, target_subject):
@@ -55,7 +55,7 @@ def fetch_latest_email(mail, email_ids, target_subject):
                 latest_msg_data = msg_data
 
     if latest_email_id is None:
-        raise Exception(f"No emails found with subject '{target_subject}'")
+        print(f"No emails found with subject '{target_subject}'")
 
     return latest_email_id, latest_msg_data
 
@@ -79,20 +79,20 @@ def process_email(msg_data, save_directory):
                                     f.write(part.get_payload(decode=True))
                                 print(f"Attachment saved: {filepath}")
 
-def check_email_and_save_attachment(config_filename):
+def check_email_and_save_attachment(config):
     try_count = 0
     max_retries = 3
     while try_count < max_retries:
+        now = datetime.now()
         try_count += 1
         try:
-            config = load_config(config_filename)
             mail = connect_to_mail_server(config['imap_server'], config['email_user'], config['email_pass'])
             select_mailbox(mail, "INBOX") # Ensure the mailbox is selected before searching
             email_ids = search_emails(mail)
             
             if not email_ids:
-                print("No unseen emails found.")
-                return
+                print(f"current time: {now} No unseen emails found.")
+                continue
             
             latest_email_id, msg_data = fetch_latest_email(mail, email_ids, config['target_subject'])
             process_email(msg_data, config['save_directory'])
@@ -113,14 +113,16 @@ def check_email_and_save_attachment(config_filename):
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
             traceback.print_exc()
-        
-        print(f"Retrying... ({try_count}/{max_retries})")
-        time.sleep(10)  # Wait for 10 seconds before retrying
+        finally:
+            print(f"current time: {now} Retrying... ({try_count}/{max_retries})")
+            time.sleep(10)  # Wait for 10 seconds before retrying
 
-def run_daily_at_specific_time(config_filename, run_time=None):
+def run_daily_at_specific_time(config_filename):
+    config = load_config(config_filename)
+    run_time = config["run_time"]
     while True:
-        if run_time is None:
-            check_email_and_save_attachment(config_filename)
+        if not run_time:
+            check_email_and_save_attachment(config)
         else:
             now = datetime.now()
             target_time = datetime.strptime(run_time, "%H:%M").replace(year=now.year, month=now.month, day=now.day)
@@ -129,13 +131,12 @@ def run_daily_at_specific_time(config_filename, run_time=None):
                 target_time += timedelta(days=1)
 
             sleep_duration = (target_time - now).total_seconds()
-            print(f"Sleeping for {sleep_duration} seconds until next run at {target_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"current time: {now} Sleeping for {sleep_duration} seconds until next run at {target_time.strftime('%Y-%m-%d %H:%M:%S')}")
             
             time.sleep(sleep_duration)
             
-            check_email_and_save_attachment(config_filename)
+            check_email_and_save_attachment(config)
 
 if __name__ == "__main__":
     config_filename = "email_reader_config.json"
-    run_time = None
-    run_daily_at_specific_time(config_filename, run_time)
+    run_daily_at_specific_time(config_filename)
