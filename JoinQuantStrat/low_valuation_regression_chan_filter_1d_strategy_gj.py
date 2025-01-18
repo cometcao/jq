@@ -9,11 +9,7 @@ import pandas as pd
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.width', 1000)
-
-# 不同步的白名单，主要用于实盘易同步持仓时，不同步中的新股，需把新股代码添加到这里。https://www.joinquant.com/algorithm/index/edit?algorithmId=23c589f4594f827184d4f6f01a11b2f2
-# 可把while_list另外放到研究的一个py文件里
-def while_list():
-    return []
+NOTEBOOK_PATH = '/home/fly/notebook/'
 
 # ==================================策略配置==============================================
 def select_strategy(context):
@@ -45,32 +41,8 @@ def select_strategy(context):
 
     ''' --------------------------配置 选股规则----------------- '''
     pick_config = [
-        [True, '', '多因子回归公式选股', Pick_Rank_Factor,{
-                        'stock_num':34,
-                        'index_scope':'all',
-                        'use_np':False,
-                        'use_enhanced':False,
-                        'factor_num': 10,
-                        # 'train_length': 55,
-                        'is_debug':False,
-                        'factor_category': ['basics','quality', 'pershare', 'growth', 'style']##['basics', 'emotion', 'growth', 'momentum', 'pershare', 'quality', 'risk', 'style', 'technical']##
-            }],
-
-        [True, '', '过滤ST,停牌,涨跌停股票', Filter_common, {}],
-        # [False, '', '过滤创业板', Filter_gem, {}],
-        [True, '', '过滤科创板', Filter_sti, {}],
-        [True, '1', '缠论卖点过滤', Filter_MA_CHAN_UP, {
-            'expected_zoushi_up':[ZouShi_Type.Qu_Shi_Up], #ZouShi_Type.Pan_Zheng
-            'expected_exhaustion_up':[Chan_Type.BEICHI], #Chan_Type.PANBEI 
-            'check_level':["1m", "5m", "30m", "60m", "1d"],
-            'onhold_days': 2,
-            }],
-
-        [True, '2', '缠论卖点过滤', Filter_MA_CHAN_DOWN, {
-            'expected_zoushi_down':[ZouShi_Type.Qu_Shi_Down, ZouShi_Type.Pan_Zheng], #ZouShi_Type.Qu_Shi_Down ZouShi_Type.Pan_Zheng
-            'expected_exhaustion_down':[Chan_Type.INVIGORATE], #Chan_Type.PANBEI 
-            'check_level':["1d"],
-            'onhold_days': 1,
+        [True, '', '从研究文件中获取选股', Pick_stock_list_from_file,{
+            'filename': NOTEBOOK_PATH+filename,
             }],
 
         [True, '', '获取最终选股数', Filter_buy_count, {
@@ -81,7 +53,7 @@ def select_strategy(context):
         [True, '_pick_stocks_', '选股', Pick_stocks2, {
             'config': pick_config,
             'day_only_run_one': True, 
-            'write_to_file': 'low_valuation_regression.txt',
+            'write_to_file': None,
             'add_etf':False
         }]
     ]
@@ -202,7 +174,7 @@ class Update_Params_Auto(Rule):
     def before_trading_start(self, context):
         if self.g.isFirstTradingDayOfWeek(context):
             self.dynamicBuyCount(context)
-            self.log.info("每周修改全局参数: ps_limit: %s pb_limit: %s pe_limit: %s buy_count: %s evs_limit: %s eve_limit: %s" % (g.ps_limit, g.pb_limit, g.pe_limit, g.buy_count, g.evs_limit, g.eve_limit))
+            self.log.info("修改全局参数")
     
     def dynamicBuyCount(self, context):
         import math

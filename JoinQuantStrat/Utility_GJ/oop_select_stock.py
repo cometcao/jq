@@ -25,8 +25,6 @@ def sort_by_sector_try(sector_list, value):
         return 999
 
 # '''-----------------选股组合器2-----------------------'''
-
-
 class Pick_stocks2(Group_rules):
     def __init__(self, params):
         Group_rules.__init__(self, params)
@@ -102,10 +100,16 @@ class Pick_stock_list_from_file(Filter_stock_list):
         self.filename = params.get('filename', None)
 
     def filter(self, context, data, stock_list):
-        file_stock_list = read_file(self.filename)
+        try:
+            with open(NOTEBOOK_PATH+self.filename,'rb') as f:
+                stock_list = json.load(f)
+        #定义空的全局字典变量
+        except:
+            self.log.info(f"file {self.filename} read failed hold on current positions")
+            stock_list = list(context.portfolio.positions.keys())
         self.log.info("stocks {0} read from file {1}".format(
-            file_stock_list, self.filename))
-        return file_stock_list
+            stock_list, self.filename))
+        return stock_list
 
     def __str__(self):
         return "从文件中读取已经写好的股票列表"
