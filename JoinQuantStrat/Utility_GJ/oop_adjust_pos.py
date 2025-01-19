@@ -102,41 +102,22 @@ class Period_condition(Weight_Base):
 class Sell_stocks(Rule):
     def __init__(self, params):
         Rule.__init__(self, params)
-        self.use_short_filter = params.get('use_short_filter', False)
-        self.money_fund = params.get('money_fund', ['511880.XSHG'])
         
     def handle_data(self, context, data):
-        to_sell = context.portfolio.positions.keys()
-        if self.use_short_filter:
-            cta = checkTAIndicator_OR({
-                'TA_Indicators':[
-                                (TaType.MACD,'240m',233),
-                                (TaType.MACD,'120m',233),
-                                (TaType.MACD,'60m',233),
-                                (TaType.BOLL, '240m',100),
-                                (TaType.BOLL_UPPER, '1d',100),
-                                ],
-                'isLong':False})
-            to_sell = cta.filter(context, data,to_sell)
-        else:
-            to_sell = []
+        to_sell = []
         self.g.monitor_buy_list = [stock for stock in self.g.monitor_buy_list if stock not in to_sell]        
         self.adjust(context, data, self.g.monitor_buy_list)
 
     def adjust(self, context, data, buy_stocks):
         # 卖出不在待买股票列表中的股票
         # 对于因停牌等原因没有卖出的股票则继续持有
-        for pindex in self.g.op_pindexs:
-            for stock in context.subportfolios[pindex].long_positions.keys():
-                if stock not in buy_stocks and stock not in self.money_fund:
-                    position = context.subportfolios[pindex].long_positions[stock]
-                    self.g.close_position(self, position, True, pindex)
+        for stock in context.portfolio.positions.keys():
+            if stock not in buy_stocks:
+                position = context.portfolio.positions[stock]
+                self.g.close_position(self, position, True)
                     
     def recordTrade(self, stock_list):
-        for stock in stock_list:
-            biaoLiStatus = self.g.monitor_short_cm.getGaugeStockList(stock).values
-            _, ta_type, period = self.g.short_record[stock] if stock in self.g.short_record else ([(nan, nan), (nan, nan), (nan, nan)], None, None)
-            self.g.short_record[stock] = (biaoLiStatus, ta_type, period)
+        pass
 
     def __str__(self):
         return '股票调仓卖出规则：卖出不在buy_stocks的股票'
@@ -147,10 +128,7 @@ class Buy_stocks(Rule):
     def __init__(self, params):
         Rule.__init__(self, params)
         self.buy_count = params.get('buy_count', 3)
-        self.use_long_filter = params.get('use_long_filter', False)
-        self.use_short_filter = params.get('use_short_filter', False)
         self.to_buy = []
-        self.use_adjust_portion = params.get('use_adjust_portion', False)
 
     def update_params(self, context, params):
         Rule.update_params(self, context, params)
@@ -159,121 +137,57 @@ class Buy_stocks(Rule):
     def handle_data(self, context, data):
         if self.is_to_return:
             self.log_warn('无法执行买入!! self.is_to_return 未开启')
-            return        
-
+            return
         self.to_buy = self.g.monitor_buy_list
         self.log.info("待选股票: "+join_list([show_stock(stock) for stock in self.to_buy], ' ', 10))
-        if self.use_short_filter:
-            self.to_buy = self.ta_short_filter(context, data, self.to_buy)
-#         if context.current_dt.hour >= 14:
-        if self.use_long_filter:
-            self.to_buy = self.ta_long_filter(context, data, self.to_buy) 
-        if self.use_adjust_portion:
-            self.adjust_portion(context, data, self.to_buy)
-        else:
-            if self.buy_count > len(context.portfolio.positions):
-                cash_value = context.portfolio.available_cash
-                cash_avg = cash_value / (self.buy_count - len(context.portfolio.positions.keys()))
-                value_avg = context.portfolio.total_value / self.buy_count
-                
-                if cash_avg / value_avg - 1 > 0.191:
-                    self.log.info("rebalance positions")
-                    self.adjust_avg(context, data, self.to_buy)
-                else:
-                    self.adjust(context, data, self.to_buy)
-
-    def ta_long_filter(self, context, data, to_buy):
-        cta = checkTAIndicator_OR({
-            'TA_Indicators':[
-                            # (TaType.MACD_ZERO,'60m',233),
-                            (TaType.TRIX_STATUS, '240m', 100),
-                            # (TaType.MACD_STATUS, '240m', 100),
-                            (TaType.RSI, '240m', 100)
-                            ],
-            'isLong':True,
-            'use_latest_data':True})
-        to_buy = cta.filter(context, data,to_buy)
-        return to_buy
-
-    def ta_short_filter(self, context, data, to_buy):
-        cti = checkTAIndicator_OR({
-            'TA_Indicators':[
-                            (TaType.MACD,'1d',233),
-                            (TaType.BOLL, '1d',100),
-                            (TaType.TRIX_STATUS, '1d', 100),
-                            (TaType.BOLL_MACD,'1d',233),
-                            (TaType.KDJ_CROSS, '1d', 100)
-                            ],
-            'isLong':False, 
-            'use_latest_data':True})
-        not_to_buy = cti.filter(context, data, to_buy)
-        to_buy = [stock for stock in to_buy if stock not in not_to_buy]
-        return to_buy
+        
+        if self.buy_count > len(context.portfolio.positions):
+            cash_value = context.portfolio.cash
+            cash_avg = cash_value / (self.buy_count - len(context.portfolio.positions.keys()))
+            value_avg = context.portfolio.portfolio_value / self.buy_count
+            
+            if cash_avg / value_avg - 1 > 0.191:
+                self.log.info("rebalance positions")
+                self.adjust_avg(context, data, self.to_buy)
+            else:
+                self.adjust(context, data, self.to_buy)
         
     def adjust(self, context, data, buy_stocks):
         # 买入股票
         # 始终保持持仓数目为g.buy_stock_count
         # 根据股票数量分仓
         # 此处只根据可用金额平均分配购买，不能保证每个仓位平均分配
-        for pindex in self.g.op_pindexs:
-            position_count = len(context.subportfolios[pindex].long_positions)
-            if self.buy_count > position_count:
-                value = context.subportfolios[pindex].available_cash / (self.buy_count - position_count)
-                for stock in buy_stocks:
-                    if stock in self.g.sell_stocks:
-                        continue
-                    if stock not in context.subportfolios[pindex].long_positions.keys():
-                        if self.g.open_position(self, stock, value, pindex):
-                            if len(context.subportfolios[pindex].long_positions) == self.buy_count:
-                                break
-        pass        
+        position_count = len(context.portfolio.positions)
+        if self.buy_count > position_count:
+            value = context.portfolio.cash / (self.buy_count - position_count)
+            for stock in buy_stocks:
+                if stock in self.g.sell_stocks:
+                    continue
+                if stock not in context.portfolio.positions.keys():
+                    if self.g.open_position(self, stock, value):
+                        if len(context.portfolio.positions) == self.buy_count:
+                            break
     
     def adjust_avg(self, context, data, buy_stocks):
-        for pindex in self.g.op_pindexs:
-            position_count = len(context.subportfolios[pindex].long_positions)
-            if self.buy_count > position_count:
-                buy_stocks = [stock for stock in buy_stocks if stock not in self.g.sell_stocks and stock not in context.subportfolios[pindex].long_positions.keys()]
-                buy_stocks = list(context.subportfolios[pindex].long_positions.keys()) + buy_stocks
+        position_count = len(context.portfolio.positions)
+        if self.buy_count > position_count:
+            buy_stocks = [stock for stock in buy_stocks if stock not in self.g.sell_stocks and stock not in context.portfolio.positions.keys()]
+            buy_stocks = list(context.portfolio.positions.keys()) + buy_stocks
                 
-        avg_value = context.portfolio.total_value / self.buy_count
-        for pindex in self.g.op_pindexs:
-            for stock in buy_stocks:
-                if self.g.open_position(self, stock, avg_value, pindex):
-                    if len(context.subportfolios[pindex].long_positions) == self.buy_count:
-                        break
-        
-    def adjust_portion(self, context, data, buy_stocks):
-        # 买入股票
-        # 始终保持持仓数目为g.buy_stock_count
-        # 根据股票数量分仓
-        # 此处只根据可用金额平均分配购买，不能保证每个仓位平均分配
-        for pindex in self.g.op_pindexs:
-            value = context.subportfolios[pindex].total_value / self.buy_count
-            for stock in context.subportfolios[pindex].long_positions.keys():
-                sub_holding_value = value * (self.g.position_proportion[stock] if stock in self.g.position_proportion else 1.0)
-                self.g.adjust_position(context, stock, sub_holding_value, pindex)            
-            
-            position_count = len(context.subportfolios[pindex].long_positions)
-            if self.buy_count > position_count:
-                for stock in buy_stocks:
-                    if stock in self.g.sell_stocks:
-                        continue
-                    if stock not in context.subportfolios[pindex].long_positions.keys():
-                        sub_value = value * (self.g.position_proportion[stock] if stock in self.g.position_proportion else 1.0)
-                        if self.g.open_position(self, stock, sub_value, pindex):
-                            if len(context.subportfolios[pindex].long_positions) == self.buy_count:
-                                break
-        pass
+        avg_value = context.portfolio.portfolio_value / self.buy_count
+        for stock in buy_stocks:
+            if self.g.open_position(self, stock, avg_value, pindex):
+                if len(context.portfolio.positions) == self.buy_count:
+                    break
                     
     def after_trading_end(self, context):
         self.g.sell_stocks = []
         self.to_buy = []
         
     def recordTrade(self, stock_list):
-        for stock in stock_list:
-            biaoLiStatus = self.g.monitor_long_cm.getGaugeStockList(stock).values
-            _, ta_type, period = self.g.long_record[stock] if stock in self.g.long_record else ([(nan, nan), (nan, nan), (nan, nan)], None, None)
-            self.g.long_record[stock] = (biaoLiStatus, ta_type, period)
+        pass
 
     def __str__(self):
         return '股票调仓买入规则：现金平分式买入股票达目标股票数'
+
+

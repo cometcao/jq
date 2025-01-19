@@ -96,8 +96,8 @@ class Global_variable(object):
     def adjust_position(self, context, security, value):
         if get_position(security).amount > 0:
             pos_value = get_position(security).amount * get_position(security).last_sale_price
-            abs(1 - pos_value/value) <= 0.055:
-            return True # don't need to make adjustments
+            if abs(1 - pos_value/value) <= 0.055:
+                return True # don't need to make adjustments
 
         order_id = order_target_value(security, value)
         if order_id != None:
@@ -475,20 +475,6 @@ class Strategy_Group(Group_rules):
             self.g = g
         
 
-# 因子排序类型
-class SortType(enum.Enum):
-    asc = 0  # 从小到大排序
-    desc = 1  # 从大到小排序
-
-
-# 价格因子排序选用的价格类型
-class PriceType(enum.Enum):
-    now = 0  # 当前价
-    today_open = 1  # 开盘价
-    pre_day_open = 2  # 昨日开盘价
-    pre_day_close = 3  # 收盘价
-    ma = 4  # N日均价
-
 '''=========================选股规则相关==================================='''
 
 # '''==============================选股 query过滤器基类=============================='''
@@ -542,21 +528,6 @@ class Adjust_expand(Rule):
     def after_adjust_end(self, context, data):
         pass
 
-
-'''=========================选股规则相关==================================='''
-
-# 选取财务数据的参数
-# 使用示例 FD_param('valuation.market_cap',None,100) #先取市值小于100亿的股票
-# 注：传入类型为 'valuation.market_cap'字符串而非 valuation.market_cap 是因 valuation.market_cap等存在序列化问题！！
-# 具体传入field 参考  https://www.joinquant.com/data/dict/fundamentals
-class FD_Factor(object):
-    def __init__(self, factor, **kwargs):
-        self.factor = factor
-        self.min = kwargs.get('min', None)
-        self.max = kwargs.get('max', None)
-        self.isComplex = kwargs.get('isComplex', False)
-
-
 '''==================================其它=============================='''
 
 
@@ -593,15 +564,15 @@ class Set_slip_fee(Rule):
         # 根据不同的时间段设置手续费
         dt = context.current_dt
         if dt > datetime.datetime(2013, 1, 1):
-            set_commission(PerTrade(buy_cost=0.0003, sell_cost=0.0013, min_cost=5))
+            set_commission(commission_ratio=0.0003, min_commission=5.0, type="STOCK")
 
         elif dt > datetime.datetime(2011, 1, 1):
-            set_commission(PerTrade(buy_cost=0.001, sell_cost=0.002, min_cost=5))
+            set_commission(commission_ratio=0.001, min_commission=5.0, type="STOCK")
 
         elif dt > datetime.datetime(2009, 1, 1):
-            set_commission(PerTrade(buy_cost=0.002, sell_cost=0.003, min_cost=5))
+            set_commission(commission_ratio=0.002, min_commission=5.0, type="STOCK")
         else:
-            set_commission(PerTrade(buy_cost=0.003, sell_cost=0.004, min_cost=5))
+            set_commission(commission_ratio=0.003, min_commission=5.0, type="STOCK")
 
     def __str__(self):
         return '根据时间设置不同的交易费率'

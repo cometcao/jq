@@ -101,11 +101,13 @@ class Pick_stock_list_from_file(Filter_stock_list):
 
     def filter(self, context, data, stock_list):
         try:
-            with open(NOTEBOOK_PATH+self.filename,'rb') as f:
+            with open(NOTEBOOK_PATH + self.filename, 'rb') as f:
                 stock_list = json.load(f)
+                stock_list = [stock.replace('XSHE', 'SZ').replace(
+                    'XSHG', 'SS') for stock in stock_list]
         #定义空的全局字典变量
         except:
-            self.log.info(f"file {self.filename} read failed hold on current positions")
+            self.log.info("file {0} read failed hold on current positions".format(self.filename))
             stock_list = list(context.portfolio.positions.keys())
         self.log.info("stocks {0} read from file {1}".format(
             stock_list, self.filename))
