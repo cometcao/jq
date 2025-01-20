@@ -71,32 +71,15 @@ class Global_variable(object):
     context = None
     _owner = None
     
-    stock_pindexs = [0]  # 指示是属于股票性质的子仓列表
-    op_pindexs = [0]  # 提示当前操作的股票子仓Id
     buy_stocks = []  # 选股列表
     sell_stocks = []  # 卖出的股票列表
     # 以下参数需配置  Run_Status_Recorder 规则进行记录。
-    is_empty_position = True  # True表示为空仓,False表示为持仓。
     run_day = 0  # 运行天数，持仓天数为正，空仓天数为负
     position_record = [False]  # 持仓空仓记录表。True表示持仓，False表示空仓。一天一个。
     curve_protect = False # 持仓资金曲线保护flag 
     monitor_buy_list = [] # 当日通过板块选股 外加周 日表里关系 选出的股票
-    monitor_long_cm = None # 表里关系计算的可能买入的
-    monitor_short_cm = None  # 表里关系计算可能卖出的
     long_record = {} # 记录买入技术指标
     short_record = {} # 记录卖出技术指标
-    filtered_sectors = None # 记录筛选出的强势板块
-    head_stocks = [] # 记录强势票 每日轮换
-    intraday_long_stock = []
-    pair_zscore = []
-    market_timing_check = {}
-    stock_index_dict = {}
-    position_proportion = {} # 仓位控制比例
-#     stock_chan_type = {} # record chan types
-    industry_sector_list = [] # record industry sector names
-    all_pos_return_stocks = set()
-    all_neg_return_stocks = set()
-    enchanced_long_stocks = set()
 
     def __init__(self, owner):
         self._owner = owner
@@ -397,7 +380,7 @@ class Group_rules(Rule):
                 # 旧规则存在则添加到新列表中,并调用规则的更新函数，更新参数。
                 nl.append(find_old)
                 find_old.memo = c[self.cs_memo]
-                find_old.log = g.log_type(c[self.cs_memo])
+                find_old.log = g.__log_type(c[self.cs_memo])
                 find_old.update_params(context, c[self.cs_param])
                 find_old.after_code_changed(context)
             else:
@@ -441,7 +424,8 @@ class Group_rules(Rule):
         obj.set_g(self.g)
         obj.name = name
         obj.memo = memo
-        obj.log = g.log_type(obj.memo)
+        g.__log_type = Rule_loger
+        obj.log = g.__log_type(obj.memo)
         # print g.log_type,obj.memo
         return obj
 
@@ -487,7 +471,8 @@ class Strategy_Group(Group_rules):
         self.g = self._params.get('g_class', Global_variable)(self)
         self.memo = self._params.get('memo', self.memo)
         self.name = self._params.get('name', self.name)
-        self.log = g.log_type(self.memo)
+        g.__log_type = Rule_loger
+        self.log = g.__log_type(self.memo)
         self.g.context = context
         Group_rules.initialize(self, context)
 
@@ -1089,8 +1074,6 @@ class Stat(Rule):
 # ==================================策略配置==============================================
 def select_strategy(context):
     g.strategy_memo = '混合策略'
-    # **** 这里定义log输出的类类型,重要，一定要写。假如有需要自定义log，可更改这个变量
-    g.log_type = Rule_loger
     g.port_pos_control = 1.0 # 组合仓位控制参数
     g.monitor_levels = ['5d','1d','60m']
     g.buy_count = 8
@@ -1173,6 +1156,8 @@ def select_strategy(context):
 
 # ===================================聚宽调用==============================================
 def initialize(context):
+    # **** 这里定义log输出的类类型,重要，一定要写。假如有需要自定义log，可更改这个变量
+    g.__log_type = Rule_loger
     # 策略配置
     select_strategy(context)
     # 创建策略组合
