@@ -40,63 +40,19 @@ def show_stock(stock):
 # ==================================strategy_frame==================================
 '''=================================基础类======================================='''
 
-
-# '''----------------------------共同参数类-----------------------------------
-# 1.考虑到规则的信息互通，完全分离也会增加很大的通讯量。适当的约定好的全局变量，可以增加灵活性。
-# 2.因共同约定，也不影响代码重用性。
-# 3.假如需要更多的共同参数。可以从全局变量类中继承一个新类并添加新的变量，并赋于所有的规则类。
-#     如此达到代码重用与策略差异的解决方案。
-# '''
-class Rule_loger(object):
-    def __init__(self, msg_header):
-        try:
-            self._owner_msg = msg_header + ':'
-        except:
-            self._owner_msg = '未知规则:'
-
-    def debug(self, msg, *args, **kwargs):
-        log.debug(self._owner_msg + msg, *args, **kwargs)
-
-    def info(self, msg, *args, **kwargs):
-        log.info(self._owner_msg + msg, *args, **kwargs)
-
-    def warn(self, msg, *args, **kwargs):
-        log.warn(self._owner_msg + msg, *args, **kwargs)
-
-    def error(self, msg, *args, **kwargs):
-        log.error(self._owner_msg + msg, *args, **kwargs)
-
-
 class Global_variable(object):
     context = None
     _owner = None
     
-    stock_pindexs = [0]  # 指示是属于股票性质的子仓列表
-    op_pindexs = [0]  # 提示当前操作的股票子仓Id
     buy_stocks = []  # 选股列表
     sell_stocks = []  # 卖出的股票列表
     # 以下参数需配置  Run_Status_Recorder 规则进行记录。
-    is_empty_position = True  # True表示为空仓,False表示为持仓。
     run_day = 0  # 运行天数，持仓天数为正，空仓天数为负
     position_record = [False]  # 持仓空仓记录表。True表示持仓，False表示空仓。一天一个。
     curve_protect = False # 持仓资金曲线保护flag 
     monitor_buy_list = [] # 当日通过板块选股 外加周 日表里关系 选出的股票
-    monitor_long_cm = None # 表里关系计算的可能买入的
-    monitor_short_cm = None  # 表里关系计算可能卖出的
     long_record = {} # 记录买入技术指标
     short_record = {} # 记录卖出技术指标
-    filtered_sectors = None # 记录筛选出的强势板块
-    head_stocks = [] # 记录强势票 每日轮换
-    intraday_long_stock = []
-    pair_zscore = []
-    market_timing_check = {}
-    stock_index_dict = {}
-    position_proportion = {} # 仓位控制比例
-#     stock_chan_type = {} # record chan types
-    industry_sector_list = [] # record industry sector names
-    all_pos_return_stocks = set()
-    all_neg_return_stocks = set()
-    enchanced_long_stocks = set()
 
     def __init__(self, owner):
         self._owner = owner
@@ -147,7 +103,7 @@ class Global_variable(object):
     def close_position(self, sender, position, is_normal=True):
         security = position.sid
         order_id = order_target_value(security, 0)  # 可能会因停牌失败
-        if order != None:
+        if order_id != None:
             order = get_order(order_id)[0]
             if order.filled != 0: #成交数量，买入时为正数，卖出时为负数
                 self._owner.on_sell_stock(position, order, is_normal,self.context)
@@ -164,7 +120,7 @@ class Global_variable(object):
     # 清仓时，调用所有规则的 when_clear_position
     def clear_position(self, sender, context):
         if context.porfolio.positions_value > 0:
-            sender.log.info(("清仓，卖出所有股票"))
+            log.info(("清仓，卖出所有股票"))
             for position in context.portfolio.positions:
                 self.close_position(sender, position, False)
         # 调用规则器的清仓事件
@@ -249,7 +205,6 @@ class Rule(object):
     g = None  # 所属的策略全局变量
     name = ''  # obj名，可以通过该名字查找到
     memo = ''  # 默认描述
-    log = None
     # 执行是否需要退出执行序列动作，用于Group_Rule默认来判断中扯执行。
     is_to_return = False
 
@@ -397,7 +352,6 @@ class Group_rules(Rule):
                 # 旧规则存在则添加到新列表中,并调用规则的更新函数，更新参数。
                 nl.append(find_old)
                 find_old.memo = c[self.cs_memo]
-                find_old.log = g.log_type(c[self.cs_memo])
                 find_old.update_params(context, c[self.cs_param])
                 find_old.after_code_changed(context)
             else:
@@ -441,7 +395,6 @@ class Group_rules(Rule):
         obj.set_g(self.g)
         obj.name = name
         obj.memo = memo
-        obj.log = g.log_type(obj.memo)
         # print g.log_type,obj.memo
         return obj
 
@@ -487,7 +440,6 @@ class Strategy_Group(Group_rules):
         self.g = self._params.get('g_class', Global_variable)(self)
         self.memo = self._params.get('memo', self.memo)
         self.name = self._params.get('name', self.name)
-        self.log = g.log_type(self.memo)
         self.g.context = context
         Group_rules.initialize(self, context)
 
@@ -665,7 +617,7 @@ class Period_condition(Weight_Base):
                             (self.mark_today[context.current_dt.date()] if context.current_dt.date() in self.mark_today else False)
         
         if context.current_dt.date() not in self.mark_today: # only increment once per day
-            self.log.info("调仓日计数 [%d]" % (self.day_count))
+            log.info("调仓日计数 [%d]" % (self.day_count))
             self.mark_today[context.current_dt.date()]=self.is_to_return
             self.day_count += 1
         pass
@@ -730,10 +682,10 @@ class Buy_stocks(Rule):
 
     def handle_data(self, context, data):
         if self.is_to_return:
-            self.log_warn('无法执行买入!! self.is_to_return 未开启')
+            log.info('无法执行买入!! self.is_to_return 未开启')
             return
         self.to_buy = self.g.monitor_buy_list
-        self.log.info("待选股票: "+join_list([show_stock(stock) for stock in self.to_buy], ' ', 10))
+        log.info("待选股票: "+join_list([show_stock(stock) for stock in self.to_buy], ' ', 10))
         
         if self.buy_count > len(context.portfolio.positions):
             cash_value = context.portfolio.cash
@@ -741,7 +693,7 @@ class Buy_stocks(Rule):
             value_avg = context.portfolio.portfolio_value / self.buy_count
             
             if cash_avg / value_avg - 1 > 0.191:
-                self.log.info("rebalance positions")
+                log.info("rebalance positions")
                 self.adjust_avg(context, data, self.to_buy)
             else:
                 self.adjust(context, data, self.to_buy)
@@ -800,7 +752,7 @@ class Pick_stocks2(Group_rules):
         except:
             to_run_one = False
         if to_run_one and self.has_run:
-            # self.log.info('设置一天只选一次，跳过选股。')
+            # log.info('设置一天只选一次，跳过选股。')
             return
 
         stock_list = self.g.buy_stocks
@@ -811,7 +763,7 @@ class Pick_stocks2(Group_rules):
         # add the ETF index into list this is already done in oop_stop_loss,
         # dirty hack
         self.g.monitor_buy_list = stock_list
-        self.log.info(
+        log.info(
             '今日选股:\n' + join_list(["[%s]" % (show_stock(x)) for x in stock_list], ' ', 10))
         self.has_run = True
 
@@ -843,7 +795,7 @@ class Pick_stocks2(Group_rules):
                     "daily_stocks/{0}.txt".format(str(context.current_dt.date())), ",".join(checking_stocks))
             else:
                 write_file(self.file_path, ",".join(checking_stocks))
-                self.log.info('file written:{0}'.format(self.file_path))
+                log.info('file written:{0}'.format(self.file_path))
 
     def __str__(self):
         return self.memo
@@ -869,9 +821,9 @@ class Pick_stock_list_from_file(Filter_stock_list):
                     'XSHG', 'SS') for stock in stock_list]
         #定义空的全局字典变量
         except:
-            self.log.info("file {0} read failed hold on current positions".format(self.filename))
+            log.info("file {0} read failed hold on current positions".format(self.filename))
             stock_list = list(context.portfolio.positions.keys())
-        self.log.info("stocks {0} read from file {1}".format(
+        log.info("stocks {0} read from file {1}".format(
             stock_list, self.filename))
         return stock_list
 
@@ -937,13 +889,13 @@ class Show_postion_adjust(Op_stocks_record):
         #         tl = self.g.buy_stocks[0:5]
         #     else:
         #         tl = self.g.buy_stocks[:]
-        #     self.log.info('选股:\n' + join_list(["[%s]" % (show_stock(x)) for x in tl], ' ', 10))
+        #     log.info('选股:\n' + join_list(["[%s]" % (show_stock(x)) for x in tl], ' ', 10))
         # 显示买卖日志
         if len(self.op_sell_stocks) > 0:
-            self.log.info(
+            log.info(
                 '\n' + join_list(["卖出 %s : %d" % (show_stock(x[0]), x[1]) for x in self.op_sell_stocks], '\n', 1))
         if len(self.op_buy_stocks) > 0:
-            self.log.info(
+            log.info(
                 '\n' + join_list(["买入 %s : %d" % (show_stock(x[0]), x[1]) for x in self.op_buy_stocks], '\n', 1))
         # 显示完就清除
         self.op_buy_stocks = []
@@ -1000,8 +952,8 @@ class Stat(Rule):
         cash = context.portfolio.cash
         totol_value = context.portfolio.portfolio_value
         position = 1 - cash / totol_value
-        self.log.info("收盘后持仓概况:%s" % str(list(context.portfolio.positions)))
-        self.log.info("仓位概况:%.2f" % position)
+        log.info("收盘后持仓概况:%s" % str(list(context.portfolio.positions)))
+        log.info("仓位概况:%.2f" % position)
         self.print_win_rate(context.current_dt.strftime("%Y-%m-%d"), context.current_dt.strftime("%Y-%m-%d"), context)
 
     def print_win_rate_v2(self):
@@ -1029,7 +981,7 @@ class Stat(Rule):
             s += '\n总资产: {0}, 本金: {1}, 盈利: {2}, 盈亏比率：{3}%'.format(starting_cash + total_profit, starting_cash,
                                                                   total_profit, total_profit / starting_cash * 100)
             s += '\n---------------------------------------------------------------'
-            self.log.info(s)
+            log.info(s)
 
     def help_status_stats(self, stats, status_stats):
         for _, long_sta, short_sta in stats:
@@ -1089,8 +1041,6 @@ class Stat(Rule):
 # ==================================策略配置==============================================
 def select_strategy(context):
     g.strategy_memo = '混合策略'
-    # **** 这里定义log输出的类类型,重要，一定要写。假如有需要自定义log，可更改这个变量
-    g.log_type = Rule_loger
     g.port_pos_control = 1.0 # 组合仓位控制参数
     g.monitor_levels = ['5d','1d','60m']
     g.buy_count = 8
@@ -1183,7 +1133,7 @@ def initialize(context):
     g.main.initialize(context)
 
     # 打印规则参数
-    g.main.log.info(g.main.show_strategy())
+    log.info(g.main.show_strategy())
 
 
 # 按分钟回测
@@ -1220,20 +1170,12 @@ def process_initialize(context):
 # 这里示例进行模拟更改回测时，如何调整策略,基本通用代码。
 def after_code_changed(context):
     try:
-        g.main
-        pass
-    except:
-        print ('更新代码->原先不是OO策略，重新调用initialize(context)。')
-        initialize(context)
-        return
-
-    try:
         print ('=> 更新代码')
         select_strategy(context)
         g.main.g.context = context
         g.main.update_params(context, {'config': g.main_config})
         g.main.after_code_changed(context)
-        g.main.log.info(g.main.show_strategy())
+        log.info(g.main.show_strategy())
     except Exception as e:
         log.error('更新代码失败:' + str(e))
         # initialize(context)
@@ -1248,7 +1190,7 @@ class Update_Params_Auto(Rule):
     def before_trading_start(self, context):
         if self.g.isFirstTradingDayOfWeek(context):
             self.dynamicBuyCount(context)
-            self.log.info("修改全局参数")
+            log.info("修改全局参数")
     
     def dynamicBuyCount(self, context):
         import math
