@@ -10,12 +10,14 @@ from email.mime.base import MIMEBase
 from email.mime.text import MIMEText
 from email import encoders
 
-def send_email_with_attachment(email_config_filename):
+def send_email_with_attachment(email_config_filename, is_anal=False):
     # Load email configuration from JSON file
-    # with open(email_config_filename, 'r') as f:
-    #     email_config = json.load(f)
-    content = read_file(email_config_filename)
-    email_config = json.loads(content)
+    if is_anal:
+        with open(email_config_filename, 'r') as f:
+            email_config = json.load(f)
+    else:
+        content = read_file(email_config_filename)
+        email_config = json.loads(content)
     
     sender_email = email_config['sender_email']
     sender_password = email_config['sender_password']
@@ -35,11 +37,12 @@ def send_email_with_attachment(email_config_filename):
     # Attach the body with the msg instance
     msg.attach(MIMEText(body, 'plain'))
 
-    # copy the attachment file from analytic space to strategy space
-    with open(attachment_filename, 'w') as f:
-        json.dump(read_file(attachment_filename), f)
+    if not is_anal:
+        # copy the attachment file from analytic space to strategy space
+        with open(attachment_filename, 'wb') as f:
+            f.write(read_file(attachment_filename))
     # Open the file to be sent
-    with open(attachment_filename, 'rb') as attachment:
+    with open(attachment_filename, 'r') as attachment:
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(attachment.read())
         encoders.encode_base64(part)
