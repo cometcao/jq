@@ -103,7 +103,7 @@ class Global_variable(object):
     def close_position(self, sender, position, is_normal=True):
         security = position.sid
         order_id = order_target_value(security, 0)  # 可能会因停牌失败
-        if order != None:
+        if order_id != None:
             order = get_order(order_id)[0]
             if order.filled != 0: #成交数量，买入时为正数，卖出时为负数
                 self._owner.on_sell_stock(position, order, is_normal,self.context)
