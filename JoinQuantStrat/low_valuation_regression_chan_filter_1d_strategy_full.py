@@ -120,7 +120,7 @@ class Global_variable(object):
     # 清仓时，调用所有规则的 when_clear_position
     def clear_position(self, sender, context):
         if context.porfolio.positions_value > 0:
-            sender.log.info(("清仓，卖出所有股票"))
+            log.info(("清仓，卖出所有股票"))
             for position in context.portfolio.positions:
                 self.close_position(sender, position, False)
         # 调用规则器的清仓事件
@@ -1133,7 +1133,7 @@ def initialize(context):
     g.main.initialize(context)
 
     # 打印规则参数
-    g.main.log.info(g.main.show_strategy())
+    log.info(g.main.show_strategy())
 
 
 # 按分钟回测
@@ -1170,20 +1170,12 @@ def process_initialize(context):
 # 这里示例进行模拟更改回测时，如何调整策略,基本通用代码。
 def after_code_changed(context):
     try:
-        g.main
-        pass
-    except:
-        print ('更新代码->原先不是OO策略，重新调用initialize(context)。')
-        initialize(context)
-        return
-
-    try:
         print ('=> 更新代码')
         select_strategy(context)
         g.main.g.context = context
         g.main.update_params(context, {'config': g.main_config})
         g.main.after_code_changed(context)
-        g.main.log.info(g.main.show_strategy())
+        log.info(g.main.show_strategy())
     except Exception as e:
         log.error('更新代码失败:' + str(e))
         # initialize(context)
