@@ -84,6 +84,7 @@ def check_email_and_save_attachment(config):
     max_retries = 3
     while try_count < max_retries:
         now = datetime.now()
+        print(f"current time: {now} trying... ({try_count}/{max_retries})")
         try_count += 1
         try:
             mail = connect_to_mail_server(config['imap_server'], config['email_user'], config['email_pass'])
@@ -99,8 +100,7 @@ def check_email_and_save_attachment(config):
             
             mail.store(latest_email_id, "+FLAGS", "\\Deleted")
             mail.expunge()
-            mail.logout()
-            break  # Exit the loop if successful
+            try_count = max_retries
         except imaplib.IMAP4.error as e:
             print(f"IMAP error: {e}")
             traceback.print_exc()
@@ -114,7 +114,7 @@ def check_email_and_save_attachment(config):
             print(f"An unexpected error occurred: {e}")
             traceback.print_exc()
         finally:
-            print(f"current time: {now} Retrying... ({try_count}/{max_retries})")
+            mail.logout()
             time.sleep(10)  # Wait for 10 seconds before retrying
 
 def run_daily_at_specific_time(config_filename):
