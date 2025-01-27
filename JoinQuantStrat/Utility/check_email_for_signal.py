@@ -92,10 +92,12 @@ def check_email_and_save_attachment(config):
             email_ids = search_emails(mail)
             
             if not email_ids:
-                print(f"current time: {now} No unseen emails found.")
+                print(f"current time: {now} No unseen emails found.{email_ids}")
                 continue
             
             latest_email_id, msg_data = fetch_latest_email(mail, email_ids, config['target_subject'])
+            if not latest_email_id:
+                continue
             process_email(msg_data, config['save_directory'])
             
             mail.store(latest_email_id, "+FLAGS", "\\Deleted")
