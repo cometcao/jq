@@ -1115,7 +1115,7 @@ def select_strategy(context):
         }]
     ]
     # 组合成一个总的策略
-    g.main_config = (common_config
+    g.__main_config = (common_config
                      + adjust_condition_config
                      + pick_new
                      + adjust_position_config)
@@ -1126,43 +1126,43 @@ def initialize(context):
     # 策略配置
     select_strategy(context)
     # 创建策略组合
-    g.main = Strategy_Group({'config': g.main_config
+    g.__main = Strategy_Group({'config': g.__main_config
                                 , 'g_class': Global_variable
                                 , 'memo': g.strategy_memo
                                 , 'name': '_main_'})
-    g.main.initialize(context)
+    g.__main.initialize(context)
 
     # 打印规则参数
-    log.info(g.main.show_strategy())
+    log.info(g.__main.show_strategy())
 
 
 # 按分钟回测
 def handle_data(context, data):
     # 保存context到全局变量量，主要是为了方便规则器在一些没有context的参数的函数里使用。
-    g.main.g.context = context
+    g.__main.g.context = context
     # 执行策略
-    g.main.handle_data(context, data)
+    g.__main.handle_data(context, data)
 
 
 # 开盘
 def before_trading_start(context, data):
     log.info("==========================================================================")
-    g.main.g.context = context
-    g.main.before_trading_start(context)
+    g.__main.g.context = context
+    g.__main.before_trading_start(context)
 
 
 # 收盘
 def after_trading_end(context,data):
-    g.main.g.context = context
-    g.main.after_trading_end(context)
-    g.main.g.context = None
+    g.__main.g.context = context
+    g.__main.after_trading_end(context)
+    g.__main.g.context = None
 
 
 # 进程启动(一天一次)
 def process_initialize(context):
     try:
-        g.main.g.context = context
-        g.main.process_initialize(context)
+        g.__main.g.context = context
+        g.__main.process_initialize(context)
     except:
         pass
 
@@ -1172,10 +1172,10 @@ def after_code_changed(context):
     try:
         print ('=> 更新代码')
         select_strategy(context)
-        g.main.g.context = context
-        g.main.update_params(context, {'config': g.main_config})
-        g.main.after_code_changed(context)
-        log.info(g.main.show_strategy())
+        g.__main.g.context = context
+        g.__main.update_params(context, {'config': g.__main_config})
+        g.__main.after_code_changed(context)
+        log.info(g.__main.show_strategy())
     except Exception as e:
         log.error('更新代码失败:' + str(e))
         # initialize(context)
