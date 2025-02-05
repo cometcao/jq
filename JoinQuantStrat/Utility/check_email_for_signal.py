@@ -47,7 +47,7 @@ def fetch_latest_email(mail, email_ids, target_subject):
         
         if target_subject in subject:
             date = msg["Date"]
-            msg_date = datetime.strptime(date[:25], "%a, %d %b %Y %H:%M:%S")
+            msg_date = datetime.strptime(date[:24], "%a, %d %b %Y %H:%M:%S")
             
             if latest_email_date is None or msg_date > latest_email_date:
                 latest_email_id = email_id
