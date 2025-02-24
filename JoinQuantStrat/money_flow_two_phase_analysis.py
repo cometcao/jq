@@ -11,7 +11,7 @@ from chan_kbar_filter import analyze_MA_zoushi_by_stock
 
 # current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 current_time = datetime.now()
-# current_time = datetime.now() - timedelta(days=69)
+# current_time = datetime.now() - timedelta(hours=12)
 print("current time: {0}".format(current_time))
 # working_date = datetime.strptime('2022-04-28', "%Y-%m-%d")
 
@@ -21,8 +21,8 @@ stock_list = get_all_securities(['stock'], date=current_time).index.values.tolis
 
 
 def filter_out_stock_by_mfc(work_stock_list, period_count, current_time, use_money, only_downward_slope, output, debug):
-    downwards_count_limit = 5
-    print(f"period count: {period_count}, use_money: {use_money}, +only_down_slope: {only_downward_slope}, limit: {downwards_count_limit}, output: {output}")
+    downwards_count_limit = 3
+    print(f"period count: {period_count}, use_money: {use_money}, only_down_slope: {only_downward_slope}, limit: {downwards_count_limit}, output: {output}")
     # I: find a rough downwards movement and worm out the period
     if only_downward_slope:
         stock_count = get_stock_downwards_count(
@@ -53,21 +53,23 @@ def filter_out_stock_by_mfc(work_stock_list, period_count, current_time, use_mon
 # F, T, 500 | T, F, 50 | T, F, 50
 
 
-stock_list_a_val = filter_out_stock_by_mfc(stock_list, 13, current_time, False, True, 1000, debug)
+stock_list_a_val = filter_out_stock_by_mfc(stock_list, 8, current_time, False, True, 1000, debug)
 stock_list_a = list(stock_list_a_val.keys())
 stock_list_b_val = filter_out_stock_by_mfc(stock_list_a, 21, current_time, False, False, 1000, debug)
 stock_list_b = list(stock_list_b_val.keys())
-stock_list_c_val = filter_out_stock_by_mfc(stock_list_b, 55, current_time, False, False, 1000, debug)
-stock_list_c = list(stock_list_c_val.keys())
-# stock_list_d_val = filter_out_stock_by_mfc(stock_list, 89, current_time, False, False, debug)
+# stock_list_c_val = filter_out_stock_by_mfc(stock_list_b, 55, current_time, False, False, 1000, debug)
+# stock_list_c = list(stock_list_c_val.keys())
+# stock_list_d_val = filter_out_stock_by_mfc(stock_list, 144, current_time, False, False, debug)
 # stock_list_d = [stock for stock,_ in stock_list_c_val]
-# final_list = [stock for stock in stock_list_b if stock_list_a_val[stock] < stock_list_b_val[stock]]
 
-final_list = list(set(stock_list_a) & set(stock_list_b) & set(stock_list_c))
+final_list = list(set(stock_list_a) & set(stock_list_b))
+final_list = [stock for stock in final_list if stock_list_a_val[stock] > stock_list_b_val[stock]]
+
+
 ####################################################################################################
 print("Intermediate list a: {0}".format(len(stock_list_a)))
 print("Intermediate list b: {0}".format(len(stock_list_b)))
-print("Intermediate list c: {0}".format(len(stock_list_c)))
+# print("Intermediate list c: {0}".format(len(stock_list_c)))
 # print("Intermediate list d: {0}".format(len(stock_list_d)))
 print("Final list: {0} {1}".format(final_list, len(final_list)))
 
