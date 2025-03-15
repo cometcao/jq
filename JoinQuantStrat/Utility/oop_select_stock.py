@@ -84,8 +84,6 @@ class Pick_stocks2(Group_rules):
         for rule in self.rules:
             if isinstance(rule, Create_stock_list):
                 self.g.buy_stocks = self.g.buy_stocks + rule.before_trading_start(context)
-
-#         self.g.buy_stocks = list(set(self.g.buy_stocks))
         
         for rule in self.rules:
             if isinstance(rule, Early_Filter_stock_list):
@@ -101,7 +99,7 @@ class Pick_stocks2(Group_rules):
 #                                                                            self.g.filtered_sectors,
 #                                                                            self.g.industry_sector_list))
     
-        checking_stocks = [stock for stock in list(set(self.g.buy_stocks+list(context.portfolio.positions.keys()))) if stock not in g.money_fund]
+        checking_stocks = self.g.buy_stocks
         if self.add_etf:
             checking_stocks = checking_stocks + g.etf
         if self.file_path:

@@ -2,13 +2,13 @@ import pandas as pd
 import numpy as np
 import enum
 import math
+import time
 import simplejson as json
 import datetime
 
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.width', 1000)
-NOTEBOOK_PATH = '/home/fly/notebook/upload_file/'
 
 #=========================================common==========================
 def join_list(pl, connector=' ', step=5):
@@ -72,9 +72,11 @@ class Global_variable(object):
     # 报单成功，触发所有规则的when_buy_stock函数
     def open_position(self, sender, security, value):
         order_id = order_value(security, value)
+        if is_trade():
+            time.sleep(6)
         if order_id != None:
             order = get_order(order_id)[0]
-            if order.filled > 0:
+            if order.status == '8': 
             # 订单成功，则调用规则的买股事件 。（注：这里只适合市价，挂价单不适合这样处理）
                 self._owner.on_buy_stock(security, order, self.context)
                 return True
@@ -87,9 +89,11 @@ class Global_variable(object):
                 return True # don't need to make adjustments
 
         order_id = order_target_value(security, value)
+        if is_trade():
+            time.sleep(6)
         if order_id != None:
             order = get_order(order_id)[0]
-            if order.filled > 0:
+            if order.status == '8': 
                 # 订单成功，则调用规则的买股事件 。（注：这里只适合市价，挂价单不适合这样处理）
                 self._owner.on_buy_stock(security, order, self.context)
                 return True
@@ -102,18 +106,24 @@ class Global_variable(object):
     # 报单成功，触发所有规则的when_sell_stock函数
     def close_position(self, sender, position, is_normal=True):
         security = position.sid
-        order_id = order_target_value(security, 0)  # 可能会因停牌失败
+        #order_market(security, -position.enable_amount, market_type=0)
+        order_id = None
+        if is_trade():
+            snap_shot = get_snapshot(security)[security]
+            order_id = order_target_value(security, 
+                                          0, 
+                                          limit_price=snap_shot["low_px"])  # 可能会因停牌失败
+            time.sleep(6)
+        else:
+            order_id = order_target_value(security, 0)
+
         if order_id != None:
             order = get_order(order_id)[0]
-            if order.filled != 0: #成交数量，买入时为正数，卖出时为负数
+            if order.status == '8': 
                 self._owner.on_sell_stock(position, order, is_normal,self.context)
                 if security not in self.sell_stocks:
                     self.sell_stocks.append(security)
                 return True
-            else:
-                print("卖出%s失败, 尝试跌停价挂单" % (security))
-                snap_shot =get_snapshot(security)
-                order_target_value(security, 0, limit_price=snap_shot.low_limit) # 尝试跌停卖出
         return False
 
     # 清空卖出所有持仓
@@ -197,7 +207,8 @@ class Global_variable(object):
         pos_ratio = {}
         for stock in context.portfolio.positions.keys():
             pos = context.portfolio.positions[stock]
-            pos_ratio[stock] = (pos.amount * pos.last_sale_price) / total_value
+            if pos.amount > 0 and total_value > 0:
+                pos_ratio[stock] = (pos.amount * pos.last_sale_price) / total_value
         return pos_ratio
 
 # ''' ==============================规则基类================================'''
@@ -518,23 +529,26 @@ class Adjust_expand(Rule):
 class Set_sys_params(Rule):
     def __init__(self, params):
         Rule.__init__(self, params)
-        pd.options.mode.chained_assignment = None
-        try:
-            # 一律使用真实价格
-            set_option('use_real_price', self._params.get('use_real_price', True))
-            set_option("avoid_future_data", True)
-        except:
-            pass
-        try:
-            # 过滤log
-            log.set_level(*(self._params.get('level', ['order', 'error'])))
-        except:
-            pass
-        try:
-            # 设置基准
-            set_benchmark(self._params.get('benchmark', '000300.XSHG'))
-        except:
-            pass
+        # pd.options.mode.chained_assignment = None
+        # try:
+        #     # 一律使用真实价格
+        #     set_option('use_real_price', self._params.get('use_real_price', True))
+        #     set_option("avoid_future_data", True)
+        # except:
+        #     import traceback
+        #     print(traceback.format_exc())
+        # try:
+        #     # 过滤log
+        #     log.set_level(*(self._params.get('level', ['order', 'error'])))
+        # except:
+        #     import traceback
+        #     print(traceback.format_exc())
+        # try:
+        #     # 设置基准
+        #     set_benchmark(self._params.get('benchmark', '000300.XSHG'))
+        # except:
+        #     import traceback
+        #     print(traceback.format_exc())
 
     def __str__(self):
         return '设置系统参数：[使用真实价格交易] [防止未来函数] [忽略order 的 log] [设置基准]'
@@ -544,18 +558,22 @@ class Set_sys_params(Rule):
 # 根据不同的时间段设置滑点与手续费并且更新指数成分股
 class Set_slip_fee(Rule):
     def before_trading_start(self, context):
-        # 根据不同的时间段设置手续费
-        dt = context.current_dt
-        if dt > datetime.datetime(2013, 1, 1):
-            set_commission(commission_ratio=0.0003, min_commission=5.0, type="STOCK")
-
-        elif dt > datetime.datetime(2011, 1, 1):
-            set_commission(commission_ratio=0.001, min_commission=5.0, type="STOCK")
-
-        elif dt > datetime.datetime(2009, 1, 1):
-            set_commission(commission_ratio=0.002, min_commission=5.0, type="STOCK")
-        else:
-            set_commission(commission_ratio=0.003, min_commission=5.0, type="STOCK")
+        try:
+            # 根据不同的时间段设置手续费
+            dt = context.current_dt
+            if dt > datetime.datetime(2013, 1, 1):
+                set_commission(commission_ratio=0.0003, min_commission=5.0, type="STOCK")
+    
+            elif dt > datetime.datetime(2011, 1, 1):
+                set_commission(commission_ratio=0.001, min_commission=5.0, type="STOCK")
+    
+            elif dt > datetime.datetime(2009, 1, 1):
+                set_commission(commission_ratio=0.002, min_commission=5.0, type="STOCK")
+            else:
+                set_commission(commission_ratio=0.003, min_commission=5.0, type="STOCK")
+        except:
+            import traceback
+            print(traceback.format_exc())
 
     def __str__(self):
         return '根据时间设置不同的交易费率'
@@ -655,7 +673,7 @@ class Sell_stocks(Rule):
         self.adjust(context, data, self.g.monitor_buy_list)
 
     def adjust(self, context, data, buy_stocks):
-        # 卖出不在待买股票列表中的股票
+        log.info("卖出不在待买股票列表中的股票")
         # 对于因停牌等原因没有卖出的股票则继续持有
         for stock in context.portfolio.positions.keys():
             if stock not in buy_stocks:
@@ -674,6 +692,7 @@ class Buy_stocks(Rule):
     def __init__(self, params):
         Rule.__init__(self, params)
         self.buy_count = params.get('buy_count', 3)
+        self.use_portion = params.get('use_portion', 1.0)
         self.to_buy = []
 
     def update_params(self, context, params):
@@ -686,14 +705,12 @@ class Buy_stocks(Rule):
             return
         self.to_buy = self.g.monitor_buy_list
         log.info("待选股票: "+join_list([show_stock(stock) for stock in self.to_buy], ' ', 10))
-        
-        if self.buy_count > len(context.portfolio.positions):
-            cash_value = context.portfolio.cash
-            cash_avg = cash_value / (self.buy_count - len(context.portfolio.positions.keys()))
-            value_avg = context.portfolio.portfolio_value / self.buy_count
+        pos_count = sum([1 for pos in context.portfolio.positions.keys() if context.portfolio.positions[pos].amount > 0])
+        if self.buy_count > pos_count:
+            target_avg = context.portfolio.portfolio_value / self.buy_count * self.use_portion
+            pos_value = context.portfolio.positions_value / pos_count if pos_count > 0 else target_avg
             
-            if cash_avg / value_avg - 1 > 0.191:
-                log.info("rebalance positions")
+            if abs(pos_value / target_avg) - 1 > 0.382:
                 self.adjust_avg(context, data, self.to_buy)
             else:
                 self.adjust(context, data, self.to_buy)
@@ -703,28 +720,30 @@ class Buy_stocks(Rule):
         # 始终保持持仓数目为g.buy_stock_count
         # 根据股票数量分仓
         # 此处只根据可用金额平均分配购买，不能保证每个仓位平均分配
-        position_count = len(context.portfolio.positions)
+        position_count = sum([1 for pos in context.portfolio.positions.keys() if context.portfolio.positions[pos].amount > 0])
         if self.buy_count > position_count:
-            value = context.portfolio.cash / (self.buy_count - position_count)
+            value = context.portfolio.cash / (self.buy_count - position_count) * self.use_portion
             for stock in buy_stocks:
                 if stock in self.g.sell_stocks:
                     continue
                 if stock not in context.portfolio.positions.keys():
                     if self.g.open_position(self, stock, value):
-                        if len(context.portfolio.positions) == self.buy_count:
+                        position_count = sum([1 for pos in context.portfolio.positions.keys() if context.portfolio.positions[pos].amount > 0])
+                        if position_count == self.buy_count:
                             break
     
     def adjust_avg(self, context, data, buy_stocks):
-        position_count = len(context.portfolio.positions)
-        if self.buy_count > position_count:
-            buy_stocks = [stock for stock in buy_stocks if stock not in self.g.sell_stocks and stock not in context.portfolio.positions.keys()]
-            buy_stocks = list(context.portfolio.positions.keys()) + buy_stocks
-                
-        avg_value = context.portfolio.portfolio_value / self.buy_count
-        for stock in buy_stocks:
-            if self.g.open_position(self, stock, avg_value):
-                if len(context.portfolio.positions) == self.buy_count:
-                    break
+        sorted_holding_stocks_data = sorted([(pos, context.portfolio.positions[pos].amount * context.portfolio.positions[pos].last_sale_price)
+                                        for pos in context.portfolio.positions.keys() if context.portfolio.positions[pos].amount > 0], key=lambda x: x[1], reverse = True)
+        sorted_holding_stocks = [i[0] for i in sorted_holding_stocks_data]
+
+        buy_stocks = [stock for stock in buy_stocks if stock not in self.g.sell_stocks and stock not in sorted_holding_stocks]
+        buy_stocks = sorted_holding_stocks + buy_stocks
+
+        avg_value = context.portfolio.portfolio_value / self.buy_count * self.use_portion
+        for stock in buy_stocks[:self.buy_count]:
+            if self.g.adjust_position(context, stock, avg_value):
+                pass
                     
     def after_trading_end(self, context):
         self.g.sell_stocks = []
@@ -744,7 +763,6 @@ class Pick_stocks2(Group_rules):
         Group_rules.__init__(self, params)
         self.has_run = False
         self.file_path = params.get('write_to_file', None)
-        self.add_etf = params.get('add_etf', False)
 
     def handle_data(self, context, data):
         try:
@@ -760,7 +778,6 @@ class Pick_stocks2(Group_rules):
             if isinstance(rule, Filter_stock_list):
                 stock_list = rule.filter(context, data, stock_list)
 
-        # add the ETF index into list this is already done in oop_stop_loss,
         # dirty hack
         self.g.monitor_buy_list = stock_list
         log.info(
@@ -785,10 +802,7 @@ class Pick_stocks2(Group_rules):
             if isinstance(rule, Early_Filter_stock_list):
                 self.g.buy_stocks = rule.filter(context, self.g.buy_stocks)
 
-        checking_stocks = [stock for stock in list(set(
-            self.g.buy_stocks + list(context.portfolio.positions.keys()))) if stock not in g.money_fund]
-        if self.add_etf:
-            checking_stocks = checking_stocks + g.etf
+        checking_stocks = self.g.buy_stocks
         if self.file_path:
             if self.file_path == "daily":
                 write_file(
@@ -814,17 +828,24 @@ class Pick_stock_list_from_file(Filter_stock_list):
         self.filename = params.get('filename', None)
 
     def filter(self, context, data, stock_list):
+        full_file_path = get_research_path() + "/upload_file/" + self.filename
         try:
-            with open(NOTEBOOK_PATH + self.filename, 'rb') as f:
+            with open(full_file_path, 'rb') as f:
                 stock_list = json.load(f)
                 stock_list = [stock.replace('XSHE', 'SZ').replace(
                     'XSHG', 'SS') for stock in stock_list]
-        #定义空的全局字典变量
         except:
-            log.info("file {0} read failed hold on current positions".format(self.filename))
+            log.info(
+                "file {0} read failed hold on current positions".format(self.filename))
             stock_list = list(context.portfolio.positions.keys())
+
         log.info("stocks {0} read from file {1}".format(
             stock_list, self.filename))
+
+        ##########################
+        # import random
+        # random.shuffle(stock_list)
+        ##########################
         return stock_list
 
 
@@ -862,7 +883,7 @@ class Op_stocks_record(Adjust_expand):
 
     def on_sell_stock(self, position, order, is_normal, new_pindex=0,context=None):
         self.position_has_change = True
-        self.op_sell_stocks.append([position.security, -order.filled])
+        self.op_sell_stocks.append([position.sid, -order.filled])
 
     def after_adjust_end(self, context, data):
         self.op_buy_stocks = self.merge_op_list(self.op_buy_stocks)
@@ -922,7 +943,7 @@ class Stat(Rule):
     def on_sell_stock(self, position, order, is_normal, pindex=0,context=None):
         if order.filled > 0:
             # 只要有成交，无论全部成交还是部分成交，则统计盈亏
-            self.watch(position.security, order.filled, position.avg_cost, position.price)
+            self.watch(position.sid, order.filled, position.cost_basis, position.last_sale_price)
 
     def on_buy_stock(self,stock,order,pindex=0,context=None):
         pass
@@ -1036,15 +1057,10 @@ class Stat(Rule):
     def __str__(self):
         return '策略绩效统计'
 
-
-
 # ==================================策略配置==============================================
 def select_strategy(context):
     g.strategy_memo = '混合策略'
-    g.port_pos_control = 1.0 # 组合仓位控制参数
-    g.monitor_levels = ['5d','1d','60m']
     g.buy_count = 8
-    g.money_fund = []
 
     ''' ---------------------配置 调仓条件判断规则-----------------------'''
     # 调仓条件判断
@@ -1079,7 +1095,6 @@ def select_strategy(context):
             'config': pick_config,
             'day_only_run_one': True, 
             'write_to_file': None,
-            'add_etf':False
         }]
     ]
 
@@ -1087,9 +1102,8 @@ def select_strategy(context):
     adjust_position_config = [
         [True, '', '卖出股票', Sell_stocks, {}],
         [True, '', '买入股票', Buy_stocks, {
-            'use_short_filter':False,
-            'buy_count': g.buy_count,  # 最终买入股票数
-            'use_adjust_portion':False
+            'buy_count': g.buy_count,
+            'use_portion': 0.1
         }],
         [True, '_Show_postion_adjust_', '显示买卖的股票', Show_postion_adjust, {}],
     ]
@@ -1103,7 +1117,7 @@ def select_strategy(context):
     # 优先辅助规则，每分钟优先执行handle_data
     common_config_list = [
         [True, '', '设置系统参数', Set_sys_params, {
-            'benchmark': '000300.XSHG'  # 指定基准为次新股指
+            'benchmark': '000300.SS'  # 指定基准为次新股指
         }],
         [True, '', '手续费设置器', Set_slip_fee, {}],
         [True, '', '统计执行器', Stat, {'trade_stats':False}],
@@ -1115,71 +1129,64 @@ def select_strategy(context):
         }]
     ]
     # 组合成一个总的策略
-    g.__main_config = (common_config
+    g.main_config = (common_config
                      + adjust_condition_config
                      + pick_new
                      + adjust_position_config)
 
-
-# ===================================聚宽调用==============================================
 def initialize(context):
+    log.info("=========================initialize=========================================")
     # 策略配置
     select_strategy(context)
     # 创建策略组合
-    g.__main = Strategy_Group({'config': g.__main_config
+    g.main = Strategy_Group({'config': g.main_config
                                 , 'g_class': Global_variable
                                 , 'memo': g.strategy_memo
                                 , 'name': '_main_'})
-    g.__main.initialize(context)
+    g.main.initialize(context)
 
     # 打印规则参数
-    log.info(g.__main.show_strategy())
+    log.info(g.main.show_strategy())
 
 
 # 按分钟回测
 def handle_data(context, data):
     # 保存context到全局变量量，主要是为了方便规则器在一些没有context的参数的函数里使用。
-    g.__main.g.context = context
+    g.main.g.context = context
     # 执行策略
-    g.__main.handle_data(context, data)
+    g.main.handle_data(context, data)
 
 
 # 开盘
 def before_trading_start(context, data):
-    log.info("==========================================================================")
-    g.__main.g.context = context
-    g.__main.before_trading_start(context)
+    log.info("=========================before_trading_start===================================")
+    g.main.g.context = context
+    g.main.before_trading_start(context)
 
 
 # 收盘
 def after_trading_end(context,data):
-    g.__main.g.context = context
-    g.__main.after_trading_end(context)
-    g.__main.g.context = None
+    log.info("=========================after_trading_end======================================")
+    g.main.g.context = context
+    g.main.after_trading_end(context)
+    g.main.g.context = None
 
 
 # 进程启动(一天一次)
 def process_initialize(context):
+    log.info("=========================process_initialize=====================================")
     try:
-        g.__main.g.context = context
-        g.__main.process_initialize(context)
+        g.main.g.context = context
+        g.main.process_initialize(context)
     except:
-        pass
+        import traceback
+        print(traceback.format_exc())
 
 
 # 这里示例进行模拟更改回测时，如何调整策略,基本通用代码。
 def after_code_changed(context):
-    try:
-        print ('=> 更新代码')
-        select_strategy(context)
-        g.__main.g.context = context
-        g.__main.update_params(context, {'config': g.__main_config})
-        g.__main.after_code_changed(context)
-        log.info(g.__main.show_strategy())
-    except Exception as e:
-        log.error('更新代码失败:' + str(e))
-        # initialize(context)
-        pass
+    log.info("=========================after_code_changed=====================================")
+    pass
     
     
 # ''' ----------------------参数自动调整----------------------------'''
