@@ -8,7 +8,6 @@ import datetime
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.width', 1000)
-NOTEBOOK_PATH = '/home/fly/notebook/upload_file/'
 
 #=========================================common==========================
 def join_list(pl, connector=' ', step=5):
@@ -814,8 +813,9 @@ class Pick_stock_list_from_file(Filter_stock_list):
         self.filename = params.get('filename', None)
 
     def filter(self, context, data, stock_list):
+        full_file_path = get_research_path() + "/upload_file/" + self.filename
         try:
-            with open(NOTEBOOK_PATH + self.filename, 'rb') as f:
+            with open(full_file_path, 'rb') as f:
                 stock_list = json.load(f)
                 stock_list = [stock.replace('XSHE', 'SZ').replace(
                     'XSHG', 'SS') for stock in stock_list]
