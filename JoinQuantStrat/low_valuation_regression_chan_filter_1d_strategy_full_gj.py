@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import enum
 import math
+import time
 import simplejson as json
 import datetime
 
@@ -101,18 +102,22 @@ class Global_variable(object):
     # 报单成功，触发所有规则的when_sell_stock函数
     def close_position(self, sender, position, is_normal=True):
         security = position.sid
-        order_id = order_target_value(security, 0)  # 可能会因停牌失败
+        #order_market(security, -position.enable_amount, market_type=0)
+        order_id = order_target_value(security, 
+                                      0, 
+                                      limit_price=position.last_sale_price*0.9)  # 可能会因停牌失败
+        time.sleep(6)
         if order_id != None:
             order = get_order(order_id)[0]
-            if order.filled != 0: #成交数量，买入时为正数，卖出时为负数
+            if order.status == '8': 
                 self._owner.on_sell_stock(position, order, is_normal,self.context)
                 if security not in self.sell_stocks:
                     self.sell_stocks.append(security)
                 return True
             else:
                 print("卖出%s失败, 尝试跌停价挂单" % (security))
-                snap_shot =get_snapshot(security)
-                order_target_value(security, 0, limit_price=snap_shot.low_limit) # 尝试跌停卖出
+                snap_shot =get_snapshot(security)[security]
+                order_target_value(security, 0, limit_price=snap_shot["low_px"]) # 尝试跌停卖出
         return False
 
     # 清空卖出所有持仓
