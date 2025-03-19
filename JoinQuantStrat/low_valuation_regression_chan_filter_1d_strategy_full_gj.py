@@ -72,9 +72,10 @@ class Global_variable(object):
     # 报单成功，触发所有规则的when_buy_stock函数
     def open_position(self, sender, security, value):
         order_id = order_value(security, value)
+        time.sleep(6)
         if order_id != None:
             order = get_order(order_id)[0]
-            if order.filled > 0:
+            if order.status == '8': 
             # 订单成功，则调用规则的买股事件 。（注：这里只适合市价，挂价单不适合这样处理）
                 self._owner.on_buy_stock(security, order, self.context)
                 return True
@@ -87,9 +88,10 @@ class Global_variable(object):
                 return True # don't need to make adjustments
 
         order_id = order_target_value(security, value)
+        time.sleep(6)
         if order_id != None:
             order = get_order(order_id)[0]
-            if order.filled > 0:
+            if order.status == '8': 
                 # 订单成功，则调用规则的买股事件 。（注：这里只适合市价，挂价单不适合这样处理）
                 self._owner.on_buy_stock(security, order, self.context)
                 return True
@@ -103,9 +105,10 @@ class Global_variable(object):
     def close_position(self, sender, position, is_normal=True):
         security = position.sid
         #order_market(security, -position.enable_amount, market_type=0)
+        snap_shot = get_snapshot(security)[security]
         order_id = order_target_value(security, 
                                       0, 
-                                      limit_price=position.last_sale_price*0.9)  # 可能会因停牌失败
+                                      limit_price=snap_shot["low_px"])  # 可能会因停牌失败
         time.sleep(6)
         if order_id != None:
             order = get_order(order_id)[0]
@@ -114,10 +117,6 @@ class Global_variable(object):
                 if security not in self.sell_stocks:
                     self.sell_stocks.append(security)
                 return True
-            else:
-                print("卖出%s失败, 尝试跌停价挂单" % (security))
-                snap_shot =get_snapshot(security)[security]
-                order_target_value(security, 0, limit_price=snap_shot["low_px"]) # 尝试跌停卖出
         return False
 
     # 清空卖出所有持仓
@@ -726,7 +725,7 @@ class Buy_stocks(Rule):
                 
         avg_value = context.portfolio.portfolio_value / self.buy_count
         for stock in buy_stocks:
-            if self.g.open_position(self, stock, avg_value):
+            if self.g.adjust_position(context, stock, avg_value):
                 if len(context.portfolio.positions) == self.buy_count:
                     break
                     

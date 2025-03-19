@@ -243,7 +243,7 @@ class Buy_stocks(Rule):
         avg_value = context.portfolio.total_value / self.buy_count
         for pindex in self.g.op_pindexs:
             for stock in buy_stocks:
-                if self.g.open_position(self, stock, avg_value, pindex):
+                if self.g.adjust_position(context, stock, avg_value, pindex):
                     if len(context.subportfolios[pindex].long_positions) == self.buy_count:
                         break
         
