@@ -866,7 +866,7 @@ class Op_stocks_record(Adjust_expand):
 
     def on_sell_stock(self, position, order, is_normal, new_pindex=0,context=None):
         self.position_has_change = True
-        self.op_sell_stocks.append([position.security, -order.filled])
+        self.op_sell_stocks.append([position.sid, -order.filled])
 
     def after_adjust_end(self, context, data):
         self.op_buy_stocks = self.merge_op_list(self.op_buy_stocks)
@@ -926,7 +926,7 @@ class Stat(Rule):
     def on_sell_stock(self, position, order, is_normal, pindex=0,context=None):
         if order.filled > 0:
             # 只要有成交，无论全部成交还是部分成交，则统计盈亏
-            self.watch(position.security, order.filled, position.avg_cost, position.price)
+            self.watch(position.sid, order.filled, position.cost_basis, position.last_sale_price)
 
     def on_buy_stock(self,stock,order,pindex=0,context=None):
         pass
@@ -1107,7 +1107,7 @@ def select_strategy(context):
     # 优先辅助规则，每分钟优先执行handle_data
     common_config_list = [
         [True, '', '设置系统参数', Set_sys_params, {
-            'benchmark': '000300.XSHG'  # 指定基准为次新股指
+            'benchmark': '000300.SS'  # 指定基准为次新股指
         }],
         [True, '', '手续费设置器', Set_slip_fee, {}],
         [True, '', '统计执行器', Stat, {'trade_stats':False}],
