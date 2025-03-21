@@ -547,18 +547,21 @@ class Set_sys_params(Rule):
 # 根据不同的时间段设置滑点与手续费并且更新指数成分股
 class Set_slip_fee(Rule):
     def before_trading_start(self, context):
-        # 根据不同的时间段设置手续费
-        dt = context.current_dt
-        if dt > datetime.datetime(2013, 1, 1):
-            set_commission(commission_ratio=0.0003, min_commission=5.0, type="STOCK")
-
-        elif dt > datetime.datetime(2011, 1, 1):
-            set_commission(commission_ratio=0.001, min_commission=5.0, type="STOCK")
-
-        elif dt > datetime.datetime(2009, 1, 1):
-            set_commission(commission_ratio=0.002, min_commission=5.0, type="STOCK")
-        else:
-            set_commission(commission_ratio=0.003, min_commission=5.0, type="STOCK")
+        try:
+            # 根据不同的时间段设置手续费
+            dt = context.current_dt
+            if dt > datetime.datetime(2013, 1, 1):
+                set_commission(commission_ratio=0.0003, min_commission=5.0, type="STOCK")
+    
+            elif dt > datetime.datetime(2011, 1, 1):
+                set_commission(commission_ratio=0.001, min_commission=5.0, type="STOCK")
+    
+            elif dt > datetime.datetime(2009, 1, 1):
+                set_commission(commission_ratio=0.002, min_commission=5.0, type="STOCK")
+            else:
+                set_commission(commission_ratio=0.003, min_commission=5.0, type="STOCK")
+        except:
+            pass
 
     def __str__(self):
         return '根据时间设置不同的交易费率'
@@ -677,6 +680,7 @@ class Buy_stocks(Rule):
     def __init__(self, params):
         Rule.__init__(self, params)
         self.buy_count = params.get('buy_count', 3)
+        self.use_portion = params.get('use_portion', 1.0)
         self.to_buy = []
 
     def update_params(self, context, params):
@@ -691,9 +695,9 @@ class Buy_stocks(Rule):
         log.info("待选股票: "+join_list([show_stock(stock) for stock in self.to_buy], ' ', 10))
         
         if self.buy_count > len(context.portfolio.positions):
-            cash_value = context.portfolio.cash
+            cash_value = context.portfolio.cash * self.use_portion
             cash_avg = cash_value / (self.buy_count - len(context.portfolio.positions.keys()))
-            value_avg = context.portfolio.portfolio_value / self.buy_count
+            value_avg = context.portfolio.portfolio_value / self.buy_count * self.use_portion
             
             if cash_avg / value_avg - 1 > 0.191:
                 log.info("rebalance positions")
@@ -708,7 +712,7 @@ class Buy_stocks(Rule):
         # 此处只根据可用金额平均分配购买，不能保证每个仓位平均分配
         position_count = len(context.portfolio.positions)
         if self.buy_count > position_count:
-            value = context.portfolio.cash / (self.buy_count - position_count)
+            value = context.portfolio.cash / (self.buy_count - position_count) * self.use_portion
             for stock in buy_stocks:
                 if stock in self.g.sell_stocks:
                     continue
@@ -723,7 +727,7 @@ class Buy_stocks(Rule):
             buy_stocks = [stock for stock in buy_stocks if stock not in self.g.sell_stocks and stock not in context.portfolio.positions.keys()]
             buy_stocks = list(context.portfolio.positions.keys()) + buy_stocks
                 
-        avg_value = context.portfolio.portfolio_value / self.buy_count
+        avg_value = context.portfolio.portfolio_value / self.buy_count * self.use_portion
         for stock in buy_stocks:
             if self.g.adjust_position(context, stock, avg_value):
                 if len(context.portfolio.positions) == self.buy_count:
@@ -1045,8 +1049,6 @@ class Stat(Rule):
 # ==================================策略配置==============================================
 def select_strategy(context):
     g.strategy_memo = '混合策略'
-    g.port_pos_control = 1.0 # 组合仓位控制参数
-    g.monitor_levels = ['5d','1d','60m']
     g.buy_count = 8
     g.money_fund = []
 
@@ -1091,9 +1093,8 @@ def select_strategy(context):
     adjust_position_config = [
         [True, '', '卖出股票', Sell_stocks, {}],
         [True, '', '买入股票', Buy_stocks, {
-            'use_short_filter':False,
-            'buy_count': g.buy_count,  # 最终买入股票数
-            'use_adjust_portion':False
+            'buy_count': g.buy_count,
+            'use_portion': 0.1
         }],
         [True, '_Show_postion_adjust_', '显示买卖的股票', Show_postion_adjust, {}],
     ]
