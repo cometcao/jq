@@ -790,7 +790,7 @@ class Pick_stocks2(Group_rules):
             if isinstance(rule, Early_Filter_stock_list):
                 self.g.buy_stocks = rule.filter(context, self.g.buy_stocks)
 
-        checking_stocks = list(set(self.g.buy_stocks + list(context.portfolio.positions.keys())))
+        checking_stocks = self.g.buy_stocks
         if self.file_path:
             if self.file_path == "daily":
                 write_file(
