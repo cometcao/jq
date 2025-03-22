@@ -751,7 +751,6 @@ class Pick_stocks2(Group_rules):
         Group_rules.__init__(self, params)
         self.has_run = False
         self.file_path = params.get('write_to_file', None)
-        self.add_etf = params.get('add_etf', False)
 
     def handle_data(self, context, data):
         try:
@@ -767,7 +766,6 @@ class Pick_stocks2(Group_rules):
             if isinstance(rule, Filter_stock_list):
                 stock_list = rule.filter(context, data, stock_list)
 
-        # add the ETF index into list this is already done in oop_stop_loss,
         # dirty hack
         self.g.monitor_buy_list = stock_list
         log.info(
@@ -792,10 +790,7 @@ class Pick_stocks2(Group_rules):
             if isinstance(rule, Early_Filter_stock_list):
                 self.g.buy_stocks = rule.filter(context, self.g.buy_stocks)
 
-        checking_stocks = [stock for stock in list(set(
-            self.g.buy_stocks + list(context.portfolio.positions.keys()))) if stock not in g.money_fund]
-        if self.add_etf:
-            checking_stocks = checking_stocks + g.etf
+        checking_stocks = list(set(self.g.buy_stocks + list(context.portfolio.positions.keys())))
         if self.file_path:
             if self.file_path == "daily":
                 write_file(
@@ -827,12 +822,14 @@ class Pick_stock_list_from_file(Filter_stock_list):
                 stock_list = json.load(f)
                 stock_list = [stock.replace('XSHE', 'SZ').replace(
                     'XSHG', 'SS') for stock in stock_list]
-        #定义空的全局字典变量
         except:
-            log.info("file {0} read failed hold on current positions".format(self.filename))
+            log.info(
+                "file {0} read failed hold on current positions".format(self.filename))
             stock_list = list(context.portfolio.positions.keys())
+
         log.info("stocks {0} read from file {1}".format(
             stock_list, self.filename))
+        
         return stock_list
 
 
@@ -1044,13 +1041,10 @@ class Stat(Rule):
     def __str__(self):
         return '策略绩效统计'
 
-
-
 # ==================================策略配置==============================================
 def select_strategy(context):
     g.strategy_memo = '混合策略'
     g.buy_count = 8
-    g.money_fund = []
 
     ''' ---------------------配置 调仓条件判断规则-----------------------'''
     # 调仓条件判断
@@ -1085,7 +1079,6 @@ def select_strategy(context):
             'config': pick_config,
             'day_only_run_one': True, 
             'write_to_file': None,
-            'add_etf':False
         }]
     ]
 
