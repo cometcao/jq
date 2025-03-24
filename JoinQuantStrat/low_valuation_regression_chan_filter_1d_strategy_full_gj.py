@@ -105,11 +105,16 @@ class Global_variable(object):
     def close_position(self, sender, position, is_normal=True):
         security = position.sid
         #order_market(security, -position.enable_amount, market_type=0)
-        snap_shot = get_snapshot(security)[security]
-        order_id = order_target_value(security, 
-                                      0, 
-                                      limit_price=snap_shot["low_px"])  # 可能会因停牌失败
-        time.sleep(6)
+        order_id = None
+        if is_trade():
+            snap_shot = get_snapshot(security)[security]
+            order_id = order_target_value(security, 
+                                          0, 
+                                          limit_price=snap_shot["low_px"])  # 可能会因停牌失败
+            time.sleep(6)
+        else:
+            order_id = order_target_value(security, 0)
+
         if order_id != None:
             order = get_order(order_id)[0]
             if order.status == '8': 
@@ -521,23 +526,26 @@ class Adjust_expand(Rule):
 class Set_sys_params(Rule):
     def __init__(self, params):
         Rule.__init__(self, params)
-        pd.options.mode.chained_assignment = None
-        try:
-            # 一律使用真实价格
-            set_option('use_real_price', self._params.get('use_real_price', True))
-            set_option("avoid_future_data", True)
-        except:
-            pass
-        try:
-            # 过滤log
-            log.set_level(*(self._params.get('level', ['order', 'error'])))
-        except:
-            pass
-        try:
-            # 设置基准
-            set_benchmark(self._params.get('benchmark', '000300.XSHG'))
-        except:
-            pass
+        # pd.options.mode.chained_assignment = None
+        # try:
+        #     # 一律使用真实价格
+        #     set_option('use_real_price', self._params.get('use_real_price', True))
+        #     set_option("avoid_future_data", True)
+        # except:
+        #     import traceback
+        #     print(traceback.format_exc())
+        # try:
+        #     # 过滤log
+        #     log.set_level(*(self._params.get('level', ['order', 'error'])))
+        # except:
+        #     import traceback
+        #     print(traceback.format_exc())
+        # try:
+        #     # 设置基准
+        #     set_benchmark(self._params.get('benchmark', '000300.XSHG'))
+        # except:
+        #     import traceback
+        #     print(traceback.format_exc())
 
     def __str__(self):
         return '设置系统参数：[使用真实价格交易] [防止未来函数] [忽略order 的 log] [设置基准]'
@@ -561,7 +569,8 @@ class Set_slip_fee(Rule):
             else:
                 set_commission(commission_ratio=0.003, min_commission=5.0, type="STOCK")
         except:
-            pass
+            import traceback
+            print(traceback.format_exc())
 
     def __str__(self):
         return '根据时间设置不同的交易费率'
@@ -829,7 +838,11 @@ class Pick_stock_list_from_file(Filter_stock_list):
 
         log.info("stocks {0} read from file {1}".format(
             stock_list, self.filename))
-        
+
+        ##########################
+        # import random
+        # random.shuffle(stock_list)
+        ##########################
         return stock_list
 
 
@@ -1118,9 +1131,8 @@ def select_strategy(context):
                      + pick_new
                      + adjust_position_config)
 
-
-# ===================================聚宽调用==============================================
 def initialize(context):
+    log.info("=========================initialize=========================================")
     # 策略配置
     select_strategy(context)
     # 创建策略组合
@@ -1144,13 +1156,14 @@ def handle_data(context, data):
 
 # 开盘
 def before_trading_start(context, data):
-    log.info("==========================================================================")
+    log.info("=========================before_trading_start===================================")
     g.main.g.context = context
     g.main.before_trading_start(context)
 
 
 # 收盘
 def after_trading_end(context,data):
+    log.info("=========================after_trading_end======================================")
     g.main.g.context = context
     g.main.after_trading_end(context)
     g.main.g.context = None
@@ -1158,26 +1171,19 @@ def after_trading_end(context,data):
 
 # 进程启动(一天一次)
 def process_initialize(context):
+    log.info("=========================process_initialize=====================================")
     try:
         g.main.g.context = context
         g.main.process_initialize(context)
     except:
-        pass
+        import traceback
+        print(traceback.format_exc())
 
 
 # 这里示例进行模拟更改回测时，如何调整策略,基本通用代码。
 def after_code_changed(context):
-    try:
-        print ('=> 更新代码')
-        select_strategy(context)
-        g.main.g.context = context
-        g.main.update_params(context, {'config': g.main_config})
-        g.main.after_code_changed(context)
-        log.info(g.main.show_strategy())
-    except Exception as e:
-        log.error('更新代码失败:' + str(e))
-        # initialize(context)
-        pass
+    log.info("=========================after_code_changed=====================================")
+    pass
     
     
 # ''' ----------------------参数自动调整----------------------------'''
