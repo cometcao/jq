@@ -72,7 +72,8 @@ class Global_variable(object):
     # 报单成功，触发所有规则的when_buy_stock函数
     def open_position(self, sender, security, value):
         order_id = order_value(security, value)
-        time.sleep(6)
+        if is_trade():
+            time.sleep(6)
         if order_id != None:
             order = get_order(order_id)[0]
             if order.status == '8': 
@@ -88,7 +89,8 @@ class Global_variable(object):
                 return True # don't need to make adjustments
 
         order_id = order_target_value(security, value)
-        time.sleep(6)
+        if is_trade():
+            time.sleep(6)
         if order_id != None:
             order = get_order(order_id)[0]
             if order.status == '8': 
@@ -670,7 +672,7 @@ class Sell_stocks(Rule):
         self.adjust(context, data, self.g.monitor_buy_list)
 
     def adjust(self, context, data, buy_stocks):
-        # 卖出不在待买股票列表中的股票
+        log.info("卖出不在待买股票列表中的股票")
         # 对于因停牌等原因没有卖出的股票则继续持有
         for stock in context.portfolio.positions.keys():
             if stock not in buy_stocks:
@@ -702,14 +704,12 @@ class Buy_stocks(Rule):
             return
         self.to_buy = self.g.monitor_buy_list
         log.info("待选股票: "+join_list([show_stock(stock) for stock in self.to_buy], ' ', 10))
-        
-        if self.buy_count > len(context.portfolio.positions):
-            cash_value = context.portfolio.cash * self.use_portion
-            cash_avg = cash_value / (self.buy_count - len(context.portfolio.positions.keys()))
-            value_avg = context.portfolio.portfolio_value / self.buy_count * self.use_portion
+        pos_count = sum([1 for pos in context.portfolio.positions.keys() if context.portfolio.positions[pos].amount > 0])
+        if self.buy_count > pos_count:
+            target_avg = context.portfolio.portfolio_value / self.buy_count * self.use_portion
+            pos_value = context.portfolio.positions_value / pos_count if pos_count > 0 else target_avg
             
-            if cash_avg / value_avg - 1 > 0.191:
-                log.info("rebalance positions")
+            if abs(pos_value / target_avg) - 1 > 0.382:
                 self.adjust_avg(context, data, self.to_buy)
             else:
                 self.adjust(context, data, self.to_buy)
@@ -719,7 +719,7 @@ class Buy_stocks(Rule):
         # 始终保持持仓数目为g.buy_stock_count
         # 根据股票数量分仓
         # 此处只根据可用金额平均分配购买，不能保证每个仓位平均分配
-        position_count = len(context.portfolio.positions)
+        position_count = sum([1 for pos in context.portfolio.positions.keys() if context.portfolio.positions[pos].amount > 0])
         if self.buy_count > position_count:
             value = context.portfolio.cash / (self.buy_count - position_count) * self.use_portion
             for stock in buy_stocks:
@@ -727,20 +727,22 @@ class Buy_stocks(Rule):
                     continue
                 if stock not in context.portfolio.positions.keys():
                     if self.g.open_position(self, stock, value):
-                        if len(context.portfolio.positions) == self.buy_count:
+                        position_count = sum([1 for pos in context.portfolio.positions.keys() if context.portfolio.positions[pos].amount > 0])
+                        if position_count == self.buy_count:
                             break
     
     def adjust_avg(self, context, data, buy_stocks):
-        position_count = len(context.portfolio.positions)
-        if self.buy_count > position_count:
-            buy_stocks = [stock for stock in buy_stocks if stock not in self.g.sell_stocks and stock not in context.portfolio.positions.keys()]
-            buy_stocks = list(context.portfolio.positions.keys()) + buy_stocks
-                
+        sorted_holding_stocks_data = sorted([(pos, context.portfolio.positions[pos].amount * context.portfolio.positions[pos].last_sale_price)
+                                        for pos in context.portfolio.positions.keys() if context.portfolio.positions[pos].amount > 0], key=lambda x: x[1], reverse = True)
+        sorted_holding_stocks = [i[0] for i in sorted_holding_stocks_data]
+
+        buy_stocks = [stock for stock in buy_stocks if stock not in self.g.sell_stocks and stock not in sorted_holding_stocks]
+        buy_stocks = sorted_holding_stocks + buy_stocks
+
         avg_value = context.portfolio.portfolio_value / self.buy_count * self.use_portion
-        for stock in buy_stocks:
+        for stock in buy_stocks[:self.buy_count]:
             if self.g.adjust_position(context, stock, avg_value):
-                if len(context.portfolio.positions) == self.buy_count:
-                    break
+                pass
                     
     def after_trading_end(self, context):
         self.g.sell_stocks = []
