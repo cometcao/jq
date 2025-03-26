@@ -207,7 +207,8 @@ class Global_variable(object):
         pos_ratio = {}
         for stock in context.portfolio.positions.keys():
             pos = context.portfolio.positions[stock]
-            pos_ratio[stock] = (pos.amount * pos.last_sale_price) / total_value
+            if pos.amount > 0 and total_value > 0:
+                pos_ratio[stock] = (pos.amount * pos.last_sale_price) / total_value
         return pos_ratio
 
 # ''' ==============================规则基类================================'''
