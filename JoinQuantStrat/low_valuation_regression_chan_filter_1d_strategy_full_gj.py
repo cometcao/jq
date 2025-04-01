@@ -722,7 +722,7 @@ class Buy_stocks(Rule):
         # 此处只根据可用金额平均分配购买，不能保证每个仓位平均分配
         position_count = sum([1 for pos in context.portfolio.positions.keys() if context.portfolio.positions[pos].amount > 0])
         if self.buy_count > position_count:
-            value = context.portfolio.cash / (self.buy_count - position_count) * self.use_portion
+            value = context.portfolio.portfolio_value / self.buy_count * self.use_portion
             for stock in buy_stocks:
                 if stock in self.g.sell_stocks:
                     continue
