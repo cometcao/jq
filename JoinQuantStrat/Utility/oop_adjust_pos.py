@@ -109,23 +109,33 @@ class Sell_stocks(Rule):
         Rule.__init__(self, params)
         self.use_short_filter = params.get('use_short_filter', False)
         self.money_fund = params.get('money_fund', ['511880.XSHG'])
-        
+        self.strict_mode = params.get('strict_mode', False)
+        self.buy_count = params.get('buy_count', 8)
+
+    def update_params(self, context, params):
+        Rule.update_params(self, context, params)
+        self.strict_mode = params.get('strict_mode', False)
+        self.buy_count = params.get('buy_count', 8)
+
     def handle_data(self, context, data):
         to_sell = context.portfolio.positions.keys()
         if self.use_short_filter:
             cta = checkTAIndicator_OR({
-                'TA_Indicators':[
-                                (TaType.MACD,'240m',233),
-                                (TaType.MACD,'120m',233),
-                                (TaType.MACD,'60m',233),
-                                (TaType.BOLL, '240m',100),
-                                (TaType.BOLL_UPPER, '1d',100),
-                                ],
-                'isLong':False})
-            to_sell = cta.filter(context, data,to_sell)
+                'TA_Indicators': [
+                    (TaType.MACD, '240m', 233),
+                    (TaType.MACD, '120m', 233),
+                    (TaType.MACD, '60m', 233),
+                    (TaType.BOLL, '240m', 100),
+                    (TaType.BOLL_UPPER, '1d', 100),
+                ],
+                'isLong': False})
+            to_sell = cta.filter(context, data, to_sell)
         else:
             to_sell = []
-        self.g.monitor_buy_list = [stock for stock in self.g.monitor_buy_list if stock not in to_sell]        
+        self.g.monitor_buy_list = [
+            stock for stock in self.g.monitor_buy_list if stock not in to_sell]
+        if self.strict_mode:
+            self.g.monitor_buy_list = self.g.monitor_buy_list[:self.buy_count]
         self.adjust(context, data, self.g.monitor_buy_list)
 
     def adjust(self, context, data, buy_stocks):
@@ -144,7 +154,7 @@ class Sell_stocks(Rule):
             self.g.short_record[stock] = (biaoLiStatus, ta_type, period)
 
     def __str__(self):
-        return '股票调仓卖出规则：卖出不在buy_stocks的股票'
+        return '股票调仓卖出规则：卖出不在buy_stocks的股票 strict_mode:{0}'.format(str(self.strict_mode))
 
 
 # '''---------------买入股票规则--------------'''
@@ -181,7 +191,7 @@ class Buy_stocks(Rule):
                 cash_avg = cash_value / (self.buy_count - len(context.portfolio.positions.keys()))
                 value_avg = context.portfolio.total_value / self.buy_count
                 
-                if cash_avg / value_avg - 1 > 0.191:
+                if abs(cash_avg / value_avg) - 1 > 0.382:
                     self.log.info("rebalance positions")
                     self.adjust_avg(context, data, self.to_buy)
                 else:
