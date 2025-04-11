@@ -1129,17 +1129,23 @@ def select_strategy(context):
         }]
     ]
     # 组合成一个总的策略
-    g.main_config = (common_config
+    return (common_config
                      + adjust_condition_config
                      + pick_new
                      + adjust_position_config)
 
 def initialize(context):
     log.info("=========================initialize=========================================")
+    pass
+
+
+# 进程启动(一天一次)
+def process_initialize(context):
+    log.info("=========================process_initialize=====================================")
     # 策略配置
-    select_strategy(context)
+    main_config = select_strategy(context)
     # 创建策略组合
-    g.main = Strategy_Group({'config': g.main_config
+    g.main = Strategy_Group({'config': main_config
                                 , 'g_class': Global_variable
                                 , 'memo': g.strategy_memo
                                 , 'name': '_main_'})
@@ -1160,6 +1166,7 @@ def handle_data(context, data):
 # 开盘
 def before_trading_start(context, data):
     log.info("=========================before_trading_start===================================")
+    process_initialize(context)
     g.main.g.context = context
     g.main.before_trading_start(context)
 
@@ -1170,17 +1177,7 @@ def after_trading_end(context,data):
     g.main.g.context = context
     g.main.after_trading_end(context)
     g.main.g.context = None
-
-
-# 进程启动(一天一次)
-def process_initialize(context):
-    log.info("=========================process_initialize=====================================")
-    try:
-        g.main.g.context = context
-        g.main.process_initialize(context)
-    except:
-        import traceback
-        print(traceback.format_exc())
+    g.main = None
 
 
 # 这里示例进行模拟更改回测时，如何调整策略,基本通用代码。
