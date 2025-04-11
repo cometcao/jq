@@ -1116,15 +1116,15 @@ def select_strategy(context):
     ''' --------------------------配置 辅助规则------------------ '''
     # 优先辅助规则，每分钟优先执行handle_data
     common_config_list = [
-        [True, '', '设置系统参数', Set_sys_params, {
+        [False, '', '设置系统参数', Set_sys_params, {
             'benchmark': '000300.SS'  # 指定基准为次新股指
         }],
-        [True, '', '手续费设置器', Set_slip_fee, {}],
-        [True, '', '统计执行器', Stat, {'trade_stats':False}],
+        [False, '', '手续费设置器', Set_slip_fee, {}],
+        [False, '', '统计执行器', Stat, {'trade_stats':False}],
         [False, '', '自动调参器', Update_Params_Auto, {}],
     ]
     common_config = [
-        [True, '_other_pre_', '预先处理的辅助规则', Group_rules, {
+        [False, '_other_pre_', '预先处理的辅助规则', Group_rules, {
             'config': common_config_list
         }]
     ]
