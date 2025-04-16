@@ -71,9 +71,13 @@ class Global_variable(object):
     # 报单失败或者报单成功但被取消（此时成交量等于0），返回False
     # 报单成功，触发所有规则的when_buy_stock函数
     def open_position(self, sender, security, value):
-        order_id = order_value(security, value)
+        order_id = None
         if is_trade():
-            time.sleep(6)
+            snap_shot = get_snapshot(security)[security]
+            amount = value / snap_shot["last_px"] // 100 * 100
+            order_id = order_market(security, amount, 0)
+        else:
+            order_id = order_value(security, value)
         if order_id != None:
             order = get_order(order_id)[0]
             if order.status == '8': 
@@ -89,8 +93,6 @@ class Global_variable(object):
                 return True # don't need to make adjustments
 
         order_id = order_target_value(security, value)
-        if is_trade():
-            time.sleep(6)
         if order_id != None:
             order = get_order(order_id)[0]
             if order.status == '8': 
@@ -106,14 +108,11 @@ class Global_variable(object):
     # 报单成功，触发所有规则的when_sell_stock函数
     def close_position(self, sender, position, is_normal=True):
         security = position.sid
-        #order_market(security, -position.enable_amount, market_type=0)
         order_id = None
         if is_trade():
-            snap_shot = get_snapshot(security)[security]
-            order_id = order_target_value(security, 
-                                          0, 
-                                          limit_price=snap_shot["low_px"])  # 可能会因停牌失败
-            time.sleep(6)
+            order_id = order_market(security, 
+                                    -position.enable_amount, 
+                                    0) # 可能会因停牌失败
         else:
             order_id = order_target_value(security, 0)
 
@@ -705,6 +704,11 @@ class Buy_stocks(Rule):
             return
         self.to_buy = self.g.monitor_buy_list
         log.info("待选股票: "+join_list([show_stock(stock) for stock in self.to_buy], ' ', 10))
+        for order in get_orders():
+            if order.status != '8':
+                log.info('之前交易未成交等待中')
+                time.sleep(6)
+        
         pos_count = sum([1 for pos in context.portfolio.positions.keys() if context.portfolio.positions[pos].amount > 0])
         if self.buy_count > pos_count:
             target_avg = context.portfolio.portfolio_value / self.buy_count * self.use_portion
@@ -714,6 +718,8 @@ class Buy_stocks(Rule):
                 self.adjust_avg(context, data, self.to_buy)
             else:
                 self.adjust(context, data, self.to_buy)
+        else:
+            log.info(f"持仓数量完整:{[(stock, context.portfolio.positions[stock].amount) for stock in context.portfolio.positions.keys()]} ")
         
     def adjust(self, context, data, buy_stocks):
         # 买入股票
