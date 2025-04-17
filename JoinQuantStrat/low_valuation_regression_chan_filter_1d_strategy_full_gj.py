@@ -74,8 +74,13 @@ class Global_variable(object):
         order_id = None
         if is_trade():
             snap_shot = get_snapshot(security)[security]
-            amount = value / snap_shot["last_px"] // 100 * 100
-            order_id = order_market(security, amount, 0)
+            last_px = snap_shot["last_px"]
+            high_px = snap_shot["high_px"]
+            amount = value / last_px // 100 * 100
+            order_id = order_market(security, 
+                                    amount = amount, 
+                                    market_type = 0,
+                                    limit_price = high_px)
         else:
             order_id = order_value(security, value)
         if order_id != None:
@@ -110,9 +115,11 @@ class Global_variable(object):
         security = position.sid
         order_id = None
         if is_trade():
+            snap_shot = get_snapshot(security)[security]
             order_id = order_market(security, 
-                                    -position.enable_amount, 
-                                    0) # 可能会因停牌失败
+                                    amount = -position.enable_amount, 
+                                    market_type = 0,
+                                    limit_price = snap_shot.get("low_px", 0.1)) # 可能会因停牌失败
         else:
             order_id = order_target_value(security, 0)
 
