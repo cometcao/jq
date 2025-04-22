@@ -45,7 +45,6 @@ class Global_variable(object):
     _owner = None
     
     buy_stocks = []  # 选股列表
-    sell_stocks = []  # 卖出的股票列表
     # 以下参数需配置  Run_Status_Recorder 规则进行记录。
     run_day = 0  # 运行天数，持仓天数为正，空仓天数为负
     position_record = [False]  # 持仓空仓记录表。True表示持仓，False表示空仓。一天一个。
@@ -66,6 +65,27 @@ class Global_variable(object):
         new_value = amount * cur_price
         return True, new_value
 
+    def find_market_type(self, security):
+        market_type = 4
+        if security[:3] == "688":
+            market_type = 0
+        elif security[:2] == "60":
+            market_type = 1
+        elif security[:3] == "300" or security[:2] == "00":
+            market_type = 0
+        return market_type
+
+    def wait_for_orders(self, order_type=0): # order_type: 1 buy, -1 sell, 0 all
+        for order in get_orders():
+            if order.status != '8' \
+                and (order_type == 0 \
+                     or order_type == -1 and order.amount < 0 \
+                     or order_type == 1 and order.amount > 0):
+                log.info('之前交易未成交等待中:{0}'.format(order))
+                time.sleep(6)
+            else:
+                pass
+
     # 开仓，买入指定价值的证券
     # 报单成功并成交（包括全部成交或部分成交，此时成交量大于0），返回True
     # 报单失败或者报单成功但被取消（此时成交量等于0），返回False
@@ -73,13 +93,14 @@ class Global_variable(object):
     def open_position(self, sender, security, value):
         order_id = None
         if is_trade():
+            self.wait_for_orders(order_type=0)
             snap_shot = get_snapshot(security)[security]
             last_px = snap_shot["last_px"]
             high_px = snap_shot["high_px"]
             amount = value / last_px // 100 * 100
             order_id = order_market(security, 
                                     amount = amount, 
-                                    market_type = 0,
+                                    market_type = self.find_market_type(security),
                                     limit_price = high_px)
         else:
             order_id = order_value(security, value)
@@ -97,6 +118,7 @@ class Global_variable(object):
             if abs(1 - pos_value/value) <= 0.055:
                 return True # don't need to make adjustments
 
+        self.wait_for_orders(order_type=0)
         order_id = order_target_value(security, value)
         if order_id != None:
             order = get_order(order_id)[0]
@@ -118,7 +140,7 @@ class Global_variable(object):
             snap_shot = get_snapshot(security)[security]
             order_id = order_market(security, 
                                     amount = -position.enable_amount, 
-                                    market_type = 0,
+                                    market_type = self.find_market_type(security),
                                     limit_price = snap_shot.get("low_px", 0.1)) # 可能会因停牌失败
         else:
             order_id = order_target_value(security, 0)
@@ -127,8 +149,6 @@ class Global_variable(object):
             order = get_order(order_id)[0]
             if order.status == '8': 
                 self._owner.on_sell_stock(position, order, is_normal,self.context)
-                if security not in self.sell_stocks:
-                    self.sell_stocks.append(security)
                 return True
         return False
 
@@ -286,7 +306,7 @@ class Rule(object):
             record(**kwargs)
 
     def set_g(self, g):
-        self.g = g
+        self.l_g = g
 
     def __str__(self):
         return self.memo
@@ -408,8 +428,8 @@ class Group_rules(Rule):
     # 创建一个规则执行器，并初始化一些通用事件
     def create_rule(self, class_type, params, name, memo):
         obj = class_type(params)
-        # obj.g = self.g
-        obj.set_g(self.g)
+        # obj.g = self.l_g
+        obj.set_g(self.l_g)
         obj.name = name
         obj.memo = memo
         # print g.log_type,obj.memo
@@ -454,10 +474,10 @@ class Group_rules(Rule):
 # 策略组合器
 class Strategy_Group(Group_rules):
     def initialize(self, context):
-        self.g = self._params.get('g_class', Global_variable)(self)
+        self.l_g = self._params.get('g_class', Global_variable)(self)
         self.memo = self._params.get('memo', self.memo)
         self.name = self._params.get('name', self.name)
-        self.g.context = context
+        self.l_g.context = context
         Group_rules.initialize(self, context)
 
     def handle_data(self, context, data):
@@ -469,10 +489,10 @@ class Strategy_Group(Group_rules):
         self.is_to_return = False
         pass
 
-    # 重载 set_g函数,self.g不再被外部修改
+    # 重载 set_g函数,self.l_g不再被外部修改
     def set_g(self, g):
-        if self.g is None:
-            self.g = g
+        if self.l_g is None:
+            self.l_g = g
         
 
 '''=========================选股规则相关==================================='''
@@ -514,7 +534,7 @@ class Adjust_position(Group_rules):
         for rule in self.rules:
             if isinstance(rule, Adjust_expand):
                 rule.after_adjust_end(context, data)
-        self.g.send_port_info(context)
+        self.l_g.send_port_info(context)
         if self.is_to_return:
             return
 
@@ -657,9 +677,9 @@ class Period_condition(Weight_Base):
     def on_clear_position(self, context, new_pindexs=[0]):
         self.day_count = 0
         self.mark_today = {}
-        if self.g.curve_protect or self.on_clear_wait_days > 0:
+        if self.l_g.curve_protect or self.on_clear_wait_days > 0:
             self.day_count = -self.on_clear_wait_days
-            self.g.curve_protect = False
+            self.l_g.curve_protect = False
         pass
 
     def __str__(self):
@@ -675,8 +695,8 @@ class Sell_stocks(Rule):
         
     def handle_data(self, context, data):
         to_sell = []
-        self.g.monitor_buy_list = [stock for stock in self.g.monitor_buy_list if stock not in to_sell]        
-        self.adjust(context, data, self.g.monitor_buy_list)
+        self.l_g.monitor_buy_list = [stock for stock in self.l_g.monitor_buy_list if stock not in to_sell]        
+        self.adjust(context, data, self.l_g.monitor_buy_list)
 
     def adjust(self, context, data, buy_stocks):
         log.info("卖出不在待买股票列表中的股票")
@@ -684,7 +704,7 @@ class Sell_stocks(Rule):
         for stock in context.portfolio.positions.keys():
             if stock not in buy_stocks:
                 position = context.portfolio.positions[stock]
-                self.g.close_position(self, position, True)
+                self.l_g.close_position(self, position, True)
                     
     def recordTrade(self, stock_list):
         pass
@@ -709,24 +729,21 @@ class Buy_stocks(Rule):
         if self.is_to_return:
             log.info('无法执行买入!! self.is_to_return 未开启')
             return
-        self.to_buy = self.g.monitor_buy_list
+        self.to_buy = self.l_g.monitor_buy_list
         log.info("待选股票: "+join_list([show_stock(stock) for stock in self.to_buy], ' ', 10))
-        for order in get_orders():
-            if order.status != '8':
-                log.info('之前交易未成交等待中')
-                time.sleep(6)
-        
-        pos_count = sum([1 for pos in context.portfolio.positions.keys() if context.portfolio.positions[pos].amount > 0])
+        holding_stocks = [context.portfolio.positions[pos].sid for pos in context.portfolio.positions.keys() if context.portfolio.positions[pos].amount > 0]
+        pos_count = len(holding_stocks)
         if self.buy_count > pos_count:
             target_avg = context.portfolio.portfolio_value / self.buy_count * self.use_portion
             pos_value = context.portfolio.positions_value / pos_count if pos_count > 0 else target_avg
-            
+            log.info("执行调仓买入:{}".format([stock for stock in self.to_buy if stock not in holding_stocks]))
             if abs(pos_value / target_avg) - 1 > 0.382:
+                log.info("平衡仓位")
                 self.adjust_avg(context, data, self.to_buy)
             else:
                 self.adjust(context, data, self.to_buy)
         else:
-            log.info(f"持仓数量完整:{[(stock, context.portfolio.positions[stock].amount) for stock in context.portfolio.positions.keys()]} ")
+            log.info("持仓数量完整:{}".format([(stock, context.portfolio.positions[stock].amount) for stock in context.portfolio.positions.keys()]))
         
     def adjust(self, context, data, buy_stocks):
         # 买入股票
@@ -737,10 +754,8 @@ class Buy_stocks(Rule):
         if self.buy_count > position_count:
             value = context.portfolio.portfolio_value / self.buy_count * self.use_portion
             for stock in buy_stocks:
-                if stock in self.g.sell_stocks:
-                    continue
                 if stock not in context.portfolio.positions.keys():
-                    if self.g.open_position(self, stock, value):
+                    if self.l_g.open_position(self, stock, value):
                         position_count = sum([1 for pos in context.portfolio.positions.keys() if context.portfolio.positions[pos].amount > 0])
                         if position_count == self.buy_count:
                             break
@@ -750,16 +765,16 @@ class Buy_stocks(Rule):
                                         for pos in context.portfolio.positions.keys() if context.portfolio.positions[pos].amount > 0], key=lambda x: x[1], reverse = True)
         sorted_holding_stocks = [i[0] for i in sorted_holding_stocks_data]
 
-        buy_stocks = [stock for stock in buy_stocks if stock not in self.g.sell_stocks and stock not in sorted_holding_stocks]
+        buy_stocks = [stock for stock in buy_stocks if stock not in sorted_holding_stocks]
         buy_stocks = sorted_holding_stocks + buy_stocks
 
         avg_value = context.portfolio.portfolio_value / self.buy_count * self.use_portion
         for stock in buy_stocks[:self.buy_count]:
-            if self.g.adjust_position(context, stock, avg_value):
+            if self.l_g.adjust_position(context, stock, avg_value):
                 pass
                     
     def after_trading_end(self, context):
-        self.g.sell_stocks = []
+        log.info("after_trading_end clear")
         self.to_buy = []
         
     def recordTrade(self, stock_list):
@@ -786,13 +801,13 @@ class Pick_stocks2(Group_rules):
             # log.info('设置一天只选一次，跳过选股。')
             return
 
-        stock_list = self.g.buy_stocks
+        stock_list = self.l_g.buy_stocks
         for rule in self.rules:
             if isinstance(rule, Filter_stock_list):
                 stock_list = rule.filter(context, data, stock_list)
 
         # dirty hack
-        self.g.monitor_buy_list = stock_list
+        self.l_g.monitor_buy_list = stock_list
         log.info(
             '今日选股:\n' + join_list(["[%s]" % (show_stock(x)) for x in stock_list], ' ', 10))
         self.has_run = True
@@ -801,10 +816,10 @@ class Pick_stocks2(Group_rules):
         self.has_run = False
         # clear the buy list this variable stores the initial list of
         # candidates for the day
-        self.g.buy_stocks = []
+        self.l_g.buy_stocks = []
         for rule in self.rules:
             if isinstance(rule, Create_stock_list):
-                self.g.buy_stocks = self.g.buy_stocks + \
+                self.l_g.buy_stocks = self.l_g.buy_stocks + \
                     rule.before_trading_start(context)
 
         for rule in self.rules:
@@ -813,9 +828,9 @@ class Pick_stocks2(Group_rules):
 
         for rule in self.rules:
             if isinstance(rule, Early_Filter_stock_list):
-                self.g.buy_stocks = rule.filter(context, self.g.buy_stocks)
+                self.l_g.buy_stocks = rule.filter(context, self.l_g.buy_stocks)
 
-        checking_stocks = self.g.buy_stocks
+        checking_stocks = self.l_g.buy_stocks
         if self.file_path:
             if self.file_path == "daily":
                 write_file(
@@ -858,6 +873,7 @@ class Pick_stock_list_from_file(Filter_stock_list):
         ##########################
         # import random
         # random.shuffle(stock_list)
+        # stock_list = stock_list[:8]
         ##########################
         return stock_list
 
@@ -918,12 +934,6 @@ class Show_postion_adjust(Op_stocks_record):
     def after_adjust_end(self, context, data):
         # 调用父类方法
         Op_stocks_record.after_adjust_end(self, context, data)
-        # if len(self.g.buy_stocks) > 0:
-        #     if len(self.g.buy_stocks) > 5:
-        #         tl = self.g.buy_stocks[0:5]
-        #     else:
-        #         tl = self.g.buy_stocks[:]
-        #     log.info('选股:\n' + join_list(["[%s]" % (show_stock(x)) for x in tl], ' ', 10))
         # 显示买卖日志
         if len(self.op_sell_stocks) > 0:
             log.info(
@@ -949,8 +959,8 @@ class Stat(Rule):
 
     def after_trading_end(self, context):
         if self._params.get('trade_stats', True):
-            self.g.long_record = {}
-            self.g.short_record = {}
+            self.l_g.long_record = {}
+            self.l_g.short_record = {}
         self.report(context)
 
     def on_sell_stock(self, position, order, is_normal, pindex=0,context=None):
@@ -1171,7 +1181,7 @@ def process_initialize(context):
 # 按分钟回测
 def handle_data(context, data):
     # 保存context到全局变量量，主要是为了方便规则器在一些没有context的参数的函数里使用。
-    g.main.g.context = context
+    g.main.l_g.context = context
     # 执行策略
     g.main.handle_data(context, data)
 
@@ -1180,16 +1190,16 @@ def handle_data(context, data):
 def before_trading_start(context, data):
     log.info("=========================before_trading_start===================================")
     process_initialize(context)
-    g.main.g.context = context
+    g.main.l_g.context = context
     g.main.before_trading_start(context)
 
 
 # 收盘
 def after_trading_end(context,data):
     log.info("=========================after_trading_end======================================")
-    g.main.g.context = context
+    g.main.l_g.context = context
     g.main.after_trading_end(context)
-    g.main.g.context = None
+    g.main.l_g.context = None
     g.main = None
 
 
@@ -1205,7 +1215,7 @@ class Update_Params_Auto(Rule):
         Rule.__init__(self, params)
 
     def before_trading_start(self, context):
-        if self.g.isFirstTradingDayOfWeek(context):
+        if self.l_g.isFirstTradingDayOfWeek(context):
             self.dynamicBuyCount(context)
             log.info("修改全局参数")
     
