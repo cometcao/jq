@@ -731,6 +731,7 @@ class Buy_stocks(Rule):
             return
         self.to_buy = self.l_g.monitor_buy_list
         log.info("待选股票: "+join_list([show_stock(stock) for stock in self.to_buy], ' ', 10))
+        self.l_g.wait_for_orders(order_type=-1)
         holding_stocks = [context.portfolio.positions[pos].sid for pos in context.portfolio.positions.keys() if context.portfolio.positions[pos].amount > 0]
         pos_count = len(holding_stocks)
         if self.buy_count > pos_count:
