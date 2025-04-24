@@ -756,9 +756,7 @@ class Buy_stocks(Rule):
             for stock in buy_stocks:
                 if stock not in context.portfolio.positions.keys():
                     if self.l_g.open_position(self, stock, value):
-                        position_count = sum([1 for pos in context.portfolio.positions.keys() if context.portfolio.positions[pos].amount > 0])
-                        if position_count == self.buy_count:
-                            break
+                        pass
     
     def adjust_avg(self, context, data, buy_stocks):
         sorted_holding_stocks_data = sorted([(pos, context.portfolio.positions[pos].amount * context.portfolio.positions[pos].last_sale_price)
