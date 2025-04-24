@@ -719,7 +719,6 @@ class Buy_stocks(Rule):
         Rule.__init__(self, params)
         self.buy_count = params.get('buy_count', 3)
         self.use_portion = params.get('use_portion', 1.0)
-        self.to_buy = []
 
     def update_params(self, context, params):
         Rule.update_params(self, context, params)
@@ -729,20 +728,20 @@ class Buy_stocks(Rule):
         if self.is_to_return:
             log.info('无法执行买入!! self.is_to_return 未开启')
             return
-        self.to_buy = self.l_g.monitor_buy_list
-        log.info("待选股票: "+join_list([show_stock(stock) for stock in self.to_buy], ' ', 10))
+        to_buy = self.l_g.monitor_buy_list[:self.buy_count]
+        log.info("待选股票: "+join_list([show_stock(stock) for stock in to_buy], ' ', 10))
         self.l_g.wait_for_orders(order_type=-1)
         holding_stocks = [context.portfolio.positions[pos].sid for pos in context.portfolio.positions.keys() if context.portfolio.positions[pos].amount > 0]
         pos_count = len(holding_stocks)
         if self.buy_count > pos_count:
             target_avg = context.portfolio.portfolio_value / self.buy_count * self.use_portion
             pos_value = context.portfolio.positions_value / pos_count if pos_count > 0 else target_avg
-            log.info("执行调仓买入:{}".format([stock for stock in self.to_buy if stock not in holding_stocks]))
+            log.info("执行调仓买入:{}".format([stock for stock in to_buy if stock not in holding_stocks]))
             if abs(pos_value / target_avg) - 1 > 0.382:
                 log.info("平衡仓位")
-                self.adjust_avg(context, data, self.to_buy)
+                self.adjust_avg(context, data, to_buy)
             else:
-                self.adjust(context, data, self.to_buy)
+                self.adjust(context, data, to_buy)
         else:
             log.info("持仓数量完整:{}".format([(stock, context.portfolio.positions[stock].amount) for stock in context.portfolio.positions.keys()]))
         
@@ -770,13 +769,12 @@ class Buy_stocks(Rule):
         buy_stocks = sorted_holding_stocks + buy_stocks
 
         avg_value = context.portfolio.portfolio_value / self.buy_count * self.use_portion
-        for stock in buy_stocks[:self.buy_count]:
+        for stock in buy_stocks:
             if self.l_g.adjust_position(context, stock, avg_value):
                 pass
                     
     def after_trading_end(self, context):
-        log.info("after_trading_end clear")
-        self.to_buy = []
+        pass
         
     def recordTrade(self, stock_list):
         pass
