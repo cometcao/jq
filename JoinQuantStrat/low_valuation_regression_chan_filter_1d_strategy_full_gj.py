@@ -77,7 +77,9 @@ class Global_variable(object):
 
     def wait_for_orders(self, order_type=0): # order_type: 1 buy, -1 sell, 0 all
         for order in get_orders():
-            if order.status != '8' \
+            if order.status == '9':
+                log.info('废单:{0}'.format(order))
+            elif order.status != '8' \
                 and (order_type == 0 \
                      or order_type == -1 and order.amount < 0 \
                      or order_type == 1 and order.amount > 0):
