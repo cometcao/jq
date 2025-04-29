@@ -140,10 +140,15 @@ class Global_variable(object):
         order_id = None
         if is_trade():
             snap_shot = get_snapshot(security)[security]
-            order_id = order_market(security, 
-                                    amount = -position.enable_amount, 
-                                    market_type = self.find_market_type(security),
-                                    limit_price = snap_shot.get("low_px", 0.1)) # 可能会因停牌失败
+            st_status = get_stock_status(security, 'ST')
+            if st_status[security]:
+                order_id = order_target_value(
+                    security, 0, limit_price=snap_shot.get("low_px", 0.1))
+            else:
+                order_id = order_market(security, 
+                                        amount = -position.enable_amount, 
+                                        market_type = self.find_market_type(security),
+                                        limit_price = snap_shot.get("low_px", 0.1)) # 可能会因停牌失败
         else:
             order_id = order_target_value(security, 0)
 
