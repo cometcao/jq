@@ -255,7 +255,7 @@ class ML_Factor_Rank(object):
             print("empty stock data")
             return None
 
-        model = svr.fit(X, Y)
+        model = svr.fit(X.values, Y.values.ravel())
         factor = Y - pd.DataFrame(svr.predict(X), index = Y.index, columns = ['log_mcap'])
 #         factor = factor.sort_index(by = 'log_mcap')
         factor = factor.sort_values(by = 'log_mcap')
