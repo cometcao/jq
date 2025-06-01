@@ -786,7 +786,7 @@ class Buy_stocks(Rule):
         pass
 
     def __str__(self):
-        return '股票调仓买入规则：现金平分式买入股票达目标股票数'
+        return '股票调仓买入规则：现金平分式买入股票达目标股票数: {0} 仓位: {1}'.format(self.buy_count, self.use_portion)
 
 
 #===================================select stock========================================
@@ -1131,7 +1131,7 @@ def select_strategy(context):
         [True, '', '卖出股票', Sell_stocks, {}],
         [True, '', '买入股票', Buy_stocks, {
             'buy_count': g.buy_count,
-            'use_portion': 0.1
+            'use_portion': 1 - 1 / g.buy_count * 0.2
         }],
         [True, '_Show_postion_adjust_', '显示买卖的股票', Show_postion_adjust, {}],
     ]
