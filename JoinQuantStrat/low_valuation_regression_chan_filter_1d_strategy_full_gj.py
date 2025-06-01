@@ -75,7 +75,7 @@ class Global_variable(object):
             market_type = 0
         return market_type
 
-    def wait_for_orders(self, order_type=0): # order_type: 1 buy, -1 sell, 0 all
+    def wait_for_orders(self, order_type=0, wait_sec=6): # order_type: 1 buy, -1 sell, 0 all
         for order in get_orders():
             if order.status == '9':
                 log.info('废单:{0}'.format(order))
@@ -84,7 +84,7 @@ class Global_variable(object):
                      or order_type == -1 and order.amount < 0 \
                      or order_type == 1 and order.amount > 0):
                 log.info('之前交易未成交等待中:{0}'.format(order))
-                time.sleep(6)
+                time.sleep(wait_sec)
             else:
                 pass
 
@@ -737,7 +737,7 @@ class Buy_stocks(Rule):
             return
         to_buy = self.l_g.monitor_buy_list[:self.buy_count]
         log.info("待选股票: "+join_list([show_stock(stock) for stock in to_buy], ' ', 10))
-        self.l_g.wait_for_orders(order_type=-1)
+        self.l_g.wait_for_orders(order_type=-1, wait_sec=60)
         holding_stocks = [context.portfolio.positions[pos].sid for pos in context.portfolio.positions.keys() if context.portfolio.positions[pos].amount > 0]
         pos_count = len(holding_stocks)
         if self.buy_count > pos_count:
@@ -786,7 +786,7 @@ class Buy_stocks(Rule):
         pass
 
     def __str__(self):
-        return '股票调仓买入规则：现金平分式买入股票达目标股票数'
+        return '股票调仓买入规则：现金平分式买入股票达目标股票数: {0} 仓位: {1}'.format(self.buy_count, self.use_portion)
 
 
 #===================================select stock========================================
@@ -1131,7 +1131,7 @@ def select_strategy(context):
         [True, '', '卖出股票', Sell_stocks, {}],
         [True, '', '买入股票', Buy_stocks, {
             'buy_count': g.buy_count,
-            'use_portion': 0.1
+            'use_portion': 1 - 1 / g.buy_count * 0.2
         }],
         [True, '_Show_postion_adjust_', '显示买卖的股票', Show_postion_adjust, {}],
     ]
