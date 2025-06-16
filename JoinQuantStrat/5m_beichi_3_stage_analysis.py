@@ -13,7 +13,10 @@ from jqfactor import *
 
 pd.options.mode.chained_assignment = None
 
-def run_initial_scan():
+startTime = datetime.time(17, 0, 0)
+endTime = datetime.time(23, 55, 0)
+
+def read_record_file():
     result = {}
     filename = 'chan_stocks_initial_scan_daily.txt'
     try:
@@ -22,24 +25,9 @@ def run_initial_scan():
 #         print(result)
     except Exception as e:
         print("{0} loading error {1}".format(filename, str(e)))
+    return result
 
-    all_trade_days = get_all_trade_days()
-    current_trade_day = get_trade_days(count=1)[0]
-    next_trade_day = all_trade_days[np.where(all_trade_days==current_trade_day)[0][0]+1]
-    today = datetime.datetime.today()
-
-    if len(np.where(all_trade_days==today)[0]) == 0:
-        record_date = next_trade_day
-    elif 15 < today.hour < 24:
-        record_date = next_trade_day
-    elif 0 < today.hour < 9:
-        record_date = current_trade_day
-    print("processing for {0}".format(record_date))
-    
-    if str(record_date) in result:
-        print("{0} already done".format(record_date))
-        return
-
+def run_initial_scan(result):
     stock_results = []
     high_level='1w'
     top_level='30m'
@@ -104,30 +92,51 @@ def run_initial_scan():
     write_file(filename, result_json)
     print([x[0] for x in stock_results])
 
-
-startTime = datetime.time(17, 0, 0)
-endTime = datetime.time(23, 55, 0)
-
-while True:
+def check_status():
+    result = read_record_file()
+    check_result = False
+    
+    all_trade_days = get_all_trade_days()
     dates = get_trade_days(count=1)
-    today = datetime.datetime.today().date()
+    current_trade_day = dates[0]
+    next_trade_day = all_trade_days[np.where(all_trade_days==current_trade_day)[0][0]+1]
+    today_dt = datetime.datetime.today()
+    
+    today_date = datetime.datetime.today().date()
     now = datetime.datetime.today().time()
     print("current time:{0}, starting time:{1}".format(now, startTime))
-    
-    if today not in dates: # today is trading day
-        print("non-trading day, wait for 4 hours")
-        time.sleep(14400) # sleep for 4 hours
-        continue
 
     if now < startTime:
-        td = datetime.datetime.combine(today, startTime) - datetime.datetime.combine(today, now)
+        td = datetime.datetime.combine(today_date, startTime) - datetime.datetime.combine(today_date, now)
         print("sleep till starting time for {0} seconds".format(td.total_seconds()))
-        time.sleep(int(td.total_seconds()) + 5)
-    else:
-        run_initial_scan()
-        
+        return result, check_result, int(td.total_seconds()) + 5
+
+    if today_date not in dates and str(next_trade_day) in result: # today is trading day
+        print("non-trading day, wait for 4 hours")
+        return result, check_result, 14400
+
+    if len(np.where(all_trade_days==today_dt)[0]) == 0:
+        record_date = next_trade_day
+        check_result = True
+    elif 15 < today_dt.hour < 24:
+        record_date = next_trade_day
+        check_result = True
+    elif 0 < today_dt.hour < 9:
+        record_date = current_trade_day
+        check_result = True
+    print("processing for {0}".format(record_date))
+
+    if str(record_date) in result:
+        print("{0} already done".format(record_date))
+        return result, False, 32400
+
+    return result, check_result, 72000 if now < endTime else 32400
+
+while True:
+    file_result, check_result, wait_sec = check_status()
+    if check_result:
+        run_initial_scan(file_result)
         print("finished wait for next trading day")
-        if now < endTime:
-            time.sleep(72000) # sleep for 20 hours
-        else:
-            time.sleep(32400) # sleep for 9 hours
+    else:
+        time.sleep(wait_sec)
+
