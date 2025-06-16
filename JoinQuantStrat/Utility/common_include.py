@@ -8,6 +8,7 @@ try:
     from kuanke.user_space_api import *
 except:
     pass
+from jqdata import *
 import enum
 import math
 import json
@@ -42,6 +43,31 @@ class TaType(enum.Enum):
 
 
 '''===============================其它基础函数=================================='''
+def get_all_non_new_stocks(end_dt, n=250):
+    #     获取交易日
+    trd_days = get_trade_days(end_date=end_dt, count=n)
+    #     获取n个交易日之前前上市股票【即过滤掉次新股】
+    on_stock_list = get_all_securities('stock', trd_days[0]).index.tolist()
+    return on_stock_list
+
+def filter_new_stocks(stocks, end_dt, n=250):
+    #     获取交易日
+    trd_days = get_trade_days(end_date=end_dt, count=n)
+    #     获取n个交易日之前前上市股票【即过滤掉次新股】
+    on_stock_list = get_all_securities('stock', trd_days[0]).index.tolist()
+    return [stock for stock in stocks if stock in on_stock_list]
+
+def filter_paused(stocks, end_date, day=1):
+    '''stocks:股票池     end_date:查询日期
+    day : 过滤最近多少天(包括今天)停牌过的股票,默认只过滤今天
+    返回 :过滤后的股票池 '''
+    s = get_price(
+        stocks,
+        end_date=end_date,
+        count=day,
+        fields='paused',
+        panel=False)
+    return s[s['paused'] < 1]['code'].tolist()
 
 def get_growth_rate(security, n=20):
     '''

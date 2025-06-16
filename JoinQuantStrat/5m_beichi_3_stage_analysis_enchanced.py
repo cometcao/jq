@@ -1,4 +1,5 @@
-# 此程序应在当日15时后， 次日9点之前运行完毕
+from jqdata import *
+from sector_selection import *
 from kBar_Chan import *
 from centralRegion import *
 from equilibrium import *
@@ -9,13 +10,25 @@ import numpy as np
 import datetime
 import time
 import json
-from jqfactor import *
 
 pd.options.mode.chained_assignment = None
 
 filename = 'chan_stocks_initial_scan_daily.txt'
 startTime = datetime.time(17, 0, 0)
 endTime = datetime.time(23, 55, 0)
+
+def get_stock_by_sectors():
+    ss = SectorSelection(limit_pct=3, 
+            isStrong=True, 
+            min_max_strength=0, 
+            useIntradayData=False,
+            useAvg=False,
+            avgPeriod=55,
+            isWeighted=True,
+            effective_date=datetime.datetime.today())
+    stock_list = ss.processAllSectorStocks(isDisplay = True)
+    print(stock_list, len(stock_list))
+    return stock_list
 
 def read_record_file():
     result = {}
@@ -35,13 +48,7 @@ def run_initial_scan(result, record_date):
     sub_level = '1m'
     
     expected_current_types = [Chan_Type.I, Chan_Type.INVALID, Chan_Type.I_weak]
-    # check_stocks = filter_high_level_by_index(
-    #                                         direction=TopBotType.top2bot, 
-    #                                         stock_index='000985.XSHG',  # '000906.XSHG' '399905.XSHE'
-    #                                         df=False,
-    #                                         periods = [high_level],
-    #                                         chan_types=[Chan_Type.I,Chan_Type.III])
-    check_stocks = get_index_stocks('000985.XSHG')
+    check_stocks = get_stock_by_sectors()
 
     for stock in check_stocks:
         current_time=pd.datetime.now().strftime("%Y-%m-%d %H:%M:%S")

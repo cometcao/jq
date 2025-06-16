@@ -6,7 +6,7 @@ Created on 2 Aug 2017
 '''
 
 try:
-    from kuanke.user_space_api import *         
+    from kuanke.user_space_api import *
 except ImportError as ie:
     print(str(ie))
 from jqdata import *
@@ -14,8 +14,8 @@ import numpy as np
 import pandas as pd
 import talib
 import datetime
+from common_include import filter_paused, filter_new_stocks
 from collections import OrderedDict
-from sector_spider import *
 
 def get_data(stock, count, level, fields, skip_paused=False, df_flag=True, isAnal=False):
     df = None
@@ -51,7 +51,7 @@ class SectorSelection(object):
         self.useAvg = useAvg
         self.isAnal = isAnal
         self.frequency = '1d' # use day period
-        self.period = 270
+        self.period = 250
         self.gauge_period = avgPeriod
         self.top_limit = float(limit_pct) / 100.0
         self.isReverse = isStrong
@@ -59,25 +59,25 @@ class SectorSelection(object):
         self.min_max_strength = min_max_strength
         self.intraday_period = intraday_period
         self.isWeighted = isWeighted
-        
-#         self.ss = sectorSpider()
-#         self.jqIndustry = self.ss.getSectorCode('sw2') # SW2
-#         self.conceptSectors = self.ss.getSectorCode('gn')
-        self.jqIndustry = sectorSpider.get_industry('sw_l2', date=effective_date)
-        self.conceptSectors = sectorSpider.get_concept(date=effective_date)
+        self.effective_date = effective_date
+        self.all_industry_data = get_industries("sw_l3", date=effective_date)
+        self.jqIndustry = self.all_industry_data.index.tolist()
+        self.all_concept_data = get_concepts()
+        self.conceptSectors = self.all_concept_data[self.all_concept_data["start_date"]<=effective_date].index.tolist()
         self.filtered_industry = []
         self.filtered_concept = []
 
     def displayResult(self, industryStrength, isConcept=False):
-#         print industryStrength
         limit_value = int(self.top_limit * len(self.conceptSectors) if isConcept else self.top_limit * len(self.jqIndustry))
         for sector, strength in industryStrength[:limit_value]:
             stocks = []
             if isConcept:
-                stocks = get_concept_stocks(sector)
+                stocks = get_concept_stocks(sector, self.effective_date)
+                sector_name = self.all_concept_data.loc[sector, "name"]
             else:
-                stocks = get_industry_stocks(sector)
-            print (sector+'@'+str(strength)+':'+','.join([get_security_info(s).display_name for s in stocks]))
+                stocks = get_industry_stocks(sector, self.effective_date)
+                sector_name = self.all_industry_data.loc[sector, "name"]
+            print (sector_name+'-'+sector+'@'+str(strength)+':'+','.join([get_security_info(s).display_name for s in stocks]))
             
     def sendResult(self, industryStrength, isConcept=False):
         message = ""
@@ -85,9 +85,9 @@ class SectorSelection(object):
         for sector, strength in industryStrength[:limit_value]:
             stocks = []
             if isConcept:
-                stocks = get_concept_stocks(sector)
+                stocks = get_concept_stocks(sector,self.effective_date)
             else:
-                stocks = get_industry_stocks(sector)
+                stocks = get_industry_stocks(sector, self.effective_date)
             message += sector + ':'
             message += ','.join([get_security_info(s).display_name for s in stocks])
             message += '***'
@@ -96,17 +96,16 @@ class SectorSelection(object):
     def processAllIndustrySectors(self, isDisplay=False):
         if self.filtered_industry:
             return self.filtered_industry
-        
-        industryStrength = self.processIndustrySectors()
 
+        industryStrength = self.processIndustrySectors()
         industry_limit_value = int(self.top_limit * len(self.jqIndustry))
-        
-        self.filtered_industry = [sector for sector, strength in industryStrength[:industry_limit_value] if (strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)] 
-        
+        self.filtered_industry = [sector for sector, strength in industryStrength[:industry_limit_value] if (
+            strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)]
+
         if isDisplay:
             print("industry strength: {0}".format(industryStrength))
             print("matching industries: {0}".format(self.filtered_industry))
-        
+
         return self.filtered_industry
 
     def processAllSectors(self, sendMsg=False, display=False, byName=True):
@@ -127,7 +126,8 @@ class SectorSelection(object):
         self.filtered_industry = [sector for sector, strength in industryStrength[:industry_limit_value] if (strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)] 
         self.filtered_concept = [sector for sector, strength in conceptStrength[:concept_limit_value] if (strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)]
         if byName:
-            return (self.ss.getSectorCodeName('sw2', self.filtered_industry).tolist(), self.ss.getSectorCodeName('gn', self.filtered_concept).tolist())
+            return (self.all_industry_data.loc[self.filtered_industry, "name"].tolist(), 
+                    self.all_concept_data.loc[self.filtered_concept, "name"].tolist())
         else:
             return (self.filtered_industry, self.filtered_concept)
         
@@ -149,7 +149,7 @@ class SectorSelection(object):
         industry = self.processAllIndustrySectors(isDisplay=isDisplay)
         allstocks = []
         for idu in industry:
-            allstocks += get_industry_stocks(idu)
+            allstocks += get_industry_stocks(idu, self.effective_date)
             
         allstocks = list(OrderedDict.fromkeys(allstocks)) # keep order remove duplicates
         return allstocks
@@ -159,9 +159,9 @@ class SectorSelection(object):
         industry, concept = self.processAllSectors(display=isDisplay, byName=False)
         allstocks = []
         for idu in industry:
-            allstocks += get_industry_stocks(idu)
+            allstocks += get_industry_stocks(idu, self.effective_date)
         for con in concept:
-            allstocks += get_concept_stocks(con)
+            allstocks += get_concept_stocks(con, self.effective_date)
         return list(set(allstocks))
         
     def processIndustrySectors(self):
@@ -170,7 +170,7 @@ class SectorSelection(object):
         
         for industry in self.jqIndustry:
             try:
-                stocks = get_industry_stocks(industry)
+                stocks = get_industry_stocks(industry, self.effective_date)
             except Exception as e:
                 print(str(e))
                 continue
@@ -185,7 +185,7 @@ class SectorSelection(object):
 
         for concept in self.conceptSectors:
             try:
-                stocks = get_concept_stocks(concept)
+                stocks = get_concept_stocks(concept, self.effective_date)
             except Exception as e:
                 print(str(e))
                 continue
@@ -196,42 +196,43 @@ class SectorSelection(object):
         return conceptStrength
         
     def gaugeSectorStrength(self, sectorStocks):
+        sectorStocks = filter_paused(
+            stocks=sectorStocks,
+            end_date=self.effective_date)
+        sectorStocks = filter_new_stocks(
+            stocks=sectorStocks, end_dt=self.effective_date, n=250)
+        if not sectorStocks:
+            return 0
         if not self.useAvg:
             sectorStrength = 0.0
-            removed = 0
             for stock in sectorStocks:
                 stockStrength = self.gaugeStockUpTrendStrength_MA(stock, isWeighted=self.isWeighted, index=-1)
-                if stockStrength == -1:
-                    removed+=1
-                else:
-                    sectorStrength += stockStrength
-            if len(sectorStocks)==removed:
-                sectorStrength = 0.0
-            else:
-                sectorStrength /= (len(sectorStocks)-removed)
-            return sectorStrength  
+                sectorStrength += stockStrength
+            sectorStrength /= len(sectorStocks)
+            return sectorStrength
         else:
             avgStrength = 0.0
             for i in range(-1, -self.gauge_period-1, -1): #range
                 sectorStrength = 0.0
-                removed = 0
+
                 for stock in sectorStocks:
                     stockStrength = self.gaugeStockUpTrendStrength_MA(stock, isWeighted=self.isWeighted, index=i)
-                    if stockStrength == -1:
-                        removed+=1
-                    else:
-                        sectorStrength += stockStrength
-                if len(sectorStocks)==removed:
-                    sectorStrength = 0.0
-                else:
-                    sectorStrength /= (len(sectorStocks)-removed)
+                    sectorStrength += stockStrength
+                sectorStrength /= len(sectorStocks)
                 avgStrength += sectorStrength
             avgStrength /= self.gauge_period
-            return avgStrength    
+            return avgStrength
     
     def gaugeStockUpTrendStrength_MA(self, stock, isWeighted=True, index=-1):
+        stock_df = get_bars(
+            security=stock,
+            count=self.period,
+            unit='1d',
+            fields=['close'],
+            include_now=True,
+            end_dt=self.effective_date,
+            df=False)
         if index == -1:
-            stock_df = self.getlatest_df(stock, self.period, ['close','paused'], skip_paused=False, df_flag=False)
             MA_5 = self.simple_moving_avg(stock_df['close'], 5)
             MA_13 = self.simple_moving_avg(stock_df['close'], 13)
             MA_21 = self.simple_moving_avg(stock_df['close'], 21)
@@ -240,9 +241,7 @@ class SectorSelection(object):
             MA_89 = self.simple_moving_avg(stock_df['close'], 89)
             MA_144 = self.simple_moving_avg(stock_df['close'], 144)
             MA_233 = self.simple_moving_avg(stock_df['close'], 233)
-            if len(stock_df['paused'])==0 or stock_df['paused'][index]: # paused we need to remove it from calculation
-                return -1 
-            elif stock_df['close'][index] < MA_5 or np.isnan(MA_5):
+            if stock_df['close'][index] < MA_5 or np.isnan(MA_5):
                 return 0 if isWeighted else 1
             elif stock_df['close'][index] < MA_13 or np.isnan(MA_13):
                 return 5 if isWeighted else 2
@@ -261,10 +260,9 @@ class SectorSelection(object):
             else:
                 return 233 if isWeighted else 9
         else: # take average value of past 20 periods
-            stock_df = MA_5 = MA_13 = MA_21 = MA_34 = MA_55 = MA_89 = MA_144 = MA_233 = None
+            MA_5 = MA_13 = MA_21 = MA_34 = MA_55 = MA_89 = MA_144 = MA_233 = None
             try:
                 if stock not in self.stock_data_buffer:
-                    stock_df = self.getlatest_df(stock, self.period, ['close','paused'], skip_paused=False, df_flag=False)
                     MA_5 = talib.SMA(stock_df['close'], 5)
                     MA_13 = talib.SMA(stock_df['close'], 13)
                     MA_21 = talib.SMA(stock_df['close'], 21)
@@ -285,11 +283,9 @@ class SectorSelection(object):
                     MA_144 = self.stock_data_buffer[stock][7]
                     MA_233 = self.stock_data_buffer[stock][8]
             except Exception as e:
-#                 print (str(e))
+                print(e, stock)
                 return -1
-            if len(stock_df['paused'])==0 or stock_df['paused'][index]: # paused we need to remove it from calculation
-                return -1 
-            elif stock_df['close'][index] < MA_5[index] or np.isnan(MA_5[index]):
+            if stock_df['close'][index] < MA_5[index] or np.isnan(MA_5[index]):
                 return 0 if isWeighted else 1
             elif stock_df['close'][index] < MA_13[index] or np.isnan(MA_13[index]):
                 return 5 if isWeighted else 2
@@ -311,31 +307,3 @@ class SectorSelection(object):
     def simple_moving_avg(self, series, period):
         total = sum(series[-period:])
         return total/period
-    
-    def getlatest_df(self, stock, count, fields, skip_paused=True, df_flag = True):
-#         df = attribute_history(stock, count, '1d', fields, df=df_flag)
-        df = get_data(stock, count, level='1d', fields=fields, skip_paused=skip_paused, df_flag=df_flag, isAnal=self.isAnal)
-        if df_flag and df.empty:
-            return df
-        
-        if self.useIntradayData:
-            latest_stock_data = attribute_history(stock, 1, '1m', fields, skip_paused=skip_paused, df=df_flag)
-            if df_flag:
-                current_date = latest_stock_data.index[-1].date()
-                latest_stock_data = latest_stock_data.reset_index(drop=False)
-                latest_stock_data.ix[0, 'index'] = pd.DatetimeIndex([current_date])[0]
-                latest_stock_data = latest_stock_data.set_index('index')
-                df = df.reset_index().drop_duplicates(subset='index').set_index('index')
-                try:
-                    df = df.append(latest_stock_data, verify_integrity=True) # True
-                except:
-                    print ("stock {0} has invalid history data".format(stock))
-            else:                    
-                final_fields = []
-                if isinstance(fields, basestring):
-                    final_fields.append(fields)
-                else:
-                    final_fields = list(fields)
-                for field in final_fields:
-                    df[field] = np.append(df[field], latest_stock_data[field][-1])
-        return df

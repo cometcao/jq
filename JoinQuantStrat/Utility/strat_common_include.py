@@ -8,7 +8,7 @@ import pandas as pd
 
 
 def get_main_money_inflow_over_circulating_mcap(stock_list,
-                                                prv_date,
+                                                wk_dt,
                                                 period_count,
                                                 price_change_filter=None,
                                                 adjust_concentrated=False,
@@ -34,12 +34,12 @@ def get_main_money_inflow_over_circulating_mcap(stock_list,
             print(stock_list[:10], len(stock_list))
 
     # circulating mcap
-    cir_mcap = get_cir_mcap(stock_list, prv_date,
+    cir_mcap = get_cir_mcap(stock_list, wk_dt,
                             adjust_concentrated, is_debug)
 
     # main money inflow
     stock_money_data = get_money_flow(security_list=stock_list,
-                                      end_date=prv_date,
+                                      end_date=wk_dt,
                                       fields=['sec_code', 'net_amount_main'],
                                       count=period_count)
     net_data = stock_money_data.groupby("sec_code")['net_amount_main'].sum()
@@ -130,7 +130,7 @@ def get_cir_mcap(stock_list,
     #         valuation.total_market_cap.lable('market_cap')
     #     ).filter(
     #         valuation.code.in_(stock_list)
-    #     ), date=prv_date)
+    #     ), date=wk_dt)
     if is_debug:
         print(f"get_cir_mcap get_valuation size: {cir_mcap.shape[0]}")
     if adjust_concentrated:
@@ -164,11 +164,11 @@ def get_cir_mcap(stock_list,
     return cir_mcap
 
 
-def get_main_money_inflow(stock_list, prv_date, stock_count_dict):
+def get_main_money_inflow(stock_list, wk_dt, stock_count_dict):
     stock_money_data_list = []
     for stock in stock_list:
         stock_money_data = get_money_flow(security_list=stock,
-                                          end_date=prv_date,
+                                          end_date=wk_dt,
                                           fields=['sec_code',
                                                   'net_amount_main'],
                                           count=stock_count_dict[stock])
@@ -180,19 +180,18 @@ def get_main_money_inflow(stock_list, prv_date, stock_count_dict):
 
 def get_main_money_inflow_over_time_over_circulating_mcap(
         stock_count_dict,
-        prv_date,
+        wk_dt,
         price_change_filter=None,
         adjust_concentrated=False,
         force_positive_inflow=True,
         is_debug=False):
     stock_list = list(stock_count_dict.keys())
-
     # circulating mcap
-    cir_mcap = get_cir_mcap(stock_list, prv_date,
+    cir_mcap = get_cir_mcap(stock_list, wk_dt,
                             adjust_concentrated, is_debug)
 
     # main money inflow
-    net_data = get_main_money_inflow(stock_list, prv_date, stock_count_dict)
+    net_data = get_main_money_inflow(stock_list, wk_dt, stock_count_dict)
 
     cir_mcap = cir_mcap.merge(
         net_data.to_frame(), left_on='code', right_on='sec_code')
