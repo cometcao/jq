@@ -27,7 +27,7 @@ def read_record_file():
         print("{0} loading error {1}".format(filename, str(e)))
     return result
 
-def run_initial_scan(result):
+def run_initial_scan(result, record_date):
     stock_results = []
     high_level='1w'
     top_level='30m'
@@ -109,11 +109,11 @@ def check_status():
     if now < startTime:
         td = datetime.datetime.combine(today_date, startTime) - datetime.datetime.combine(today_date, now)
         print("sleep till starting time for {0} seconds".format(td.total_seconds()))
-        return result, check_result, int(td.total_seconds()) + 5
+        return result, check_result, int(td.total_seconds()) + 5, next_trade_day
 
     if today_date not in dates and str(next_trade_day) in result: # today is trading day
         print("non-trading day, wait for 4 hours")
-        return result, check_result, 14400
+        return result, check_result, 14400, next_trade_day
 
     if len(np.where(all_trade_days==today_dt)[0]) == 0:
         record_date = next_trade_day
@@ -128,14 +128,14 @@ def check_status():
 
     if str(record_date) in result:
         print("{0} already done".format(record_date))
-        return result, False, 32400
+        return result, False, 32400, record_date
 
-    return result, check_result, 72000 if now < endTime else 32400
+    return result, check_result, 72000 if now < endTime else 32400, record_date
 
 while True:
-    file_result, check_result, wait_sec = check_status()
+    file_result, check_result, wait_sec, record_date = check_status()
     if check_result:
-        run_initial_scan(file_result)
+        run_initial_scan(file_result, record_date)
         print("finished wait for next trading day")
     else:
         time.sleep(wait_sec)
