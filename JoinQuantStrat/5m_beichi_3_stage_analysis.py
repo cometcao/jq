@@ -13,12 +13,12 @@ from jqfactor import *
 
 pd.options.mode.chained_assignment = None
 
+filename = 'chan_stocks_initial_scan_daily.txt'
 startTime = datetime.time(17, 0, 0)
 endTime = datetime.time(23, 55, 0)
 
 def read_record_file():
     result = {}
-    filename = 'chan_stocks_initial_scan_daily.txt'
     try:
         content = read_file(filename)
         result = json.loads(content)
