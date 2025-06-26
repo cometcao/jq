@@ -6,7 +6,7 @@ Created on 2 Aug 2017
 '''
 
 try:
-    from kuanke.user_space_api import *         
+    from kuanke.user_space_api import *
 except ImportError as ie:
     print(str(ie))
 from jqdata import *
@@ -15,7 +15,6 @@ import pandas as pd
 import talib
 import datetime
 from collections import OrderedDict
-from sector_spider import *
 
 def get_data(stock, count, level, fields, skip_paused=False, df_flag=True, isAnal=False):
     df = None
@@ -59,24 +58,22 @@ class SectorSelection(object):
         self.min_max_strength = min_max_strength
         self.intraday_period = intraday_period
         self.isWeighted = isWeighted
-        
-#         self.ss = sectorSpider()
-#         self.jqIndustry = self.ss.getSectorCode('sw2') # SW2
-#         self.conceptSectors = self.ss.getSectorCode('gn')
-        self.jqIndustry = sectorSpider.get_industry('sw_l2', date=effective_date)
-        self.conceptSectors = sectorSpider.get_concept(date=effective_date)
+        self.effective_date = effective_date
+        self.all_industry_data = get_industries("sw_l2", date=effective_date)
+        self.jqIndustry = self.all_industry_data.index.tolist()
+        self.all_concept_data = get_concepts()
+        self.conceptSectors = self.all_concept_data[self.all_concept_data["start_date"]<=effective_date].index.tolist()
         self.filtered_industry = []
         self.filtered_concept = []
 
     def displayResult(self, industryStrength, isConcept=False):
-#         print industryStrength
         limit_value = int(self.top_limit * len(self.conceptSectors) if isConcept else self.top_limit * len(self.jqIndustry))
         for sector, strength in industryStrength[:limit_value]:
             stocks = []
             if isConcept:
-                stocks = get_concept_stocks(sector)
+                stocks = get_concept_stocks(sector, self.effective_date)
             else:
-                stocks = get_industry_stocks(sector)
+                stocks = get_industry_stocks(sector, self.effective_date)
             print (sector+'@'+str(strength)+':'+','.join([get_security_info(s).display_name for s in stocks]))
             
     def sendResult(self, industryStrength, isConcept=False):
@@ -85,9 +82,9 @@ class SectorSelection(object):
         for sector, strength in industryStrength[:limit_value]:
             stocks = []
             if isConcept:
-                stocks = get_concept_stocks(sector)
+                stocks = get_concept_stocks(sector,self.effective_date)
             else:
-                stocks = get_industry_stocks(sector)
+                stocks = get_industry_stocks(sector, self.effective_date)
             message += sector + ':'
             message += ','.join([get_security_info(s).display_name for s in stocks])
             message += '***'
@@ -96,17 +93,16 @@ class SectorSelection(object):
     def processAllIndustrySectors(self, isDisplay=False):
         if self.filtered_industry:
             return self.filtered_industry
-        
-        industryStrength = self.processIndustrySectors()
 
+        industryStrength = self.processIndustrySectors()
         industry_limit_value = int(self.top_limit * len(self.jqIndustry))
-        
-        self.filtered_industry = [sector for sector, strength in industryStrength[:industry_limit_value] if (strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)] 
-        
+        self.filtered_industry = [sector for sector, strength in industryStrength[:industry_limit_value] if (
+            strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)]
+
         if isDisplay:
             print("industry strength: {0}".format(industryStrength))
             print("matching industries: {0}".format(self.filtered_industry))
-        
+
         return self.filtered_industry
 
     def processAllSectors(self, sendMsg=False, display=False, byName=True):
@@ -127,7 +123,8 @@ class SectorSelection(object):
         self.filtered_industry = [sector for sector, strength in industryStrength[:industry_limit_value] if (strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)] 
         self.filtered_concept = [sector for sector, strength in conceptStrength[:concept_limit_value] if (strength >= self.min_max_strength if self.isReverse else strength <= self.min_max_strength)]
         if byName:
-            return (self.ss.getSectorCodeName('sw2', self.filtered_industry).tolist(), self.ss.getSectorCodeName('gn', self.filtered_concept).tolist())
+            return (self.all_industry_data.loc[self.filtered_industry, "name"].tolist(), 
+                    self.all_concept_data.loc[self.filtered_concept, "name"].tolist())
         else:
             return (self.filtered_industry, self.filtered_concept)
         
@@ -149,7 +146,7 @@ class SectorSelection(object):
         industry = self.processAllIndustrySectors(isDisplay=isDisplay)
         allstocks = []
         for idu in industry:
-            allstocks += get_industry_stocks(idu)
+            allstocks += get_industry_stocks(idu, self.effective_date)
             
         allstocks = list(OrderedDict.fromkeys(allstocks)) # keep order remove duplicates
         return allstocks
@@ -159,9 +156,9 @@ class SectorSelection(object):
         industry, concept = self.processAllSectors(display=isDisplay, byName=False)
         allstocks = []
         for idu in industry:
-            allstocks += get_industry_stocks(idu)
+            allstocks += get_industry_stocks(idu, self.effective_date)
         for con in concept:
-            allstocks += get_concept_stocks(con)
+            allstocks += get_concept_stocks(con, self.effective_date)
         return list(set(allstocks))
         
     def processIndustrySectors(self):
@@ -170,7 +167,7 @@ class SectorSelection(object):
         
         for industry in self.jqIndustry:
             try:
-                stocks = get_industry_stocks(industry)
+                stocks = get_industry_stocks(industry, self.effective_date)
             except Exception as e:
                 print(str(e))
                 continue
@@ -185,7 +182,7 @@ class SectorSelection(object):
 
         for concept in self.conceptSectors:
             try:
-                stocks = get_concept_stocks(concept)
+                stocks = get_concept_stocks(concept, self.effective_date)
             except Exception as e:
                 print(str(e))
                 continue
