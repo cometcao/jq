@@ -72,9 +72,11 @@ class SectorSelection(object):
             stocks = []
             if isConcept:
                 stocks = get_concept_stocks(sector, self.effective_date)
+                sector_name = self.all_concept_data.loc[sector, "name"]
             else:
                 stocks = get_industry_stocks(sector, self.effective_date)
-            print (sector+'@'+str(strength)+':'+','.join([get_security_info(s).display_name for s in stocks]))
+                sector_name = self.all_industry_data.loc[sector, "name"]
+            print (sector_name+'-'+sector+'@'+str(strength)+':'+','.join([get_security_info(s).display_name for s in stocks]))
             
     def sendResult(self, industryStrength, isConcept=False):
         message = ""
