@@ -18,7 +18,7 @@ startTime = datetime.time(17, 0, 0)
 endTime = datetime.time(23, 55, 0)
 
 def get_stock_by_sectors():
-    ss = SectorSelection(limit_pct=10, 
+    ss = SectorSelection(limit_pct=3, 
             isStrong=True, 
             min_max_strength=0, 
             useIntradayData=False,

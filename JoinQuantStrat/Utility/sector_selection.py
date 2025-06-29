@@ -59,7 +59,7 @@ class SectorSelection(object):
         self.intraday_period = intraday_period
         self.isWeighted = isWeighted
         self.effective_date = effective_date
-        self.all_industry_data = get_industries("sw_l2", date=effective_date)
+        self.all_industry_data = get_industries("sw_l3", date=effective_date)
         self.jqIndustry = self.all_industry_data.index.tolist()
         self.all_concept_data = get_concepts()
         self.conceptSectors = self.all_concept_data[self.all_concept_data["start_date"]<=effective_date].index.tolist()
