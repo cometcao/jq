@@ -230,6 +230,9 @@ class Global_variable(object):
         elif period == 'M':
             print ("Monthly Update Data with num {0}".format(num_of_day))
             return self.isFirstTradingDayOfMonth(context, num_of_day)
+        elif period == 'D':
+            print ("Daily Update Data with num {0}".format(num_of_day))
+            return True
         else:
             print ("Invalid period return FALSE")
             return False

@@ -43,6 +43,19 @@ class TaType(enum.Enum):
 
 '''===============================其它基础函数=================================='''
 
+
+def filter_paused(stocks, end_date, day=1):
+    '''stocks:股票池     end_date:查询日期
+    day : 过滤最近多少天(包括今天)停牌过的股票,默认只过滤今天
+    返回 :过滤后的股票池 '''
+    s = get_price(
+        stocks,
+        end_date=end_date,
+        count=day,
+        fields='paused',
+        panel=False)
+    return s[s['paused'] < 1]['code'].tolist()
+
 def get_growth_rate(security, n=20):
     '''
     获取股票n日以来涨幅，根据当前价(前1分钟的close）计算
