@@ -371,6 +371,9 @@ class Sort_main_money_inflow(SortBase):
         from strat_common_include import get_main_money_inflow_over_total_money_over_time, get_stock_downwards_count
         
         stock_count = get_stock_downwards_count(stock_list, 8, context.current_dt, '1d', 3, 0, False)
+        #stock_count = {stock:period_count for stock in work_stock_list}
+        if not stock_count:
+            return []
         
         cir_mcap = get_main_money_inflow_over_total_money_over_time(stock_count, 
                                                                    context.previous_date, 
@@ -380,7 +383,7 @@ class Sort_main_money_inflow(SortBase):
                                                                    is_debug=False)
         
         cir_mcap = cir_mcap.sort_values(by='mfc', ascending=self.is_asc)
-        return cir_mcap['code'].values.tolist()
+        return cir_mcap.index.tolist()
 
     def __str__(self):
         return '[权重: %s ] [排序: %s ] %s' % (self.weight, self._sort_type_str(), self.memo)

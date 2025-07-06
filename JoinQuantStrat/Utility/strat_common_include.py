@@ -186,7 +186,6 @@ def get_main_money_inflow_over_time_over_circulating_mcap(
         force_positive_inflow=True,
         is_debug=False):
     stock_list = list(stock_count_dict.keys())
-
     # circulating mcap
     cir_mcap = get_cir_mcap(stock_list, wk_dt,
                             adjust_concentrated, is_debug)
