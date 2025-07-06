@@ -43,6 +43,13 @@ class TaType(enum.Enum):
 
 
 '''===============================其它基础函数=================================='''
+def get_all_non_new_stocks(end_dt, n=250):
+    #     获取交易日
+    trd_days = get_trade_days(end_date=end_dt, count=n)
+    #     获取n个交易日之前前上市股票【即过滤掉次新股】
+    on_stock_list = get_all_securities('stock', trd_days[0]).index.tolist()
+    return on_stock_list
+
 def filter_new_stocks(stocks, end_dt, n=250):
     #     获取交易日
     trd_days = get_trade_days(end_date=end_dt, count=n)

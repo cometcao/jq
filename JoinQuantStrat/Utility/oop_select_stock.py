@@ -403,6 +403,27 @@ class Pick_Chan_Stocks(Create_stock_list):
     def __str__(self):
         return "Chan Selection Params: {0}, {1}, {2}".format(self.index, self.periods, self.chan_types)
 
+######################################################################################################
+class Pick_non_new_stocks(Create_stock_list):
+    def __init__(self, params):
+        Create_stock_list.__init__(self, params)
+        self.new_list = []
+        
+    def update_params(self, context, params):
+        pass
+        
+    def filter(self, context, data):
+        return self.new_list
+    
+    def before_trading_start(self, context):
+        return get_all_non_new_stocks(end_dt = context.current_dt)
+    
+    def after_trading_end(self, context):
+        pass
+    
+    def __str__(self):
+        return "选取所有非次新股"
+
 ################## 缠论强势板块 #################
 class Pick_rank_sector(Create_stock_list):
     def __init__(self, params):
@@ -2072,6 +2093,50 @@ class Filter_Industry_Sector(Early_Filter_stock_list):
             self.g.industry_sector_list = ss.processAllIndustrySectors() # save sector order for later use
             self.log.info("saved industry list: {0}... (top TEN)".format(self.g.industry_sector_list[:10]))
             
+    def __str__(self):
+        if self.strong_sector:
+            return '强势板块股票 %s%% 阈值 %s' % (self.sector_limit_pct, self.strength_threthold)
+        else:
+            return '弱势板块股票 %s%% 阈值 %s' % (self.sector_limit_pct, self.strength_threthold)
+
+
+class Filter_sector_stocks(Filter_stock_list):
+    def __init__(self, params):
+        Filter_stock_list.__init__(self, params)
+        self.strong_sector = params.get('strong_sector', False)
+        self.sector_limit_pct = params.get('sector_limit_pct', 5)
+        self.strength_threthold = params.get('strength_threthold', 4)
+        self.isDaily = params.get('isDaily', False)
+        self.useIntradayData = params.get('useIntradayData', False)
+        self.useAvg = params.get('useAvg', True)
+        self.avgPeriod = params.get('avgPeriod', 5)
+        self.period_frequency = params.get('period_frequency', 'W')
+        self.isWeighted = params.get('isWeighted', True)
+        self.new_list = []
+        
+    def update_params(self, context, params):
+        self.period_frequency = params.get('period_frequency', 'W')        
+        self.isWeighted = params.get('isWeighted', True)
+    
+    def filter(self, context, data, stock_list):
+        if self.g.isFirstNTradingDayOfPeriod(context, num_of_day=1, period=self.period_frequency) or not self.new_list or self.isDaily:
+            self.log.info("选取前 %s%% 板块" % str(self.sector_limit_pct))
+            ss = SectorSelection(limit_pct=self.sector_limit_pct, 
+                    isStrong=self.strong_sector, 
+                    min_max_strength=self.strength_threthold, 
+                    useIntradayData=self.useIntradayData,
+                    useAvg=self.useAvg,
+                    avgPeriod=self.avgPeriod,
+                    isWeighted=self.isWeighted,
+                    effective_date=context.current_dt)
+            self.new_list = ss.processAllSectorStocks(isDisplay = True)
+            self.g.filtered_sectors = ss.processAllSectors()
+            stock_list = [stock for stock in self.new_list if stock in stock_list]
+        return stock_list
+    
+    def after_trading_end(self, context):
+        pass
+    
     def __str__(self):
         if self.strong_sector:
             return '强势板块股票 %s%% 阈值 %s' % (self.sector_limit_pct, self.strength_threthold)
