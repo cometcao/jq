@@ -373,7 +373,7 @@ class Sort_main_money_inflow(SortBase):
         stock_count = get_stock_downwards_count(stock_list, 8, context.current_dt, '1d', 3, 0, False)
         
         cir_mcap = get_main_money_inflow_over_total_money_over_time(stock_count, 
-                                                                   context.current_dt, 
+                                                                   context.previous_date, 
                                                                    force_positive_inflow=True,
                                                                    use_cir_mcap=True,
                                                                    use_money=False,
