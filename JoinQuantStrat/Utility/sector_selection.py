@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import talib
 import datetime
-from common_include import filter_paused
+from common_include import filter_paused, filter_new_stocks
 from collections import OrderedDict
 
 def get_data(stock, count, level, fields, skip_paused=False, df_flag=True, isAnal=False):
@@ -51,7 +51,7 @@ class SectorSelection(object):
         self.useAvg = useAvg
         self.isAnal = isAnal
         self.frequency = '1d' # use day period
-        self.period = 270
+        self.period = 250
         self.gauge_period = avgPeriod
         self.top_limit = float(limit_pct) / 100.0
         self.isReverse = isStrong
@@ -196,7 +196,11 @@ class SectorSelection(object):
         return conceptStrength
         
     def gaugeSectorStrength(self, sectorStocks):
-        sectorStocks = filter_paused(stocks=sectorStocks, end_date=self.effective_date)
+        sectorStocks = filter_paused(
+            stocks=sectorStocks,
+            end_date=self.effective_date)
+        sectorStocks = filter_new_stocks(
+            stocks=sectorStocks, end_dt=self.effective_date, n=250)
         if not sectorStocks:
             return 0
         if not self.useAvg:
@@ -220,15 +224,15 @@ class SectorSelection(object):
             return avgStrength
     
     def gaugeStockUpTrendStrength_MA(self, stock, isWeighted=True, index=-1):
+        stock_df = get_bars(
+            security=stock,
+            count=self.period,
+            unit='1d',
+            fields=['close'],
+            include_now=True,
+            end_dt=self.effective_date,
+            df=False)
         if index == -1:
-            stock_df = get_bars(
-                security=stock,
-                count=self.period,
-                unit='1d',
-                fields=['close'],
-                include_now=True,
-                end_dt=self.effective_date,
-                df=False)
             MA_5 = self.simple_moving_avg(stock_df['close'], 5)
             MA_13 = self.simple_moving_avg(stock_df['close'], 13)
             MA_21 = self.simple_moving_avg(stock_df['close'], 21)
@@ -256,17 +260,9 @@ class SectorSelection(object):
             else:
                 return 233 if isWeighted else 9
         else: # take average value of past 20 periods
-            stock_df = MA_5 = MA_13 = MA_21 = MA_34 = MA_55 = MA_89 = MA_144 = MA_233 = None
+            MA_5 = MA_13 = MA_21 = MA_34 = MA_55 = MA_89 = MA_144 = MA_233 = None
             try:
                 if stock not in self.stock_data_buffer:
-                    stock_df = get_bars(
-                        security=stock,
-                        count=self.period,
-                        unit='1d',
-                        fields=['close'],
-                        include_now=True,
-                        end_dt=self.effective_date,
-                        df=False)
                     MA_5 = talib.SMA(stock_df['close'], 5)
                     MA_13 = talib.SMA(stock_df['close'], 13)
                     MA_21 = talib.SMA(stock_df['close'], 21)
