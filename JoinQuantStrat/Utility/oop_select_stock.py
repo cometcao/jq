@@ -2115,8 +2115,7 @@ class Filter_sector_stocks(Filter_stock_list):
         self.new_list = []
         
     def update_params(self, context, params):
-        self.period_frequency = params.get('period_frequency', 'W')        
-        self.isWeighted = params.get('isWeighted', True)
+        pass
     
     def filter(self, context, data, stock_list):
         if self.g.isFirstNTradingDayOfPeriod(context, num_of_day=1, period=self.period_frequency) or not self.new_list or self.isDaily:

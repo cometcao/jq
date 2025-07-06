@@ -366,13 +366,18 @@ class Sort_rank_stock(SortBase):
 
 class Sort_main_money_inflow(SortBase):
     def sort(self, context, data, stock_list):
-        from strat_common_include import get_main_money_inflow_over_circulating_mcap
-        cir_mcap = get_main_money_inflow_over_circulating_mcap(stock_list, 
-                                                               context.previous_date, 
-                                                               period_count=60,
-                                                               price_change_filter=None,
-                                                               adjust_concentrated=True, 
-                                                               is_debug=False)
+        if not stock_list:
+            return stock_list
+        from strat_common_include import get_main_money_inflow_over_total_money_over_time, get_stock_downwards_count
+        
+        stock_count = get_stock_downwards_count(stock_list, 8, context.current_dt, '1d', 3, 0, False)
+        
+        cir_mcap = get_main_money_inflow_over_total_money_over_time(stock_count, 
+                                                                   context.current_dt, 
+                                                                   force_positive_inflow=True,
+                                                                   use_cir_mcap=True,
+                                                                   use_money=False,
+                                                                   is_debug=False)
         
         cir_mcap = cir_mcap.sort_values(by='mfc', ascending=self.is_asc)
         return cir_mcap['code'].values.tolist()
