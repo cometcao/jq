@@ -370,14 +370,14 @@ class Sort_main_money_inflow(SortBase):
             return stock_list
         from strat_common_include import get_main_money_inflow_over_total_money_over_time, get_stock_downwards_count
         
-        stock_count = get_stock_downwards_count(stock_list, 8, context.current_dt, '1d', 3, 0, False)
-        #stock_count = {stock:period_count for stock in work_stock_list}
+        # stock_count = get_stock_downwards_count(stock_list, 8, context.current_dt, '1d', 3, 0, False)
+        stock_count = {stock:21 for stock in stock_list}
         if not stock_count:
             return []
         
         cir_mcap = get_main_money_inflow_over_total_money_over_time(stock_count, 
                                                                    context.previous_date, 
-                                                                   force_positive_inflow=True,
+                                                                   force_positive_inflow=False,
                                                                    use_cir_mcap=True,
                                                                    use_money=False,
                                                                    is_debug=False)
