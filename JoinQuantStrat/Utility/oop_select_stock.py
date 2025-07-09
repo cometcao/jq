@@ -59,14 +59,7 @@ class Pick_stocks2(Group_rules):
         except:
             to_run_one = False
         if to_run_one and self.has_run:
-            # self.log.info('设置一天只选一次，跳过选股。')
             return
-
-#         self.log.debug("DEBUG 4: stock cache: {0}, stock list: {1}, monitor_list: {2}, filtered_sectors: {3}, industry_sector_list: {4}".format(g.stock_chan_type.keys(), 
-#                                                                            self.g.buy_stocks,
-#                                                                            self.g.monitor_buy_list,
-#                                                                            self.g.filtered_sectors,
-#                                                                            self.g.industry_sector_list))
 
         stock_list = self.g.buy_stocks
         for rule in self.rules:
@@ -92,12 +85,6 @@ class Pick_stocks2(Group_rules):
         for rule in self.rules:
             if isinstance(rule, Early_Filter_stock_list):
                 self.g.buy_stocks = rule.filter(context, self.g.buy_stocks)
-                
-#         self.log.debug("DEBUG 3: stock cache: {0}, stock list: {1}, monitor_list: {2}, filtered_sectors: {3}, industry_sector_list: {4}".format(g.stock_chan_type.keys(), 
-#                                                                            self.g.buy_stocks,
-#                                                                            self.g.monitor_buy_list,
-#                                                                            self.g.filtered_sectors,
-#                                                                            self.g.industry_sector_list))
     
         checking_stocks = self.g.buy_stocks
         if self.add_etf:
