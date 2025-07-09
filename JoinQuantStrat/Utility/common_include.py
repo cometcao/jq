@@ -51,10 +51,7 @@ def get_all_non_new_stocks(end_dt, n=250):
     return on_stock_list
 
 def filter_new_stocks(stocks, end_dt, n=250):
-    #     获取交易日
-    trd_days = get_trade_days(end_date=end_dt, count=n)
-    #     获取n个交易日之前前上市股票【即过滤掉次新股】
-    on_stock_list = get_all_securities('stock', trd_days[0]).index.tolist()
+    on_stock_list = get_all_non_new_stocks(end_dt, n)
     return [stock for stock in stocks if stock in on_stock_list]
 
 def filter_paused(stocks, end_date, day=1):
@@ -111,13 +108,13 @@ def get_obj_class_name(obj):
     return cn[:cn.find("'")]
 
 
-def show_stock(stock):
+def show_stock(stock, current_dt=None):
     '''
     获取股票代码的显示信息    
     :param stock: 股票代码，例如: '603822.XSHG'
     :return: str，例如：'603822 嘉澳环保'
     '''
-    return "%s:%s" % (stock[:6], get_security_info(stock).display_name)
+    return "%s:%s" % (stock[:6], get_security_info(stock, current_dt).display_name)
 
 
 def join_list(pl, connector=' ', step=5):

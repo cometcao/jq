@@ -271,7 +271,11 @@ def check_zhongshu_strong(direction, zs, stock_high, debug=False):
 def check_direction_match_zhongshu_cross(direction, zhongshu, allow_ext = False):
     return (direction == TopBotType.top2bot and zhongshu[0] > 0) or\
            (direction == TopBotType.bot2top and zhongshu[0] < 0) or\
-           (allow_ext and len(zhongshu) > 2)
+           (allow_ext and len(zhongshu) > 2 and
+                ((direction == TopBotType.top2bot and zhongshu[-1] < 0) 
+                or
+                (direction == TopBotType.bot2top and zhongshu[-1] > 0))
+            )
 
 def zhongshu_qushi_qualified(stock_high, direction, zhongshu):
     '''
@@ -414,7 +418,7 @@ class KBar(object):
         zoushi_result = ZouShi_Type.INVALID
         exhaustion_result = Chan_Type.INVALID
         
-        if len(zhongshu) > 1:
+        if len(zhongshu) > 1 and check_direction_match_zhongshu_cross(direction, zhongshu[-1], allow_ext=False):
             if direction == TopBotType.top2bot and\
                 zhongshu_qushi_qualified(stock_high, direction, zhongshu):
                 zoushi_result = ZouShi_Type.Qu_Shi_Down
@@ -423,7 +427,7 @@ class KBar(object):
                 zoushi_result = ZouShi_Type.Qu_Shi_Up
             else:
                 zoushi_result = ZouShi_Type.Pan_Zheng_Composite
-        elif len(zhongshu) == 1 and check_direction_match_zhongshu_cross(direction, zhongshu[0], allow_ext=True):
+        elif len(zhongshu) > 0 and check_direction_match_zhongshu_cross(direction, zhongshu[-1], allow_ext=True):
             zoushi_result = ZouShi_Type.Pan_Zheng
         else:
             return zoushi_result, exhaustion_result

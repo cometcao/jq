@@ -59,14 +59,7 @@ class Pick_stocks2(Group_rules):
         except:
             to_run_one = False
         if to_run_one and self.has_run:
-            # self.log.info('设置一天只选一次，跳过选股。')
             return
-
-#         self.log.debug("DEBUG 4: stock cache: {0}, stock list: {1}, monitor_list: {2}, filtered_sectors: {3}, industry_sector_list: {4}".format(g.stock_chan_type.keys(), 
-#                                                                            self.g.buy_stocks,
-#                                                                            self.g.monitor_buy_list,
-#                                                                            self.g.filtered_sectors,
-#                                                                            self.g.industry_sector_list))
 
         stock_list = self.g.buy_stocks
         for rule in self.rules:
@@ -92,12 +85,6 @@ class Pick_stocks2(Group_rules):
         for rule in self.rules:
             if isinstance(rule, Early_Filter_stock_list):
                 self.g.buy_stocks = rule.filter(context, self.g.buy_stocks)
-                
-#         self.log.debug("DEBUG 3: stock cache: {0}, stock list: {1}, monitor_list: {2}, filtered_sectors: {3}, industry_sector_list: {4}".format(g.stock_chan_type.keys(), 
-#                                                                            self.g.buy_stocks,
-#                                                                            self.g.monitor_buy_list,
-#                                                                            self.g.filtered_sectors,
-#                                                                            self.g.industry_sector_list))
     
         checking_stocks = self.g.buy_stocks
         if self.add_etf:
@@ -2271,7 +2258,7 @@ class Filter_sti(Early_Filter_stock_list):
 
 class Filter_common_early(Early_Filter_stock_list):
     def __init__(self, params):
-        self.filters = params.get('filters', ['st', 'high_limit', 'low_limit', 'pause','ban'])
+        self.filters = params.get('filters', ['st', 'high_limit', 'low_limit', 'pause','ban','new'])
 
     def set_feasible_stocks(self, initial_stocks, current_data):
         # 判断初始股票池的股票是否停牌，返回list
@@ -2284,11 +2271,7 @@ class Filter_common_early(Early_Filter_stock_list):
         return unsuspened_stocks
 
     def filter(self, context, stock_list):
-        # print("before common filter list: {0}".format(stock_list))
         current_data = get_current_data()
-        
-        # filter out paused stocks
-#         stock_list = self.set_feasible_stocks(stock_list, current_data)
         
         if 'st' in self.filters:
             stock_list = [stock for stock in stock_list
@@ -2315,6 +2298,9 @@ class Filter_common_early(Early_Filter_stock_list):
                 stock_list = [stock for stock in stock_list if stock[:6] not in ban_shares]
         except Exception as e:
             self.log.error(str(e))
+        
+        if 'new' in self.filters:
+            stock_list = filter_new_stocks(stock_list, context.current_dt)
         
         self.log.info("选股过滤（显示前五）:\n{0}, total: {1}".format(join_list(["[%s]" % (show_stock(x)) for x in stock_list[:5]], ' ', 10), len(stock_list)))
         return stock_list
@@ -2794,3 +2780,86 @@ class Filter_SD_CHAN(Filter_stock_list):
     
 ################################################################################
 
+class Filter_MA_CHAN(Filter_stock_list):
+    def __init__(self, params):
+        self.expected_zoushi_down = params.get("expected_zoushi_down", [ZouShi_Type.Pan_Zheng, ZouShi_Type.Qu_Shi_Down]) #, 
+        self.expected_exhaustion_down = params.get("expected_exhaustion_down", [Chan_Type.PANBEI, Chan_Type.BEICHI]) #
+        self.down_check_level = params.get("down_check_level", ["5m", "15m", "30m"])
+        self.expected_zoushi_up = params.get("expected_zoushi_up",[ZouShi_Type.Qu_Shi_Up, ZouShi_Type.Pan_Zheng])
+        self.expected_exhaustion_up = params.get("expected_exhaustion_up", [Chan_Type.BEICHI, Chan_Type.PANBEI])
+        self.up_check_level = params.get("up_check_level", ["1d"])
+        self.is_filter_out = params.get("is_filter_out", True)
+
+    def get_count(self, period):
+        if period == '1d':
+            return 180
+        elif period == '120m':
+            return 237
+        elif period == '90m':
+            return 356
+        elif period == '60m':
+            return 712
+        elif period == '30m':
+            return 1200
+        elif period == '15m':
+            return 1500
+        elif period == '5m':
+            return 1800
+        else:
+            return 1800
+
+    def get_tb_count(self, stock, level, direction):
+        stock_data = get_bars(stock, 
+                               count=self.get_count(level), 
+                               end_dt=None, 
+                               unit=level,
+                               fields= ['date','high', 'low'], 
+                               df = False,
+                               include_now=True)
+        if direction == TopBotType.top2bot:
+            max_loc = int(np.where(stock_data['high'] == max(stock_data['high']))[0][-1])
+            top_time = stock_data[max_loc]['date']
+            return len(stock_data['high']) - max_loc
+        else:
+            min_loc = int(np.where(stock_data['low'] == min(stock_data['low']))[0][-1])
+            bot_time = stock_data[min_loc]['date']
+            return len(stock_data['low']) - min_loc
+    
+    def filter_stocks(self, stock, check_level, direction):
+        for level in check_level:
+            tb_count = self.get_tb_count(stock, level, direction)
+            if tb_count > 0:
+                result_zoushi, result_exhaustion = analyze_MA_zoushi_by_stock(stock=stock,
+                                                              period=level, 
+                                                              count=tb_count,
+                                                              end_dt=None, 
+                                                              df=False, 
+                                                              zoushi_types=self.expected_zoushi_down, 
+                                                              direction=direction)
+                if direction ==  TopBotType.top2bot \
+                    and result_zoushi in self.expected_zoushi_down \
+                    and result_exhaustion in self.expected_exhaustion_down:
+                    # print("{0} zoushi: {1} exhaustion down:{2} level:{3}".format(stock, result_zoushi, result_exhaustion, level))
+                    return True
+                elif  direction ==  TopBotType.bot2top \
+                    and result_zoushi in self.expected_zoushi_up \
+                    and result_exhaustion in self.expected_exhaustion_up:
+                    # print("{0} zoushi: {1} exhaustion UP:{2} level:{3}".format(stock, result_zoushi, result_exhaustion, level))
+                    return True
+        return False
+    
+    def filter(self, context, data, stock_list):
+        stock_to_keep = []
+        for stock in stock_list:
+            if self.filter_stocks(stock, self.up_check_level, TopBotType.bot2top):
+                if self.is_filter_out:
+                    continue
+            if self.filter_stocks(stock, self.down_check_level, TopBotType.top2bot):
+                if self.is_filter_out:
+                    continue
+            stock_to_keep.append(stock)
+        self.log.info("after Chan filter: {0}".format(stock_to_keep))
+        return stock_to_keep
+    
+    def __str__(self):
+        return '缠论分析过滤: {0}, {1}, {2}'.format(self.down_check_level, self.up_check_level, self.is_filter_out) 
