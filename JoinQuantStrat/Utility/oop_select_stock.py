@@ -2258,7 +2258,7 @@ class Filter_sti(Early_Filter_stock_list):
 
 class Filter_common_early(Early_Filter_stock_list):
     def __init__(self, params):
-        self.filters = params.get('filters', ['st', 'high_limit', 'low_limit', 'pause','ban'])
+        self.filters = params.get('filters', ['st', 'high_limit', 'low_limit', 'pause','ban','new'])
 
     def set_feasible_stocks(self, initial_stocks, current_data):
         # 判断初始股票池的股票是否停牌，返回list
@@ -2271,11 +2271,7 @@ class Filter_common_early(Early_Filter_stock_list):
         return unsuspened_stocks
 
     def filter(self, context, stock_list):
-        # print("before common filter list: {0}".format(stock_list))
         current_data = get_current_data()
-        
-        # filter out paused stocks
-#         stock_list = self.set_feasible_stocks(stock_list, current_data)
         
         if 'st' in self.filters:
             stock_list = [stock for stock in stock_list
@@ -2302,6 +2298,9 @@ class Filter_common_early(Early_Filter_stock_list):
                 stock_list = [stock for stock in stock_list if stock[:6] not in ban_shares]
         except Exception as e:
             self.log.error(str(e))
+        
+        if 'new' in self.filters:
+            stock_list = filter_new_stocks(stock_list, context.current_dt)
         
         self.log.info("选股过滤（显示前五）:\n{0}, total: {1}".format(join_list(["[%s]" % (show_stock(x)) for x in stock_list[:5]], ' ', 10), len(stock_list)))
         return stock_list
