@@ -51,7 +51,7 @@ class Pick_stocks2(Group_rules):
         self.send_email = params.get('send_email', False) # email json config
 
     def update_params(self, context, params):
-        self.send_email = params.get('send_email', False)
+        pass
 
     def handle_data(self, context, data):
         try:
@@ -427,8 +427,7 @@ class Pick_rank_sector(Create_stock_list):
         self.new_list = []
         
     def update_params(self, context, params):
-        self.period_frequency = params.get('period_frequency', 'W')        
-        self.isWeighted = params.get('isWeighted', True)
+        pass
         
     def filter(self, context, data):
         return self.new_list
@@ -549,7 +548,7 @@ class Pick_Rank_Factor(Create_stock_list):
         pass
     
     def update_params(self, context, params):
-        self.factor_num = params.get('factor_num', 10)
+        pass
     
     def before_trading_start(self, context):
         from ml_factor_rank import ML_Dynamic_Factor_Rank, ML_Factor_Rank
@@ -717,9 +716,7 @@ class Pick_Dynamic_Rank_Factor(Create_stock_list):
         pass  
 
     def update_params(self, context, params):
-        self.ic_mean_threthold = params.get('ic_mean_threthold', 0.02)
-        self.is_debug = params.get('is_debug', False)
-        self.factor_analyzer_result_path = params.get('factor_analyzer_result_path', None)
+        pass
 
     def before_trading_start(self, context):
         from dynamic_factor_based_stock_ranking import Dynamic_factor_based_stock_ranking
@@ -826,7 +823,7 @@ class Pick_Pair_Trading(Create_stock_list):
         self.new_pair = []
     
     def update_params(self, context, params):
-        self.period_frequency = params.get('period_frequency', 'M')
+        pass
         
     
     def before_trading_start(self, context):
@@ -1980,7 +1977,7 @@ class Filter_Pair_Trading(Filter_stock_list):
         self.new_pair = []
         
     def update_params(self, context, params):
-        self.period_frequency = params.get('period_frequency', 'M')        
+        pass      
         
     def filter(self, context, data, stock_list):
         self.log.info('配对筛股:\n' + join_list(["[%s]" % (show_stock(x)) for x in stock_list[-10:]], ' ', 10))
@@ -2018,10 +2015,6 @@ class Filter_Rank_Sector(Early_Filter_stock_list):
         self.isWeighted = params.get('isWeighted', True)
         self.new_list = []
     
-    def update_params(self, context, params):
-        self.period_frequency = params.get('period_frequency', 'W')
-        self.isWeighted = params.get('isWeighted', True)
-    
     def filter(self, context, stock_list):
         return [stock for stock in stock_list if stock in self.new_list]
 
@@ -2035,9 +2028,9 @@ class Filter_Rank_Sector(Early_Filter_stock_list):
                     useAvg=self.useAvg,
                     avgPeriod=self.avgPeriod,
                     isWeighted=self.isWeighted,
-                    effective_date=context.previous_date)
+                    effective_date=context.current_dt)
             self.new_list = ss.processAllSectorStocks()
-            
+
     def __str__(self):
         if self.strong_sector:
             return '强势板块股票 %s%% 阈值 %s' % (self.sector_limit_pct, self.strength_threthold)
@@ -2137,9 +2130,7 @@ class Filter_Week_Day_Long_Pivot_Stocks(Filter_stock_list):
         self.period_frequency = params.get('period_frequency', 'W')
         
     def update_params(self, context, params):
-        Filter_stock_list.update_params(self, context, params)
-        self.enable_filter = params.get('enable_filter', True)
-        self.period_frequency = params.get('period_frequency', 'W')
+        pass
         
     def filter(self, context, data, stock_list):
         # 新选出票 + 过去一周选出票 + 过去一周强势票
@@ -2314,7 +2305,7 @@ class Filter_common_early(Early_Filter_stock_list):
         return df_jj.code.values
 
     def update_params(self, context, params):
-        self.filters = params.get('filters', ['st', 'high_limit', 'low_limit', 'pause']) # ,'ban'
+        pass
 
     def __str__(self):
         return '一般性股票过滤器:%s' % (str(self.filters))
@@ -2378,7 +2369,7 @@ class Filter_common(Filter_stock_list):
         return df_jj.code.values
 
     def update_params(self, context, params):
-        self.filters = params.get('filters', ['st', 'high_limit', 'low_limit', 'pause']) # ,'ban'
+        pass
 
     def __str__(self):
         return '一般性股票过滤器:%s' % (str(self.filters))
