@@ -197,7 +197,7 @@ def analyze_MA_zoushi_by_stock(stock,
                                            all_cross=all_cross,
                                            debug=debug)
     
-def analyze_MA_exhaustion(zoushi_result, first, second,debug=False):
+def analyze_MA_exhaustion_by_direction(direction, zoushi_result, first, second,debug=False):
     # work out the slope return true if the slope exhausted
     if debug:
         print(first)
@@ -208,27 +208,33 @@ def analyze_MA_exhaustion(zoushi_result, first, second,debug=False):
     snd_max_idx = np.where(second['high'] == max(second['high']))[0][0]
     snd_min_idx = np.where(second['low'] == min(second['low']))[0][-1]
     
+    tail_direction_match = False
+    
     if int(fst_min_idx) == int(fst_max_idx) or\
         int(snd_min_idx) == int(snd_max_idx):
-        return False
+        return False, tail_direction_match
+
+    if (direction == TopBotType.top2bot and snd_min_idx > snd_max_idx) or\
+        (direction == TopBotType.bot2top and snd_min_idx < snd_max_idx):
+        tail_direction_match = True
     
     if zoushi_result == ZouShi_Type.Qu_Shi_Down:
         first_slope = (max(first['high']) - min(first['low'])) / (fst_min_idx-fst_max_idx) 
         second_slope = (max(second['high']) - min(second['low'])) / (snd_min_idx-snd_max_idx) 
-        return abs(second_slope) < abs(first_slope)
+        return abs(second_slope) < abs(first_slope), tail_direction_match
     elif zoushi_result == ZouShi_Type.Qu_Shi_Up:
         first=first[int(first['low'].argmin()):] # cut the data
         second=second[int(second['low'].argmin()):]
         first_slope = (max(first['high']) - min(first['low'])) / (fst_max_idx - fst_min_idx) 
         second_slope = (max(second['high']) - min(second['low'])) / (snd_max_idx - snd_min_idx) 
-        return abs(second_slope) < abs(first_slope)
+        return abs(second_slope) < abs(first_slope), tail_direction_match
         
     elif zoushi_result == ZouShi_Type.Pan_Zheng:
         first_slope = (max(first['high']) - min(first['low'])) / (fst_min_idx-fst_max_idx) 
         second_slope = (max(second['high']) - min(second['low'])) / (snd_min_idx-snd_max_idx) 
-        return abs(second_slope) < abs(first_slope)
+        return abs(second_slope) < abs(first_slope), tail_direction_match
     else:
-        return False
+        return False, tail_direction_match
     
 def check_zhongshu_advance(direction, zs1, zs2, stock_high, debug=False):
     first_zhongshu_data = stock_high[abs(zs1[0])+1:abs(zs1[-1])+1]
@@ -268,14 +274,17 @@ def check_zhongshu_strong(direction, zs, stock_high, debug=False):
     else:
         return False
     
+def direction_match_zhongshu_tail(direction, zhongshu):
+    pass
+
+def direction_match_zhongshu_head(direction, zhongshu):
+    return ((direction == TopBotType.top2bot and zhongshu[0] > 0) 
+            or
+            (direction == TopBotType.bot2top and zhongshu[0] < 0))
+
 def check_direction_match_zhongshu_cross(direction, zhongshu, allow_ext = False):
-    return (direction == TopBotType.top2bot and zhongshu[0] > 0) or\
-           (direction == TopBotType.bot2top and zhongshu[0] < 0) or\
-           (allow_ext and len(zhongshu) > 2 and
-                ((direction == TopBotType.top2bot and zhongshu[-1] < 0) 
-                or
-                (direction == TopBotType.bot2top and zhongshu[-1] > 0))
-            )
+    return direction_match_zhongshu_head(direction, zhongshu) and\
+           (len(zhongshu) == 2 or (allow_ext and len(zhongshu) > 2))
 
 def zhongshu_qushi_qualified(stock_high, direction, zhongshu):
     '''
@@ -418,7 +427,7 @@ class KBar(object):
         zoushi_result = ZouShi_Type.INVALID
         exhaustion_result = Chan_Type.INVALID
         
-        if len(zhongshu) > 1 and check_direction_match_zhongshu_cross(direction, zhongshu[-1], allow_ext=False):
+        if len(zhongshu) > 1:
             if direction == TopBotType.top2bot and\
                 zhongshu_qushi_qualified(stock_high, direction, zhongshu):
                 zoushi_result = ZouShi_Type.Qu_Shi_Down
@@ -436,29 +445,26 @@ class KBar(object):
         if zoushi_result not in zoushi_types:
             return zoushi_result, exhaustion_result
         
-        # make sure we have the right direction
-        if (direction == TopBotType.top2bot and all_cross[-1] > 0) or\
-            (direction == TopBotType.bot2top and all_cross[-1] < 0):
-            return zoushi_result, exhaustion_result
+        # # make sure we have the right direction
+        # if (direction == TopBotType.top2bot and all_cross[-1] > 0) or\
+        #     (direction == TopBotType.bot2top and all_cross[-1] < 0):
+        #     return zoushi_result, exhaustion_result
         
         # only check exhaustion by last ZhongShu
         if len(zhongshu) == 1:
             zs = zhongshu[0]
             first_part = stock_high[:abs(zs[0])+1]
             second_part = stock_high[abs(zs[-1])+1:]
-            if analyze_MA_exhaustion(zoushi_result, first_part, second_part,debug):
-                exhaustion_result = Chan_Type.PANBEI
-            else:
-                exhaustion_result = Chan_Type.INVIGORATE
+            exhaustion_check, direction_check = analyze_MA_exhaustion_by_direction(direction, zoushi_result, first_part, second_part,debug)
+            exhaustion_result = Chan_Type.INVALID if not direction_check else Chan_Type.PANBEI if exhaustion_check else Chan_Type.INVIGORATE
+
         else:
             zs1 = zhongshu[-2]
             zs2 = zhongshu[-1]
             first_part = stock_high[abs(zs1[-1])+1:abs(zs2[0])+1]
             second_part = stock_high[abs(zs2[-1])+1:]
-            if analyze_MA_exhaustion(zoushi_result, first_part, second_part,debug):
-                exhaustion_result = Chan_Type.BEICHI
-            else:
-                exhaustion_result = Chan_Type.INVIGORATE
+            exhaustion_check, direction_check = analyze_MA_exhaustion_by_direction(direction, zoushi_result, first_part, second_part,debug)
+            exhaustion_result = Chan_Type.INVALID if not direction_check else Chan_Type.PANBEI if exhaustion_check else Chan_Type.INVIGORATE
         
         return zoushi_result, exhaustion_result
 
