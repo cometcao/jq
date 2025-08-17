@@ -1039,6 +1039,8 @@ class Equilibrium():
         '''
         all_types = []
         if len(self.analytic_result) < 2 and not self.analytic_result[0].isZhongShu:
+            if self.isdebug:
+                print("analytic result is: {0}".format(self.analytic_result))
             all_types.append((Chan_Type.INVALID, TopBotType.noTopBot, 0))
             return all_types
         
@@ -1298,16 +1300,20 @@ class Equilibrium():
         all_types = list(set(all_types))
         
         if not all_types: # if not found, we give the boundary of latest ZhongShu
+            # use type II to represent PANZHENG
             if type(self.analytic_result[-1]) is ZhongShu:
-                final_zs = self.analytic_result[-1]
-                all_types.append((Chan_Type.INVALID,
-                                  TopBotType.noTopBot,
-                                  final_zs.get_amplitude_region_original(re_evaluate=True)))
+                all_types.append((Chan_Type.II,
+                                  TopBotType.bot2top if self.analytic_nodes[-1].tb == TopBotType.top else TopBotType.top2bot,
+                                  self.analytic_result[-1].get_amplitude_region_original(re_evaluate=True)))
             elif len(self.analytic_result) > 1 and type(self.analytic_result[-2]) is ZhongShu:
                 final_zs = self.analytic_result[-2]
+                all_types.append((Chan_Type.II,
+                                  TopBotType.bot2top if self.analytic_nodes[-1].tb == TopBotType.top else TopBotType.top2bot,
+                                  final_zs.get_amplitude_region_original()))
+            else:
                 all_types.append((Chan_Type.INVALID,
                                   TopBotType.noTopBot,
-                                  final_zs.get_amplitude_region_original()))
+                                  [None, None]))
         
         if all_types and self.isdebug:
             print("all chan types found: {0}".format(all_types))
