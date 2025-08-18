@@ -25,6 +25,7 @@ from biaoLiStatus import TopBotType
 from chan_kbar_filter import *
 from equilibrium import *
 from kBar_Chan import *
+from datetime import timedelta
 import datetime
 import talib
 
@@ -2247,6 +2248,162 @@ class Filter_sti(Early_Filter_stock_list):
     def __str__(self):
         return '过滤科创板股票'
 
+def filter_stocks_by_regulation(stock_list, dt):
+    if not stock_list:
+        return []
+
+    try:
+        # 1. 批量获取股票基础信息
+        all_stocks = get_all_securities(types=['stock'], date=dt)
+        basic_info = all_stocks[all_stocks.index.isin(stock_list)]
+
+        # 标记主板/创业板
+        basic_info['board'] = np.where(
+            basic_info.index.str.startswith('300') | basic_info.index.str.startswith('688'),
+            'growth', 'mainboard'
+        )
+
+        # 2. 批量获取财务数据
+        q = query(
+            valuation.code,
+            valuation.circulating_market_cap,
+            income.net_profit,
+            income.operating_revenue
+        ).filter(valuation.code.in_(stock_list))
+
+        fin_data = get_fundamentals(q, date=dt).set_index('code')
+
+        # 3. 批量获取股价数据
+        prices = get_price(
+            stock_list, 
+            end_date=dt,
+            count=1,
+            fields=['close'],
+            panel=False
+        ).set_index('code')['close']
+
+        # 4. 批量获取股东人数（使用最新报告期数据）
+        holder_data = {}
+        for stock in stock_list:
+            try:
+                holder_q = query(
+                    finance.STK_HOLDER_NUM.code,
+                    finance.STK_HOLDER_NUM.share_holders
+                ).filter(
+                    finance.STK_HOLDER_NUM.code == stock,
+                ).order_by(
+                    finance.STK_HOLDER_NUM.end_date.desc()
+                ).limit(1)
+
+                result = finance.run_query(holder_q)
+                
+                if not result.empty:
+                    holder_data[stock] = result.iloc[0]['share_holders']
+                else:
+                    # 如果没有数据，尝试使用默认值
+                    holder_data[stock] = 0
+                
+            except Exception as e:
+                print("获取股票{stock}股东人数失败: {}".format(e))
+                holder_data[stock] = 0
+            # 添加短暂延迟避免API限制
+            time.sleep(0.1)
+        holder_series = pd.Series(holder_data, name='holder_num')
+            
+        # 5. 批量获取分红数据（最近三年）
+        three_years_ago = (dt - timedelta(days=3*365)).strftime('%Y-%m-%d')
+        div_q = query(
+            finance.STK_XR_XD.code,
+            (finance.STK_XR_XD.bonus_ratio_rmb).label('dividend')
+        ).filter(
+            finance.STK_XR_XD.code.in_(stock_list),
+            finance.STK_XR_XD.report_date  >= three_years_ago
+        )
+        div_data = finance.run_query(div_q)
+        if not div_data.empty:
+            dividends = div_data.groupby('code')['dividend'].sum()
+        else:
+            dividends = pd.Series(0, index=stock_list)
+
+        # 6. 合并所有数据
+        merged = basic_info.join(fin_data, how='left')
+        merged = merged.join(prices.rename('price'), how='left')
+        merged = merged.join(holder_series.rename('holder_num'), how='left')
+        merged = merged.join(dividends.rename('dividend_3yr'), how='left')
+
+        # 填充缺失值
+        merged.fillna({
+            'net_profit': 0,
+            'operating_revenue': 0,
+            'circulating_market_cap': 0,
+            'price': 0,
+            'holder_num': 0,
+            'dividend_3yr': 0
+        }, inplace=True)
+
+        # 7. 应用国九条筛选规则
+        # 财务退市阈值
+        revenue_threshold = {
+            'mainboard': 3e8,   # 主板3亿元
+            'growth': 1e8        # 创业板1亿元
+        }
+
+        # 创建筛选条件 - 修正括号问题
+        condition = (
+            # 分红规则
+            (merged['dividend_3yr'] > 0) &
+
+            # 财务规则 - 修正括号结构
+            (
+                (
+                    (merged['board'] == 'mainboard') & 
+                    (
+                        (merged['net_profit'] > 0) | 
+                        (merged['operating_revenue'] >= revenue_threshold['mainboard'])
+                    )
+                ) |
+                (
+                    (merged['board'] == 'growth') & 
+                    (
+                        (merged['net_profit'] > 0) | 
+                        (merged['operating_revenue'] >= revenue_threshold['growth'])
+                    )
+                )
+            ) &
+
+            # 交易规则
+            (merged['price'] >= 1) &
+
+            # 市值规则 - 修正括号结构
+            (
+                (
+                    (merged['board'] == 'mainboard') & 
+                    (merged['circulating_market_cap'] >= 5)
+                ) |
+                (
+                    (merged['board'] == 'growth') & 
+                    (merged['circulating_market_cap'] >= 3)
+                )
+            ) &
+
+            # 股东人数规则 - 修正括号结构
+            (
+                (
+                    (merged['board'] == 'mainboard') & 
+                    (merged['holder_num'] >= 2000)
+                ) |
+                (
+                    (merged['board'] == 'growth') & 
+                    (merged['holder_num'] >= 400)
+                )
+            )
+        )
+        return merged[condition].index.tolist()
+
+    except Exception as e:
+        print("筛选过程中发生错误: {}".format(e))
+        return []
+
 class Filter_common_early(Early_Filter_stock_list):
     def __init__(self, params):
         self.filters = params.get('filters', ['st', 'high_limit', 'low_limit', 'pause','ban','new'])
@@ -2260,162 +2417,6 @@ class Filter_common_early(Early_Filter_stock_list):
         df_paused_info = pd.DataFrame({'paused_info':paused_info},index = initial_stocks)
         unsuspened_stocks =list(df_paused_info.index[df_paused_info.paused_info == False])
         return unsuspened_stocks
-    
-    def filter_stocks_by_regulation(self, stock_list, dt):
-        if not stock_list:
-            return []
-    
-        try:
-            # 1. 批量获取股票基础信息
-            all_stocks = get_all_securities(types=['stock'], date=dt)
-            basic_info = all_stocks[all_stocks.index.isin(stock_list)]
-    
-            # 标记主板/创业板
-            basic_info['board'] = np.where(
-                basic_info.index.str.startswith('300') | basic_info.index.str.startswith('688'),
-                'growth', 'mainboard'
-            )
-    
-            # 2. 批量获取财务数据
-            q = query(
-                valuation.code,
-                valuation.circulating_market_cap,
-                income.net_profit,
-                income.operating_revenue
-            ).filter(valuation.code.in_(stock_list))
-    
-            fin_data = get_fundamentals(q, date=dt).set_index('code')
-    
-            # 3. 批量获取股价数据
-            prices = get_price(
-                stock_list, 
-                end_date=dt,
-                count=1,
-                fields=['close'],
-                panel=False
-            ).set_index('code')['close']
-    
-            # 4. 批量获取股东人数（使用最新报告期数据）
-            holder_data = {}
-            for stock in stock_list:
-                try:
-                    holder_q = query(
-                        finance.STK_HOLDER_NUM.code,
-                        finance.STK_HOLDER_NUM.share_holders
-                    ).filter(
-                        finance.STK_HOLDER_NUM.code == stock,
-                    ).order_by(
-                        finance.STK_HOLDER_NUM.end_date.desc()
-                    ).limit(1)
-    
-                    result = finance.run_query(holder_q)
-                    
-                    if not result.empty:
-                        holder_data[stock] = result.iloc[0]['share_holders']
-                    else:
-                        # 如果没有数据，尝试使用默认值
-                        holder_data[stock] = 0
-                    
-                except Exception as e:
-                    print("获取股票{stock}股东人数失败: {}".format(e))
-                    holder_data[stock] = 0
-                # 添加短暂延迟避免API限制
-                time.sleep(0.1)
-            holder_series = pd.Series(holder_data, name='holder_num')
-                
-            # 5. 批量获取分红数据（最近三年）
-            three_years_ago = (dt - timedelta(days=3*365)).strftime('%Y-%m-%d')
-            div_q = query(
-                finance.STK_XR_XD.code,
-                (finance.STK_XR_XD.bonus_ratio_rmb).label('dividend')
-            ).filter(
-                finance.STK_XR_XD.code.in_(stock_list),
-                finance.STK_XR_XD.report_date  >= three_years_ago
-            )
-            div_data = finance.run_query(div_q)
-            if not div_data.empty:
-                dividends = div_data.groupby('code')['dividend'].sum()
-            else:
-                dividends = pd.Series(0, index=stock_list)
-    
-            # 6. 合并所有数据
-            merged = basic_info.join(fin_data, how='left')
-            merged = merged.join(prices.rename('price'), how='left')
-            merged = merged.join(holder_series.rename('holder_num'), how='left')
-            merged = merged.join(dividends.rename('dividend_3yr'), how='left')
-    
-            # 填充缺失值
-            merged.fillna({
-                'net_profit': 0,
-                'operating_revenue': 0,
-                'circulating_market_cap': 0,
-                'price': 0,
-                'holder_num': 0,
-                'dividend_3yr': 0
-            }, inplace=True)
-    
-            # 7. 应用国九条筛选规则
-            # 财务退市阈值
-            revenue_threshold = {
-                'mainboard': 3e8,   # 主板3亿元
-                'growth': 1e8        # 创业板1亿元
-            }
-    
-            # 创建筛选条件 - 修正括号问题
-            condition = (
-                # 分红规则
-                (merged['dividend_3yr'] > 0) &
-    
-                # 财务规则 - 修正括号结构
-                (
-                    (
-                        (merged['board'] == 'mainboard') & 
-                        (
-                            (merged['net_profit'] > 0) | 
-                            (merged['operating_revenue'] >= revenue_threshold['mainboard'])
-                        )
-                    ) |
-                    (
-                        (merged['board'] == 'growth') & 
-                        (
-                            (merged['net_profit'] > 0) | 
-                            (merged['operating_revenue'] >= revenue_threshold['growth'])
-                        )
-                    )
-                ) &
-    
-                # 交易规则
-                (merged['price'] >= 1) &
-    
-                # 市值规则 - 修正括号结构
-                (
-                    (
-                        (merged['board'] == 'mainboard') & 
-                        (merged['circulating_market_cap'] >= 5)
-                    ) |
-                    (
-                        (merged['board'] == 'growth') & 
-                        (merged['circulating_market_cap'] >= 3)
-                    )
-                ) &
-    
-                # 股东人数规则 - 修正括号结构
-                (
-                    (
-                        (merged['board'] == 'mainboard') & 
-                        (merged['holder_num'] >= 2000)
-                    ) |
-                    (
-                        (merged['board'] == 'growth') & 
-                        (merged['holder_num'] >= 400)
-                    )
-                )
-            )
-            return merged[condition].index.tolist()
-    
-        except Exception as e:
-            print("筛选过程中发生错误: {}".format(e))
-            return []
 
     def filter(self, context, stock_list):
         current_data = get_current_data()
@@ -2450,7 +2451,7 @@ class Filter_common_early(Early_Filter_stock_list):
             stock_list = filter_new_stocks(stock_list, context.current_dt)
         
         if 'regulation' in self.filters:
-            stock_list = self.filter_stocks_by_regulation(stock_list, context.previous_date)
+            stock_list = filter_stocks_by_regulation(stock_list, context.previous_date)
         
         self.log.info("选股过滤（显示前五）:\n{0}, total: {1}".format(join_list(["[%s]" % (show_stock(x)) for x in stock_list[:5]], ' ', 10), len(stock_list)))
         return stock_list
@@ -2966,6 +2967,8 @@ class Filter_MA_CHAN(Filter_stock_list):
                                fields= ['date','high', 'low'], 
                                df = False,
                                include_now=True)
+        if stock_data.size == 0:
+            return 0
         if direction == TopBotType.top2bot:
             max_loc = int(np.where(stock_data['high'] == max(stock_data['high']))[0][-1])
             top_time = stock_data[max_loc]['date']
@@ -2975,7 +2978,7 @@ class Filter_MA_CHAN(Filter_stock_list):
             bot_time = stock_data[min_loc]['date']
             return len(stock_data['low']) - min_loc
     
-    def filter_stocks(self, stock, check_level, direction):
+    def filter_stocks(self, stock, check_level, direction, expected_zoushi):
         for level in check_level:
             tb_count = self.get_tb_count(stock, level, direction)
             if tb_count > 0:
@@ -2984,7 +2987,7 @@ class Filter_MA_CHAN(Filter_stock_list):
                                                               count=tb_count,
                                                               end_dt=None, 
                                                               df=False, 
-                                                              zoushi_types=self.expected_zoushi_down, 
+                                                              zoushi_types=expected_zoushi, 
                                                               direction=direction)
                 if direction ==  TopBotType.top2bot \
                     and result_zoushi in self.expected_zoushi_down \
@@ -3001,13 +3004,16 @@ class Filter_MA_CHAN(Filter_stock_list):
     def filter(self, context, data, stock_list):
         stock_to_keep = []
         for stock in stock_list:
-            if self.filter_stocks(stock, self.up_check_level, TopBotType.bot2top):
-                if self.is_filter_out:
+            if self.is_filter_out:
+                if self.filter_stocks(stock, self.up_check_level, TopBotType.bot2top, self.expected_zoushi_up):
                     continue
-            if self.filter_stocks(stock, self.down_check_level, TopBotType.top2bot):
-                if self.is_filter_out:
+                if self.filter_stocks(stock, self.down_check_level, TopBotType.top2bot, self.expected_zoushi_down):
                     continue
-            stock_to_keep.append(stock)
+                stock_to_keep.append(stock)
+            else:
+                if self.filter_stocks(stock, self.up_check_level, TopBotType.bot2top, self.expected_zoushi_up) or \
+                    self.filter_stocks(stock, self.down_check_level, TopBotType.top2bot, self.expected_zoushi_down):
+                    stock_to_keep.append(stock)
         self.log.info("after Chan filter: {0}".format(stock_to_keep))
         return stock_to_keep
     
