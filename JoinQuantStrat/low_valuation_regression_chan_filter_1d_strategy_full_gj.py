@@ -98,12 +98,12 @@ class Global_variable(object):
             self.wait_for_orders(order_type=0)
             snap_shot = get_snapshot(security)[security]
             last_px = snap_shot["last_px"]
-            high_px = snap_shot["high_px"]
+            up_px = snap_shot["up_px"]
             amount = value / last_px // 100 * 100
             order_id = order_market(security, 
                                     amount = amount, 
                                     market_type = self.find_market_type(security),
-                                    limit_price = high_px)
+                                    limit_price = up_px)
         else:
             order_id = order_value(security, value)
         if order_id != None:
@@ -143,12 +143,12 @@ class Global_variable(object):
             st_status = get_stock_status(security, 'ST')
             if st_status[security]:
                 order_id = order_target_value(
-                    security, 0, limit_price=snap_shot.get("low_px", 0.1))
+                    security, 0, limit_price=snap_shot.get("down_px", 0.1))
             else:
                 order_id = order_market(security, 
                                         amount = -position.enable_amount, 
                                         market_type = self.find_market_type(security),
-                                        limit_price = snap_shot.get("low_px", 0.1)) # 可能会因停牌失败
+                                        limit_price = snap_shot.get("down_px", 0.1)) # 可能会因停牌失败
         else:
             order_id = order_target_value(security, 0)
 
