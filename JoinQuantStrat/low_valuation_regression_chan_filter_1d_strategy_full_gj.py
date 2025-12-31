@@ -1131,7 +1131,7 @@ def select_strategy(context):
         [True, '', '卖出股票', Sell_stocks, {}],
         [True, '', '买入股票', Buy_stocks, {
             'buy_count': g.buy_count,
-            'use_portion': 1 - 1 / g.buy_count * 0.2
+            'use_portion': 1 - 1 / g.buy_count * 0.1
         }],
         [True, '_Show_postion_adjust_', '显示买卖的股票', Show_postion_adjust, {}],
     ]
