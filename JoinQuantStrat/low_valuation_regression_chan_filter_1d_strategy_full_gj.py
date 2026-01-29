@@ -1088,7 +1088,7 @@ class Stat(Rule):
 # ==================================策略配置==============================================
 def select_strategy(context):
     g.strategy_memo = '混合策略'
-    g.buy_count = 8
+    g.buy_count = 13
 
     ''' ---------------------配置 调仓条件判断规则-----------------------'''
     # 调仓条件判断
@@ -1115,7 +1115,7 @@ def select_strategy(context):
             }],
 
         [True, '', '获取最终选股数', Filter_buy_count, {
-            'buy_count': 13  # 最终入选股票数
+            'buy_count': 21  # 最终入选股票数
         }],
     ]
     pick_new = [
