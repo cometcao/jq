@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-miniQMT 每日调仓策略（实盘优化版 · 无报警）
+miniQMT 每日调仓策略（实盘优化版 + 时间等待）
 - 保持原有逻辑：按名单调仓 + 再平衡（双向20%偏离）
 - 优化：实时数据订阅、动态订单等待、网络重试、单例保护
+- 新增：带 scheduled_time 的动作将等待到指定时间再执行
 """
 
 import json
@@ -11,6 +12,7 @@ import logging
 import os
 import sys
 import atexit
+import datetime  # 新增，用于时间处理
 from abc import ABC, abstractmethod
 
 try:
@@ -23,33 +25,23 @@ except ImportError:
 
 # ==================== 工具类：行情数据（强制实时）====================
 class MarketUtils:
-    """实盘行情工具（实时获取，带缓存）"""
+    """实盘行情工具，带缓存"""
     _cache = {}
     
     @classmethod
     def get_limit_price(cls, code, limit_type='high_limit'):
-        """
-        获取指定股票的涨停价或跌停价
-        :param code: 股票代码，格式如 '000001.SZ' 或 '600000.SH'
-        :param limit_type: 'high_limit' 或 'low_limit'
-        :return: 价格（浮点数），获取失败返回 0.0
-        """
         cache_key = f"{code}_{limit_type}_{time.strftime('%Y%m%d')}"
         if cache_key in cls._cache:
             return cls._cache[cache_key]
-        
         try:
-            # 确保数据已下载（避免首次获取为空）
+            # 确保数据已下载
             xtdata.download_history_data(code, period='1d', start_time='', end_time='')
-            
-            # 获取最新日线数据（不传 subscribe 参数）
             data = xtdata.get_market_data_ex(
-                [code],
-                period='1d',
-                count=1,
+                [code], 
+                period='1d', 
+                count=1, 
                 dividend_type='front_ratio'
             )
-            
             if code in data and data[code] is not None and not data[code].empty:
                 price = data[code][limit_type].iloc[-1]
                 cls._cache[cache_key] = price
@@ -57,26 +49,24 @@ class MarketUtils:
         except Exception as e:
             logging.error(f"获取{limit_type}异常 {code}: {e}")
         return 0.0
-
+    
     @classmethod
     def is_limit_status(cls, code, limit_type='high_limit', tolerance=0.001):
-        """判断股票是否处于涨跌停状态"""
         price = cls.get_limit_price(code, limit_type)
         if price <= 0:
             return False
         try:
-            # 获取当前收盘价（也可用最新价，但日线足够）
             data = xtdata.get_market_data_ex(
-                [code],
-                period='1d',
-                count=1,
+                [code], 
+                period='1d', 
+                count=1, 
                 dividend_type='front_ratio'
             )
             if code in data and data[code] is not None and not data[code].empty:
                 current = data[code]['close'].iloc[-1]
                 return abs(current - price) < tolerance
-        except Exception as e:
-            logging.error(f"判断涨跌停异常 {code}: {e}")
+        except:
+            pass
         return False
 
 # ==================== 单例运行保护 ====================
@@ -87,7 +77,6 @@ def check_single_instance():
         try:
             with open(lock_file, 'r') as f:
                 pid = int(f.read().strip())
-            # 检查进程是否存在（Windows兼容简化：仅检查文件修改时间）
             if time.time() - os.path.getmtime(lock_file) < 3600:
                 logging.warning("检测到另一实例可能正在运行，退出")
                 sys.exit(0)
@@ -101,7 +90,7 @@ def check_single_instance():
 class Action(ABC):
     def __init__(self, name, scheduled_time=None):
         self.name = name
-        self.scheduled_time = scheduled_time
+        self.scheduled_time = scheduled_time  # 格式 "HH:MM"，如 "09:35"
     @abstractmethod
     def run(self, context): pass
 
@@ -111,18 +100,41 @@ class SimpleAction(Action):
         self.func = func
     def run(self, context): self.func(context)
 
-class SequenceAction(Action):
+class CompositeAction(Action):
     def __init__(self, name, scheduled_time=None):
         super().__init__(name, scheduled_time)
         self.children = []
     def add(self, child): self.children.append(child); return self
+
+class SequenceAction(CompositeAction):
+    """按顺序执行所有子动作，并支持按预定时间触发"""
     def run(self, context):
-        logging.info(f">>> 开始 {self.name}")
+        logging.info(f">>> 开始执行组合: {self.name}")
         for child in self.children:
+            # 处理子动作的预定时间
+            if child.scheduled_time:
+                try:
+                    target_hour, target_minute = map(int, child.scheduled_time.split(':'))
+                    now = datetime.datetime.now()
+                    target_time = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
+                    if now < target_time:
+                        wait_seconds = (target_time - now).total_seconds()
+                        logging.info(f"等待到预定时间 {child.scheduled_time} 执行 {child.name}，需等待 {wait_seconds:.0f} 秒")
+                        time.sleep(wait_seconds)
+                    else:
+                        logging.info(f"预定时间 {child.scheduled_time} 已过，立即执行 {child.name}")
+                except Exception as e:
+                    logging.error(f"解析时间 {child.scheduled_time} 失败: {e}")
+            
+            # 执行子动作
             tag = f" [{child.scheduled_time}]" if child.scheduled_time else ""
-            logging.info(f"--- 执行 {child.name}{tag}")
-            child.run(context)
-        logging.info(f"<<< 结束 {self.name}")
+            logging.info(f"--- 执行子动作: {child.name}{tag} ...")
+            try:
+                child.run(context)
+            except Exception as e:
+                logging.error(f"!!! 子动作 {child.name} 失败: {e}")
+                raise
+        logging.info(f"<<< 组合 {self.name} 执行完毕")
 
 # ==================== 重试装饰器 ====================
 class RetryAction(Action):
@@ -384,13 +396,12 @@ RootStrategy.add(InitSequence).add(TradeSequence)
 
 # ==================== 主函数 ====================
 def main():
-    # 单例保护
     check_single_instance()
     
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
                         handlers=[logging.StreamHandler()])
     logging.info("="*50)
-    logging.info("miniQMT 每日调仓策略 (实盘优化版)")
+    logging.info("miniQMT 每日调仓策略 (实盘优化版 + 时间等待)")
     logging.info(f"启动时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     
     context = {}
@@ -398,7 +409,6 @@ def main():
         RootStrategy.run(context)
     except Exception as e:
         logging.exception("策略执行失败")
-        # 可根据需要在此处添加其他报警方式（如日志监控）
     else:
         logging.info("策略执行成功")
     logging.info("="*50)
