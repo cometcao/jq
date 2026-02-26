@@ -25,48 +25,71 @@ except ImportError:
 
 # ==================== 工具类：行情数据（强制实时）====================
 class MarketUtils:
-    """实盘行情工具，带缓存"""
+    """实盘行情工具（使用 get_instrument_detail 获取涨跌停价）"""
     _cache = {}
     
     @classmethod
     def get_limit_price(cls, code, limit_type='high_limit'):
+        """
+        获取指定股票的涨停价或跌停价
+        :param code: 股票代码，格式如 '000001.SZ' 或 '600000.SH'
+        :param limit_type: 'high_limit' 对应涨停价，'low_limit' 对应跌停价
+        :return: 价格（浮点数），获取失败返回 0.0
+        """
         cache_key = f"{code}_{limit_type}_{time.strftime('%Y%m%d')}"
         if cache_key in cls._cache:
             return cls._cache[cache_key]
+        
         try:
-            # 确保数据已下载
-            xtdata.download_history_data(code, period='1d', start_time='', end_time='')
-            data = xtdata.get_market_data_ex(
-                [code], 
-                period='1d', 
-                count=1, 
-                dividend_type='front_ratio'
-            )
-            if code in data and data[code] is not None and not data[code].empty:
-                price = data[code][limit_type].iloc[-1]
+            # 获取合约详细信息
+            detail = xtdata.get_instrument_detail(code)
+            
+            if detail is None:
+                logging.warning(f"get_instrument_detail 返回 None: {code}")
+                return 0.0
+            
+            # 根据类型返回对应价格
+            if limit_type == 'high_limit':
+                price = detail.get('UpStopPrice', 0.0)
+            elif limit_type == 'low_limit':
+                price = detail.get('DownStopPrice', 0.0)
+            else:
+                price = 0.0
+            
+            if price and price > 0:
                 cls._cache[cache_key] = price
                 return price
+            else:
+                logging.warning(f"{code} 的 {limit_type} 为 0 或不存在")
+                return 0.0
+                
         except Exception as e:
             logging.error(f"获取{limit_type}异常 {code}: {e}")
-        return 0.0
-    
+            return 0.0
+
     @classmethod
     def is_limit_status(cls, code, limit_type='high_limit', tolerance=0.001):
-        price = cls.get_limit_price(code, limit_type)
-        if price <= 0:
+        """判断股票是否处于涨跌停状态"""
+        limit_price = cls.get_limit_price(code, limit_type)
+        if limit_price <= 0:
             return False
+        
         try:
+            # 获取当前收盘价（也可用最新价）
             data = xtdata.get_market_data_ex(
-                [code], 
-                period='1d', 
-                count=1, 
+                [code],
+                period='1d',
+                count=1,
                 dividend_type='front_ratio'
             )
             if code in data and data[code] is not None and not data[code].empty:
                 current = data[code]['close'].iloc[-1]
-                return abs(current - price) < tolerance
-        except:
-            pass
+                is_limit = abs(current - limit_price) < tolerance
+                if is_limit:
+                    logging.info(f"{code} 处于{limit_type}状态: 当前价 {current:.3f}, 限价 {limit_price:.3f}")
+                return is_limit
+        except Exception as e:
+            logging.error(f"判断涨跌停异常 {code}: {e}")
         return False
 
 # ==================== 单例运行保护 ====================
@@ -109,7 +132,7 @@ class CompositeAction(Action):
 class SequenceAction(CompositeAction):
     """按顺序执行所有子动作，并支持按预定时间触发"""
     def run(self, context):
-        logging.info(f">>> 开始执行组合: {self.name}")
+        logging.info(f">>> 开始组合: {self.name}, context id: {id(context)}")
         for child in self.children:
             # 处理子动作的预定时间
             if child.scheduled_time:
@@ -237,10 +260,16 @@ def sell_out_of_pool(context):
             if not MarketUtils.is_limit_status(code, 'high_limit'):
                 price = MarketUtils.get_limit_price(code, 'low_limit')
                 if price > 0:
-                    trader.order_stock_async(account, code, xtconstant.STOCK_SELL, pos.volume,
-                                             xtconstant.FIX_PRICE, price, '卖出清单外')
-                    logging.info(f"卖出 {code} {pos.volume}股 @ {price:.2f}")
-                    orders_placed = True
+                    # 改为同步下单 order_stock
+                    oid = trader.order_stock(
+                        account, code, xtconstant.STOCK_SELL, pos.volume,
+                        xtconstant.FIX_PRICE, price, '卖出清单外'
+                    )
+                    if oid > 0:
+                        logging.info(f"卖出 {code} {pos.volume}股 @ {price:.2f} 订单号:{oid}")
+                        orders_placed = True
+                    else:
+                        logging.error(f"卖出下单失败 {code} 错误码:{oid}")
     
     if orders_placed:
         new_positions = wait_for_order_completion(trader, account, positions, timeout=10)
@@ -272,10 +301,16 @@ def rebalance(context):
             if vol_sell > 0:
                 limit_price = MarketUtils.get_limit_price(code, 'low_limit')
                 if limit_price > 0:
-                    trader.order_stock_async(account, code, xtconstant.STOCK_SELL, vol_sell,
-                                             xtconstant.FIX_PRICE, limit_price, '再平衡卖出')
-                    logging.info(f"再平衡卖出 {code} {vol_sell}股")
-                    sell_orders = True
+                    # 同步下单卖出
+                    oid = trader.order_stock(
+                        account, code, xtconstant.STOCK_SELL, vol_sell,
+                        xtconstant.FIX_PRICE, limit_price, '再平衡卖出'
+                    )
+                    if oid > 0:
+                        logging.info(f"再平衡卖出 {code} {vol_sell}股 订单号:{oid}")
+                        sell_orders = True
+                    else:
+                        logging.error(f"再平衡卖出下单失败 {code} 错误码:{oid}")
     
     if sell_orders:
         new_positions = wait_for_order_completion(trader, account, positions, timeout=10)
@@ -302,10 +337,16 @@ def rebalance(context):
             if vol_buy > 0:
                 limit_price = MarketUtils.get_limit_price(code, 'high_limit')
                 if limit_price > 0:
-                    trader.order_stock_async(account, code, xtconstant.STOCK_BUY, vol_buy,
-                                             xtconstant.FIX_PRICE, limit_price, '再平衡补仓')
-                    logging.info(f"再平衡补仓 {code} {vol_buy}股")
-                    buy_orders = True
+                    # 同步下单买入
+                    oid = trader.order_stock(
+                        account, code, xtconstant.STOCK_BUY, vol_buy,
+                        xtconstant.FIX_PRICE, limit_price, '再平衡补仓'
+                    )
+                    if oid > 0:
+                        logging.info(f"再平衡补仓 {code} {vol_buy}股 订单号:{oid}")
+                        buy_orders = True
+                    else:
+                        logging.error(f"再平衡补仓下单失败 {code} 错误码:{oid}")
     
     if buy_orders:
         wait_for_order_completion(trader, account, positions, timeout=10)
@@ -347,31 +388,53 @@ def buy_to_fill(context):
     buy_pool = context['buy_pool']
     total_asset = context['total_asset']
     cash = context['cash']
-    
+
     current_codes = set(positions.keys())
     slots = cfg["max_holdings"] - len(current_codes)
+    logging.info(f"当前持仓代码: {current_codes}, 剩余仓位: {slots}")
+
     if slots <= 0:
+        logging.info("slots <= 0，无需买入")
         return
+
     reserve = total_asset * cfg["cash_reserve_ratio"]
     buy_cash = cash - reserve
+    logging.info(f"保留现金: {reserve:.2f}, 可用买入资金: {buy_cash:.2f}")
+
     if buy_cash <= 0:
-        logging.warning("现金不足，无法买入")
+        logging.warning("可用买入资金不足，无法买入")
         return
-    
-    candidates = [c for c in buy_pool if c not in current_codes][:slots]
-    if not candidates:
+
+    candidates = [c for c in buy_pool if c not in current_codes]
+    logging.info(f"候选买入股票（未持仓）: {candidates}")
+
+    stocks_to_buy = candidates[:slots]
+    if not stocks_to_buy:
+        logging.info("无可买入的股票")
         return
-    
-    per_stock = buy_cash / len(candidates)
-    for code in candidates:
+
+    per_stock = buy_cash / len(stocks_to_buy)
+    for code in stocks_to_buy:
         price = MarketUtils.get_limit_price(code, 'high_limit')
+        logging.info(f"股票 {code} 涨停价获取结果: {price}")
         if price <= 0:
+            logging.warning(f"获取 {code} 涨停价失败，跳过")
             continue
         vol = int(per_stock // (price * 100)) * 100
+        logging.info(f"计算可买股数: {vol}")
         if vol > 0:
-            trader.order_stock_async(account, code, xtconstant.STOCK_BUY, vol,
-                                     xtconstant.FIX_PRICE, price, '买入新股')
-            logging.info(f"买入 {code} {vol}股 @ {price:.2f}")
+            # 改用同步下单函数 order_stock
+            oid = trader.order_stock(
+                account, code, xtconstant.STOCK_BUY, vol,
+                xtconstant.FIX_PRICE, price, '买入新股'
+            )
+            if oid > 0:
+                logging.info(f"买入下单成功: {code} {vol}股 @ {price:.2f} 订单号:{oid}")
+            else:
+                logging.error(f"买入下单失败 {code} 错误码:{oid}")
+        else:
+            logging.info(f"{code} 资金不足以买一手")
+            
 
 def close_trader(context):
     if 'trader' in context:
@@ -380,7 +443,7 @@ def close_trader(context):
 
 # ==================== 构建策略 ====================
 InitSequence = SequenceAction("初始化")
-InitSequence.add(SimpleAction("加载配置", load_config, "09:00"))
+InitSequence.add(SimpleAction("加载配置", load_config))
 
 TradeSequence = SequenceAction("交易流程")
 TradeSequence.add(SimpleAction("读取股票列表", read_stock_lists, "09:20")) \
