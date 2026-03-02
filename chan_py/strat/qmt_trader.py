@@ -177,7 +177,7 @@ class RetryAction(Action):
                 time.sleep(self.delay * (attempt+1))
 
 # ==================== 动态订单等待 ====================
-def wait_for_order_completion(trader, account, initial_positions, timeout=10):
+def wait_for_order_completion(trader, account, initial_positions, timeout=60):
     """等待持仓变化，返回新持仓字典，超时返回None"""
     start = time.time()
     while time.time() - start < timeout:
@@ -239,13 +239,21 @@ def get_account_status(context):
     asset = trader.query_stock_asset(account)
     if asset is None:
         raise Exception("查询资产失败")
-    positions = {p.stock_code: p for p in trader.query_stock_positions(account)}
+    # 获取所有持仓，并过滤掉 volume <= 0 的记录
+    raw_positions = trader.query_stock_positions(account)
+    positions = {}
+    for p in raw_positions:
+        if p.volume > 0:   # 只保留有实际股数的持仓
+            positions[p.stock_code] = p
+        else:
+            logging.debug(f"忽略零股持仓: {p.stock_code} volume={p.volume}")
+    
     context.update({
         'total_asset': asset.total_asset,
         'cash': asset.cash,
         'positions': positions
     })
-    logging.info(f"总资产: {asset.total_asset:.2f}, 现金: {asset.cash:.2f}, 持仓: {len(positions)}只")
+    logging.info(f"总资产: {asset.total_asset:.2f}, 现金: {asset.cash:.2f}, 有效持仓: {len(positions)}只")
 
 def sell_out_of_pool(context):
     cfg = context['config']
@@ -259,7 +267,7 @@ def sell_out_of_pool(context):
         if code not in candidate:
             if not MarketUtils.is_limit_status(code, 'high_limit'):
                 price = MarketUtils.get_limit_price(code, 'low_limit')
-                if price > 0:
+                if price > 0 and pos.volume > 0:
                     # 改为同步下单 order_stock
                     oid = trader.order_stock(
                         account, code, xtconstant.STOCK_SELL, pos.volume,
@@ -362,22 +370,21 @@ def check_rebalance_and_execute(context):
     current_holdings = len(positions)
     slots = cfg["max_holdings"] - current_holdings
     if slots <= 0:
+        # 无空位时，没有买入需求，也就不触发基于剩余资金的再平衡
         return
     
     reserve = total_asset * cfg["cash_reserve_ratio"]
     cash_for_buy = cash - reserve
     if cash_for_buy <= 0:
+        logging.warning("可用买入资金不足，无需再平衡")
         return
     
-    avg_alloc = cash_for_buy / slots
+    avg_alloc = cash_for_buy / slots  # 计划买入的平均资金
+    target_per_stock = total_asset / cfg["max_holdings"]  # 目标平均市值（总资产/总仓位）
     
-    if current_holdings > 0:
-        avg_market = sum(p.market_value for p in positions.values()) / current_holdings
-    else:
-        avg_market = (total_asset * (1 - cfg["cash_reserve_ratio"])) / cfg["max_holdings"]
-    
-    if abs(avg_alloc - avg_market) > avg_market * cfg["rebalance_threshold"]:
-        logging.info(f"触发再平衡: 平均分配资金 {avg_alloc:.2f}, 平均市值 {avg_market:.2f}, 偏离 {abs(avg_alloc-avg_market)/avg_market:.1%}")
+    deviation = abs(avg_alloc - target_per_stock) / target_per_stock
+    if deviation > cfg["rebalance_threshold"]:
+        logging.info(f"触发再平衡: 计划平均资金 {avg_alloc:.2f}, 目标平均市值 {target_per_stock:.2f}, 偏离 {deviation:.1%}")
         rebalance(context)
 
 def buy_to_fill(context):
