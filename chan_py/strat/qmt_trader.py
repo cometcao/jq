@@ -161,11 +161,12 @@ class SequenceAction(CompositeAction):
 
 # ==================== 重试装饰器 ====================
 class RetryAction(Action):
-    def __init__(self, action, max_retries=3, delay=2):
+    def __init__(self, action, max_retries=3, delay=2, scheduled_time=None):
+        super().__init__(f"{action.name}(重试)", scheduled_time)
         self.action = action
         self.max_retries = max_retries
         self.delay = delay
-        super().__init__(f"{action.name}(重试)")
+
     def run(self, context):
         for attempt in range(self.max_retries):
             try:
@@ -189,7 +190,7 @@ def wait_for_order_completion(trader, account, initial_positions, timeout=60):
 
 # ==================== 具体动作定义 ====================
 def load_config(context):
-    config_file = context.get('config_file', 'qmt_config_test.json')
+    config_file = context.get('config_file', 'qmt_config.json')
     with open(config_file, encoding='utf-8') as f:
         config = json.load(f)
     log_file = config.get("log_file", "strategy.log")
@@ -454,7 +455,7 @@ InitSequence.add(SimpleAction("加载配置", load_config))
 
 TradeSequence = SequenceAction("交易流程")
 TradeSequence.add(SimpleAction("读取股票列表", read_stock_lists, "09:20")) \
-             .add(RetryAction(SimpleAction("初始化交易客户端", init_trader, "09:35"))) \
+             .add(RetryAction(SimpleAction("初始化交易客户端", init_trader), scheduled_time="09:35")) \
              .add(SimpleAction("获取账户状态", get_account_status)) \
              .add(SimpleAction("卖出清单外股票", sell_out_of_pool)) \
              .add(SimpleAction("检查再平衡", check_rebalance_and_execute)) \
@@ -463,6 +464,8 @@ TradeSequence.add(SimpleAction("读取股票列表", read_stock_lists, "09:20"))
 
 RootStrategy = SequenceAction("每日调仓策略")
 RootStrategy.add(InitSequence).add(TradeSequence)
+
+
 
 # ==================== 主函数 ====================
 def main():
