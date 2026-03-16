@@ -219,6 +219,8 @@ def init_trader(context):
     for attempt in range(max_attempts):
         try:
             trader = XtQuantTrader(cfg["miniqmt_path"], 2)
+            # 关键修复：开启主动请求接口的专用线程，防止死锁
+            trader.set_relaxed_response_order_enabled(True)
             account = StockAccount(cfg["account_id"])
             trader.start()
             time.sleep(3)
