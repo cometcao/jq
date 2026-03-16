@@ -468,15 +468,12 @@ RootStrategy.add(InitSequence).add(TradeSequence)
 
 
 # ==================== 主函数 ====================
-def main():
-    check_single_instance()
-    
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
-                        handlers=[logging.StreamHandler()])
-    logging.info("="*50)
-    logging.info("miniQMT 每日调仓策略 (实盘优化版 + 时间等待)")
-    logging.info(f"启动时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    
+def is_weekday(date):
+    """判断日期是否为周一至周五（0=周一，4=周五，5=周六，6=周日）"""
+    return date.weekday() < 5
+
+def run_strategy_once():
+    """执行一次完整的策略（包括内部 scheduled_time 等待）"""
     context = {}
     try:
         RootStrategy.run(context)
@@ -484,7 +481,41 @@ def main():
         logging.exception("策略执行失败")
     else:
         logging.info("策略执行成功")
-    logging.info("="*50)
+
+def main_loop():
+    check_single_instance()  # 你的单例保护函数
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
+                        handlers=[logging.StreamHandler()])
+    logging.info("miniQMT 每日调仓策略 (常驻调度版) 启动")
+
+    while True:
+        now = datetime.datetime.now()
+        today = now.date()
+
+        # 若今天是工作日且已过09:00，立即执行一次
+        if is_weekday(today) and now.hour >= 9:
+            logging.info("当前工作日且已过09:00，立即执行策略")
+            run_strategy_once()
+            now = datetime.datetime.now()  # 更新当前时间，用于计算下一次
+
+        # 计算下一个工作日 09:00（从当前时间开始找）
+        next_run = now.replace(hour=9, minute=0, second=0, microsecond=0)
+        if now >= next_run:
+            next_run += datetime.timedelta(days=1)
+        while not is_weekday(next_run.date()):
+            next_run += datetime.timedelta(days=1)
+
+        wait_seconds = (next_run - now).total_seconds()
+        logging.info(f"等待至 {next_run} (等待 {wait_seconds/3600:.1f} 小时)")
+        try:
+            time.sleep(wait_seconds)
+        except KeyboardInterrupt:
+            logging.info("程序终止")
+            sys.exit(0)
+
+        # 到达目标时间，执行策略
+        logging.info("时间到，开始执行策略")
+        run_strategy_once()
 
 if __name__ == "__main__":
-    main()
+    main_loop()
