@@ -13,6 +13,7 @@ import os
 import sys
 import atexit
 import datetime  # 新增，用于时间处理
+import random
 from abc import ABC, abstractmethod
 
 try:
@@ -213,28 +214,34 @@ def read_stock_lists(context):
     logging.info(f"候选池: {len(context['candidate_pool'])}只, 买入池: {len(context['buy_pool'])}只")
 
 def init_trader(context):
-    """带重试的初始化"""
     cfg = context['config']
-    max_attempts = 3
-    for attempt in range(max_attempts):
+    path = cfg["miniqmt_path"]  # 必须是 userdata_mini 目录
+    # 随机生成 session_id
+    session_id = random.randint(10000, 99999)
+
+    # 可选：清理残留锁文件（谨慎使用，确保没有其他进程在使用）
+    # lock_file = os.path.join(path, "xtquant.lock")
+    # if os.path.exists(lock_file):
+    #     os.remove(lock_file)
+    #     logging.info("已清除残留锁文件")
+
+    for attempt in range(3):
         try:
-            trader = XtQuantTrader(cfg["miniqmt_path"], 2)
-            # 关键修复：开启主动请求接口的专用线程，防止死锁
-            trader.set_relaxed_response_order_enabled(True)
-            account = StockAccount(cfg["account_id"])
+            trader = XtQuantTrader(path, session_id)
+            trader.set_relaxed_response_order_enabled(True)  # 关键优化
             trader.start()
             time.sleep(3)
             if trader.connect() != 0:
                 raise Exception(f"连接失败，错误码: {trader.connect()}")
             context['trader'] = trader
-            context['account'] = account
+            context['account'] = StockAccount(cfg["account_id"])
             logging.info("交易客户端就绪")
             return
         except Exception as e:
-            logging.error(f"初始化尝试 {attempt+1}/{max_attempts} 失败: {e}")
-            if attempt == max_attempts - 1:
+            logging.error(f"初始化尝试 {attempt+1}/3 失败: {e}")
+            if attempt == 2:
                 raise
-            time.sleep(5 * (attempt+1))
+            time.sleep(5 * (attempt + 1))  # 等待时间递增
 
 def get_account_status(context):
     trader = context['trader']
@@ -485,21 +492,13 @@ def run_strategy_once():
         logging.info("策略执行成功")
 
 def main_loop():
-    check_single_instance()  # 你的单例保护函数
+    check_single_instance()
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
                         handlers=[logging.StreamHandler()])
     logging.info("miniQMT 每日调仓策略 (常驻调度版) 启动")
 
     while True:
         now = datetime.datetime.now()
-        today = now.date()
-
-        # 若今天是工作日且已过09:00，立即执行一次
-        if is_weekday(today) and now.hour >= 9:
-            logging.info("当前工作日且已过09:00，立即执行策略")
-            run_strategy_once()
-            now = datetime.datetime.now()  # 更新当前时间，用于计算下一次
-
         # 计算下一个工作日 09:00（从当前时间开始找）
         next_run = now.replace(hour=9, minute=0, second=0, microsecond=0)
         if now >= next_run:
@@ -518,6 +517,7 @@ def main_loop():
         # 到达目标时间，执行策略
         logging.info("时间到，开始执行策略")
         run_strategy_once()
+        # 执行完后自动进入下一次循环，重新计算下一个目标时间
 
 if __name__ == "__main__":
     main_loop()
