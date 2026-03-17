@@ -491,11 +491,16 @@ def run_strategy_once():
     else:
         logging.info("策略执行成功")
 
-def main_loop():
+def main_loop(run_now=False):
     check_single_instance()
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
                         handlers=[logging.StreamHandler()])
     logging.info("miniQMT 每日调仓策略 (常驻调度版) 启动")
+
+    if run_now:
+        logging.info("立即执行模式，执行一次策略后退出")
+        run_strategy_once()
+        return
 
     while True:
         now = datetime.datetime.now()
@@ -520,4 +525,5 @@ def main_loop():
         # 执行完后自动进入下一次循环，重新计算下一个目标时间
 
 if __name__ == "__main__":
-    main_loop()
+    run_now = "--now" in sys.argv
+    main_loop(run_now)
