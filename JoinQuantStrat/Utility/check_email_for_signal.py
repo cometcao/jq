@@ -30,34 +30,34 @@ def search_emails(mail):
         print("Failed to search for unseen emails")
     return messages[0].split()
 
-def fetch_latest_email(mail, email_ids, target_subject):
-    latest_email_id = None
-    latest_email_date = None
-    latest_msg_data = None
+def fetch_latest_emails(mail, email_ids, target_subjects):
+    """For each target subject, find the latest matching email.
+    Returns a list of (email_id, msg_data) tuples, one per matched subject."""
+    results = {}  # subject -> (email_id, email_date, msg_data)
 
     for email_id in email_ids:
         status, msg_data = mail.fetch(email_id, "(RFC822)")
         if status != "OK":
             continue
-        
+
         msg = email.message_from_bytes(msg_data[0][1])
         subject, encoding = decode_header(msg["Subject"])[0]
         if isinstance(subject, bytes):
             subject = subject.decode(encoding if encoding else "utf-8")
-        
-        if target_subject in subject:
-            date = msg["Date"]
-            msg_date = datetime.strptime(date[:24], "%a, %d %b %Y %H:%M:%S")
-            
-            if latest_email_date is None or msg_date > latest_email_date:
-                latest_email_id = email_id
-                latest_email_date = msg_date
-                latest_msg_data = msg_data
 
-    if latest_email_id is None:
-        print(f"No emails found with subject '{target_subject}'")
+        for target_subject in target_subjects:
+            if target_subject in subject:
+                date = msg["Date"]
+                msg_date = datetime.strptime(date[:24], "%a, %d %b %Y %H:%M:%S")
 
-    return latest_email_id, latest_msg_data
+                if target_subject not in results or msg_date > results[target_subject][1]:
+                    results[target_subject] = (email_id, msg_date, msg_data)
+
+    for target_subject in target_subjects:
+        if target_subject not in results:
+            print(f"No emails found with subject '{target_subject}'")
+
+    return [(r[0], r[2]) for r in results.values()]
 
 def process_email(msg_data, save_directory):
     for response_part in msg_data:
@@ -80,6 +80,10 @@ def process_email(msg_data, save_directory):
                                 print(f"Attachment saved: {filepath}")
 
 def check_email_and_save_attachment(config):
+    target_subjects = config['target_subject']
+    if isinstance(target_subjects, str):
+        target_subjects = [target_subjects]
+
     try_count = 0
     max_retries = 3
     while try_count < max_retries:
@@ -88,19 +92,20 @@ def check_email_and_save_attachment(config):
         try_count += 1
         try:
             mail = connect_to_mail_server(config['imap_server'], config['email_user'], config['email_pass'])
-            select_mailbox(mail, "INBOX") # Ensure the mailbox is selected before searching
+            select_mailbox(mail, "INBOX")
             email_ids = search_emails(mail)
-            
+
             if not email_ids:
                 print(f"current time: {now} No unseen emails found.{email_ids}")
                 continue
-            
-            latest_email_id, msg_data = fetch_latest_email(mail, email_ids, config['target_subject'])
-            if not latest_email_id:
+
+            matched_emails = fetch_latest_emails(mail, email_ids, target_subjects)
+            if not matched_emails:
                 continue
-            process_email(msg_data, config['save_directory'])
-            
-            mail.store(latest_email_id, "+FLAGS", "\\Deleted")
+
+            for latest_email_id, msg_data in matched_emails:
+                process_email(msg_data, config['save_directory'])
+                mail.store(latest_email_id, "+FLAGS", "\\Deleted")
             mail.expunge()
             try_count = max_retries
         except imaplib.IMAP4.error as e:
@@ -117,7 +122,7 @@ def check_email_and_save_attachment(config):
             traceback.print_exc()
         finally:
             mail.logout()
-            time.sleep(10)  # Wait for 10 seconds before retrying
+            time.sleep(10)
 
 def run_daily_at_specific_time(config_filename):
     config = load_config(config_filename)
