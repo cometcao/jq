@@ -1133,9 +1133,9 @@ class KBarChan(object):
                     removed_loc_2 = 2
                 else:
                     working_df[next_valid_elems[0]][tb] = TopBotType.noTopBot.value
-                    working_df[next_valid_elems[1]][tb] = TopBotType.noTopBot.value
+                    working_df[next_valid_elems[3]][tb] = TopBotType.noTopBot.value
                     removed_loc_1 = 0
-                    removed_loc_2 = 1
+                    removed_loc_2 = 3
             else: # bot2top
                 if float_more(firstElem[chan_price], thirdElem[chan_price]):
                     working_df[next_valid_elems[1]][tb] = TopBotType.noTopBot.value
@@ -1144,9 +1144,9 @@ class KBarChan(object):
                     removed_loc_2 = 2
                 else:
                     working_df[next_valid_elems[0]][tb] = TopBotType.noTopBot.value
-                    working_df[next_valid_elems[1]][tb] = TopBotType.noTopBot.value
+                    working_df[next_valid_elems[3]][tb] = TopBotType.noTopBot.value
                     removed_loc_1 = 0
-                    removed_loc_2 = 1
+                    removed_loc_2 = 3
 
             
             if self.isdebug:
