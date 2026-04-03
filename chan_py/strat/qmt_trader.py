@@ -26,71 +26,86 @@ except ImportError:
 
 # ==================== 工具类：行情数据（强制实时）====================
 class MarketUtils:
-    """实盘行情工具（使用 get_instrument_detail 获取涨跌停价）"""
     _cache = {}
-    
+
     @classmethod
-    def get_limit_price(cls, code, limit_type='high_limit'):
-        """
-        获取指定股票的涨停价或跌停价
-        :param code: 股票代码，格式如 '000001.SZ' 或 '600000.SH'
-        :param limit_type: 'high_limit' 对应涨停价，'low_limit' 对应跌停价
-        :return: 价格（浮点数），获取失败返回 0.0
-        """
+    def _ensure_connection(cls, retry=3):
+        """尝试重新建立 xtdata 连接"""
+        for i in range(retry):
+            try:
+                # 任意调用一下，触发内部重连
+                xtdata.get_market_data_ex(['000001.SZ'], period='1d', count=1)
+                logging.info("xtdata 连接已恢复")
+                return True
+            except Exception as e:
+                logging.warning(f"尝试重连 xtdata ({i+1}/{retry}): {e}")
+                time.sleep(2)
+        return False
+
+    @classmethod
+    def get_limit_price(cls, code, limit_type='high_limit', retries=3):
         cache_key = f"{code}_{limit_type}_{time.strftime('%Y%m%d')}"
         if cache_key in cls._cache:
             return cls._cache[cache_key]
-        
-        try:
-            # 获取合约详细信息
-            detail = xtdata.get_instrument_detail(code)
-            
-            if detail is None:
-                logging.warning(f"get_instrument_detail 返回 None: {code}")
-                return 0.0
-            
-            # 根据类型返回对应价格
-            if limit_type == 'high_limit':
-                price = detail.get('UpStopPrice', 0.0)
-            elif limit_type == 'low_limit':
-                price = detail.get('DownStopPrice', 0.0)
-            else:
-                price = 0.0
-            
-            if price and price > 0:
-                cls._cache[cache_key] = price
-                return price
-            else:
-                logging.warning(f"{code} 的 {limit_type} 为 0 或不存在")
-                return 0.0
-                
-        except Exception as e:
-            logging.error(f"获取{limit_type}异常 {code}: {e}")
-            return 0.0
+
+        for attempt in range(retries):
+            try:
+                detail = xtdata.get_instrument_detail(code)
+                if detail is None:
+                    logging.warning(f"get_instrument_detail 返回 None: {code}")
+                    if attempt < retries - 1:
+                        time.sleep(1)
+                        continue
+                    return 0.0
+                if limit_type == 'high_limit':
+                    price = detail.get('UpStopPrice', 0.0)
+                else:
+                    price = detail.get('DownStopPrice', 0.0)
+                if price > 0:
+                    cls._cache[cache_key] = price
+                    return price
+                else:
+                    return 0.0
+            except Exception as e:
+                err_msg = str(e)
+                if "无法连接xtquant服务" in err_msg:
+                    logging.error(f"xtdata 连接断开，尝试重连 ({attempt+1}/{retries})")
+                    if cls._ensure_connection():
+                        continue
+                    else:
+                        logging.error(f"重连失败，放弃获取 {code} {limit_type}")
+                        return 0.0
+                else:
+                    logging.error(f"获取{limit_type}异常 {code}: {e}")
+                    if attempt < retries - 1:
+                        time.sleep(2)
+                        continue
+                    return 0.0
+        return 0.0
 
     @classmethod
     def is_limit_status(cls, code, limit_type='high_limit', tolerance=0.001):
-        """判断股票是否处于涨跌停状态"""
+        # 类似地加入重试
         limit_price = cls.get_limit_price(code, limit_type)
         if limit_price <= 0:
             return False
-        
-        try:
-            # 获取当前收盘价（也可用最新价）
-            data = xtdata.get_market_data_ex(
-                [code],
-                period='1d',
-                count=1,
-                dividend_type='front_ratio'
-            )
-            if code in data and data[code] is not None and not data[code].empty:
-                current = data[code]['close'].iloc[-1]
-                is_limit = abs(current - limit_price) < tolerance
-                if is_limit:
-                    logging.info(f"{code} 处于{limit_type}状态: 当前价 {current:.3f}, 限价 {limit_price:.3f}")
-                return is_limit
-        except Exception as e:
-            logging.error(f"判断涨跌停异常 {code}: {e}")
+        # 获取当前价（可以复用 get_limit_price 逻辑，但这里简单处理）
+        for attempt in range(3):
+            try:
+                data = xtdata.get_market_data_ex([code], period='1d', count=1)
+                if code in data and data[code] is not None and not data[code].empty:
+                    current = data[code]['close'].iloc[-1]
+                    return abs(current - limit_price) < tolerance
+                else:
+                    return False
+            except Exception as e:
+                if "无法连接xtquant服务" in str(e) and attempt < 2:
+                    cls._ensure_connection()
+                    time.sleep(1)
+                    continue
+                else:
+                    logging.error(f"判断涨跌停异常 {code}: {e}")
+                    return False
         return False
 
 # ==================== 单例运行保护 ====================
@@ -276,27 +291,17 @@ def sell_out_of_pool(context):
     for code, pos in positions.items():
         if code not in candidate:
             if not MarketUtils.is_limit_status(code, 'high_limit'):
-                price = MarketUtils.get_limit_price(code, 'low_limit')
-                if price > 0 and pos.volume > 0:
-                    # 改为同步下单 order_stock
-                    oid = trader.order_stock(
-                        account, code, xtconstant.STOCK_SELL, pos.volume,
-                        xtconstant.FIX_PRICE, price, '卖出清单外'
-                    )
-                    if oid > 0:
-                        logging.info(f"卖出 {code} {pos.volume}股 @ {price:.2f} 订单号:{oid}")
-                        orders_placed = True
-                    else:
-                        logging.error(f"卖出下单失败 {code} 错误码:{oid}")
-    
+                # 直接调用，不再传入 price
+                oid = place_sell_order(trader, account, code, pos.volume, "sell_out_pool")
+                if oid > 0:
+                    orders_placed = True
     if orders_placed:
         new_positions = wait_for_order_completion(trader, account, positions, timeout=10)
         if new_positions is not None:
             context['positions'] = new_positions
         else:
-            logging.warning("卖出订单等待超时，继续执行")
-    
-    get_account_status(context)  # 重新获取最新状态
+            logging.warning("Sell order wait timeout, continue")
+    get_account_status(context)
 
 def rebalance(context):
     cfg = context['config']
@@ -309,7 +314,7 @@ def rebalance(context):
     cash_for_stocks = total_asset - reserve
     target_per_stock = cash_for_stocks / cfg["max_holdings"]
     
-    # 卖出超额的
+    # Sell over-weighted (保持不变)
     sell_orders = False
     for code, pos in positions.items():
         if pos.market_value > target_per_stock and not MarketUtils.is_limit_status(code, 'high_limit'):
@@ -317,29 +322,20 @@ def rebalance(context):
             price = pos.market_value / pos.volume
             vol_sell = int(value_sell // (price * 100)) * 100
             if vol_sell > 0:
-                limit_price = MarketUtils.get_limit_price(code, 'low_limit')
-                if limit_price > 0:
-                    # 同步下单卖出
-                    oid = trader.order_stock(
-                        account, code, xtconstant.STOCK_SELL, vol_sell,
-                        xtconstant.FIX_PRICE, limit_price, '再平衡卖出'
-                    )
-                    if oid > 0:
-                        logging.info(f"再平衡卖出 {code} {vol_sell}股 订单号:{oid}")
-                        sell_orders = True
-                    else:
-                        logging.error(f"再平衡卖出下单失败 {code} 错误码:{oid}")
+                oid = place_sell_order(trader, account, code, vol_sell, "rebalance_sell")
+                if oid > 0:
+                    sell_orders = True
     
     if sell_orders:
         new_positions = wait_for_order_completion(trader, account, positions, timeout=10)
         if new_positions:
             context['positions'] = new_positions
         else:
-            logging.warning("再平衡卖出等待超时")
+            logging.warning("Rebalance sell wait timeout")
     
     get_account_status(context)
     
-    # 补仓不足的
+    # Buy under-weighted (使用 calculate_buy_price_and_volume)
     total_asset = context['total_asset']
     positions = context['positions']
     reserve = total_asset * cfg["cash_reserve_ratio"]
@@ -350,21 +346,16 @@ def rebalance(context):
     for code, pos in positions.items():
         if pos.market_value < target_per_stock and not MarketUtils.is_limit_status(code, 'low_limit'):
             value_buy = target_per_stock - pos.market_value
-            price = pos.market_value / pos.volume if pos.volume > 0 else MarketUtils.get_limit_price(code, 'high_limit')
-            vol_buy = int(value_buy // (price * 100)) * 100
-            if vol_buy > 0:
-                limit_price = MarketUtils.get_limit_price(code, 'high_limit')
-                if limit_price > 0:
-                    # 同步下单买入
-                    oid = trader.order_stock(
-                        account, code, xtconstant.STOCK_BUY, vol_buy,
-                        xtconstant.FIX_PRICE, limit_price, '再平衡补仓'
-                    )
-                    if oid > 0:
-                        logging.info(f"再平衡补仓 {code} {vol_buy}股 订单号:{oid}")
-                        buy_orders = True
-                    else:
-                        logging.error(f"再平衡补仓下单失败 {code} 错误码:{oid}")
+            # 使用 calculate_buy_price_and_volume 来计算买入价格和股数
+            # 注意：这里的 target_amount 是 value_buy（需要买入的金额）
+            buy_price, vol_buy = calculate_buy_price_and_volume(trader, account, code, value_buy, cfg)
+            if vol_buy > 0 and buy_price is not None:
+                oid = place_buy_order(trader, account, code, vol_buy, buy_price, "rebalance_buy")
+                if oid > 0:
+                    logging.info(f"Rebalance buy {code} {vol_buy} shares @ {buy_price:.2f} order_id:{oid}")
+                    buy_orders = True
+            else:
+                logging.info(f"Skipping rebalance buy for {code} due to price/volume calculation failure")
     
     if buy_orders:
         wait_for_order_completion(trader, account, positions, timeout=10)
@@ -405,52 +396,34 @@ def buy_to_fill(context):
     buy_pool = context['buy_pool']
     total_asset = context['total_asset']
     cash = context['cash']
-
+    
     current_codes = set(positions.keys())
     slots = cfg["max_holdings"] - len(current_codes)
-    logging.info(f"当前持仓代码: {current_codes}, 剩余仓位: {slots}")
-
     if slots <= 0:
-        logging.info("slots <= 0，无需买入")
         return
-
+    
     reserve = total_asset * cfg["cash_reserve_ratio"]
     buy_cash = cash - reserve
-    logging.info(f"保留现金: {reserve:.2f}, 可用买入资金: {buy_cash:.2f}")
-
     if buy_cash <= 0:
-        logging.warning("可用买入资金不足，无法买入")
+        logging.warning("Insufficient cash to buy")
         return
-
-    candidates = [c for c in buy_pool if c not in current_codes]
-    logging.info(f"候选买入股票（未持仓）: {candidates}")
-
-    stocks_to_buy = candidates[:slots]
-    if not stocks_to_buy:
-        logging.info("无可买入的股票")
+    
+    candidates = [c for c in buy_pool if c not in current_codes][:slots]
+    if not candidates:
         return
-
-    per_stock = buy_cash / len(stocks_to_buy)
-    for code in stocks_to_buy:
-        price = MarketUtils.get_limit_price(code, 'high_limit')
-        logging.info(f"股票 {code} 涨停价获取结果: {price}")
-        if price <= 0:
-            logging.warning(f"获取 {code} 涨停价失败，跳过")
-            continue
-        vol = int(per_stock // (price * 100)) * 100
-        logging.info(f"计算可买股数: {vol}")
-        if vol > 0:
-            # 改用同步下单函数 order_stock
-            oid = trader.order_stock(
-                account, code, xtconstant.STOCK_BUY, vol,
-                xtconstant.FIX_PRICE, price, '买入新股'
-            )
+    
+    per_stock = buy_cash / len(candidates)
+    
+    for code in candidates:
+        buy_price, vol = calculate_buy_price_and_volume(trader, account, code, per_stock, cfg)
+        if vol > 0 and buy_price is not None:
+            oid = place_buy_order(trader, account, code, vol, buy_price, "buy_new")
             if oid > 0:
-                logging.info(f"买入下单成功: {code} {vol}股 @ {price:.2f} 订单号:{oid}")
+                logging.info(f"Buy order placed for {code}: {vol} shares @ {buy_price:.2f} order_id:{oid}")
             else:
-                logging.error(f"买入下单失败 {code} 错误码:{oid}")
+                logging.error(f"Failed to place buy order for {code}")
         else:
-            logging.info(f"{code} 资金不足以买一手")
+            logging.info(f"Skipping {code} due to price/volume calculation failure")
             
 
 def close_trader(context):
@@ -475,6 +448,112 @@ RootStrategy = SequenceAction("每日调仓策略")
 RootStrategy.add(InitSequence).add(TradeSequence)
 
 
+
+# ==================== 封装的下单函数 ====================
+def calculate_buy_price_and_volume(trader, account, code, target_amount, cfg):
+    """
+    根据盘口价格和涨停价，计算符合“价格笼子”的买入价格和股数
+    返回: (buy_price, buy_volume) 或 (None, 0) 表示无法买入
+    """
+    # 1. 获取涨停价（作为价格上限）
+    high_limit = MarketUtils.get_limit_price(code, 'high_limit')
+    if high_limit <= 0:
+        logging.warning(f"Cannot get high limit price for {code}, skip")
+        return None, 0
+
+    # 2. 获取当前盘口价格（用于计算价格笼子上限）
+    try:
+        tick = xtdata.get_full_tick([code])
+        if code not in tick or tick[code] is None:
+            logging.warning(f"Cannot get tick data for {code}")
+            return None, 0
+        
+        # 获取卖一价
+        ask_price = tick[code].get('askPrice', [0])[0]
+        if ask_price <= 0:
+            ask_price = tick[code].get('lastPrice', 0)
+        
+        if ask_price <= 0:
+            logging.warning(f"Cannot get valid price for {code}, ask_price={ask_price}")
+            return None, 0
+        
+        # 3. 计算价格笼子上限：min(卖一价*102%, 卖一价+0.1)
+        cage_limit = max(ask_price * 1.02, ask_price + 0.1)
+        # 最终买入价格取“笼子上限”和“涨停价”的较小值
+        buy_price = min(cage_limit, high_limit)
+        
+        # 4. 计算可买股数（预留1%资金缓冲）
+        safety_factor = 0.99
+        max_amount = target_amount * safety_factor
+        volume = int(max_amount // (buy_price * 100)) * 100
+        
+        if volume <= 0:
+            logging.info(f"Insufficient funds to buy one lot of {code}")
+            return None, 0
+        
+        # 5. 资金校验：确保总金额不超可用现金
+        asset = trader.query_stock_asset(account)
+        if asset is None:
+            logging.error(f"Query asset failed for {code}")
+            return None, 0
+        
+        available_cash = asset.p_enable_balance
+        required_cash = volume * buy_price * 1.001  # 含0.1%手续费预估
+        
+        if required_cash > available_cash:
+            logging.warning(f"Cash insufficient for {code}: required {required_cash:.2f} > available {available_cash:.2f}")
+            # 重新计算股数
+            volume = int((available_cash * safety_factor) // (buy_price * 100)) * 100
+            if volume <= 0:
+                return None, 0
+        
+        return buy_price, volume
+        
+    except Exception as e:
+        logging.error(f"Failed to calculate price for {code}: {e}")
+        return None, 0
+
+def place_sell_order(trader, account, code, volume, remark=""):
+    """卖出委托（对手方最优价格）"""
+    if volume <= 0:
+        return None
+    oid = trader.order_stock(
+        account, code, xtconstant.STOCK_SELL, volume,
+        xtconstant.MARKET_PEER_PRICE_FIRST, 0, remark
+    )
+    if oid > 0:
+        logging.info(f"Sell {code} {volume} shares @ market peer price, order_id:{oid}")
+    else:
+        logging.error(f"Sell order failed {code} error_code:{oid}")
+    return oid
+
+def place_buy_order(trader, account, code, volume, price=None, remark=""):
+    """
+    买入委托（使用 order_stock）
+    - 如果 price 不为 None，则按指定价格限价买入（涨停价）
+    - 如果 price 为 None，则按对手价快速成交
+    """
+    if volume <= 0:
+        return None
+    if price is not None:
+        # 限价单
+        price_type = xtconstant.FIX_PRICE
+        order_price = price
+    else:
+        # 对手价（快速成交）
+        price_type = xtconstant.MARKET_PEER_PRICE_FIRST
+        order_price = 0
+
+    oid = trader.order_stock(
+        account, code, xtconstant.STOCK_BUY, volume,
+        price_type, order_price, remark
+    )
+    if oid > 0:
+        action = f"限价 {price:.2f}" if price is not None else "对手价"
+        logging.info(f"Buy {code} {volume} shares @ {action} order_id:{oid}")
+    else:
+        logging.error(f"Buy order failed {code} error_code:{oid}")
+    return oid
 
 # ==================== 主函数 ====================
 def is_weekday(date):
