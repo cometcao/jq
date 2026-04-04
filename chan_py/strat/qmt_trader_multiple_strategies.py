@@ -598,7 +598,9 @@ def check_rebalance_and_execute(context):
         return
 
     avg_alloc = cash_for_buy / slots
-    target_per_stock = total_asset / strat["max_holdings"]
+    # 修正：使用与 rebalance 函数相同的计算公式
+    cash_for_stocks = total_asset - reserve
+    target_per_stock = cash_for_stocks / strat["max_holdings"]
     deviation = abs(avg_alloc - target_per_stock) / target_per_stock if target_per_stock > 0 else 0
 
     if deviation > strat["rebalance_threshold"]:

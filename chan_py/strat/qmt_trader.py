@@ -381,7 +381,9 @@ def check_rebalance_and_execute(context):
         return
     
     avg_alloc = cash_for_buy / slots  # 计划买入的平均资金
-    target_per_stock = total_asset / cfg["max_holdings"]  # 目标平均市值（总资产/总仓位）
+    # 修正：使用与 rebalance 函数相同的计算公式
+    cash_for_stocks = total_asset - reserve
+    target_per_stock = cash_for_stocks / cfg["max_holdings"]  # 目标平均市值（扣除储备金后的总资产/总仓位）
     
     deviation = abs(avg_alloc - target_per_stock) / target_per_stock
     if deviation > cfg["rebalance_threshold"]:
