@@ -97,6 +97,16 @@ class MarketUtils:
         return False
 
 
+def calculate_cash_allocation(strat, total_asset, cash):
+    """
+    计算现金分配：储备金和可用购买现金
+    返回: (reserve, available_cash)
+    """
+    reserve = total_asset * strat["cash_reserve_ratio"]
+    available_cash = cash - reserve
+    return reserve, max(available_cash, 0)
+
+
 # ==================== 策略持仓跟踪 ====================
 class StrategyPositionTracker:
     """
@@ -155,10 +165,11 @@ class StrategyPositionTracker:
         """返回持有某只股票的策略名列表"""
         return [name for name, positions in self.data.items() if positions.get(code, 0) > 0]
 
-    def sync_with_broker(self, broker_positions, strategy_names):
+    def sync_with_broker(self, broker_positions, strategy_names, strategy_configs=None):
         """
         与 broker 实际持仓对账。
         broker_positions: {stock_code: position_object} (volume > 0)
+        strategy_configs: 策略配置列表，用于按资金比例分配孤儿持仓（可选）
         """
         # 确保所有策略在 data 中
         for name in strategy_names:
@@ -172,14 +183,28 @@ class StrategyPositionTracker:
                 vol = self.data[strat_name].pop(code)
                 logging.warning(f"对账: {strat_name} 的 {code}({vol}股) 在broker中不存在，移除")
 
-        # 2. broker 有但无策略跟踪（孤儿）→ 分配给第一个策略
+        # 2. broker 有但无策略跟踪（孤儿）→ 按策略资金比例分配或分配给第一个策略
         all_tracked = set()
         for pos in self.data.values():
             all_tracked.update(pos.keys())
+        
         for code, pos in broker_positions.items():
             if code not in all_tracked:
-                self.data[strategy_names[0]][code] = pos.volume
-                logging.warning(f"对账: {code}({pos.volume}股) 未被跟踪，分配给 '{strategy_names[0]}'")
+                if strategy_configs:
+                    # 按策略资金比例分配孤儿持仓
+                    try:
+                        # 暂时分配给资金比例最高的策略，避免复杂分配
+                        max_ratio_strat = max(strategy_configs, key=lambda s: s['capital_ratio'])['name']
+                        self.data[max_ratio_strat][code] = pos.volume
+                        logging.warning(f"对账: {code}({pos.volume}股) 未被跟踪，分配给资金比例最高的策略 '{max_ratio_strat}'")
+                    except Exception as e:
+                        # fallback: 分配给第一个策略
+                        self.data[strategy_names[0]][code] = pos.volume
+                        logging.warning(f"对账: {code}({pos.volume}股) 分配异常 {e}，临时分配给 '{strategy_names[0]}'，请手动调整")
+                else:
+                    # fallback: 分配给第一个策略
+                    self.data[strategy_names[0]][code] = pos.volume
+                    logging.warning(f"对账: {code}({pos.volume}股) 未被跟踪，临时分配给 '{strategy_names[0]}'，请手动调整")
 
         # 3. tracked 总量 vs broker 实际不一致
         for code, pos in broker_positions.items():
@@ -329,10 +354,15 @@ def load_config(context):
     # 解析策略列表
     strategies = config['strategies']
     total_ratio = sum(s['capital_ratio'] for s in strategies)
-    if total_ratio > 1.001:
-        raise ValueError(f"capital_ratio 之和 ({total_ratio:.3f}) 超过 1.0")
+    # 严格验证资金比例：必须在0.9999到1.0001之间
+    if abs(total_ratio - 1.0) > 0.0001:
+        raise ValueError(f"capital_ratio 之和 ({total_ratio:.4f}) 必须等于 1.0 (允许误差 ±0.0001)")
+    # 验证每个策略的资金比例为正数
+    for s in strategies:
+        if s['capital_ratio'] <= 0:
+            raise ValueError(f"策略 '{s['name']}' 的 capital_ratio ({s['capital_ratio']}) 必须大于0")
     context['strategy_configs'] = strategies
-    logging.info(f"多策略模式: {[s['name'] for s in strategies]}, capital_ratio合计={total_ratio:.2f}")
+    logging.info(f"多策略模式: {[s['name'] for s in strategies]}, capital_ratio合计={total_ratio:.4f}")
 
     # 初始化持仓跟踪
     tracking_file = config.get("position_tracking_file", "strategy_positions.json")
@@ -400,7 +430,7 @@ def get_account_status(context):
     # 对账（每轮只做一次）
     if not context.get('_sync_done'):
         strategy_names = [s['name'] for s in context['strategy_configs']]
-        tracker.sync_with_broker(broker_positions, strategy_names)
+        tracker.sync_with_broker(broker_positions, strategy_names, context['strategy_configs'])
         context['_sync_done'] = True
 
     # 过滤当前策略持仓
@@ -412,11 +442,12 @@ def get_account_status(context):
             strategy_positions[code] = broker_positions[code]
             strategy_position_value += broker_positions[code].market_value
 
-    # 虚拟资金
+    # 虚拟资金 - 方案A（严格隔离）：每个策略使用自己的现金配额
     total_asset = asset.total_asset
     strategy_total = total_asset * strat['capital_ratio']
-    strategy_cash = min(strategy_total - strategy_position_value, asset.cash)
-    strategy_cash = max(strategy_cash, 0)
+    strategy_cash_quota = asset.cash * strat['capital_ratio']
+    strategy_cash_needed = strategy_total - strategy_position_value
+    strategy_cash = max(min(strategy_cash_needed, strategy_cash_quota), 0)
 
     context.update({
         'broker_total_asset': total_asset,
@@ -435,7 +466,7 @@ def get_account_status(context):
 
 # ==================== tracker 更新辅助 ====================
 def _update_tracker_after_trade(context, codes):
-    """交易后根据 broker 实际持仓更新 tracker"""
+    """交易后根据 broker 实际持仓更新 tracker - 精确版本"""
     strat = context['current_strategy']
     tracker = context['position_tracker']
     broker_positions = context['broker_positions']
@@ -443,13 +474,17 @@ def _update_tracker_after_trade(context, codes):
     for code in codes:
         broker_pos = broker_positions.get(code)
         if broker_pos is None or broker_pos.volume == 0:
+            # 卖出或清仓
             tracker.update_position(strat['name'], code, 0)
         else:
-            # broker 总量 - 其他策略的份额 = 本策略的份额
-            my_old = tracker.get_positions(strat['name']).get(code, 0)
-            other_vol = tracker.get_tracked_volume(code) - my_old
+            # 精确计算当前策略应占的份额
+            current_vol = tracker.get_positions(strat['name']).get(code, 0)
+            # 计算其他策略对该股票的总跟踪持仓
+            other_vol = tracker.get_tracked_volume(code) - current_vol
+            # 当前策略的新持仓 = broker总持仓 - 其他策略持仓
             my_new = max(broker_pos.volume - other_vol, 0)
             tracker.update_position(strat['name'], code, my_new)
+            logging.debug(f"[{strat['name']}] 更新跟踪: {code} 当前={current_vol}, 其他={other_vol}, broker={broker_pos.volume}, 新={my_new}")
 
 
 # ==================== 交易动作 ====================
@@ -478,6 +513,14 @@ def sell_out_of_pool(context):
     get_account_status(context)
 
 
+def _calculate_rebalance_targets(strat, total_asset):
+    """计算再平衡的目标参数"""
+    reserve = total_asset * strat["cash_reserve_ratio"]
+    cash_for_stocks = total_asset - reserve
+    target_per_stock = cash_for_stocks / strat["max_holdings"]
+    return reserve, cash_for_stocks, target_per_stock
+
+
 def rebalance(context):
     strat = context['current_strategy']
     trader = context['trader']
@@ -485,9 +528,8 @@ def rebalance(context):
     positions = context['positions']
     total_asset = context['total_asset']
 
-    reserve = total_asset * strat["cash_reserve_ratio"]
-    cash_for_stocks = total_asset - reserve
-    target_per_stock = cash_for_stocks / strat["max_holdings"]
+    # 计算再平衡目标
+    reserve, cash_for_stocks, target_per_stock = _calculate_rebalance_targets(strat, total_asset)
 
     # --- 卖出超配 ---
     sell_codes = []
@@ -512,12 +554,13 @@ def rebalance(context):
     get_account_status(context)
 
     # --- 买入低配 ---
+    # 重新获取更新后的账户状态
     total_asset = context['total_asset']
     positions = context['positions']
-    reserve = total_asset * strat["cash_reserve_ratio"]
-    cash_for_stocks = total_asset - reserve
-    target_per_stock = cash_for_stocks / strat["max_holdings"]
     available_cash = context['cash']
+    
+    # 重新计算目标（因为total_asset可能已变化）
+    reserve, cash_for_stocks, target_per_stock = _calculate_rebalance_targets(strat, total_asset)
 
     buy_codes = []
     for code, pos in positions.items():
@@ -549,8 +592,8 @@ def check_rebalance_and_execute(context):
     if slots <= 0:
         return
 
-    reserve = total_asset * strat["cash_reserve_ratio"]
-    cash_for_buy = cash - reserve
+    # 使用辅助函数计算现金分配
+    reserve, cash_for_buy = calculate_cash_allocation(strat, total_asset, cash)
     if cash_for_buy <= 0:
         return
 
@@ -577,8 +620,8 @@ def buy_to_fill(context):
     if slots <= 0:
         return
 
-    reserve = total_asset * strat["cash_reserve_ratio"]
-    buy_cash = cash - reserve
+    # 使用辅助函数计算现金分配
+    reserve, buy_cash = calculate_cash_allocation(strat, total_asset, cash)
     if buy_cash <= 0:
         logging.warning(f"[{strat['name']}] 可用资金不足")
         return
