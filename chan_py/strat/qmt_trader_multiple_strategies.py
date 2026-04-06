@@ -566,7 +566,7 @@ def rebalance(context):
     for code, pos in positions.items():
         if pos.market_value < target_per_stock and not MarketUtils.is_limit_status(code, 'low_limit'):
             value_buy = target_per_stock - pos.market_value
-            buy_price, vol_buy = calculate_buy_price_and_volume(code, value_buy, available_cash)
+            buy_price, vol_buy = calculate_trade_price_and_volume(code, value_buy, available_cash, is_buy=True)
             if vol_buy > 0 and buy_price is not None:
                 oid = place_buy_order(trader, account, code, vol_buy, buy_price, f"rb_buy_{strat['name']}")
                 if oid and oid > 0:
@@ -637,7 +637,7 @@ def buy_to_fill(context):
 
     buy_codes = []
     for code in candidates:
-        buy_price, vol = calculate_buy_price_and_volume(code, per_stock, available_cash)
+        buy_price, vol = calculate_trade_price_and_volume(code, per_stock, available_cash, is_buy=True)
         if vol > 0 and buy_price is not None:
             oid = place_buy_order(trader, account, code, vol, buy_price, f"buy_{strat['name']}")
             if oid and oid > 0:
@@ -657,49 +657,102 @@ def buy_to_fill(context):
 
 
 # ==================== 下单函数 ====================
-def calculate_buy_price_and_volume(code, target_amount, available_cash):
+def calculate_trade_price_and_volume(code, target_amount, available_cash, is_buy=True):
     """
-    根据盘口和涨停价计算买入价和股数。
-    available_cash 由调用方传入，避免重复查询 broker。
+    统一的交易价格计算函数（买入和卖出）
+    is_buy: True 表示买入，False 表示卖出
     """
-    high_limit = MarketUtils.get_limit_price(code, 'high_limit')
-    if high_limit <= 0:
-        logging.warning(f"Cannot get high limit for {code}")
-        return None, 0
-    try:
-        tick = xtdata.get_full_tick([code])
-        if code not in tick or tick[code] is None:
-            logging.warning(f"Cannot get tick for {code}")
+    if is_buy:
+        # 买入逻辑
+        high_limit = MarketUtils.get_limit_price(code, 'high_limit')
+        if high_limit <= 0:
+            logging.warning(f"Cannot get high limit for {code}")
             return None, 0
-        ask_price = tick[code].get('askPrice', [0])[0]
-        if ask_price <= 0:
-            ask_price = tick[code].get('lastPrice', 0)
-        if ask_price <= 0:
+        try:
+            tick = xtdata.get_full_tick([code])
+            if code not in tick or tick[code] is None:
+                logging.warning(f"Cannot get tick for {code}")
+                return None, 0
+            ask_price = tick[code].get('askPrice', [0])[0]
+            if ask_price <= 0:
+                # 卖一价为0，说明股票涨停了，直接用涨停价买入
+                logging.info(f"股票 {code} 卖一价为0（涨停状态），使用涨停价 {high_limit:.2f} 买入")
+                buy_price = high_limit
+            else:
+                cage_limit = max(ask_price * 1.02, ask_price + 0.1)
+                buy_price = min(cage_limit, high_limit)
+
+            safety_factor = 0.99
+            max_amount = min(target_amount, available_cash) * safety_factor
+            volume = int(max_amount // (buy_price * 100)) * 100
+            if volume <= 0:
+                return None, 0
+            return buy_price, volume
+        except Exception as e:
+            logging.error(f"Failed to calculate price for {code}: {e}")
+            return None, 0
+    else:
+        # 卖出逻辑
+        low_limit = MarketUtils.get_limit_price(code, 'low_limit')
+        if low_limit <= 0:
+            logging.warning(f"Cannot get low limit for {code}")
+            return None, 0
+        try:
+            tick = xtdata.get_full_tick([code])
+            if code not in tick or tick[code] is None:
+                logging.warning(f"Cannot get tick for {code}")
+                return None, 0
+            bid_price = tick[code].get('bidPrice', [0])[0]
+            if bid_price <= 0:
+                # 买一价为0，说明跌停了，直接用跌停价
+                logging.info(f"股票 {code} 买一价为0（跌停状态），使用跌停价 {low_limit:.2f} 限价卖出")
+                sell_price = low_limit
+            else:
+                # 计算价格笼子下限：min(买一价*0.98, 买一价-0.1)
+                cage_lower_limit = min(bid_price * 0.98, bid_price - 0.1)
+                # 卖出价格取价格笼子下限和跌停价的较大值（卖出时价格越高越好）
+                sell_price = max(cage_lower_limit, low_limit)
+                logging.info(f"股票 {code} 买一价 {bid_price:.2f}, 价格笼子下限 {cage_lower_limit:.2f}, 跌停价 {low_limit:.2f}, 最终卖出价 {sell_price:.2f}")
+            
+            # 对于卖出，返回价格（卖出不需要计算股数，股数由调用方提供）
+            return sell_price, 0
+        except Exception as e:
+            logging.error(f"Failed to calculate sell price for {code}: {e}")
             return None, 0
 
-        cage_limit = max(ask_price * 1.02, ask_price + 0.1)
-        buy_price = min(cage_limit, high_limit)
 
-        safety_factor = 0.99
-        max_amount = min(target_amount, available_cash) * safety_factor
-        volume = int(max_amount // (buy_price * 100)) * 100
-        if volume <= 0:
-            return None, 0
-        return buy_price, volume
-    except Exception as e:
-        logging.error(f"Failed to calculate price for {code}: {e}")
-        return None, 0
 
 
 def place_sell_order(trader, account, code, volume, remark=""):
+    """卖出委托（使用统一的交易价格计算函数）"""
     if volume <= 0:
         return None
+    
+    # 使用统一的交易价格计算函数获取卖出价格
+    # 注意：对于卖出，target_amount 参数不需要，传入 0
+    # available_cash 参数也不需要，传入 0
+    sell_price = calculate_trade_price_and_volume(code, 0, 0, is_buy=False)
+    
+    if sell_price is None:
+        logging.warning(f"无法计算股票 {code} 的卖出价格，回退到对手价下单")
+        # 回退到对手价下单
+        oid = trader.order_stock(
+            account, code, xtconstant.STOCK_SELL, volume,
+            xtconstant.MARKET_PEER_PRICE_FIRST, 0, remark
+        )
+        if oid and oid > 0:
+            logging.info(f"Sell {code} {volume}股 @ 对手价, order_id:{oid}")
+        else:
+            logging.error(f"Sell failed {code} err:{oid}")
+        return oid
+    
+    # 使用限价单卖出
     oid = trader.order_stock(
         account, code, xtconstant.STOCK_SELL, volume,
-        xtconstant.MARKET_PEER_PRICE_FIRST, 0, remark
+        xtconstant.FIX_PRICE, sell_price, remark
     )
     if oid and oid > 0:
-        logging.info(f"Sell {code} {volume}股 @ 对手价, order_id:{oid}")
+        logging.info(f"Sell {code} {volume}股 @ 价格 {sell_price:.2f}, order_id:{oid}")
     else:
         logging.error(f"Sell failed {code} err:{oid}")
     return oid

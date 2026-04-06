@@ -346,9 +346,9 @@ def rebalance(context):
     for code, pos in positions.items():
         if pos.market_value < target_per_stock and not MarketUtils.is_limit_status(code, 'low_limit'):
             value_buy = target_per_stock - pos.market_value
-            # 使用 calculate_buy_price_and_volume 来计算买入价格和股数
+            # 使用 calculate_trade_price_and_volume 来计算买入价格和股数
             # 注意：这里的 target_amount 是 value_buy（需要买入的金额）
-            buy_price, vol_buy = calculate_buy_price_and_volume(trader, account, code, value_buy, cfg)
+            buy_price, vol_buy = calculate_trade_price_and_volume(trader, account, code, value_buy, cfg, is_buy=True)
             if vol_buy > 0 and buy_price is not None:
                 oid = place_buy_order(trader, account, code, vol_buy, buy_price, "rebalance_buy")
                 if oid > 0:
@@ -417,7 +417,7 @@ def buy_to_fill(context):
     per_stock = buy_cash / len(candidates)
     
     for code in candidates:
-        buy_price, vol = calculate_buy_price_and_volume(trader, account, code, per_stock, cfg)
+        buy_price, vol = calculate_trade_price_and_volume(trader, account, code, per_stock, cfg, is_buy=True)
         if vol > 0 and buy_price is not None:
             oid = place_buy_order(trader, account, code, vol, buy_price, "buy_new")
             if oid > 0:
@@ -452,79 +452,136 @@ RootStrategy.add(InitSequence).add(TradeSequence)
 
 
 # ==================== 封装的下单函数 ====================
-def calculate_buy_price_and_volume(trader, account, code, target_amount, cfg):
+def calculate_trade_price_and_volume(trader, account, code, target_amount, cfg, is_buy=True):
     """
-    根据盘口价格和涨停价，计算符合“价格笼子”的买入价格和股数
-    返回: (buy_price, buy_volume) 或 (None, 0) 表示无法买入
+    计算交易价格和数量（支持买卖）
+    
+    Args:
+        trader: 交易客户端
+        account: 账户
+        code: 股票代码
+        target_amount: 目标金额（对于买入）或目标股数（对于卖出）
+        cfg: 配置
+        is_buy: True=买入，False=卖出
+    
+    Returns:
+        对于买入: (price, volume) 或 (None, 0)
+        对于卖出: price 或 None
     """
-    # 1. 获取涨停价（作为价格上限）
-    high_limit = MarketUtils.get_limit_price(code, 'high_limit')
-    if high_limit <= 0:
-        logging.warning(f"Cannot get high limit price for {code}, skip")
-        return None, 0
-
-    # 2. 获取当前盘口价格（用于计算价格笼子上限）
+    # 1. 确定涨跌停类型和盘口字段
+    if is_buy:
+        limit_type = 'high_limit'
+        price_field = 'askPrice'
+        cage_multiplier = 1.02
+        cage_offset = 0.1
+        compare_func = min  # 买入取较小值
+        operation = "买入"
+    else:
+        limit_type = 'low_limit'
+        price_field = 'bidPrice'
+        cage_multiplier = 0.98
+        cage_offset = -0.1  # 注意是负值
+        compare_func = max  # 卖出取较大值
+        operation = "卖出"
+    
+    # 2. 获取涨跌停价
+    limit_price = MarketUtils.get_limit_price(code, limit_type)
+    if limit_price <= 0:
+        logging.warning(f"Cannot get {limit_type} price for {code}, skip")
+        return (None, 0) if is_buy else None
+    
+    # 3. 获取盘口数据
     try:
         tick = xtdata.get_full_tick([code])
         if code not in tick or tick[code] is None:
             logging.warning(f"Cannot get tick data for {code}")
-            return None, 0
+            return (None, 0) if is_buy else None
         
-        # 获取卖一价
-        ask_price = tick[code].get('askPrice', [0])[0]
-        if ask_price <= 0:
-            ask_price = tick[code].get('lastPrice', 0)
+        market_price = tick[code].get(price_field, [0])[0]
         
-        if ask_price <= 0:
-            logging.warning(f"Cannot get valid price for {code}, ask_price={ask_price}")
-            return None, 0
+        # 4. 判断涨跌停状态
+        if market_price <= 0:
+            # 涨跌停状态，直接使用涨跌停价
+            logging.info(f"股票 {code} {price_field}为0（{operation}状态），使用{limit_type} {limit_price:.2f} 下单")
+            final_price = limit_price
+        else:
+            # 5. 计算价格笼子限制
+            cage_limit = compare_func(
+                market_price * cage_multiplier,
+                market_price + cage_offset
+            )
+            # 6. 确定最终价格
+            final_price = compare_func(cage_limit, limit_price)
         
-        # 3. 计算价格笼子上限：min(卖一价*102%, 卖一价+0.1)
-        cage_limit = max(ask_price * 1.02, ask_price + 0.1)
-        # 最终买入价格取“笼子上限”和“涨停价”的较小值
-        buy_price = min(cage_limit, high_limit)
-        
-        # 4. 计算可买股数（预留1%资金缓冲）
-        safety_factor = 0.99
-        max_amount = target_amount * safety_factor
-        volume = int(max_amount // (buy_price * 100)) * 100
-        
-        if volume <= 0:
-            logging.info(f"Insufficient funds to buy one lot of {code}")
-            return None, 0
-        
-        # 5. 资金校验：确保总金额不超可用现金
-        asset = trader.query_stock_asset(account)
-        if asset is None:
-            logging.error(f"Query asset failed for {code}")
-            return None, 0
-        
-        available_cash = asset.p_enable_balance
-        required_cash = volume * buy_price * 1.001  # 含0.1%手续费预估
-        
-        if required_cash > available_cash:
-            logging.warning(f"Cash insufficient for {code}: required {required_cash:.2f} > available {available_cash:.2f}")
-            # 重新计算股数
-            volume = int((available_cash * safety_factor) // (buy_price * 100)) * 100
+        # 7. 对于买入：计算数量
+        if is_buy:
+            # 资金计算（预留1%缓冲）
+            safety_factor = 0.99
+            max_amount = target_amount * safety_factor
+            volume = int(max_amount // (final_price * 100)) * 100
+            
             if volume <= 0:
+                logging.info(f"Insufficient funds to buy one lot of {code}")
                 return None, 0
+            
+            # 资金校验
+            asset = trader.query_stock_asset(account)
+            if asset is None:
+                logging.error(f"Query asset failed for {code}")
+                return None, 0
+            
+            available_cash = asset.p_enable_balance
+            required_cash = volume * final_price * 1.001  # 加0.1%手续费预留
+            
+            if required_cash > available_cash:
+                logging.warning(f"Cash insufficient for {code}: required {required_cash:.2f} > available {available_cash:.2f}")
+                # 重新计算最大可买数量
+                max_volume = int(available_cash // (final_price * 1.001 * 100)) * 100
+                if max_volume <= 0:
+                    return None, 0
+                volume = max_volume
+            
+            return final_price, volume
         
-        return buy_price, volume
-        
+        # 8. 对于卖出：只返回价格
+        else:
+            return final_price
+    
     except Exception as e:
-        logging.error(f"Failed to calculate price for {code}: {e}")
-        return None, 0
+        logging.error(f"Error calculating {operation} price for {code}: {e}")
+        return (None, 0) if is_buy else None
+
 
 def place_sell_order(trader, account, code, volume, remark=""):
-    """卖出委托（对手方最优价格）"""
+    """卖出委托（使用统一的交易价格计算函数）"""
     if volume <= 0:
         return None
+    
+    # 使用统一的交易价格计算函数获取卖出价格
+    # 注意：对于卖出，target_amount 参数不需要，传入 0
+    # cfg 参数也不需要，传入空字典 {}
+    sell_price = calculate_trade_price_and_volume(trader, account, code, 0, {}, is_buy=False)
+    
+    if sell_price is None:
+        logging.warning(f"无法计算股票 {code} 的卖出价格，回退到对手价下单")
+        # 回退到对手价下单
+        oid = trader.order_stock(
+            account, code, xtconstant.STOCK_SELL, volume,
+            xtconstant.MARKET_PEER_PRICE_FIRST, 0, remark
+        )
+        if oid > 0:
+            logging.info(f"Sell {code} {volume} shares @ market peer price, order_id:{oid}")
+        else:
+            logging.error(f"Sell order failed {code} error_code:{oid}")
+        return oid
+    
+    # 使用限价单卖出
     oid = trader.order_stock(
         account, code, xtconstant.STOCK_SELL, volume,
-        xtconstant.MARKET_PEER_PRICE_FIRST, 0, remark
+        xtconstant.FIX_PRICE, sell_price, remark
     )
     if oid > 0:
-        logging.info(f"Sell {code} {volume} shares @ market peer price, order_id:{oid}")
+        logging.info(f"Sell {code} {volume} shares @ price {sell_price:.2f}, order_id:{oid}")
     else:
         logging.error(f"Sell order failed {code} error_code:{oid}")
     return oid
