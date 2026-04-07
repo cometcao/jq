@@ -17,6 +17,143 @@ import datetime
 import random
 from abc import ABC, abstractmethod
 
+
+# ==================== 自定义异常类 ====================
+class MarketDataException(Exception):
+    """市场数据获取异常"""
+    pass
+
+class OrderExecutionException(Exception):
+    """订单执行异常"""
+    pass
+
+
+# ==================== 工具类：订单处理 ====================
+class OrderUtils:
+    """订单处理工具类，提取重复的订单处理逻辑"""
+    
+    @staticmethod
+    def safe_place_order(trader, account, code, volume, is_buy=True, price=None, remark=""):
+        """
+        安全下单：订单失败时只记录日志，不抛出异常
+        返回: order_id (成功) 或 None (失败)
+        """
+        try:
+            if is_buy:
+                return place_buy_order(trader, account, code, volume, price, remark)
+            else:
+                return place_sell_order(trader, account, code, volume, remark)
+        except Exception as e:
+            action = "买入" if is_buy else "卖出"
+            logging.error(f"{action}订单执行异常 {code}: {e}")
+            return None
+    
+    @staticmethod
+    def batch_process_orders(trader, account, orders, context, timeout=15):
+        """
+        批量处理订单，收集失败信息
+        orders: [(code, volume, is_buy, price, remark), ...]
+        返回: (success_codes, failed_codes)
+        """
+        success_codes = []
+        failed_codes = []
+        
+        for code, volume, is_buy, price, remark in orders:
+            oid = OrderUtils.safe_place_order(trader, account, code, volume, is_buy, price, remark)
+            if oid and oid > 0:
+                success_codes.append(code)
+            else:
+                failed_codes.append(code)
+        
+        if success_codes:
+            new_pos = wait_for_order_completion(trader, account, success_codes, 
+                                              context['broker_positions'], timeout=timeout)
+            if new_pos is not None:
+                context['broker_positions'] = new_pos
+            else:
+                logging.warning(f"订单等待超时: {success_codes}")
+            _update_tracker_after_trade(context, success_codes)
+        
+        return success_codes, failed_codes
+
+
+# ==================== 工具类：数据验证 ====================
+class DataValidationUtils:
+    """市场数据验证工具类"""
+    
+    @staticmethod
+    def validate_market_data(code, is_buy=True):
+        """
+        验证市场数据是否可用
+        返回: (is_valid, error_message)
+        """
+        try:
+            if is_buy:
+                MarketUtils.get_limit_price(code, 'high_limit')
+            else:
+                MarketUtils.get_limit_price(code, 'low_limit')
+            
+            tick = xtdata.get_full_tick([code])
+            if code not in tick or tick[code] is None:
+                return False, f"无法获取{code}的实时行情数据"
+            
+            return True, None
+        except MarketDataException as e:
+            return False, str(e)
+        except Exception as e:
+            return False, f"验证{code}市场数据失败: {e}"
+    
+    @staticmethod
+    def get_safe_trade_price(code, is_buy=True):
+        """
+        安全获取交易价格，带异常处理
+        返回: (price, error_message)
+        """
+        try:
+            price, _ = calculate_trade_price_and_volume(code, 0, 0, is_buy=is_buy)
+            return price, None
+        except MarketDataException as e:
+            return None, str(e)
+        except Exception as e:
+            return None, f"获取{code}交易价格失败: {e}"
+
+
+# ==================== 日志格式化工具 ====================
+def log_section(title, level="INFO"):
+    """输出带分割线的章节标题"""
+    separator = "=" * 60
+    if level.upper() == "INFO":
+        logging.info(f"\n{separator}")
+        logging.info(f"{title}")
+        logging.info(f"{separator}")
+    elif level.upper() == "WARNING":
+        logging.warning(f"\n{separator}")
+        logging.warning(f"{title}")
+        logging.warning(f"{separator}")
+    elif level.upper() == "ERROR":
+        logging.error(f"\n{separator}")
+        logging.error(f"{title}")
+        logging.error(f"{separator}")
+
+def log_subsection(title):
+    """输出子章节标题"""
+    separator = "-" * 40
+    logging.info(f"\n{separator}")
+    logging.info(f"{title}")
+    logging.info(f"{separator}")
+
+def log_important(msg):
+    """输出重要信息"""
+    logging.info(f"🔥 {msg}")
+
+def log_warning_highlight(msg):
+    """输出警告信息（突出显示）"""
+    logging.warning(f"⚠️  {msg}")
+
+def log_error_highlight(msg):
+    """输出错误信息（突出显示）"""
+    logging.error(f"❌ {msg}")
+
 try:
     from xtquant.xttrader import XtQuantTrader
     from xtquant.xttype import StockAccount
@@ -55,46 +192,52 @@ class MarketUtils:
                     if attempt < retries - 1:
                         time.sleep(1)
                         continue
-                    return 0.0
+                    raise MarketDataException(f"无法获取{code}的涨跌停价详情")
                 price = detail.get('UpStopPrice' if limit_type == 'high_limit' else 'DownStopPrice', 0.0)
                 if price > 0:
                     cls._cache[cache_key] = price
                     return price
-                return 0.0
+                raise MarketDataException(f"{code}的{limit_type}价格无效: {price}")
+            except MarketDataException:
+                raise
             except Exception as e:
                 if "无法连接xtquant服务" in str(e):
                     logging.error(f"xtdata 连接断开，尝试重连 ({attempt+1}/{retries})")
                     if cls._ensure_connection():
                         continue
-                    return 0.0
+                    raise MarketDataException(f"xtdata连接失败，无法获取{code}的{limit_type}价格")
                 else:
                     logging.error(f"获取{limit_type}异常 {code}: {e}")
                     if attempt < retries - 1:
                         time.sleep(2)
                         continue
-                    return 0.0
-        return 0.0
+                    raise MarketDataException(f"获取{code}的{limit_type}价格失败: {e}")
+        raise MarketDataException(f"获取{code}的{limit_type}价格失败，重试{retries}次后仍失败")
 
     @classmethod
     def is_limit_status(cls, code, limit_type='high_limit', tolerance=0.001):
-        limit_price = cls.get_limit_price(code, limit_type)
-        if limit_price <= 0:
-            return False
-        for attempt in range(3):
-            try:
-                data = xtdata.get_market_data_ex([code], period='1d', count=1)
-                if code in data and data[code] is not None and not data[code].empty:
-                    current = data[code]['close'].iloc[-1]
-                    return abs(current - limit_price) < tolerance
-                return False
-            except Exception as e:
-                if "无法连接xtquant服务" in str(e) and attempt < 2:
-                    cls._ensure_connection()
-                    time.sleep(1)
-                    continue
-                logging.error(f"判断涨跌停异常 {code}: {e}")
-                return False
-        return False
+        try:
+            limit_price = cls.get_limit_price(code, limit_type)
+            for attempt in range(3):
+                try:
+                    data = xtdata.get_market_data_ex([code], period='1d', count=1)
+                    if code in data and data[code] is not None and not data[code].empty:
+                        current = data[code]['close'].iloc[-1]
+                        return abs(current - limit_price) < tolerance
+                    raise MarketDataException(f"无法获取{code}的收盘价数据")
+                except MarketDataException:
+                    raise
+                except Exception as e:
+                    if "无法连接xtquant服务" in str(e) and attempt < 2:
+                        cls._ensure_connection()
+                        time.sleep(1)
+                        continue
+                    raise MarketDataException(f"判断{code}涨跌停状态失败: {e}")
+            raise MarketDataException(f"判断{code}涨跌停状态失败，重试3次后仍失败")
+        except MarketDataException:
+            raise
+        except Exception as e:
+            raise MarketDataException(f"判断{code}涨跌停状态失败: {e}")
 
 
 def calculate_cash_allocation(strat, total_asset, cash):
@@ -357,12 +500,36 @@ def load_config(context):
     # 严格验证资金比例：必须在0.9999到1.0001之间
     if abs(total_ratio - 1.0) > 0.0001:
         raise ValueError(f"capital_ratio 之和 ({total_ratio:.4f}) 必须等于 1.0 (允许误差 ±0.0001)")
-    # 验证每个策略的资金比例为正数
+    
+    # 为每个策略设置默认的 trading_times 并验证
     for s in strategies:
         if s['capital_ratio'] <= 0:
             raise ValueError(f"策略 '{s['name']}' 的 capital_ratio ({s['capital_ratio']}) 必须大于0")
+        
+        # 设置默认交易时间：09:35
+        if 'trading_times' not in s:
+            s['trading_times'] = ["09:35"]
+        
+        # 验证 trading_times 格式
+        if not isinstance(s['trading_times'], list):
+            raise ValueError(f"策略 '{s['name']}' 的 trading_times 必须是列表")
+        
+        # 验证时间格式
+        for t in s['trading_times']:
+            if not isinstance(t, str) or len(t) != 5 or t[2] != ':':
+                raise ValueError(f"策略 '{s['name']}' 的交易时间格式错误: {t}，应为 HH:MM 格式")
+            try:
+                hour = int(t[:2])
+                minute = int(t[3:])
+                if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+                    raise ValueError
+            except ValueError:
+                raise ValueError(f"策略 '{s['name']}' 的交易时间格式错误: {t}，应为有效的 HH:MM 格式")
+    
     context['strategy_configs'] = strategies
     logging.info(f"多策略模式: {[s['name'] for s in strategies]}, capital_ratio合计={total_ratio:.4f}")
+    for s in strategies:
+        logging.info(f"  策略 '{s['name']}': 交易时间 {s['trading_times']}")
 
     # 初始化持仓跟踪
     tracking_file = config.get("position_tracking_file", "strategy_positions.json")
@@ -371,13 +538,46 @@ def load_config(context):
 
 
 def read_stock_lists(context):
+    """读取策略的股票名单，支持文件存在性检查和过期检查
+    
+    规则：
+    1. 如果文件不存在，返回空列表（策略清仓）
+    2. 如果文件修改时间超过14天，返回空列表（策略清仓）
+    3. 如果文件读取失败，返回空列表（策略清仓）
+    4. 正常情况返回股票列表
+    """
     strat = context['current_strategy']
-    with open(strat["stock_list_file"], encoding='utf-8') as f:
-        data = json.load(f)
-    all_codes = [item.replace('XSHE', 'SZ').replace('XSHG', 'SH') for item in data]
-    context['candidate_pool'] = all_codes[:strat["candidate_pool_size"]]
-    context['buy_pool'] = all_codes[:strat["max_holdings"]]
-    logging.info(f"[{strat['name']}] 候选池: {len(context['candidate_pool'])}只, 买入池: {len(context['buy_pool'])}只")
+    file_path = strat["stock_list_file"]
+    
+    # 检查文件是否存在
+    if not os.path.exists(file_path):
+        logging.warning(f"[{strat['name']}] 股票名单文件不存在: {file_path}")
+        context['candidate_pool'] = []
+        context['buy_pool'] = []
+        return
+    
+    # 检查文件是否过期（超过14天）
+    file_mtime = datetime.datetime.fromtimestamp(os.path.getmtime(file_path))
+    days_old = (datetime.datetime.now() - file_mtime).days
+    if days_old > 14:
+        logging.warning(f"[{strat['name']}] 股票名单文件已过期: {file_path}，最后修改于 {file_mtime} ({days_old}天前)")
+        context['candidate_pool'] = []
+        context['buy_pool'] = []
+        return
+    
+    try:
+        with open(file_path, encoding='utf-8') as f:
+            data = json.load(f)
+        
+        all_codes = [item.replace('XSHE', 'SZ').replace('XSHG', 'SH') for item in data]
+        context['candidate_pool'] = all_codes[:strat["candidate_pool_size"]]
+        context['buy_pool'] = all_codes[:strat["max_holdings"]]
+        logging.info(f"[{strat['name']}] 候选池: {len(context['candidate_pool'])}只, 买入池: {len(context['buy_pool'])}只")
+        
+    except Exception as e:
+        logging.error(f"[{strat['name']}] 读取股票名单文件失败: {e}")
+        context['candidate_pool'] = []
+        context['buy_pool'] = []
 
 
 def init_trader(context):
@@ -497,10 +697,19 @@ def sell_out_of_pool(context):
 
     sell_codes = []
     for code, pos in positions.items():
-        if code not in candidate and not MarketUtils.is_limit_status(code, 'high_limit'):
-            oid = place_sell_order(trader, account, code, pos.volume, f"sell_out_{strat['name']}")
-            if oid and oid > 0:
-                sell_codes.append(code)
+        if code not in candidate:
+            try:
+                # 检查是否涨停，涨停时不能卖出
+                if not MarketUtils.is_limit_status(code, 'high_limit'):
+                    oid = place_sell_order(trader, account, code, pos.volume, f"sell_out_{strat['name']}")
+                    if oid and oid > 0:
+                        sell_codes.append(code)
+            except MarketDataException as e:
+                logging.error(f"[{strat['name']}] 获取{code}市场数据失败，跳过卖出: {e}")
+                continue
+            except Exception as e:
+                logging.error(f"[{strat['name']}] 卖出{code}时发生异常: {e}")
+                continue
 
     if sell_codes:
         new_pos = wait_for_order_completion(trader, account, sell_codes, context['broker_positions'], timeout=15)
@@ -534,14 +743,23 @@ def rebalance(context):
     # --- 卖出超配 ---
     sell_codes = []
     for code, pos in positions.items():
-        if pos.market_value > target_per_stock and not MarketUtils.is_limit_status(code, 'high_limit'):
-            value_sell = pos.market_value - target_per_stock
-            price = pos.market_value / pos.volume
-            vol_sell = int(value_sell // (price * 100)) * 100
-            if vol_sell > 0:
-                oid = place_sell_order(trader, account, code, vol_sell, f"rb_sell_{strat['name']}")
-                if oid and oid > 0:
-                    sell_codes.append(code)
+        if pos.market_value > target_per_stock:
+            try:
+                # 检查是否涨停，涨停时不能卖出
+                if not MarketUtils.is_limit_status(code, 'high_limit'):
+                    value_sell = pos.market_value - target_per_stock
+                    price = pos.market_value / pos.volume
+                    vol_sell = int(value_sell // (price * 100)) * 100
+                    if vol_sell > 0:
+                        oid = place_sell_order(trader, account, code, vol_sell, f"rb_sell_{strat['name']}")
+                        if oid and oid > 0:
+                            sell_codes.append(code)
+            except MarketDataException as e:
+                logging.error(f"[{strat['name']}] 获取{code}市场数据失败，跳过卖出: {e}")
+                continue
+            except Exception as e:
+                logging.error(f"[{strat['name']}] 卖出{code}时发生异常: {e}")
+                continue
 
     if sell_codes:
         new_pos = wait_for_order_completion(trader, account, sell_codes, context['broker_positions'], timeout=15)
@@ -564,14 +782,23 @@ def rebalance(context):
 
     buy_codes = []
     for code, pos in positions.items():
-        if pos.market_value < target_per_stock and not MarketUtils.is_limit_status(code, 'low_limit'):
-            value_buy = target_per_stock - pos.market_value
-            buy_price, vol_buy = calculate_trade_price_and_volume(code, value_buy, available_cash, is_buy=True)
-            if vol_buy > 0 and buy_price is not None:
-                oid = place_buy_order(trader, account, code, vol_buy, buy_price, f"rb_buy_{strat['name']}")
-                if oid and oid > 0:
-                    buy_codes.append(code)
-                    available_cash -= vol_buy * buy_price * 1.001
+        if pos.market_value < target_per_stock:
+            try:
+                # 检查是否跌停，跌停时不能买入
+                if not MarketUtils.is_limit_status(code, 'low_limit'):
+                    value_buy = target_per_stock - pos.market_value
+                    buy_price, vol_buy = calculate_trade_price_and_volume(code, value_buy, available_cash, is_buy=True)
+                    if vol_buy > 0 and buy_price is not None:
+                        oid = place_buy_order(trader, account, code, vol_buy, buy_price, f"rb_buy_{strat['name']}")
+                        if oid and oid > 0:
+                            buy_codes.append(code)
+                            available_cash -= vol_buy * buy_price * 1.001
+            except MarketDataException as e:
+                logging.error(f"[{strat['name']}] 获取{code}市场数据失败，跳过买入: {e}")
+                continue
+            except Exception as e:
+                logging.error(f"[{strat['name']}] 买入{code}时发生异常: {e}")
+                continue
 
     if buy_codes:
         new_pos = wait_for_order_completion(trader, account, buy_codes, context['broker_positions'], timeout=15)
@@ -637,15 +864,22 @@ def buy_to_fill(context):
 
     buy_codes = []
     for code in candidates:
-        buy_price, vol = calculate_trade_price_and_volume(code, per_stock, available_cash, is_buy=True)
-        if vol > 0 and buy_price is not None:
-            oid = place_buy_order(trader, account, code, vol, buy_price, f"buy_{strat['name']}")
-            if oid and oid > 0:
-                logging.info(f"[{strat['name']}] Buy {code}: {vol}股 @ {buy_price:.2f}")
-                buy_codes.append(code)
-                available_cash -= vol * buy_price * 1.001
-        else:
-            logging.info(f"[{strat['name']}] Skipping {code}")
+        try:
+            buy_price, vol = calculate_trade_price_and_volume(code, per_stock, available_cash, is_buy=True)
+            if vol > 0 and buy_price is not None:
+                oid = place_buy_order(trader, account, code, vol, buy_price, f"buy_{strat['name']}")
+                if oid and oid > 0:
+                    logging.info(f"[{strat['name']}] Buy {code}: {vol}股 @ {buy_price:.2f}")
+                    buy_codes.append(code)
+                    available_cash -= vol * buy_price * 1.001
+            else:
+                logging.info(f"[{strat['name']}] Skipping {code}")
+        except MarketDataException as e:
+            logging.error(f"[{strat['name']}] 获取{code}市场数据失败，跳过买入: {e}")
+            continue
+        except Exception as e:
+            logging.error(f"[{strat['name']}] 买入{code}时发生异常: {e}")
+            continue
 
     if buy_codes:
         new_pos = wait_for_order_completion(trader, account, buy_codes, context['broker_positions'], timeout=15)
@@ -664,15 +898,11 @@ def calculate_trade_price_and_volume(code, target_amount, available_cash, is_buy
     """
     if is_buy:
         # 买入逻辑
-        high_limit = MarketUtils.get_limit_price(code, 'high_limit')
-        if high_limit <= 0:
-            logging.warning(f"Cannot get high limit for {code}")
-            return None, 0
         try:
+            high_limit = MarketUtils.get_limit_price(code, 'high_limit')
             tick = xtdata.get_full_tick([code])
             if code not in tick or tick[code] is None:
-                logging.warning(f"Cannot get tick for {code}")
-                return None, 0
+                raise MarketDataException(f"无法获取{code}的实时行情数据")
             ask_price = tick[code].get('askPrice', [0])[0]
             if ask_price <= 0:
                 # 卖一价为0，说明股票涨停了，直接用涨停价买入
@@ -688,20 +918,17 @@ def calculate_trade_price_and_volume(code, target_amount, available_cash, is_buy
             if volume <= 0:
                 return None, 0
             return buy_price, volume
+        except MarketDataException:
+            raise
         except Exception as e:
-            logging.error(f"Failed to calculate price for {code}: {e}")
-            return None, 0
+            raise MarketDataException(f"计算{code}买入价格失败: {e}")
     else:
         # 卖出逻辑
-        low_limit = MarketUtils.get_limit_price(code, 'low_limit')
-        if low_limit <= 0:
-            logging.warning(f"Cannot get low limit for {code}")
-            return None, 0
         try:
+            low_limit = MarketUtils.get_limit_price(code, 'low_limit')
             tick = xtdata.get_full_tick([code])
             if code not in tick or tick[code] is None:
-                logging.warning(f"Cannot get tick for {code}")
-                return None, 0
+                raise MarketDataException(f"无法获取{code}的实时行情数据")
             bid_price = tick[code].get('bidPrice', [0])[0]
             if bid_price <= 0:
                 # 买一价为0，说明跌停了，直接用跌停价
@@ -716,9 +943,10 @@ def calculate_trade_price_and_volume(code, target_amount, available_cash, is_buy
             
             # 对于卖出，返回价格（卖出不需要计算股数，股数由调用方提供）
             return sell_price, 0
+        except MarketDataException:
+            raise
         except Exception as e:
-            logging.error(f"Failed to calculate sell price for {code}: {e}")
-            return None, 0
+            raise MarketDataException(f"计算{code}卖出价格失败: {e}")
 
 
 
@@ -728,61 +956,70 @@ def place_sell_order(trader, account, code, volume, remark=""):
     if volume <= 0:
         return None
     
-    # 使用统一的交易价格计算函数获取卖出价格
-    # 注意：对于卖出，target_amount 参数不需要，传入 0
-    # available_cash 参数也不需要，传入 0
-    sell_price = calculate_trade_price_and_volume(code, 0, 0, is_buy=False)
-    
-    if sell_price is None:
-        logging.warning(f"无法计算股票 {code} 的卖出价格，回退到对手价下单")
-        # 回退到对手价下单
+    try:
+        # 使用统一的交易价格计算函数获取卖出价格
+        # 注意：对于卖出，target_amount 参数不需要，传入 0
+        # available_cash 参数也不需要，传入 0
+        sell_price = calculate_trade_price_and_volume(code, 0, 0, is_buy=False)
+        
+        if sell_price is None:
+            logging.warning(f"无法计算股票 {code} 的卖出价格，回退到对手价下单")
+            # 回退到对手价下单
+            oid = trader.order_stock(
+                account, code, xtconstant.STOCK_SELL, volume,
+                xtconstant.MARKET_PEER_PRICE_FIRST, 0, remark
+            )
+            if oid and oid > 0:
+                logging.info(f"Sell {code} {volume}股 @ 对手价, order_id:{oid}")
+                return oid
+            else:
+                logging.error(f"Sell failed {code} err:{oid}")
+                return None
+        
+        # 使用限价单卖出
         oid = trader.order_stock(
             account, code, xtconstant.STOCK_SELL, volume,
-            xtconstant.MARKET_PEER_PRICE_FIRST, 0, remark
+            xtconstant.FIX_PRICE, sell_price, remark
         )
         if oid and oid > 0:
-            logging.info(f"Sell {code} {volume}股 @ 对手价, order_id:{oid}")
+            logging.info(f"Sell {code} {volume}股 @ 价格 {sell_price:.2f}, order_id:{oid}")
+            return oid
         else:
             logging.error(f"Sell failed {code} err:{oid}")
-        return oid
-    
-    # 使用限价单卖出
-    oid = trader.order_stock(
-        account, code, xtconstant.STOCK_SELL, volume,
-        xtconstant.FIX_PRICE, sell_price, remark
-    )
-    if oid and oid > 0:
-        logging.info(f"Sell {code} {volume}股 @ 价格 {sell_price:.2f}, order_id:{oid}")
-    else:
-        logging.error(f"Sell failed {code} err:{oid}")
-    return oid
+            return None
+    except Exception as e:
+        logging.error(f"卖出订单执行异常 {code}: {e}")
+        return None
 
 
 def place_buy_order(trader, account, code, volume, price=None, remark=""):
     if volume <= 0:
         return None
-    if price is not None:
-        price_type = xtconstant.FIX_PRICE
-        order_price = price
-    else:
-        price_type = xtconstant.MARKET_PEER_PRICE_FIRST
-        order_price = 0
-    oid = trader.order_stock(
-        account, code, xtconstant.STOCK_BUY, volume,
-        price_type, order_price, remark
-    )
-    if oid and oid > 0:
-        action = f"限价{price:.2f}" if price else "对手价"
-        logging.info(f"Buy {code} {volume}股 @ {action} order_id:{oid}")
-    else:
-        logging.error(f"Buy failed {code} err:{oid}")
-    return oid
+    try:
+        if price is not None:
+            price_type = xtconstant.FIX_PRICE
+            order_price = price
+        else:
+            price_type = xtconstant.MARKET_PEER_PRICE_FIRST
+            order_price = 0
+        oid = trader.order_stock(
+            account, code, xtconstant.STOCK_BUY, volume,
+            price_type, order_price, remark
+        )
+        if oid and oid > 0:
+            action = f"限价{price:.2f}" if price else "对手价"
+            logging.info(f"Buy {code} {volume}股 @ {action} order_id:{oid}")
+            return oid
+        else:
+            logging.error(f"Buy failed {code} err:{oid}")
+            return None
+    except Exception as e:
+        logging.error(f"买入订单执行异常 {code}: {e}")
+        return None
 
 
 # ==================== scheduled_time 等待动作 ====================
-WaitForReadTime = SequenceAction("等待读取时间")
-WaitForReadTime.add(SimpleAction("等待09:20", lambda ctx: None, scheduled_time="09:20"))
-
+# 注意：09:20的等待已移除，因为股票名单文件在每个交易时间点都会重新读取
 WaitForTradeTime = SequenceAction("等待交易时间")
 WaitForTradeTime.add(RetryAction(SimpleAction("初始化交易客户端", init_trader), scheduled_time="09:35"))
 
@@ -792,21 +1029,59 @@ def is_weekday(date):
     return date.weekday() < 5
 
 
-def run_strategy_once(config_file=None):
-    """执行一次完整的多策略调仓"""
+def run_strategy_once(config_file=None, current_time_str=None):
+    """执行一次完整的多策略调仓
+    config_file: 配置文件路径
+    current_time_str: 当前时间字符串 (HH:MM)，如果为None则使用系统当前时间
+    """
     context = {}
     if config_file:
         context['config_file'] = config_file
     try:
+        log_section(f"策略执行开始")
+        logging.info(f"执行时间: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        
         load_config(context)
-
-        WaitForReadTime.run(context)
+        
+        # 获取当前时间
+        if current_time_str is None:
+            current_time_str = datetime.datetime.now().strftime("%H:%M")
+        
+        # 过滤出需要在当前时间执行的策略
+        strategies_to_run = []
+        for strat_cfg in context['strategy_configs']:
+            if current_time_str in strat_cfg['trading_times']:
+                strategies_to_run.append(strat_cfg)
+        
+        if not strategies_to_run:
+            logging.info(f"当前时间 {current_time_str} 没有需要执行的策略")
+            log_section(f"策略执行结束 - 无策略需要执行")
+            return
+        
+        log_subsection(f"策略筛选结果")
+        logging.info(f"当前时间: {current_time_str}")
+        logging.info(f"需要执行的策略: {[s['name'] for s in strategies_to_run]}")
+        logging.info(f"策略数量: {len(strategies_to_run)}")
+        
+        # 对于所有交易时间，直接初始化交易客户端
+        # 但需要确保在交易时间内
+        now = datetime.datetime.now()
+        hour, minute = map(int, current_time_str.split(':'))
+        target_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        
+        if now < target_time:
+            wait_seconds = (target_time - now).total_seconds()
+            logging.info(f"等待到 {current_time_str}，需等待 {wait_seconds:.0f} 秒")
+            time.sleep(wait_seconds)
+        
         WaitForTradeTime.run(context)
 
-        for strat_cfg in context['strategy_configs']:
+        for strat_cfg in strategies_to_run:
             context['current_strategy'] = strat_cfg
             context['_sync_done'] = False
-            logging.info(f"{'='*20} 策略: {strat_cfg['name']} (ratio={strat_cfg['capital_ratio']}) {'='*20}")
+            log_section(f"策略执行: {strat_cfg['name']} (资金比例={strat_cfg['capital_ratio']})")
+            logging.info(f"交易时间: {current_time_str}")
+            logging.info(f"开始时间: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
             read_stock_lists(context)
             get_account_status(context)
@@ -815,9 +1090,14 @@ def run_strategy_once(config_file=None):
             buy_to_fill(context)
             context['position_tracker'].save()
 
-            logging.info(f"{'='*20} {strat_cfg['name']} 完毕 {'='*20}")
+            logging.info(f"结束时间: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            log_section(f"策略完成: {strat_cfg['name']}")
 
-        logging.info("所有策略执行成功")
+        log_section(f"所有策略执行完成")
+        logging.info(f"执行时间: {current_time_str}")
+        logging.info(f"完成时间: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logging.info(f"执行策略数量: {len(strategies_to_run)}")
+        logging.info(f"执行策略列表: {[s['name'] for s in strategies_to_run]}")
     except Exception:
         logging.exception("策略执行失败")
     finally:
@@ -840,24 +1120,92 @@ def main_loop(run_now=False, config_file=None):
         run_strategy_once(config_file)
         return
 
+    # 加载配置以获取所有策略的时间表
+    context = {}
+    if config_file:
+        context['config_file'] = config_file
+    try:
+        load_config(context)
+    except Exception as e:
+        logging.error(f"加载配置失败: {e}")
+        return
+    
+    # 收集所有策略的所有交易时间点
+    all_trading_times = set()
+    for strat_cfg in context['strategy_configs']:
+        for t in strat_cfg['trading_times']:
+            all_trading_times.add(t)
+    
+    # 转换为排序的时间列表
+    sorted_times = sorted(all_trading_times)
+    logging.info(f"所有策略的交易时间点: {sorted_times}")
+    
     while True:
         now = datetime.datetime.now()
-        next_run = now.replace(hour=9, minute=0, second=0, microsecond=0)
-        if now >= next_run:
-            next_run += datetime.timedelta(days=1)
-        while not is_weekday(next_run.date()):
-            next_run += datetime.timedelta(days=1)
-
-        wait_seconds = (next_run - now).total_seconds()
-        logging.info(f"等待至 {next_run} ({wait_seconds/3600:.1f}h)")
-        try:
+        current_time_str = now.strftime("%H:%M")
+        
+        # 如果是交易日，检查是否需要执行
+        if is_weekday(now.date()):
+            # 检查当前时间是否在交易时间点中
+            if current_time_str in all_trading_times:
+                logging.info(f"交易日 {now.date()}，当前时间 {current_time_str} 是交易时间点，开始执行")
+                run_strategy_once(config_file, current_time_str)
+            else:
+                # 计算到下一个交易时间点的等待时间
+                next_time = None
+                for t in sorted_times:
+                    hour, minute = map(int, t.split(':'))
+                    target_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                    if target_time > now:
+                        next_time = target_time
+                        break
+                
+                if next_time is None:
+                    # 今天的所有交易时间点都已过，等待到明天的第一个时间点
+                    tomorrow = now + datetime.timedelta(days=1)
+                    # 找到明天的第一个交易日
+                    while not is_weekday(tomorrow.date()):
+                        tomorrow += datetime.timedelta(days=1)
+                    
+                    first_time = sorted_times[0]
+                    hour, minute = map(int, first_time.split(':'))
+                    next_time = tomorrow.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                
+                wait_seconds = (next_time - now).total_seconds()
+                if wait_seconds > 60:  # 只显示较长的等待
+                    log_section(f"等待阶段 - 交易日")
+                    logging.info(f"当前时间: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+                    logging.info(f"等待至: {next_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                    logging.info(f"等待时长: {wait_seconds/3600:.1f} 小时 ({wait_seconds/60:.0f} 分钟)")
+                    logging.info(f"等待开始: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                    
+                    # 单次等待，无需分块
+                    time.sleep(wait_seconds)
+                    
+                    logging.info(f"等待结束: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                    log_section(f"等待结束 - 继续执行")
+        else:
+            # 非交易日，等待到下一个交易日的第一个时间点
+            next_day = now + datetime.timedelta(days=1)
+            while not is_weekday(next_day.date()):
+                next_day += datetime.timedelta(days=1)
+            
+            first_time = sorted_times[0]
+            hour, minute = map(int, first_time.split(':'))
+            next_time = next_day.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            
+            wait_seconds = (next_time - now).total_seconds()
+            log_section(f"等待阶段 - 非交易日")
+            logging.info(f"当前时间: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+            logging.info(f"等待至: {next_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            logging.info(f"等待时长: {wait_seconds/3600:.1f} 小时 ({wait_seconds/60:.0f} 分钟)")
+            logging.info(f"等待开始: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            # 单次等待，无需分块
             time.sleep(wait_seconds)
-        except KeyboardInterrupt:
-            logging.info("程序终止")
-            sys.exit(0)
-
-        logging.info("开始执行")
-        run_strategy_once(config_file)
+            
+            logging.info(f"等待结束: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            log_section(f"等待结束 - 继续执行")
 
 
 if __name__ == "__main__":
