@@ -530,7 +530,7 @@ def calculate_trade_price_and_volume(trader, account, code, target_amount, cfg, 
                 logging.error(f"Query asset failed for {code}")
                 return None, 0
             
-            available_cash = asset.p_enable_balance
+            available_cash = asset.cash
             required_cash = volume * final_price * 1.001  # 加0.1%手续费预留
             
             if required_cash > available_cash:
