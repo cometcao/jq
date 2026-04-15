@@ -239,6 +239,11 @@ class MarketUtils:
         except Exception as e:
             raise MarketDataException(f"判断{code}涨跌停状态失败: {e}")
 
+    @staticmethod
+    def round_to_tick(price, tick=0.01):
+        """将价格调整到最小变动单位的整数倍"""
+        return round(price / tick) * tick
+
 
 def calculate_cash_allocation(strat, total_asset, cash):
     """
@@ -911,6 +916,9 @@ def calculate_trade_price_and_volume(code, target_amount, available_cash, is_buy
             else:
                 cage_limit = max(ask_price * 1.02, ask_price + 0.1)
                 buy_price = min(cage_limit, high_limit)
+            
+            # 调整价格到最小变动价位
+            buy_price = MarketUtils.round_to_tick(buy_price)
 
             safety_factor = 0.99
             max_amount = min(target_amount, available_cash) * safety_factor
@@ -939,6 +947,8 @@ def calculate_trade_price_and_volume(code, target_amount, available_cash, is_buy
                 cage_lower_limit = min(bid_price * 0.98, bid_price - 0.1)
                 # 卖出价格取价格笼子下限和跌停价的较大值（卖出时价格越高越好）
                 sell_price = max(cage_lower_limit, low_limit)
+                # 调整价格到最小变动价位
+                sell_price = MarketUtils.round_to_tick(sell_price)
                 logging.info(f"股票 {code} 买一价 {bid_price:.2f}, 价格笼子下限 {cage_lower_limit:.2f}, 跌停价 {low_limit:.2f}, 最终卖出价 {sell_price:.2f}")
             
             # 对于卖出，返回价格（卖出不需要计算股数，股数由调用方提供）

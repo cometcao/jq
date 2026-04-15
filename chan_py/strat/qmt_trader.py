@@ -83,6 +83,11 @@ class MarketUtils:
                     return 0.0
         return 0.0
 
+    @staticmethod
+    def round_to_tick(price, tick=0.01):
+        """将价格调整到最小变动单位的整数倍"""
+        return round(price / tick) * tick
+
     @classmethod
     def is_limit_status(cls, code, limit_type='high_limit', tolerance=0.001):
         # 类似地加入重试
@@ -512,6 +517,10 @@ def calculate_trade_price_and_volume(trader, account, code, target_amount, cfg, 
             )
             # 6. 确定最终价格
             final_price = compare_func(cage_limit, limit_price)
+        
+        # 6.5 调整价格到最小变动价位
+        final_price = MarketUtils.round_to_tick(final_price)
+        logging.debug(f"调整后价格: {final_price:.4f}")
         
         # 7. 对于买入：计算数量
         if is_buy:
