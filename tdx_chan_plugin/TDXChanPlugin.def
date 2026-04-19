@@ -1,4 +1,0 @@
-LIBRARY TDXChanPlugin
-EXPORTS
-    Plugin2 @1
-    CalcN @2

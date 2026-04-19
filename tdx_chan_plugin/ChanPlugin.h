@@ -99,21 +99,25 @@ struct XianDuan {
     int end_index;      // 结束索引
 };
 
-// 浮点数比较函数（考虑精度）
-inline bool float_less(double a, double b) {
-    return a <= b - MIN_PRICE_UNIT;
+// 浮点数比较函数（更接近kBar_Chan.py的实现）
+inline bool float_less(double a, double b, double epsilon = MIN_PRICE_UNIT) {
+    return a < b - epsilon;
 }
 
-inline bool float_more(double a, double b) {
-    return (a - b) > (MIN_PRICE_UNIT * 0.9999);
+inline bool float_more(double a, double b, double epsilon = MIN_PRICE_UNIT) {
+    return a > b + epsilon;
 }
 
-inline bool float_less_equal(double a, double b) {
-    return a <= b + MIN_PRICE_UNIT;
+inline bool float_less_equal(double a, double b, double epsilon = MIN_PRICE_UNIT) {
+    return a < b + epsilon;
 }
 
-inline bool float_more_equal(double a, double b) {
-    return a >= b - MIN_PRICE_UNIT;
+inline bool float_more_equal(double a, double b, double epsilon = MIN_PRICE_UNIT) {
+    return a > b - epsilon;
+}
+
+inline bool float_equal(double a, double b, double epsilon = MIN_PRICE_UNIT) {
+    return std::abs(a - b) < epsilon;
 }
 
 // 缠论分析器主类
