@@ -1,5 +1,5 @@
-// ChanAnalyzer.cpp - 缠论分析器实现
-// 实现 kBar_Chan.py 中的笔和线段算法
+// ChanAnalyzer.cpp - Chan Theory Analyzer Implementation
+// Implementation of pen and line segment algorithm from kBar_Chan.py
 
 #include "ChanPlugin.h"
 #include <algorithm>
@@ -23,19 +23,19 @@ void ChanAnalyzer::setData(const std::vector<KLine>& data) {
 void ChanAnalyzer::analyze() {
     if (original_data.empty()) return;
     
-    // 步骤1: 检测缺口
+    // Step 1: Detect Gaps
     detectGaps();
     
-    // 步骤2: 标准化处理
+    // Step 2: Standardization Process
     standardize();
     
-    // 步骤3: 标记顶底分型
+    // Step 3: Mark Top/Bottom Patterns
     markTopBot();
     
-    // 步骤4: 定义笔
+    // Step 4: Define Pen
     defineBi();
     
-    // 步骤5: 定义线段
+    // Step 5: Define Line Segment
     defineXD();
 }
 

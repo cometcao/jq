@@ -1,7 +1,7 @@
-// ChanPlugin.h - 通达信缠论插件头文件
-// 插件支持任何周期，实时更新，在主K线图上绘制笔和线段
+﻿// ChanPlugin.h - Tongdaxin Chan Theory Plugin Header File
+// Plugin supports any period, real-time updates, draws pen and line segments on main K chart
 
-// 防止windows.h中的min/max宏与std::min/std::max冲突
+// Prevent conflicts between min/max macros in windows.h and std::min/std::max
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -14,7 +14,7 @@
 #ifdef _WIN32
     #include <windows.h>
 #else
-    // 非Windows平台模拟
+    // Non-Windows platform simulation
     typedef void* HDC;
     typedef struct { int left; int top; int right; int bottom; } RECT;
     #define __declspec(dllexport)
@@ -30,76 +30,76 @@
 #include <tuple>
 #include <utility>
 
-// 缠论常量定义
-const double MIN_PRICE_UNIT = 0.01;  // 最小价格单位
-const double GOLDEN_RATIO = 0.618;   // 黄金分割比例
+// Chan theory constant definitions
+const double MIN_PRICE_UNIT = 0.01;  // Minimum price unit
+const double GOLDEN_RATIO = 0.618;   // Golden ratio
 
-// 顶底分型类型枚举
+// Top/bottom pattern type enumeration
 enum TopBotType {
-    NO_TOPBOT = 0,   // 无分型
-    TOP = 1,         // 顶分型
-    BOT = 2,         // 底分型
-    TOP2BOT = 3,     // 顶到底
-    BOT2TOP = 4      // 底到顶
+    NO_TOPBOT = 0,   // No pattern
+    TOP = 1,         // Top pattern
+    BOT = 2,         // Bottom pattern
+    TOP2BOT = 3,     // Top to bottom
+    BOT2TOP = 4      // Bottom to top
 };
 
-// 包含关系类型
+// Inclusion relation type
 enum InclusionType {
-    NO_INCLUSION = 0,    // 无包含
-    FIRST_CSECOND = 1,   // 第一包含第二
-    SECOND_CFIRST = 2    // 第二包含第一
+    NO_INCLUSION = 0,    // No inclusion
+    FIRST_CSECOND = 1,   // First includes second
+    SECOND_CFIRST = 2    // Second includes first
 };
 
-// K线数据结构
+// K-line data structure
 struct KLine {
-    int date;           // 日期/时间
-    double open;        // 开盘价
-    double high;        // 最高价
-    double low;         // 最低价
-    double close;       // 收盘价
-    double volume;      // 成交量
-    int gap;            // 跳空缺口: 0=无, 1=向上缺口, -1=向下缺口
-    double gap_start;   // 缺口开始价格
-    double gap_end;     // 缺口结束价格
+    int date;           // Date/time
+    double open;        // Open price
+    double high;        // High price
+    double low;         // Low price
+    double close;       // Close price
+    double volume;      // Volume
+    int gap;            // Gap: 0=none, 1=up gap, -1=down gap
+    double gap_start;   // Gap start price
+    double gap_end;     // Gap end price
 };
 
-// 标准化K线数据结构
+// Standardized K-line data structure
 struct StandardKLine {
-    int date;           // 日期/时间
-    double close;       // 收盘价
-    double high;        // 最高价（标准化后）
-    double low;         // 最低价（标准化后）
-    int real_loc;       // 原始位置索引
-    int new_index;      // 新索引
-    int tb;             // 顶底分型类型
-    double chan_price;  // 缠论价格（顶分型取high，底分型取low）
-    int original_tb;    // 原始分型类型
-    int xd_tb;          // 线段顶底分型类型
+    int date;           // Date/time
+    double close;       // Close price
+    double high;        // High price (after standardization)
+    double low;         // Low price (after standardization)
+    int real_loc;       // Original position index
+    int new_index;      // New index
+    int tb;             // Top/bottom pattern type
+    double chan_price;  // Chan price (high for top pattern, low for bottom pattern)
+    int original_tb;    // Original pattern type
+    int xd_tb;          // Line segment top/bottom pattern type
 };
 
-// 笔结构
+// Pen structure
 struct Bi {
-    int start_date;     // 起始日期
-    int end_date;       // 结束日期
-    double start_price; // 起始价格
-    double end_price;   // 结束价格
-    int type;           // 类型: TOP=顶分型, BOT=底分型
-    int start_index;    // 起始索引
-    int end_index;      // 结束索引
+    int start_date;     // Start date
+    int end_date;       // End date
+    double start_price; // Start price
+    double end_price;   // End price
+    int type;           // Type: TOP=top pattern, BOT=bottom pattern
+    int start_index;    // Start index
+    int end_index;      // End index
 };
 
-// 线段结构
+// Line segment structure
 struct XianDuan {
-    int start_date;     // 起始日期
-    int end_date;       // 结束日期
-    double start_price; // 起始价格
-    double end_price;   // 结束价格
-    int type;           // 类型: TOP=顶分型, BOT=底分型
-    int start_index;    // 起始索引
-    int end_index;      // 结束索引
+    int start_date;     // Start date
+    int end_date;       // End date
+    double start_price; // Start price
+    double end_price;   // End price
+    int type;           // Type: TOP=top pattern, BOT=bottom pattern
+    int start_index;    // Start index
+    int end_index;      // End index
 };
 
-// 浮点数比较函数（更接近kBar_Chan.py的实现）
+// Floating point comparison functions (implementation matches KBar_Chan.py)
 inline bool float_less(double a, double b, double epsilon = MIN_PRICE_UNIT) {
     return a < b - epsilon;
 }
@@ -120,78 +120,79 @@ inline bool float_equal(double a, double b, double epsilon = MIN_PRICE_UNIT) {
     return std::abs(a - b) < epsilon;
 }
 
-// 缠论分析器主类
+// Chan Analyzer main class
 class ChanAnalyzer {
 private:
-    std::vector<KLine> original_data;          // 原始K线数据
-    std::vector<StandardKLine> standardized;   // 标准化K线
-    std::vector<StandardKLine> marked_bi;      // 标记的笔
-    std::vector<StandardKLine> marked_xd;      // 标记的线段
-    std::vector<int> gap_XD;                   // 线段缺口索引
-    std::vector<int> previous_skipped_idx;     // 之前跳过的索引
-    bool previous_with_xd_gap;                 // 之前有线段缺口
-    bool is_debug;                             // 调试模式
+    std::vector<KLine> original_data;          // Original K-line data
+    std::vector<StandardKLine> standardized;   // Standardized K-lines
+    std::vector<StandardKLine> marked_bi;      // Marked pen
+    std::vector<StandardKLine> marked_xd;      // Marked line segment
+    std::vector<int> gap_XD;                   // Line segment gap indices
+    std::vector<int> previous_skipped_idx;     // Previously skipped indices
+    bool previous_with_xd_gap;                 // Previously had line segment gap
+    bool is_debug;                             // Debug mode
 
 public:
     ChanAnalyzer(bool debug = false);
     
-    // 设置K线数据
+    // Set K-line data
     void setData(const std::vector<KLine>& data);
     
-    // 执行完整分析
+    // Execute complete analysis
     void analyze();
     
-    // 获取笔
+    // Get pen
     std::vector<Bi> getBi() const;
     
-    // 获取线段
+    // Get line segment
     std::vector<XianDuan> getXianDuan() const;
     
-    // 获取标准化K线（用于调试）
+    // Get standardized K-lines (for debugging)
     std::vector<StandardKLine> getStandardized() const { return standardized; }
     
 private:
-    // 核心算法方法
+    // Core algorithm methods
     void standardize(int initial_state = NO_TOPBOT);
     void markTopBot(int initial_state = NO_TOPBOT, bool mark_last_kbar = true);
     void defineBi();
     void defineXD(int initial_state = NO_TOPBOT);
     
-    // 辅助方法
+    // Helper methods
     InclusionType checkInclusion(const StandardKLine& first, const StandardKLine& second);
     TopBotType isBullType(const StandardKLine& first, const StandardKLine& second);
     TopBotType checkTopBot(const StandardKLine& current, 
                           const StandardKLine& first, 
                           const StandardKLine& second);
     
-    // 缺口处理
+    // Gap processing
     void detectGaps();
     bool gapExistsInRange(int start_idx, int end_idx);
     
-    // 索引查找
+    // Index lookup
     int getNextLoc(int loc, const std::vector<StandardKLine>& working_df);
     int getPreviousLoc(int loc, const std::vector<StandardKLine>& working_df);
     
-    // 清理前两个分型
+    // Clean first two top/bottom patterns
     std::vector<StandardKLine> cleanFirstTwoTB(const std::vector<StandardKLine>& working_df);
     
-    // 缺口处理高级函数
+    // Advanced gap processing functions
     std::vector<std::pair<double, double>> gapRegion(double start_date, double end_date, TopBotType gap_direction);
     std::vector<std::pair<double, double>> combineGaps(const std::vector<std::pair<double, double>>& gap_regions);
     bool kbarGapAsXd(const std::vector<StandardKLine>& working_df, int first_idx, int second_idx, int compare_idx);
     
-    // 线段包含关系处理
+    // Line segment inclusion relation processing
     bool xdInclusion(const StandardKLine& first, const StandardKLine& second, const StandardKLine& third, const StandardKLine& forth);
     std::pair<bool, bool> isXDInclusionFree(TopBotType direction, const std::vector<int>& next_valid_elems, std::vector<StandardKLine>& working_df);
     
-    // 高级线段识别
+    // Advanced line segment recognition
     std::vector<int> checkInclusionByDirection(int current_loc, std::vector<StandardKLine>& working_df, TopBotType direction, int count_num = 6);
-    std::pair<TopBotType, bool> checkXDTopBot(const StandardKLine& first, const StandardKLine& second, const StandardKLine& third, 
-                                              const StandardKLine& forth, const StandardKLine& fifth, const StandardKLine& sixth);
     std::tuple<TopBotType, bool, bool> checkKlineGapAsXd(const std::vector<int>& next_valid_elems, const std::vector<StandardKLine>& working_df, TopBotType direction);
+    std::pair<TopBotType, bool> checkXDTopBot(const StandardKLine& first, const StandardKLine& second, const StandardKLine& third, 
+                                              const StandardKLine& fourth, const StandardKLine& fifth, const StandardKLine& sixth);
     std::tuple<TopBotType, bool, bool> checkXDTopBotDirected(const std::vector<int>& next_valid_elems, TopBotType direction, const std::vector<StandardKLine>& working_df);
+    std::vector<StandardKLine> findXD(int initial_i, TopBotType initial_direction, std::vector<StandardKLine>& working_df);
     
-    // 辅助函数
+    // Helper functions
     std::vector<int> getNextNElem(int loc, const std::vector<StandardKLine>& working_df, int N = 4, TopBotType start_tb = NO_TOPBOT, bool single_direction = false);
     std::vector<int> getPreviousNElem(int loc, const std::vector<StandardKLine>& working_df, int N = 0, TopBotType end_tb = NO_TOPBOT, bool single_direction = true);
     bool directionAssert(const StandardKLine& elem, TopBotType direction);
@@ -199,9 +200,8 @@ private:
     void restoreTbData(std::vector<StandardKLine>& working_df, int from_idx, int to_idx);
     int xdTopbotCandidate(const std::vector<int>& next_valid_elems, TopBotType current_direction, std::vector<StandardKLine>& working_df, bool with_current_gap);
     std::pair<int, TopBotType> popGap(std::vector<StandardKLine>& working_df, const std::vector<int>& next_valid_elems, TopBotType current_direction);
-    std::vector<StandardKLine> findXD(int initial_i, TopBotType initial_direction, std::vector<StandardKLine>& working_df);
     
-    // 完整线段定义辅助函数 (Full implementation matching Python)
+    // Full line segment definition helper functions (Full implementation matching Python)
     bool xdInclusionFull(const StandardKLine& firstElem, const StandardKLine& secondElem,
                          const StandardKLine& thirdElem, const StandardKLine& forthElem);
     bool checkCurrentGap(const std::vector<StandardKLine>& working_df, int idx0, int idx1, int idx2, int idx3);
@@ -218,13 +218,13 @@ private:
     std::vector<StandardKLine> findXDFull(int initial_i, TopBotType initial_direction, std::vector<StandardKLine>& working_df);
     std::pair<int, TopBotType> findInitialDirectionFull(std::vector<StandardKLine>& working_df, TopBotType initial_status);
     
-    // 检查前一个元素以避免线段缺口
+    // Check previous element to avoid line segment gap
     bool checkPreviousElemToAvoidXdGap(bool with_gap, const std::vector<int>& next_valid_elems, std::vector<StandardKLine>& working_df);
     
-    // 增强的线段定义函数
+    // Enhanced line segment definition function
     void defineXDEnhanced(int initial_state = NO_TOPBOT);
     
-    // 缺失的函数声明
+    // Missing function declarations
     std::tuple<int, int, int> same_tb_remove_previous(std::vector<StandardKLine>& working_df, int previous_index, int current_index, int next_index);
     std::tuple<int, int, int> same_tb_remove_current(std::vector<StandardKLine>& working_df, int previous_index, int current_index, int next_index);
     std::tuple<int, int, int> same_tb_remove_next(std::vector<StandardKLine>& working_df, int previous_index, int current_index, int next_index);
@@ -234,42 +234,42 @@ private:
 };
 
 
-// 通达信插件接口函数
+// Tongdaxin plugin interface functions
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// 插件信息
+// Plugin information
 __declspec(dllexport) const char* __stdcall TDXPlugin_GetInfo();
 __declspec(dllexport) int __stdcall TDXPlugin_Init();
 
-// 主计算函数
+// Main calculation function
 __declspec(dllexport) int __stdcall TDXPlugin_Calculate(
-    int nCount,                     // K线数量
-    float* pOpen,                   // 开盘价数组
-    float* pHigh,                   // 最高价数组
-    float* pLow,                    // 最低价数组
-    float* pClose,                  // 收盘价数组
-    float* pVolume,                 // 成交量数组
-    int* pDate,                     // 日期数组
-    int nPeriod,                    // 周期类型
-    int* pOutCount,                 // 输出数量
-    float** ppOutData1,             // 输出数据1（笔）
-    float** ppOutData2,             // 输出数据2（线段）
-    char*** ppOutText               // 输出文本
+    int nCount,                     // K-line count
+    float* pOpen,                   // Open price array
+    float* pHigh,                   // High price array
+    float* pLow,                    // Low price array
+    float* pClose,                  // Close price array
+    float* pVolume,                 // Volume array
+    int* pDate,                     // Date array
+    int nPeriod,                    // Period type
+    int* pOutCount,                 // Output count
+    float** ppOutData1,             // Output data 1 (pen)
+    float** ppOutData2,             // Output data 2 (line segment)
+    char*** ppOutText               // Output text
 );
 
-// 绘图函数
+// Drawing function
 __declspec(dllexport) int __stdcall TDXPlugin_Draw(
-    HDC hDC,                        // 设备上下文
-    RECT* pRect,                    // 绘图区域
-    int nCount,                     // K线数量
-    float* pOpen,                   // 开盘价数组
-    float* pHigh,                   // 最高价数组
-    float* pLow,                    // 最低价数组
-    float* pClose,                  // 收盘价数组
-    int* pDate,                     // 日期数组
-    int nPeriod                     // 周期类型
+    HDC hDC,                        // Device context
+    RECT* pRect,                    // Drawing area
+    int nCount,                     // K-line count
+    float* pOpen,                   // Open price array
+    float* pHigh,                   // High price array
+    float* pLow,                    // Low price array
+    float* pClose,                  // Close price array
+    int* pDate,                     // Date array
+    int nPeriod                     // Period type
 );
 
 #ifdef __cplusplus
