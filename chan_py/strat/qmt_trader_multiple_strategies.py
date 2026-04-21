@@ -218,26 +218,29 @@ class MarketUtils:
     def is_limit_status(cls, code, limit_type='high_limit', tolerance=0.001):
         try:
             limit_price = cls.get_limit_price(code, limit_type)
+            if limit_price <= 0:
+                return False
+            
             for attempt in range(3):
                 try:
                     data = xtdata.get_market_data_ex([code], period='1d', count=1)
                     if code in data and data[code] is not None and not data[code].empty:
                         current = data[code]['close'].iloc[-1]
                         return abs(current - limit_price) < tolerance
-                    raise MarketDataException(f"无法获取{code}的收盘价数据")
-                except MarketDataException:
-                    raise
+                    else:
+                        return False  # 无法获取数据，返回False而不是抛出异常
                 except Exception as e:
                     if "无法连接xtquant服务" in str(e) and attempt < 2:
                         cls._ensure_connection()
                         time.sleep(1)
                         continue
-                    raise MarketDataException(f"判断{code}涨跌停状态失败: {e}")
-            raise MarketDataException(f"判断{code}涨跌停状态失败，重试3次后仍失败")
-        except MarketDataException:
-            raise
+                    else:
+                        logging.warning(f"判断涨跌停状态异常 {code}: {e}")
+                        return False  # 异常时返回False
+            return False
         except Exception as e:
-            raise MarketDataException(f"判断{code}涨跌停状态失败: {e}")
+            logging.warning(f"判断涨跌停状态异常 {code}: {e}")
+            return False
 
     @staticmethod
     def round_to_tick(price, tick=0.01):
@@ -703,18 +706,12 @@ def sell_out_of_pool(context):
     sell_codes = []
     for code, pos in positions.items():
         if code not in candidate:
-            try:
-                # 检查是否涨停，涨停时不能卖出
-                if not MarketUtils.is_limit_status(code, 'high_limit'):
-                    oid = place_sell_order(trader, account, code, pos.volume, f"sell_out_{strat['name']}")
-                    if oid and oid > 0:
-                        sell_codes.append(code)
-            except MarketDataException as e:
-                logging.error(f"[{strat['name']}] 获取{code}市场数据失败，跳过卖出: {e}")
-                continue
-            except Exception as e:
-                logging.error(f"[{strat['name']}] 卖出{code}时发生异常: {e}")
-                continue
+            # 检查是否涨停，涨停时不能卖出
+            if not MarketUtils.is_limit_status(code, 'high_limit'):
+                oid = place_sell_order(trader, account, code, pos.volume, f"sell_out_{strat['name']}")
+                if oid and oid > 0:
+                    sell_codes.append(code)
+            # 如果涨停，跳过卖出
 
     if sell_codes:
         new_pos = wait_for_order_completion(trader, account, sell_codes, context['broker_positions'], timeout=15)
@@ -749,22 +746,16 @@ def rebalance(context):
     sell_codes = []
     for code, pos in positions.items():
         if pos.market_value > target_per_stock:
-            try:
-                # 检查是否涨停，涨停时不能卖出
-                if not MarketUtils.is_limit_status(code, 'high_limit'):
-                    value_sell = pos.market_value - target_per_stock
-                    price = pos.market_value / pos.volume
-                    vol_sell = int(value_sell // (price * 100)) * 100
-                    if vol_sell > 0:
-                        oid = place_sell_order(trader, account, code, vol_sell, f"rb_sell_{strat['name']}")
-                        if oid and oid > 0:
-                            sell_codes.append(code)
-            except MarketDataException as e:
-                logging.error(f"[{strat['name']}] 获取{code}市场数据失败，跳过卖出: {e}")
-                continue
-            except Exception as e:
-                logging.error(f"[{strat['name']}] 卖出{code}时发生异常: {e}")
-                continue
+            # 检查是否涨停，涨停时不能卖出
+            if not MarketUtils.is_limit_status(code, 'high_limit'):
+                value_sell = pos.market_value - target_per_stock
+                price = pos.market_value / pos.volume
+                vol_sell = int(value_sell // (price * 100)) * 100
+                if vol_sell > 0:
+                    oid = place_sell_order(trader, account, code, vol_sell, f"rb_sell_{strat['name']}")
+                    if oid and oid > 0:
+                        sell_codes.append(code)
+            # 如果涨停，跳过卖出
 
     if sell_codes:
         new_pos = wait_for_order_completion(trader, account, sell_codes, context['broker_positions'], timeout=15)
@@ -788,22 +779,17 @@ def rebalance(context):
     buy_codes = []
     for code, pos in positions.items():
         if pos.market_value < target_per_stock:
-            try:
-                # 检查是否跌停，跌停时不能买入
-                if not MarketUtils.is_limit_status(code, 'low_limit'):
-                    value_buy = target_per_stock - pos.market_value
-                    buy_price, vol_buy = calculate_trade_price_and_volume(code, value_buy, available_cash, is_buy=True)
-                    if vol_buy > 0 and buy_price is not None:
-                        oid = place_buy_order(trader, account, code, vol_buy, buy_price, f"rb_buy_{strat['name']}")
-                        if oid and oid > 0:
-                            buy_codes.append(code)
-                            available_cash -= vol_buy * buy_price * 1.001
-            except MarketDataException as e:
-                logging.error(f"[{strat['name']}] 获取{code}市场数据失败，跳过买入: {e}")
-                continue
-            except Exception as e:
-                logging.error(f"[{strat['name']}] 买入{code}时发生异常: {e}")
-                continue
+            # 检查是否跌停，跌停时不能买入
+            if not MarketUtils.is_limit_status(code, 'low_limit'):
+                value_buy = target_per_stock - pos.market_value
+                buy_price, vol_buy = calculate_trade_price_and_volume(code, value_buy, available_cash, is_buy=True)
+                if vol_buy > 0 and buy_price is not None:
+                    oid = place_buy_order(trader, account, code, vol_buy, buy_price, f"rb_buy_{strat['name']}")
+                    if oid and oid > 0:
+                        buy_codes.append(code)
+                        available_cash -= vol_buy * buy_price * 1.001
+                else:
+                    logging.info(f"[{strat['name']}] 无法计算{code}的买入价格/数量，跳过")
 
     if buy_codes:
         new_pos = wait_for_order_completion(trader, account, buy_codes, context['broker_positions'], timeout=15)
@@ -869,22 +855,15 @@ def buy_to_fill(context):
 
     buy_codes = []
     for code in candidates:
-        try:
-            buy_price, vol = calculate_trade_price_and_volume(code, per_stock, available_cash, is_buy=True)
-            if vol > 0 and buy_price is not None:
-                oid = place_buy_order(trader, account, code, vol, buy_price, f"buy_{strat['name']}")
-                if oid and oid > 0:
-                    logging.info(f"[{strat['name']}] Buy {code}: {vol}股 @ {buy_price:.2f}")
-                    buy_codes.append(code)
-                    available_cash -= vol * buy_price * 1.001
-            else:
-                logging.info(f"[{strat['name']}] Skipping {code}")
-        except MarketDataException as e:
-            logging.error(f"[{strat['name']}] 获取{code}市场数据失败，跳过买入: {e}")
-            continue
-        except Exception as e:
-            logging.error(f"[{strat['name']}] 买入{code}时发生异常: {e}")
-            continue
+        buy_price, vol = calculate_trade_price_and_volume(code, per_stock, available_cash, is_buy=True)
+        if vol > 0 and buy_price is not None:
+            oid = place_buy_order(trader, account, code, vol, buy_price, f"buy_{strat['name']}")
+            if oid and oid > 0:
+                logging.info(f"[{strat['name']}] Buy {code}: {vol}股 @ {buy_price:.2f}")
+                buy_codes.append(code)
+                available_cash -= vol * buy_price * 1.001
+        else:
+            logging.info(f"[{strat['name']}] Skipping {code}")
 
     if buy_codes:
         new_pos = wait_for_order_completion(trader, account, buy_codes, context['broker_positions'], timeout=15)
@@ -900,63 +879,79 @@ def calculate_trade_price_and_volume(code, target_amount, available_cash, is_buy
     """
     统一的交易价格计算函数（买入和卖出）
     is_buy: True 表示买入，False 表示卖出
+    
+    Returns:
+        对于买入: (price, volume) 或 (None, 0)
+        对于卖出: price 或 None
     """
+    # 1. 确定涨跌停类型和盘口字段
     if is_buy:
-        # 买入逻辑
-        try:
-            high_limit = MarketUtils.get_limit_price(code, 'high_limit')
-            tick = xtdata.get_full_tick([code])
-            if code not in tick or tick[code] is None:
-                raise MarketDataException(f"无法获取{code}的实时行情数据")
-            ask_price = tick[code].get('askPrice', [0])[0]
-            if ask_price <= 0:
-                # 卖一价为0，说明股票涨停了，直接用涨停价买入
-                logging.info(f"股票 {code} 卖一价为0（涨停状态），使用涨停价 {high_limit:.2f} 买入")
-                buy_price = high_limit
-            else:
-                cage_limit = max(ask_price * 1.02, ask_price + 0.1)
-                buy_price = min(cage_limit, high_limit)
-            
-            # 调整价格到最小变动价位
-            buy_price = MarketUtils.round_to_tick(buy_price)
-
+        limit_type = 'high_limit'
+        price_field = 'askPrice'
+        cage_multiplier = 1.02
+        cage_offset = 0.1
+        compare_func = min  # 买入取较小值
+        operation = "买入"
+    else:
+        limit_type = 'low_limit'
+        price_field = 'bidPrice'
+        cage_multiplier = 0.98
+        cage_offset = -0.1  # 注意是负值
+        compare_func = max  # 卖出取较大值
+        operation = "卖出"
+    
+    # 2. 获取涨跌停价
+    limit_price = MarketUtils.get_limit_price(code, limit_type)
+    if limit_price <= 0:
+        logging.warning(f"Cannot get {limit_type} price for {code}, skip")
+        return (None, 0) if is_buy else None
+    
+    # 3. 获取盘口数据
+    try:
+        tick = xtdata.get_full_tick([code])
+        if code not in tick or tick[code] is None:
+            logging.warning(f"Cannot get tick data for {code}")
+            return (None, 0) if is_buy else None
+        
+        market_price = tick[code].get(price_field, [0])[0]
+        
+        # 4. 判断涨跌停状态
+        if market_price <= 0:
+            # 涨跌停状态，直接使用涨跌停价
+            logging.info(f"股票 {code} {price_field}为0（{operation}状态），使用{limit_type} {limit_price:.2f} 下单")
+            final_price = limit_price
+        else:
+            # 5. 计算价格笼子限制
+            cage_limit = compare_func(
+                market_price * cage_multiplier,
+                market_price + cage_offset
+            )
+            # 6. 确定最终价格
+            final_price = compare_func(cage_limit, limit_price)
+        
+        # 6.5 调整价格到最小变动价位
+        final_price = MarketUtils.round_to_tick(final_price)
+        
+        # 7. 对于买入：计算数量
+        if is_buy:
+            # 资金计算（预留1%缓冲）
             safety_factor = 0.99
             max_amount = min(target_amount, available_cash) * safety_factor
-            volume = int(max_amount // (buy_price * 100)) * 100
-            if volume <= 0:
-                return None, 0
-            return buy_price, volume
-        except MarketDataException:
-            raise
-        except Exception as e:
-            raise MarketDataException(f"计算{code}买入价格失败: {e}")
-    else:
-        # 卖出逻辑
-        try:
-            low_limit = MarketUtils.get_limit_price(code, 'low_limit')
-            tick = xtdata.get_full_tick([code])
-            if code not in tick or tick[code] is None:
-                raise MarketDataException(f"无法获取{code}的实时行情数据")
-            bid_price = tick[code].get('bidPrice', [0])[0]
-            if bid_price <= 0:
-                # 买一价为0，说明跌停了，直接用跌停价
-                logging.info(f"股票 {code} 买一价为0（跌停状态），使用跌停价 {low_limit:.2f} 限价卖出")
-                sell_price = low_limit
-            else:
-                # 计算价格笼子下限：min(买一价*0.98, 买一价-0.1)
-                cage_lower_limit = min(bid_price * 0.98, bid_price - 0.1)
-                # 卖出价格取价格笼子下限和跌停价的较大值（卖出时价格越高越好）
-                sell_price = max(cage_lower_limit, low_limit)
-                # 调整价格到最小变动价位
-                sell_price = MarketUtils.round_to_tick(sell_price)
-                logging.info(f"股票 {code} 买一价 {bid_price:.2f}, 价格笼子下限 {cage_lower_limit:.2f}, 跌停价 {low_limit:.2f}, 最终卖出价 {sell_price:.2f}")
+            volume = int(max_amount // (final_price * 100)) * 100
             
-            # 对于卖出，返回价格（卖出不需要计算股数，股数由调用方提供）
-            return sell_price, 0
-        except MarketDataException:
-            raise
-        except Exception as e:
-            raise MarketDataException(f"计算{code}卖出价格失败: {e}")
+            if volume <= 0:
+                logging.info(f"Insufficient funds to buy one lot of {code}")
+                return None, 0
+            
+            return final_price, volume
+        
+        # 8. 对于卖出：只返回价格
+        else:
+            return final_price
+    
+    except Exception as e:
+        logging.error(f"Error calculating {operation} price for {code}: {e}")
+        return (None, 0) if is_buy else None
 
 
 
@@ -1150,6 +1145,9 @@ def main_loop(run_now=False, config_file=None):
     sorted_times = sorted(all_trading_times)
     logging.info(f"所有策略的交易时间点: {sorted_times}")
     
+    # 记录上次执行时间，避免重复执行
+    last_execution_time = None
+    
     while True:
         now = datetime.datetime.now()
         current_time_str = now.strftime("%H:%M")
@@ -1158,8 +1156,20 @@ def main_loop(run_now=False, config_file=None):
         if is_weekday(now.date()):
             # 检查当前时间是否在交易时间点中
             if current_time_str in all_trading_times:
-                logging.info(f"交易日 {now.date()}，当前时间 {current_time_str} 是交易时间点，开始执行")
-                run_strategy_once(config_file, current_time_str)
+                # 避免短时间内重复执行（至少等待1分钟）
+                if last_execution_time is None or (now - last_execution_time).total_seconds() > 60:
+                    logging.info(f"交易日 {now.date()}，当前时间 {current_time_str} 是交易时间点，开始执行")
+                    last_execution_time = now
+                    run_strategy_once(config_file, current_time_str)
+                    
+                    # 执行完成后，等待至少1秒，确保时间推进
+                    time.sleep(1)
+                else:
+                    # 如果距离上次执行不到1分钟，跳过执行
+                    wait_remaining = 60 - (now - last_execution_time).total_seconds()
+                    if wait_remaining > 0:
+                        logging.debug(f"跳过执行：距离上次执行时间太短，还需等待 {wait_remaining:.0f} 秒")
+                        time.sleep(min(wait_remaining, 5))
             else:
                 # 计算到下一个交易时间点的等待时间
                 next_time = None
@@ -1194,6 +1204,9 @@ def main_loop(run_now=False, config_file=None):
                     
                     logging.info(f"等待结束: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
                     log_section(f"等待结束 - 继续执行")
+                else:
+                    # 短时间等待，避免高频循环
+                    time.sleep(min(wait_seconds, 5) if wait_seconds > 0 else 5)
         else:
             # 非交易日，等待到下一个交易日的第一个时间点
             next_day = now + datetime.timedelta(days=1)
