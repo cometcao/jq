@@ -1034,10 +1034,11 @@ def is_weekday(date):
     return date.weekday() < 5
 
 
-def run_strategy_once(config_file=None, current_time_str=None):
+def run_strategy_once(config_file=None, current_time_str=None, force_run=False):
     """执行一次完整的多策略调仓
     config_file: 配置文件路径
     current_time_str: 当前时间字符串 (HH:MM)，如果为None则使用系统当前时间
+    force_run: True表示强制执行，忽略时间检查（用于--now模式）
     """
     context = {}
     if config_file:
@@ -1054,32 +1055,43 @@ def run_strategy_once(config_file=None, current_time_str=None):
         
         # 过滤出需要在当前时间执行的策略
         strategies_to_run = []
-        for strat_cfg in context['strategy_configs']:
-            if current_time_str in strat_cfg['trading_times']:
-                strategies_to_run.append(strat_cfg)
-        
-        if not strategies_to_run:
-            logging.info(f"当前时间 {current_time_str} 没有需要执行的策略")
-            log_section(f"策略执行结束 - 无策略需要执行")
-            return
+        if force_run:
+            # 强制模式下，执行所有策略，忽略时间检查
+            strategies_to_run = context['strategy_configs']
+            logging.info(f"强制执行模式：执行所有策略，忽略时间检查")
+        else:
+            # 正常模式：只执行当前时间配置的策略
+            for strat_cfg in context['strategy_configs']:
+                if current_time_str in strat_cfg['trading_times']:
+                    strategies_to_run.append(strat_cfg)
+            
+            if not strategies_to_run:
+                logging.info(f"当前时间 {current_time_str} 没有需要执行的策略")
+                log_section(f"策略执行结束 - 无策略需要执行")
+                return
         
         log_subsection(f"策略筛选结果")
         logging.info(f"当前时间: {current_time_str}")
         logging.info(f"需要执行的策略: {[s['name'] for s in strategies_to_run]}")
         logging.info(f"策略数量: {len(strategies_to_run)}")
         
-        # 对于所有交易时间，直接初始化交易客户端
-        # 但需要确保在交易时间内
-        now = datetime.datetime.now()
-        hour, minute = map(int, current_time_str.split(':'))
-        target_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        
-        if now < target_time:
-            wait_seconds = (target_time - now).total_seconds()
-            logging.info(f"等待到 {current_time_str}，需等待 {wait_seconds:.0f} 秒")
-            time.sleep(wait_seconds)
-        
-        WaitForTradeTime.run(context)
+        # 初始化交易客户端
+        if force_run:
+            # 强制模式下，直接初始化交易客户端，不等待特定时间
+            logging.info("强制模式：直接初始化交易客户端")
+            init_trader(context)
+        else:
+            # 正常模式：确保在交易时间内，并使用WaitForTradeTime
+            now = datetime.datetime.now()
+            hour, minute = map(int, current_time_str.split(':'))
+            target_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            
+            if now < target_time:
+                wait_seconds = (target_time - now).total_seconds()
+                logging.info(f"等待到 {current_time_str}，需等待 {wait_seconds:.0f} 秒")
+                time.sleep(wait_seconds)
+            
+            WaitForTradeTime.run(context)
 
         for strat_cfg in strategies_to_run:
             context['current_strategy'] = strat_cfg
@@ -1122,7 +1134,7 @@ def main_loop(run_now=False, config_file=None):
 
     if run_now:
         logging.info("立即执行模式")
-        run_strategy_once(config_file)
+        run_strategy_once(config_file, force_run=True)
         return
 
     # 加载配置以获取所有策略的时间表
