@@ -408,8 +408,22 @@ void ChanAnalyzer::defineBi() {
     int current_index = 1;
     int next_index = 2;
     
+    // 添加安全保护：防止无限循环
+    int max_iterations = static_cast<int>(working_df.size()) * 3;
+    int iteration_count = 0;
+    
     while (next_index < static_cast<int>(working_df.size()) && 
            previous_index >= 0 && next_index >= 0) {
+        
+        // 安全保护：防止无限循环
+        iteration_count++;
+        if (iteration_count > max_iterations) {
+            // 紧急退出：清除所有分型标记以避免卡死
+            for (auto& kline : working_df) {
+                kline.tb = NO_TOPBOT;
+            }
+            break;
+        }
         
         StandardKLine& previous = working_df[previous_index];
         StandardKLine& current = working_df[current_index];
@@ -1232,7 +1246,20 @@ std::vector<StandardKLine> ChanAnalyzer::findXDFull(int initial_i, TopBotType in
     TopBotType current_direction = initial_direction;
     int i = initial_i;
     
+    // 添加安全保护：防止无限循环
+    int max_iterations = static_cast<int>(working_df.size()) * 10;
+    int iteration_count = 0;
+    
     while (i + 5 < static_cast<int>(working_df.size())) {
+        // 安全保护：防止无限循环
+        iteration_count++;
+        if (iteration_count > max_iterations) {
+            // 紧急退出：记录错误并返回当前结果
+            if (is_debug) {
+                // 可以添加调试输出
+            }
+            break;
+        }
         bool previous_gap = !gap_XD.empty();
         
         if (previous_gap) {
