@@ -380,9 +380,10 @@ std::vector<StandardKLine> ChanAnalyzer::cleanFirstTwoTB(const std::vector<Stand
 void ChanAnalyzer::defineBi() {
     if (standardized.empty()) return;
     
-    // 注意: detectGaps() 已在 analyze() 中调用，此处无需重复调用
+    // 简化笔定义算法 - 避免复杂回溯，提高大数据量性能
+    // 缠论笔定义：相邻的顶分型和底分型，中间至少有5根K线（包含分型本身）
     
-    // 创建工作副本 - 只包含有分型的K线
+    // 收集所有分型
     std::vector<StandardKLine> working_df;
     for (const auto& kline : standardized) {
         if (kline.tb == TOP || kline.tb == BOT) {
@@ -390,407 +391,94 @@ void ChanAnalyzer::defineBi() {
         }
     }
     
-    if (working_df.size() < 3) {
+    if (working_df.size() < 2) {
         marked_bi = working_df;
         return;
     }
     
-    // 清理前两个分型
-    working_df = cleanFirstTwoTB(working_df);
+    // 第一步：清理相邻的相同类型分型，保留极值
+    std::vector<StandardKLine> cleaned_df;
+    int i = 0;
+    while (i < static_cast<int>(working_df.size())) {
+        if (i + 1 < static_cast<int>(working_df.size()) && working_df[i].tb == working_df[i + 1].tb) {
+            // 找到相同类型分型的连续段
+            int start = i;
+            while (i + 1 < static_cast<int>(working_df.size()) && working_df[i].tb == working_df[i + 1].tb) {
+                i++;
+            }
+            int end = i;
+            
+            // 保留极值
+            if (working_df[start].tb == TOP) {
+                // 顶分型：保留最高的
+                int max_idx = start;
+                for (int j = start + 1; j <= end; j++) {
+                    if (float_more(working_df[j].high, working_df[max_idx].high)) {
+                        max_idx = j;
+                    }
+                }
+                cleaned_df.push_back(working_df[max_idx]);
+            } else {
+                // 底分型：保留最低的
+                int min_idx = start;
+                for (int j = start + 1; j <= end; j++) {
+                    if (float_less(working_df[j].low, working_df[min_idx].low)) {
+                        min_idx = j;
+                    }
+                }
+                cleaned_df.push_back(working_df[min_idx]);
+            }
+        } else {
+            cleaned_df.push_back(working_df[i]);
+        }
+        i++;
+    }
     
-    if (working_df.size() < 3) {
-        marked_bi = working_df;
+    if (cleaned_df.size() < 2) {
+        marked_bi = cleaned_df;
         return;
     }
     
-    // 完整笔定义算法 - 实现Python版本的核心逻辑
-    int previous_index = 0;
-    int current_index = 1;
-    int next_index = 2;
+    // 第二步：检查分型之间的距离，确保至少有4根K线间隔
+    std::vector<StandardKLine> valid_bi;
+    valid_bi.push_back(cleaned_df[0]); // 第一个分型总是有效
     
-    // 添加安全保护：防止无限循环
-    int max_iterations = static_cast<int>(working_df.size()) * 3;
-    int iteration_count = 0;
-    
-    while (next_index < static_cast<int>(working_df.size()) && 
-           previous_index >= 0 && next_index >= 0) {
+    for (size_t idx = 1; idx < cleaned_df.size(); idx++) {
+        const auto& current = cleaned_df[idx];
+        const auto& last_valid = valid_bi.back();
         
-        // 安全保护：防止无限循环
-        iteration_count++;
-        if (iteration_count > max_iterations) {
-            // 紧急退出：清除所有分型标记以避免卡死
-            for (auto& kline : working_df) {
-                kline.tb = NO_TOPBOT;
-            }
-            break;
-        }
-        
-        StandardKLine& previous = working_df[previous_index];
-        StandardKLine& current = working_df[current_index];
-        StandardKLine& next = working_df[next_index];
-        
-        // 检查缺口资格 (Python defineBi line 635)
-        bool gap_qualify = check_gap_qualify(working_df, previous_index, current_index, next_index);
-        
-        // 处理相同类型的相邻分型 (Python defineBi line 519-569)
-        if (current.tb == previous.tb) {
+        // 检查分型类型必须交替
+        if (current.tb == last_valid.tb) {
+            // 相同类型，保留极值
             if (current.tb == TOP) {
-                if (float_less(current.high, previous.high)) {
-                    // 当前顶分型低于前一个顶分型，移除当前
-                    std::tie(previous_index, current_index, next_index) = 
-                        same_tb_remove_current(working_df, previous_index, current_index, next_index);
-                } else if (float_more(current.high, previous.high)) {
-                    // 当前顶分型高于前一个顶分型，移除前一个
-                    std::tie(previous_index, current_index, next_index) = 
-                        same_tb_remove_previous(working_df, previous_index, current_index, next_index);
-                } else {
-                    // 相等情况，检查缺口资格 (Python line 531-543)
-                    if (working_df[next_index].new_index - working_df[current_index].new_index < 4 && !gap_qualify) {
-                        std::tie(previous_index, current_index, next_index) = 
-                            same_tb_remove_current(working_df, previous_index, current_index, next_index);
-                    } else {
-                        std::tie(previous_index, current_index, next_index) = 
-                            same_tb_remove_previous(working_df, previous_index, current_index, next_index);
-                    }
-                }
-                continue;
-            } else if (current.tb == BOT) {
-                if (float_more(current.low, previous.low)) {
-                    // 当前底分型高于前一个底分型，移除当前
-                    std::tie(previous_index, current_index, next_index) = 
-                        same_tb_remove_current(working_df, previous_index, current_index, next_index);
-                } else if (float_less(current.low, previous.low)) {
-                    // 当前底分型低于前一个底分型，移除前一个
-                    std::tie(previous_index, current_index, next_index) = 
-                        same_tb_remove_previous(working_df, previous_index, current_index, next_index);
-                } else {
-                    // 相等情况 (Python line 556-568)
-                    if (working_df[next_index].new_index - working_df[current_index].new_index < 4 && !gap_qualify) {
-                        std::tie(previous_index, current_index, next_index) = 
-                            same_tb_remove_current(working_df, previous_index, current_index, next_index);
-                    } else {
-                        std::tie(previous_index, current_index, next_index) = 
-                            same_tb_remove_previous(working_df, previous_index, current_index, next_index);
-                    }
-                }
-                continue;
-            }
-        } else if (current.tb == next.tb) {
-            // current和next是相同类型 (Python line 570-633)
-            if (current.tb == TOP) {
-                if (float_less(current.high, next.high)) {
-                    std::tie(previous_index, current_index, next_index) = 
-                        same_tb_remove_current(working_df, previous_index, current_index, next_index);
-                } else if (float_more(current.high, next.high)) {
-                    std::tie(previous_index, current_index, next_index) = 
-                        same_tb_remove_next(working_df, previous_index, current_index, next_index);
-                } else {
-                    // 相等情况 (Python line 583-601)
-                    int pre_pre_index = trace_back_index(working_df, previous_index);
-                    if (pre_pre_index < 0) {
-                        std::tie(previous_index, current_index, next_index) = 
-                            same_tb_remove_current(working_df, previous_index, current_index, next_index);
-                        continue;
-                    }
-                    bool pre_gap_qualify = check_gap_qualify(working_df, pre_pre_index, previous_index, current_index);
-                    if (working_df[current_index].new_index - working_df[previous_index].new_index >= 4 || pre_gap_qualify) {
-                        std::tie(previous_index, current_index, next_index) = 
-                            same_tb_remove_next(working_df, previous_index, current_index, next_index);
-                    } else {
-                        std::tie(previous_index, current_index, next_index) = 
-                            same_tb_remove_current(working_df, previous_index, current_index, next_index);
-                    }
-                }
-                continue;
-            } else if (current.tb == BOT) {
-                if (float_more(current.low, next.low)) {
-                    std::tie(previous_index, current_index, next_index) = 
-                        same_tb_remove_current(working_df, previous_index, current_index, next_index);
-                } else if (float_less(current.low, next.low)) {
-                    std::tie(previous_index, current_index, next_index) = 
-                        same_tb_remove_next(working_df, previous_index, current_index, next_index);
-                } else {
-                    // 相等情况 (Python line 614-632)
-                    int pre_pre_index = trace_back_index(working_df, previous_index);
-                    if (pre_pre_index < 0) {
-                        std::tie(previous_index, current_index, next_index) = 
-                            same_tb_remove_current(working_df, previous_index, current_index, next_index);
-                        continue;
-                    }
-                    bool pre_gap_qualify = check_gap_qualify(working_df, pre_pre_index, previous_index, current_index);
-                    if (working_df[current_index].new_index - working_df[previous_index].new_index >= 4 || pre_gap_qualify) {
-                        std::tie(previous_index, current_index, next_index) = 
-                            same_tb_remove_next(working_df, previous_index, current_index, next_index);
-                    } else {
-                        std::tie(previous_index, current_index, next_index) = 
-                            same_tb_remove_current(working_df, previous_index, current_index, next_index);
-                    }
-                }
-                continue;
-            }
-        }
-        
-        // Python line 635-759: 检查距离和缺口资格
-        if (current.new_index - previous.new_index < 4) {
-            // 距离不足4根K线 (Python line 636-744)
-            // 检查next和current之间距离以及缺口资格
-            bool next_gap_qualify = gap_qualify;  // 已在上面计算
-            if ((next.new_index - current.new_index) >= 4 || next_gap_qualify) {
-                // Python line 640-730: 需要更复杂的判断
-                int pre_pre_index = trace_back_index(working_df, previous_index);
-                
-                // 检查pre_pre和previous之间的缺口资格
-                bool pre_pre_gap_qualify = false;
-                if (pre_pre_index >= 0) {
-                    pre_pre_gap_qualify = check_gap_qualify(working_df, pre_pre_index, previous_index, current_index);
-                }
-                
-                if (pre_pre_gap_qualify) {
-                    // previous和current之间的笔有效，继续
-                    // fall through to confirm
-                } else if (current.tb == BOT && previous.tb == TOP && next.tb == TOP) {
-                    // Python line 646-687: 顶-底-顶 结构
-                    if (float_more_equal(previous.high, next.high)) {
-                        // 需要检查pre_pre
-                        if (pre_pre_index < 0) {
-                            working_df[current_index].tb = NO_TOPBOT;
-                            current_index = next_index;
-                            next_index = get_next_tb(next_index, working_df);
-                            continue;
-                        }
-                        if (pre_pre_index >= 0 && working_df[pre_pre_index].low >= current.low) {
-                            working_df[pre_pre_index].tb = NO_TOPBOT;
-                            int temp_idx = trace_back_index(working_df, pre_pre_index);
-                            if (temp_idx < 0) {
-                                working_df[current_index].tb = NO_TOPBOT;
-                                current_index = next_index;
-                                next_index = get_next_tb(next_index, working_df);
-                            } else {
-                                next_index = current_index;
-                                current_index = previous_index;
-                                previous_index = temp_idx;
-                                auto it = std::find(previous_skipped_idx.begin(), previous_skipped_idx.end(), previous_index);
-                                if (it != previous_skipped_idx.end()) {
-                                    previous_skipped_idx.erase(it);
-                                }
-                            }
-                            continue;
-                        } else {
-                            working_df[current_index].tb = NO_TOPBOT;
-                            current_index = previous_index;
-                            previous_index = trace_back_index(working_df, previous_index);
-                            if (previous_index >= 0) {
-                                auto it = std::find(previous_skipped_idx.begin(), previous_skipped_idx.end(), previous_index);
-                                if (it != previous_skipped_idx.end()) {
-                                    previous_skipped_idx.erase(it);
-                                }
-                            }
-                            continue;
-                        }
-                    } else {
-                        // previous.high < next.high
-                        working_df[previous_index].tb = NO_TOPBOT;
-                        previous_index = trace_back_index(working_df, previous_index);
-                        if (previous_index >= 0) {
-                            auto it = std::find(previous_skipped_idx.begin(), previous_skipped_idx.end(), previous_index);
-                            if (it != previous_skipped_idx.end()) {
-                                previous_skipped_idx.erase(it);
-                            }
-                        }
-                        continue;
-                    }
-                } else if (current.tb == TOP && previous.tb == BOT && next.tb == BOT) {
-                    // Python line 689-730: 底-顶-底 结构
-                    if (float_less(previous.low, next.low)) {
-                        if (pre_pre_index < 0) {
-                            working_df[current_index].tb = NO_TOPBOT;
-                            current_index = next_index;
-                            next_index = get_next_tb(next_index, working_df);
-                            continue;
-                        }
-                        if (pre_pre_index >= 0 && working_df[pre_pre_index].high <= current.high) {
-                            working_df[pre_pre_index].tb = NO_TOPBOT;
-                            int temp_idx = trace_back_index(working_df, pre_pre_index);
-                            if (temp_idx < 0) {
-                                working_df[current_index].tb = NO_TOPBOT;
-                                current_index = next_index;
-                                next_index = get_next_tb(next_index, working_df);
-                            } else {
-                                next_index = current_index;
-                                current_index = previous_index;
-                                previous_index = temp_idx;
-                                auto it = std::find(previous_skipped_idx.begin(), previous_skipped_idx.end(), previous_index);
-                                if (it != previous_skipped_idx.end()) {
-                                    previous_skipped_idx.erase(it);
-                                }
-                            }
-                            continue;
-                        } else {
-                            working_df[current_index].tb = NO_TOPBOT;
-                            current_index = previous_index;
-                            previous_index = trace_back_index(working_df, previous_index);
-                            if (previous_index >= 0) {
-                                auto it = std::find(previous_skipped_idx.begin(), previous_skipped_idx.end(), previous_index);
-                                if (it != previous_skipped_idx.end()) {
-                                    previous_skipped_idx.erase(it);
-                                }
-                            }
-                            continue;
-                        }
-                    } else {
-                        // previous.low >= next.low
-                        working_df[previous_index].tb = NO_TOPBOT;
-                        previous_index = trace_back_index(working_df, previous_index);
-                        if (previous_index >= 0) {
-                            auto it = std::find(previous_skipped_idx.begin(), previous_skipped_idx.end(), previous_index);
-                            if (it != previous_skipped_idx.end()) {
-                                previous_skipped_idx.erase(it);
-                            }
-                        }
-                        continue;
-                    }
+                if (float_more(current.high, last_valid.high)) {
+                    valid_bi.back() = current; // 替换为更高的顶
                 }
             } else {
-                // next和current距离也不足4 (Python line 731-744)
-                int temp_index = get_next_tb(next_index, working_df);
-                if (temp_index >= static_cast<int>(working_df.size())) {
-                    // 到达末尾，需要处理
-                    // 简化处理：移除最后一个
-                    working_df[next_index].tb = NO_TOPBOT;
-                    next_index = current_index;
-                    current_index = previous_index;
-                    previous_index = trace_back_index(working_df, previous_index);
-                    continue;
-                } else {
-                    // 标记索引以便回溯
-                    previous_skipped_idx.push_back(previous_index);
-                    previous_index = current_index;
-                    current_index = next_index;
-                    next_index = temp_index;
-                    continue;
+                if (float_less(current.low, last_valid.low)) {
+                    valid_bi.back() = current; // 替换为更低的底
                 }
             }
-        } else if ((next.new_index - current.new_index) < 4 && !gap_qualify) {
-            // current和previous距离足够，但next和current不足 (Python line 746-759)
-            int temp_index = get_next_tb(next_index, working_df);
-            if (temp_index >= static_cast<int>(working_df.size())) {
-                // 到达末尾
-                working_df[next_index].tb = NO_TOPBOT;
-                next_index = current_index;
-                current_index = previous_index;
-                previous_index = trace_back_index(working_df, previous_index);
-                continue;
-            } else {
-                previous_skipped_idx.push_back(previous_index);
-                previous_index = current_index;
-                current_index = next_index;
-                next_index = temp_index;
-                continue;
-            }
-        }
-        
-        // 确认笔有效后的额外检查 (Python line 760-788)
-        if (current.tb == TOP && next.tb == BOT) {
-            if (float_less_equal(current.high, next.high)) {
-                working_df[current_index].tb = NO_TOPBOT;
-                current_index = next_index;
-                next_index = get_next_tb(next_index, working_df);
-                continue;
-            }
-            if (float_more_equal(current.low, next.low)) {
-                working_df[next_index].tb = NO_TOPBOT;
-                next_index = get_next_tb(next_index, working_df);
-                continue;
-            }
-        } else if (current.tb == BOT && next.tb == TOP) {
-            if (float_more_equal(current.low, next.low)) {
-                working_df[current_index].tb = NO_TOPBOT;
-                current_index = next_index;
-                next_index = get_next_tb(next_index, working_df);
-                continue;
-            }
-            if (float_less_equal(current.high, next.high)) {
-                working_df[next_index].tb = NO_TOPBOT;
-                next_index = get_next_tb(next_index, working_df);
-                continue;
-            }
-        }
-        
-        // 处理跳过的索引 (Python line 790-796)
-        if (!previous_skipped_idx.empty()) {
-            previous_index = previous_skipped_idx.back();
-            previous_skipped_idx.pop_back();
-            if (working_df[previous_index].tb == NO_TOPBOT) {
-                previous_index = get_next_tb(previous_index, working_df);
-            }
-            current_index = get_next_tb(previous_index, working_df);
-            next_index = get_next_tb(current_index, working_df);
             continue;
         }
         
-        // 确认笔，移动到下一个
-        previous_index = current_index;
-        current_index = next_index;
-        next_index = get_next_tb(next_index, working_df);
-    }
-    
-    // 处理末尾情况 (Python line 804-826)
-    if (next_index >= static_cast<int>(working_df.size()) && 
-        current_index < static_cast<int>(working_df.size()) &&
-        previous_index >= 0) {
-        // 检查最后一根K线
-        double last_high = 0, last_low = 999999;
-        for (const auto& k : original_data) {
-            if (k.high > last_high) last_high = k.high;
-            if (k.low < last_low) last_low = k.low;
-        }
-        
-        if (working_df[current_index].tb == TOP && float_more(last_high, working_df[current_index].high)) {
-            working_df.back().tb = TOP;
-            working_df[current_index].tb = NO_TOPBOT;
-        } else if (working_df[current_index].tb == BOT && float_less(last_low, working_df[current_index].low)) {
-            working_df.back().tb = BOT;
-            working_df[current_index].tb = NO_TOPBOT;
-        }
-        
-        if (working_df[current_index].tb == NO_TOPBOT && previous_index >= 0) {
-            if (working_df[previous_index].tb == TOP && float_more(last_high, working_df[previous_index].high)) {
-                working_df.back().tb = TOP;
-                working_df[previous_index].tb = NO_TOPBOT;
-            } else if (working_df[previous_index].tb == BOT && float_less(last_low, working_df[previous_index].low)) {
-                working_df.back().tb = BOT;
-                working_df[previous_index].tb = NO_TOPBOT;
+        // 检查K线数量：至少4根K线间隔（缠论要求至少5根K线包含分型本身）
+        int kline_gap = current.new_index - last_valid.new_index;
+        if (kline_gap >= 4) {
+            // 满足条件，添加为有效笔端点
+            valid_bi.push_back(current);
+        } else {
+            // 距离不足，检查是否有缺口
+            bool has_gap = gapExistsInRange(last_valid.date, current.date);
+            if (has_gap) {
+                // 有缺口时，距离要求可以放宽
+                valid_bi.push_back(current);
             }
-        }
-        
-        // 如果previous和current是相同类型，保留更高的顶或更低的底
-        if (previous_index >= 0 && current_index < static_cast<int>(working_df.size()) &&
-            working_df[previous_index].tb == working_df[current_index].tb) {
-            if (working_df[current_index].tb == TOP) {
-                if (float_more(working_df[current_index].high, working_df[previous_index].high)) {
-                    working_df[previous_index].tb = NO_TOPBOT;
-                } else {
-                    working_df[current_index].tb = NO_TOPBOT;
-                }
-            } else if (working_df[current_index].tb == BOT) {
-                if (float_less(working_df[current_index].low, working_df[previous_index].low)) {
-                    working_df[previous_index].tb = NO_TOPBOT;
-                } else {
-                    working_df[current_index].tb = NO_TOPBOT;
-                }
-            }
+            // 否则忽略这个分型
         }
     }
     
-    // 清理无效分型
-    std::vector<StandardKLine> valid_bi;
-    for (const auto& kline : working_df) {
-        if (kline.tb == TOP || kline.tb == BOT) {
-            valid_bi.push_back(kline);
-        }
-    }
-    
-    // 设置chan_price
+    // 第三步：设置chan_price和original_tb
     for (auto& bi : valid_bi) {
         if (bi.tb == TOP) {
             bi.chan_price = bi.high;
@@ -801,6 +489,11 @@ void ChanAnalyzer::defineBi() {
     }
     
     marked_bi = valid_bi;
+    
+    // 调试输出
+    if (is_debug && !marked_bi.empty()) {
+        // 可以添加调试信息
+    }
 }
 
 // 线段包含关系处理 (Python xd_inclusion line 1075-1082)

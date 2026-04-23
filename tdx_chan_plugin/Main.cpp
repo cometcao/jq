@@ -30,199 +30,194 @@ typedef struct tagPluginTCalcFuncInfo
 #pragma pack(pop)
 
 //=============================================================================
-// 辅助函数：将ChanAnalyzer的笔数据转换为输出数组
+// 性能配置：只处理最近 N 根K线，防止历史K线过多导致卡死
 //=============================================================================
-static void convertBiToOutput(const std::vector<Bi>& bi_list, float* pOut, int nCount)
+static const int MAX_PROCESS_COUNT = 300; // 最大处理K线数量，超过则截断
+
+//=============================================================================
+// 辅助结构体：数据窗口
+//=============================================================================
+struct DataWindow {
+    std::vector<KLine> klines;  // 截断后的K线数据
+    int startIdx;               // 在原数组中的起始位置
+    int processCount;           // 实际处理的数量
+};
+
+//=============================================================================
+// 通用数据准备函数：截断数据到最近 MAX_PROCESS_COUNT 根K线
+//=============================================================================
+static DataWindow prepareDataWindow(int nCount, float* pHigh, float* pLow,
+                                    float* pOpen = nullptr, float* pClose = nullptr,
+                                    float* pVolume = nullptr, int* pDate = nullptr)
 {
-    // 初始化输出为0
+    DataWindow dw;
+    dw.processCount = (nCount < MAX_PROCESS_COUNT) ? nCount : MAX_PROCESS_COUNT;
+    dw.startIdx = (nCount > MAX_PROCESS_COUNT) ? (nCount - MAX_PROCESS_COUNT) : 0;
+    dw.klines.reserve(dw.processCount);
+
+    for (int i = 0; i < dw.processCount; i++) {
+        int idx = dw.startIdx + i;
+        KLine k;
+        k.date = (pDate != nullptr) ? pDate[idx] : idx;
+        k.open = (pOpen != nullptr) ? pOpen[idx] : 0.0f;
+        k.high = pHigh[idx];
+        k.low = pLow[idx];
+        k.close = (pClose != nullptr) ? pClose[idx] : 0.0f;
+        k.volume = (pVolume != nullptr) ? pVolume[idx] : 0.0f;
+        k.gap = 0;
+        k.gap_start = 0.0;
+        k.gap_end = 0.0;
+        dw.klines.push_back(k);
+    }
+    return dw;
+}
+
+//=============================================================================
+// 辅助函数：将ChanAnalyzer的笔数据转换为输出数组（支持索引偏移映射）
+// bi_list 中的 start_index/end_index 是截断数据内的索引，
+// 需要加上 startOffset 才能映射到通达信原始数组位置
+//=============================================================================
+static void convertBiToOutputWithOffset(const std::vector<Bi>& bi_list, float* pOut, int nCount, int startOffset)
+{
     memset(pOut, 0, nCount * sizeof(float));
-    
-    // 将笔端点标记到输出数组
     for (const auto& bi : bi_list) {
-        int start_idx = bi.start_index;
-        int end_idx = bi.end_index;
-        
-        if (start_idx >= 0 && start_idx < nCount) {
-            // 笔起点：顶分型标记为1.0，底分型标记为-1.0
-            pOut[start_idx] = (bi.type == TOP) ? 1.0f : -1.0f;
+        int origStart = startOffset + bi.start_index;
+        int origEnd = startOffset + bi.end_index;
+        if (origStart >= 0 && origStart < nCount) {
+            pOut[origStart] = (bi.type == TOP) ? 1.0f : -1.0f;
         }
-        
-        if (end_idx >= 0 && end_idx < nCount) {
-            // 笔终点：顶分型标记为1.0，底分型标记为-1.0
-            pOut[end_idx] = (bi.type == TOP) ? 1.0f : -1.0f;
+        if (origEnd >= 0 && origEnd < nCount) {
+            pOut[origEnd] = (bi.type == TOP) ? 1.0f : -1.0f;
         }
     }
 }
 
 //=============================================================================
-// 辅助函数：将ChanAnalyzer的线段数据转换为输出数组
+// 辅助函数：将ChanAnalyzer的线段数据转换为输出数组（支持索引偏移映射）
 //=============================================================================
-static void convertXianDuanToOutput(const std::vector<XianDuan>& xd_list, float* pOut, int nCount)
+static void convertXianDuanToOutputWithOffset(const std::vector<XianDuan>& xd_list, float* pOut, int nCount, int startOffset)
 {
-    // 初始化输出为0
     memset(pOut, 0, nCount * sizeof(float));
-    
-    // 将线段端点标记到输出数组
     for (const auto& xd : xd_list) {
-        int start_idx = xd.start_index;
-        int end_idx = xd.end_index;
-        
-        if (start_idx >= 0 && start_idx < nCount) {
-            // 线段起点：顶分型标记为2.0，底分型标记为-2.0
-            pOut[start_idx] = (xd.type == TOP) ? 2.0f : -2.0f;
+        int origStart = startOffset + xd.start_index;
+        int origEnd = startOffset + xd.end_index;
+        if (origStart >= 0 && origStart < nCount) {
+            pOut[origStart] = (xd.type == TOP) ? 2.0f : -2.0f;
         }
-        
-        if (end_idx >= 0 && end_idx < nCount) {
-            // 线段终点：顶分型标记为2.0，底分型标记为-2.0
-            pOut[end_idx] = (xd.type == TOP) ? 2.0f : -2.0f;
+        if (origEnd >= 0 && origEnd < nCount) {
+            pOut[origEnd] = (xd.type == TOP) ? 2.0f : -2.0f;
         }
     }
 }
 
 //=============================================================================
-// 输出函数1号：输出简笔顶底端点
+// 输出函数1号：输出简笔顶底端点（不涉及ChanAnalyzer，保持原逻辑）
 //=============================================================================
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
 {
     if (nCount <= 0 || pOut == nullptr) return;
-    
-    // 初始化输出为0
+
     for (int i = 0; i < nCount; i++) {
         pOut[i] = 0.0f;
     }
-    
-    // 简化实现：当高价创3周期新高时标记为1，低价创3周期新低时标记为-1
+
     if (pHigh != nullptr && pLow != nullptr && nCount >= 3) {
         for (int i = 2; i < nCount; i++) {
             if (pHigh[i] > pHigh[i-1] && pHigh[i] > pHigh[i-2]) {
-                pOut[i] = 1.0f;  // 顶分型
+                pOut[i] = 1.0f;
             } else if (pLow[i] < pLow[i-1] && pLow[i] < pLow[i-2]) {
-                pOut[i] = -1.0f; // 底分型
+                pOut[i] = -1.0f;
             }
         }
     }
 }
 
 //=============================================================================
-// 输出函数2号：输出标准笔顶底端点（使用ChanAnalyzer）
+// 输出函数2号：输出标准笔顶底端点（使用ChanAnalyzer + 数据截断）
 //=============================================================================
 void Func2(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
 {
     if (nCount <= 0 || pOut == nullptr || pHigh == nullptr || pLow == nullptr) {
         return;
     }
-    
-    // 创建K线数据
-    std::vector<KLine> klines;
-    for (int i = 0; i < nCount; i++) {
-        KLine kline;
-        kline.date = i;  // 使用索引作为日期
-        kline.open = 0.0;
-        kline.high = pHigh[i];
-        kline.low = pLow[i];
-        kline.close = 0.0;
-        kline.volume = 0.0;
-        kline.gap = 0;
-        kline.gap_start = 0.0;
-        kline.gap_end = 0.0;
-        klines.push_back(kline);
-    }
-    
-    // 创建分析器并分析
+
+    // 1. 准备截断后的数据窗口
+    DataWindow dw = prepareDataWindow(nCount, pHigh, pLow);
+
+    // 2. 创建分析器并分析
     ChanAnalyzer analyzer(false);
-    analyzer.setData(klines);
+    analyzer.setData(dw.klines);
     analyzer.analyze();
-    
-    // 获取笔数据并转换
+
+    // 3. 获取笔结果并映射回原数组位置
     std::vector<Bi> bi_list = analyzer.getBi();
-    convertBiToOutput(bi_list, pOut, nCount);
+    convertBiToOutputWithOffset(bi_list, pOut, nCount, dw.startIdx);
 }
 
 //=============================================================================
-// 输出函数3号：段端点（标准画法）
+// 输出函数3号：段端点（标准画法）—— 保持原简化实现
 //=============================================================================
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
 {
     if (nCount <= 0 || pOut == nullptr) return;
-    
-    // 初始化输出为0
+
     for (int i = 0; i < nCount; i++) {
         pOut[i] = 0.0f;
     }
-    
-    // 简化实现：基于笔端点识别线段端点
-    // 实际算法应基于缠论线段定义
+
     if (pIn != nullptr && nCount >= 5) {
         for (int i = 4; i < nCount; i++) {
-            // 简化逻辑：当连续3个同向笔端点时标记为线段端点
             if (pIn[i] == 2.0f && pIn[i-2] == 2.0f && pIn[i-4] == 2.0f) {
-                pOut[i] = 3.0f;  // 线段顶
+                pOut[i] = 3.0f;
             } else if (pIn[i] == -2.0f && pIn[i-2] == -2.0f && pIn[i-4] == -2.0f) {
-                pOut[i] = -3.0f; // 线段底
+                pOut[i] = -3.0f;
             }
         }
     }
 }
 
 //=============================================================================
-// 输出函数4号：段端点（1+1终结画法）
+// 输出函数4号：段端点（1+1终结画法）—— 保持原简化实现
 //=============================================================================
 void Func4(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
 {
     if (nCount <= 0 || pOut == nullptr) return;
-    
-    // 初始化输出为0
+
     for (int i = 0; i < nCount; i++) {
         pOut[i] = 0.0f;
     }
-    
-    // 简化实现：1+1终结画法
-    // 实际算法应基于缠论1+1终结模式
+
     if (pIn != nullptr && nCount >= 3) {
         for (int i = 2; i < nCount; i++) {
-            // 简化逻辑：笔端点模式变化时标记
             if (pIn[i] == 2.0f && pIn[i-1] == -2.0f && pIn[i-2] == 2.0f) {
-                pOut[i] = 4.0f;  // 1+1终结顶
+                pOut[i] = 4.0f;
             } else if (pIn[i] == -2.0f && pIn[i-1] == 2.0f && pIn[i-2] == -2.0f) {
-                pOut[i] = -4.0f; // 1+1终结底
+                pOut[i] = -4.0f;
             }
         }
     }
 }
 
 //=============================================================================
-// 输出函数5号：输出线段端点（使用ChanAnalyzer）
+// 输出函数5号：输出线段端点（使用ChanAnalyzer + 数据截断）
 //=============================================================================
 void Func5(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
 {
     if (nCount <= 0 || pOut == nullptr || pHigh == nullptr || pLow == nullptr) {
         return;
     }
-    
-    // 创建K线数据
-    std::vector<KLine> klines;
-    for (int i = 0; i < nCount; i++) {
-        KLine kline;
-        kline.date = i;  // 使用索引作为日期
-        kline.open = 0.0;
-        kline.high = pHigh[i];
-        kline.low = pLow[i];
-        kline.close = 0.0;
-        kline.volume = 0.0;
-        kline.gap = 0;
-        kline.gap_start = 0.0;
-        kline.gap_end = 0.0;
-        klines.push_back(kline);
-    }
-    
-    // 创建分析器并分析
+
+    // 1. 准备截断后的数据窗口
+    DataWindow dw = prepareDataWindow(nCount, pHigh, pLow);
+
+    // 2. 创建分析器并分析
     ChanAnalyzer analyzer(false);
-    analyzer.setData(klines);
+    analyzer.setData(dw.klines);
     analyzer.analyze();
-    
-    // 获取线段数据并转换
+
+    // 3. 获取线段结果并映射回原数组位置
     std::vector<XianDuan> xd_list = analyzer.getXianDuan();
-    convertXianDuanToOutput(xd_list, pOut, nCount);
+    convertXianDuanToOutputWithOffset(xd_list, pOut, nCount, dw.startIdx);
 }
 
 //=============================================================================
@@ -246,10 +241,8 @@ extern "C" __declspec(dllexport) BOOL RegisterTdxFunc(PluginTCalcFuncInfo **pInf
     if (*pInfo == NULL)
     {
         *pInfo = Info;
-
         return TRUE;
     }
-
     return FALSE;
 }
 
@@ -258,7 +251,7 @@ extern "C" __declspec(dllexport) BOOL RegisterTdxFunc(PluginTCalcFuncInfo **pInf
 //=============================================================================
 extern "C" __declspec(dllexport) const char* __stdcall TDXPlugin_GetInfo()
 {
-    return "TDX Chan Theory Plugin v1.0 - Pen and Line Segment Analysis";
+    return "TDX Chan Theory Plugin v1.1 - Pen and Line Segment Analysis";
 }
 
 //=============================================================================
@@ -270,7 +263,17 @@ extern "C" __declspec(dllexport) int __stdcall TDXPlugin_Init()
 }
 
 //=============================================================================
-// 通达信主计算函数
+// 通达信内存释放函数
+//=============================================================================
+extern "C" __declspec(dllexport) void __stdcall TDXPlugin_FreeMemory(float* pData)
+{
+    if (pData != nullptr) {
+        delete[] pData;
+    }
+}
+
+//=============================================================================
+// 通达信主计算函数 - 统一使用 MAX_PROCESS_COUNT 截断
 //=============================================================================
 extern "C" __declspec(dllexport) int __stdcall TDXPlugin_Calculate(
     int nCount,                     // K-line count
@@ -290,51 +293,40 @@ extern "C" __declspec(dllexport) int __stdcall TDXPlugin_Calculate(
     if (nCount <= 0 || pHigh == nullptr || pLow == nullptr) {
         return -1; // 参数错误
     }
-    
-    // 创建K线数据
-    std::vector<KLine> klines;
-    for (int i = 0; i < nCount; i++) {
-        KLine kline;
-        kline.date = (pDate != nullptr && i < nCount) ? pDate[i] : i;
-        kline.open = (pOpen != nullptr && i < nCount) ? pOpen[i] : 0.0;
-        kline.high = pHigh[i];
-        kline.low = pLow[i];
-        kline.close = (pClose != nullptr && i < nCount) ? pClose[i] : 0.0;
-        kline.volume = (pVolume != nullptr && i < nCount) ? pVolume[i] : 0.0;
-        kline.gap = 0;
-        kline.gap_start = 0.0;
-        kline.gap_end = 0.0;
-        klines.push_back(kline);
-    }
-    
+
+    // 使用统一的数据窗口准备（截断保护）
+    DataWindow dw = prepareDataWindow(nCount, pHigh, pLow, pOpen, pClose, pVolume, pDate);
+
     // 创建分析器并分析
     ChanAnalyzer analyzer(false);
-    analyzer.setData(klines);
+    analyzer.setData(dw.klines);
     analyzer.analyze();
-    
+
     // 获取笔和线段数据
     std::vector<Bi> bi_list = analyzer.getBi();
     std::vector<XianDuan> xd_list = analyzer.getXianDuan();
-    
-    // 分配输出缓冲区
+
+    // 分配输出缓冲区 - 分配完整nCount大小
     if (ppOutData1 != nullptr) {
         *ppOutData1 = new float[nCount];
-        convertBiToOutput(bi_list, *ppOutData1, nCount);
+        memset(*ppOutData1, 0, nCount * sizeof(float));
+        convertBiToOutputWithOffset(bi_list, *ppOutData1, nCount, dw.startIdx);
     }
-    
+
     if (ppOutData2 != nullptr) {
         *ppOutData2 = new float[nCount];
-        convertXianDuanToOutput(xd_list, *ppOutData2, nCount);
+        memset(*ppOutData2, 0, nCount * sizeof(float));
+        convertXianDuanToOutputWithOffset(xd_list, *ppOutData2, nCount, dw.startIdx);
     }
-    
+
     if (pOutCount != nullptr) {
         *pOutCount = nCount;
     }
-    
+
     // 文本输出（可选）
     if (ppOutText != nullptr) {
         *ppOutText = nullptr; // 暂不提供文本输出
     }
-    
+
     return 0; // 成功
 }
