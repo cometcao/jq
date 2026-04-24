@@ -167,6 +167,7 @@ private:
     // Gap processing
     void detectGaps();
     bool gapExistsInRange(int start_idx, int end_idx);
+    bool gapExistsInDateRange(double start_date, double end_date);
     
     // Index lookup
     int getNextLoc(int loc, const std::vector<StandardKLine>& working_df);
@@ -174,6 +175,7 @@ private:
     
     // Clean first two top/bottom patterns
     std::vector<StandardKLine> cleanFirstTwoTB(const std::vector<StandardKLine>& working_df);
+    
     
     // Advanced gap processing functions
     std::vector<std::pair<double, double>> gapRegion(double start_date, double end_date, TopBotType gap_direction);
@@ -186,10 +188,10 @@ private:
     
     // Advanced line segment recognition
     std::vector<int> checkInclusionByDirection(int current_loc, std::vector<StandardKLine>& working_df, TopBotType direction, int count_num = 6);
-    std::tuple<TopBotType, bool, bool> checkKlineGapAsXd(const std::vector<int>& next_valid_elems, const std::vector<StandardKLine>& working_df, TopBotType direction);
+    std::tuple<TopBotType, bool, bool> checkKlineGapAsXd(const std::vector<int>& next_valid_elems, TopBotType direction, std::vector<StandardKLine>& working_df);
     std::pair<TopBotType, bool> checkXDTopBot(const StandardKLine& first, const StandardKLine& second, const StandardKLine& third, 
                                               const StandardKLine& fourth, const StandardKLine& fifth, const StandardKLine& sixth);
-    std::tuple<TopBotType, bool, bool> checkXDTopBotDirected(const std::vector<int>& next_valid_elems, TopBotType direction, const std::vector<StandardKLine>& working_df);
+    std::tuple<TopBotType, bool, bool> checkXDTopBotDirected(const std::vector<int>& next_valid_elems, TopBotType direction, std::vector<StandardKLine>& working_df);
     std::vector<StandardKLine> findXD(int initial_i, TopBotType initial_direction, std::vector<StandardKLine>& working_df);
     
     // Helper functions
@@ -231,6 +233,7 @@ private:
     int trace_back_index(const std::vector<StandardKLine>& working_df, int current_index);
     int get_next_tb(int current_index, const std::vector<StandardKLine>& working_df);
     bool check_gap_qualify(const std::vector<StandardKLine>& working_df, int previous_index, int current_index, int next_index);
+    std::tuple<int, int, int> work_on_end(std::vector<StandardKLine>& working_df, int pre_idx, int cur_idx, int nex_idx);
 };
 
 

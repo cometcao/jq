@@ -32,7 +32,7 @@ typedef struct tagPluginTCalcFuncInfo
 //=============================================================================
 // 性能配置：只处理最近 N 根K线，防止历史K线过多导致卡死
 //=============================================================================
-static const int MAX_PROCESS_COUNT = 300; // 最大处理K线数量，超过则截断
+static const int MAX_PROCESS_COUNT = 4000; // 最大处理K线数量，超过则截断
 
 //=============================================================================
 // 辅助结构体：数据窗口
@@ -74,7 +74,7 @@ static DataWindow prepareDataWindow(int nCount, float* pHigh, float* pLow,
 
 //=============================================================================
 // 辅助函数：将ChanAnalyzer的笔数据转换为输出数组（支持索引偏移映射）
-// bi_list 中的 start_index/end_index 是截断数据内的索引，
+// bi_list 中的 start_index/end_index 是截断数据内的原始索引（real_loc），
 // 需要加上 startOffset 才能映射到通达信原始数组位置
 //=============================================================================
 static void convertBiToOutputWithOffset(const std::vector<Bi>& bi_list, float* pOut, int nCount, int startOffset)
@@ -94,6 +94,7 @@ static void convertBiToOutputWithOffset(const std::vector<Bi>& bi_list, float* p
 
 //=============================================================================
 // 辅助函数：将ChanAnalyzer的线段数据转换为输出数组（支持索引偏移映射）
+// 输出值为 ±1，与通达信公式 DRAWLINE 兼容
 //=============================================================================
 static void convertXianDuanToOutputWithOffset(const std::vector<XianDuan>& xd_list, float* pOut, int nCount, int startOffset)
 {
@@ -102,40 +103,19 @@ static void convertXianDuanToOutputWithOffset(const std::vector<XianDuan>& xd_li
         int origStart = startOffset + xd.start_index;
         int origEnd = startOffset + xd.end_index;
         if (origStart >= 0 && origStart < nCount) {
-            pOut[origStart] = (xd.type == TOP) ? 2.0f : -2.0f;
+            pOut[origStart] = (xd.type == TOP) ? 1.0f : -1.0f;
         }
         if (origEnd >= 0 && origEnd < nCount) {
-            pOut[origEnd] = (xd.type == TOP) ? 2.0f : -2.0f;
+            pOut[origEnd] = (xd.type == TOP) ? 1.0f : -1.0f;
         }
     }
 }
 
 //=============================================================================
-// 输出函数1号：输出简笔顶底端点（不涉及ChanAnalyzer，保持原逻辑）
+// 输出函数1号：标准笔顶底端点（使用ChanAnalyzer + 数据截断）
+// 输出值：顶分型=+1.0，底分型=-1.0
 //=============================================================================
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
-{
-    if (nCount <= 0 || pOut == nullptr) return;
-
-    for (int i = 0; i < nCount; i++) {
-        pOut[i] = 0.0f;
-    }
-
-    if (pHigh != nullptr && pLow != nullptr && nCount >= 3) {
-        for (int i = 2; i < nCount; i++) {
-            if (pHigh[i] > pHigh[i-1] && pHigh[i] > pHigh[i-2]) {
-                pOut[i] = 1.0f;
-            } else if (pLow[i] < pLow[i-1] && pLow[i] < pLow[i-2]) {
-                pOut[i] = -1.0f;
-            }
-        }
-    }
-}
-
-//=============================================================================
-// 输出函数2号：输出标准笔顶底端点（使用ChanAnalyzer + 数据截断）
-//=============================================================================
-void Func2(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
 {
     if (nCount <= 0 || pOut == nullptr || pHigh == nullptr || pLow == nullptr) {
         return;
@@ -155,53 +135,10 @@ void Func2(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
 }
 
 //=============================================================================
-// 输出函数3号：段端点（标准画法）—— 保持原简化实现
+// 输出函数2号：线段端点（使用ChanAnalyzer真正线段算法 + 数据截断）
+// 输出值：线段顶=+1.0，线段底=-1.0
 //=============================================================================
-void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
-{
-    if (nCount <= 0 || pOut == nullptr) return;
-
-    for (int i = 0; i < nCount; i++) {
-        pOut[i] = 0.0f;
-    }
-
-    if (pIn != nullptr && nCount >= 5) {
-        for (int i = 4; i < nCount; i++) {
-            if (pIn[i] == 2.0f && pIn[i-2] == 2.0f && pIn[i-4] == 2.0f) {
-                pOut[i] = 3.0f;
-            } else if (pIn[i] == -2.0f && pIn[i-2] == -2.0f && pIn[i-4] == -2.0f) {
-                pOut[i] = -3.0f;
-            }
-        }
-    }
-}
-
-//=============================================================================
-// 输出函数4号：段端点（1+1终结画法）—— 保持原简化实现
-//=============================================================================
-void Func4(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
-{
-    if (nCount <= 0 || pOut == nullptr) return;
-
-    for (int i = 0; i < nCount; i++) {
-        pOut[i] = 0.0f;
-    }
-
-    if (pIn != nullptr && nCount >= 3) {
-        for (int i = 2; i < nCount; i++) {
-            if (pIn[i] == 2.0f && pIn[i-1] == -2.0f && pIn[i-2] == 2.0f) {
-                pOut[i] = 4.0f;
-            } else if (pIn[i] == -2.0f && pIn[i-1] == 2.0f && pIn[i-2] == -2.0f) {
-                pOut[i] = -4.0f;
-            }
-        }
-    }
-}
-
-//=============================================================================
-// 输出函数5号：输出线段端点（使用ChanAnalyzer + 数据截断）
-//=============================================================================
-void Func5(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
+void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
 {
     if (nCount <= 0 || pOut == nullptr || pHigh == nullptr || pLow == nullptr) {
         return;
@@ -210,7 +147,7 @@ void Func5(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
     // 1. 准备截断后的数据窗口
     DataWindow dw = prepareDataWindow(nCount, pHigh, pLow);
 
-    // 2. 创建分析器并分析
+    // 2. 创建分析器并分析（获取真正线段）
     ChanAnalyzer analyzer(false);
     analyzer.setData(dw.klines);
     analyzer.analyze();
@@ -221,15 +158,12 @@ void Func5(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
 }
 
 //=============================================================================
-// 函数注册表 - 包含笔和线段函数
+// 函数注册表 - 只注册笔和线段两个核心函数
 //=============================================================================
 static PluginTCalcFuncInfo Info[] =
     {
-        {1, &Func1},  // 简笔端点
-        {2, &Func2},  // 标准笔端点（使用ChanAnalyzer）
-        {3, &Func3},  // 段端点（标准画法）
-        {4, &Func4},  // 段端点（1+1终结画法）
-        {5, &Func5},  // 线段端点（使用ChanAnalyzer）
+        {1, &Func1},  // 标准笔端点（顶=+1，底=-1）
+        {2, &Func2},  // 线段端点（顶=+1，底=-1）
         {0, NULL}     // 结束标记
     };
 
@@ -251,7 +185,7 @@ extern "C" __declspec(dllexport) BOOL RegisterTdxFunc(PluginTCalcFuncInfo **pInf
 //=============================================================================
 extern "C" __declspec(dllexport) const char* __stdcall TDXPlugin_GetInfo()
 {
-    return "TDX Chan Theory Plugin v1.1 - Pen and Line Segment Analysis";
+    return "TDX Chan Theory Plugin v2.0 - Bi and XianDuan Analysis";
 }
 
 //=============================================================================

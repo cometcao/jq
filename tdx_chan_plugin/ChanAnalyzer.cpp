@@ -32,10 +32,10 @@ void ChanAnalyzer::analyze() {
     // Step 3: Mark Top/Bottom Patterns
     markTopBot();
     
-    // Step 4: Define Pen
+    // Step 4: Define Pen (笔)
     defineBi();
     
-    // Step 5: Define Line Segment
+    // Step 5: Define Line Segment (线段)
     defineXD();
 }
 
@@ -99,6 +99,17 @@ bool ChanAnalyzer::gapExistsInRange(int start_idx, int end_idx) {
     
     for (const auto& kline : original_data) {
         if (kline.date > start_idx && kline.date <= end_idx) {
+            if (kline.gap != 0) return true;
+        }
+    }
+    return false;
+}
+
+bool ChanAnalyzer::gapExistsInDateRange(double start_date, double end_date) {
+    if (original_data.empty()) return false;
+    
+    for (const auto& kline : original_data) {
+        if (kline.date > start_date && kline.date <= end_date) {
             if (kline.gap != 0) return true;
         }
     }
@@ -298,10 +309,23 @@ void ChanAnalyzer::markTopBot(int initial_state, bool mark_last_kbar) {
     }
 }
 
+// 清理前两个顶底分型 (Python clean_first_two_tb lines 334-415)
 std::vector<StandardKLine> ChanAnalyzer::cleanFirstTwoTB(const std::vector<StandardKLine>& working_df) {
     std::vector<StandardKLine> result = working_df;
     
     if (result.size() < 3) return result;
+    
+    // Python code uses a different indexing scheme: 
+    // firstIdx=0, secondIdx=firstIdx+1, thirdIdx=secondIdx+1
+    // and uses get_next_loc to find NEXT valid tb after removal
+    // This is fundamentally different from simple index-based iteration.
+    // The working_df here has already been filtered to only tb entries.
+    // But in Python, working_df is the full numpy array of standardized data,
+    // filtered to non-noTopBot entries via boolean indexing on line 501.
+    // Then clean_first_two_tb works on the filtered array.
+    
+    // The key insight: result here has contiguous tb entries (0,1,2,...)
+    // Python's get_next_loc on a filtered array is just idx+1.
     
     int first_idx = 0;
     int second_idx = 1;
@@ -312,61 +336,104 @@ std::vector<StandardKLine> ChanAnalyzer::cleanFirstTwoTB(const std::vector<Stand
         StandardKLine& second = result[second_idx];
         StandardKLine& third = result[third_idx];
         
-        // 处理两个相邻的同类型分型
-        if (first.tb == second.tb) {
-            if (first.tb == TOP) {
-                if (float_less(first.high, second.high)) {
-                    first.tb = NO_TOPBOT;
-                    first_idx = getNextLoc(first_idx, result);
-                } else {
-                    second.tb = NO_TOPBOT;
-                    second_idx = getNextLoc(second_idx, result);
-                }
-            } else if (first.tb == BOT) {
-                if (float_more(first.low, second.low)) {
-                    first.tb = NO_TOPBOT;
-                    first_idx = getNextLoc(first_idx, result);
-                } else {
-                    second.tb = NO_TOPBOT;
-                    second_idx = getNextLoc(second_idx, result);
-                }
-            }
-        } else if (second.new_index - first.new_index < 4) {
-            // 分型之间距离太近
+        // Python line 348-352: both TOP, first.high < second.high -> remove first
+        if (first.tb == TOP && second.tb == TOP && float_less(first.high, second.high)) {
+            first.tb = NO_TOPBOT;
+            first_idx = getNextLoc(first_idx, result);
+            second_idx = getNextLoc(first_idx, result);
+            third_idx = getNextLoc(second_idx, result);
+            continue;
+        }
+        // Python line 354-358: both TOP, first.high >= second.high -> remove second
+        else if (first.tb == TOP && second.tb == TOP && float_more_equal(first.high, second.high)) {
+            second.tb = NO_TOPBOT;
+            second_idx = getNextLoc(second_idx, result);
+            third_idx = getNextLoc(second_idx, result);
+            continue;
+        }
+        // Python line 359-363: both BOT, first.low > second.low -> remove first
+        else if (first.tb == BOT && second.tb == BOT && float_more(first.low, second.low)) {
+            first.tb = NO_TOPBOT;
+            first_idx = getNextLoc(first_idx, result);
+            second_idx = getNextLoc(first_idx, result);
+            third_idx = getNextLoc(second_idx, result);
+            continue;
+        }
+        // Python line 365-369: both BOT, first.low <= second.low -> remove second
+        else if (first.tb == BOT && second.tb == BOT && float_less_equal(first.low, second.low)) {
+            second.tb = NO_TOPBOT;
+            second_idx = getNextLoc(second_idx, result);
+            third_idx = getNextLoc(second_idx, result);
+            continue;
+        }
+        // Python line 370-395: distance < 4 between first.second
+        else if (second.new_index - first.new_index < 4) {
+            // Python: if first.tb == third.tb (same type)
             if (first.tb == third.tb) {
                 if (first.tb == TOP) {
+                    // Python 371-376: both TOP, first.high < third.high -> remove first
                     if (float_less(first.high, third.high)) {
                         first.tb = NO_TOPBOT;
                         first_idx = getNextLoc(first_idx, result);
-                    } else {
+                        second_idx = getNextLoc(first_idx, result);
+                        third_idx = getNextLoc(second_idx, result);
+                        continue;
+                    }
+                    // Python 377-381: both TOP, first.high >= third.high -> remove second
+                    else {
                         second.tb = NO_TOPBOT;
                         second_idx = getNextLoc(second_idx, result);
+                        third_idx = getNextLoc(second_idx, result);
+                        continue;
                     }
-                } else if (first.tb == BOT) {
+                }
+                else if (first.tb == BOT) {
+                    // Python 382-386: both BOT, first.low > third.low -> remove first
                     if (float_more(first.low, third.low)) {
                         first.tb = NO_TOPBOT;
                         first_idx = getNextLoc(first_idx, result);
-                    } else {
+                        second_idx = getNextLoc(first_idx, result);
+                        third_idx = getNextLoc(second_idx, result);
+                        continue;
+                    }
+                    // Python 388-392: both BOT, first.low <= third.low -> remove second
+                    else {
                         second.tb = NO_TOPBOT;
                         second_idx = getNextLoc(second_idx, result);
+                        third_idx = getNextLoc(second_idx, result);
+                        continue;
                     }
                 }
             }
-        } else if ((first.tb == TOP && second.tb == BOT && float_less_equal(first.high, second.low)) ||
-                   (first.tb == BOT && second.tb == TOP && float_more_equal(first.low, second.high))) {
-            // 无效的分型组合
+            else {
+                // Python line 393-394: something wrong (first.tb != third.tb but distance < 4)
+                // Just break to avoid infinite loop
+                break;
+            }
+        }
+        // Python line 397-410: overlapping TOP-BOT or BOT-TOP within 4 bars
+        else if (first.tb == TOP && second.tb == BOT && float_less_equal(first.high, second.low)) {
             first.tb = NO_TOPBOT;
             second.tb = NO_TOPBOT;
             first_idx = getNextLoc(first_idx, result);
             second_idx = getNextLoc(first_idx, result);
-        } else {
+            third_idx = getNextLoc(second_idx, result);
+            continue;
+        }
+        else if (first.tb == BOT && second.tb == TOP && float_more_equal(first.low, second.high)) {
+            first.tb = NO_TOPBOT;
+            second.tb = NO_TOPBOT;
+            first_idx = getNextLoc(first_idx, result);
+            second_idx = getNextLoc(first_idx, result);
+            third_idx = getNextLoc(second_idx, result);
+            continue;
+        }
+        else {
             break;
         }
-        
-        third_idx = getNextLoc(second_idx, result);
     }
     
-    // 移除无效分型
+    // Python line 414: filter out noTopBot entries
     std::vector<StandardKLine> cleaned;
     for (const auto& kline : result) {
         if (kline.tb == TOP || kline.tb == BOT) {
@@ -377,17 +444,18 @@ std::vector<StandardKLine> ChanAnalyzer::cleanFirstTwoTB(const std::vector<Stand
     return cleaned;
 }
 
+// 笔定义：(from Python define_bi lines 489-831) 
 void ChanAnalyzer::defineBi() {
     if (standardized.empty()) return;
     
-    // 简化笔定义算法 - 避免复杂回溯，提高大数据量性能
-    // 缠论笔定义：相邻的顶分型和底分型，中间至少有5根K线（包含分型本身）
-    
-    // 收集所有分型
+    // 分步1：收集所有分型到 working_df (Python line 501-507)
     std::vector<StandardKLine> working_df;
     for (const auto& kline : standardized) {
         if (kline.tb == TOP || kline.tb == BOT) {
-            working_df.push_back(kline);
+            StandardKLine elem = kline;
+            elem.chan_price = (elem.tb == TOP) ? elem.high : elem.low;
+            elem.original_tb = elem.tb;
+            working_df.push_back(elem);
         }
     }
     
@@ -396,104 +464,545 @@ void ChanAnalyzer::defineBi() {
         return;
     }
     
-    // 第一步：清理相邻的相同类型分型，保留极值
-    std::vector<StandardKLine> cleaned_df;
-    int i = 0;
-    while (i < static_cast<int>(working_df.size())) {
-        if (i + 1 < static_cast<int>(working_df.size()) && working_df[i].tb == working_df[i + 1].tb) {
-            // 找到相同类型分型的连续段
-            int start = i;
-            while (i + 1 < static_cast<int>(working_df.size()) && working_df[i].tb == working_df[i + 1].tb) {
-                i++;
-            }
-            int end = i;
-            
-            // 保留极值
-            if (working_df[start].tb == TOP) {
-                // 顶分型：保留最高的
-                int max_idx = start;
-                for (int j = start + 1; j <= end; j++) {
-                    if (float_more(working_df[j].high, working_df[max_idx].high)) {
-                        max_idx = j;
-                    }
-                }
-                cleaned_df.push_back(working_df[max_idx]);
-            } else {
-                // 底分型：保留最低的
-                int min_idx = start;
-                for (int j = start + 1; j <= end; j++) {
-                    if (float_less(working_df[j].low, working_df[min_idx].low)) {
-                        min_idx = j;
-                    }
-                }
-                cleaned_df.push_back(working_df[min_idx]);
-            }
-        } else {
-            cleaned_df.push_back(working_df[i]);
-        }
-        i++;
-    }
+    // Python line 507: clean_first_two_tb
+    working_df = cleanFirstTwoTB(working_df);
     
-    if (cleaned_df.size() < 2) {
-        marked_bi = cleaned_df;
+    if (working_df.size() < 2) {
+        marked_bi = working_df;
         return;
     }
     
-    // 第二步：检查分型之间的距离，确保至少有4根K线间隔
-    std::vector<StandardKLine> valid_bi;
-    valid_bi.push_back(cleaned_df[0]); // 第一个分型总是有效
+    // 重置 previous_skipped_idx
+    previous_skipped_idx.clear();
     
-    for (size_t idx = 1; idx < cleaned_df.size(); idx++) {
-        const auto& current = cleaned_df[idx];
-        const auto& last_valid = valid_bi.back();
+    // Python line 510-513: 初始化三个指针
+    int previous_index = 0;
+    int current_index = 1;
+    int next_index = 2;
+    
+    // Python line 514: 主循环
+    while (next_index < static_cast<int>(working_df.size()) && 
+           previous_index >= 0 && next_index >= 0) {
         
-        // 检查分型类型必须交替
-        if (current.tb == last_valid.tb) {
-            // 相同类型，保留极值
-            if (current.tb == TOP) {
-                if (float_more(current.high, last_valid.high)) {
-                    valid_bi.back() = current; // 替换为更高的顶
+        StandardKLine& prev = working_df[previous_index];
+        StandardKLine& cur  = working_df[current_index];
+        StandardKLine& nxt  = working_df[next_index];
+        
+        // ===== Python line 519-569: Case A - cur.tb == prev.tb (同类型) =====
+        if (cur.tb == prev.tb) {
+            if (cur.tb == TOP) {
+                if (float_less(cur.high, prev.high)) {
+                    // Python line 522-525: remove_current
+                    auto result = same_tb_remove_current(working_df, previous_index, current_index, next_index);
+                    previous_index = std::get<0>(result);
+                    current_index = std::get<1>(result);
+                    next_index = std::get<2>(result);
                 }
-            } else {
-                if (float_less(current.low, last_valid.low)) {
-                    valid_bi.back() = current; // 替换为更低的底
+                else if (float_more(cur.high, prev.high)) {
+                    // Python line 527-530: remove_previous
+                    auto result = same_tb_remove_previous(working_df, previous_index, current_index, next_index);
+                    previous_index = std::get<0>(result);
+                    current_index = std::get<1>(result);
+                    next_index = std::get<2>(result);
+                }
+                else { // equal case
+                    bool gap_qualify = check_gap_qualify(working_df, previous_index, current_index, next_index);
+                    if (next_index < static_cast<int>(working_df.size()) && 
+                        nxt.new_index - cur.new_index < 4 && !gap_qualify) {
+                        // Python line 535-538: remove_current
+                        auto result = same_tb_remove_current(working_df, previous_index, current_index, next_index);
+                        previous_index = std::get<0>(result);
+                        current_index = std::get<1>(result);
+                        next_index = std::get<2>(result);
+                    }
+                    else {
+                        // Python line 540-543: remove_previous
+                        auto result = same_tb_remove_previous(working_df, previous_index, current_index, next_index);
+                        previous_index = std::get<0>(result);
+                        current_index = std::get<1>(result);
+                        next_index = std::get<2>(result);
+                    }
+                }
+            }
+            else if (cur.tb == BOT) {
+                if (float_more(cur.low, prev.low)) {
+                    // Python line 547-550: remove_current
+                    auto result = same_tb_remove_current(working_df, previous_index, current_index, next_index);
+                    previous_index = std::get<0>(result);
+                    current_index = std::get<1>(result);
+                    next_index = std::get<2>(result);
+                }
+                else if (float_less(cur.low, prev.low)) {
+                    // Python line 552-555: remove_previous
+                    auto result = same_tb_remove_previous(working_df, previous_index, current_index, next_index);
+                    previous_index = std::get<0>(result);
+                    current_index = std::get<1>(result);
+                    next_index = std::get<2>(result);
+                }
+                else { // equal case
+                    bool gap_qualify = check_gap_qualify(working_df, previous_index, current_index, next_index);
+                    if (next_index < static_cast<int>(working_df.size()) && 
+                        nxt.new_index - cur.new_index < 4 && !gap_qualify) {
+                        auto result = same_tb_remove_current(working_df, previous_index, current_index, next_index);
+                        previous_index = std::get<0>(result);
+                        current_index = std::get<1>(result);
+                        next_index = std::get<2>(result);
+                    }
+                    else {
+                        auto result = same_tb_remove_previous(working_df, previous_index, current_index, next_index);
+                        previous_index = std::get<0>(result);
+                        current_index = std::get<1>(result);
+                        next_index = std::get<2>(result);
+                    }
                 }
             }
             continue;
         }
         
-        // 检查K线数量：至少4根K线间隔（缠论要求至少5根K线包含分型本身）
-        int kline_gap = current.new_index - last_valid.new_index;
-        if (kline_gap >= 4) {
-            // 满足条件，添加为有效笔端点
-            valid_bi.push_back(current);
-        } else {
-            // 距离不足，检查是否有缺口
-            bool has_gap = gapExistsInRange(last_valid.date, current.date);
-            if (has_gap) {
-                // 有缺口时，距离要求可以放宽
-                valid_bi.push_back(current);
+        // ===== Python line 570-633: Case B - cur.tb == nxt.tb (下一分型同类型) =====
+        if (cur.tb == nxt.tb) {
+            if (cur.tb == TOP) {
+                if (float_less(cur.high, nxt.high)) {
+                    // Python line 573-576: remove_current
+                    auto result = same_tb_remove_current(working_df, previous_index, current_index, next_index);
+                    previous_index = std::get<0>(result);
+                    current_index = std::get<1>(result);
+                    next_index = std::get<2>(result);
+                }
+                else if (float_more(cur.high, nxt.high)) {
+                    // Python line 579-582: remove_next
+                    auto result = same_tb_remove_next(working_df, previous_index, current_index, next_index);
+                    previous_index = std::get<0>(result);
+                    current_index = std::get<1>(result);
+                    next_index = std::get<2>(result);
+                }
+                else { // equality case
+                    int pre_pre_index = trace_back_index(working_df, previous_index);
+                    if (pre_pre_index < 0) {
+                        // Python line 586-589: remove_current
+                        auto result = same_tb_remove_current(working_df, previous_index, current_index, next_index);
+                        previous_index = std::get<0>(result);
+                        current_index = std::get<1>(result);
+                        next_index = std::get<2>(result);
+                        continue;
+                    }
+                    bool gap_qualify = check_gap_qualify(working_df, pre_pre_index, previous_index, current_index);
+                    if (cur.new_index - prev.new_index >= 4 || gap_qualify) {
+                        // Python line 593-596: remove_next
+                        auto result = same_tb_remove_next(working_df, previous_index, current_index, next_index);
+                        previous_index = std::get<0>(result);
+                        current_index = std::get<1>(result);
+                        next_index = std::get<2>(result);
+                    }
+                    else {
+                        // Python line 598-601: remove_current
+                        auto result = same_tb_remove_current(working_df, previous_index, current_index, next_index);
+                        previous_index = std::get<0>(result);
+                        current_index = std::get<1>(result);
+                        next_index = std::get<2>(result);
+                    }
+                }
             }
-            // 否则忽略这个分型
+            else if (cur.tb == BOT) {
+                if (float_more(cur.low, nxt.low)) {
+                    // Python line 605-608: remove_current
+                    auto result = same_tb_remove_current(working_df, previous_index, current_index, next_index);
+                    previous_index = std::get<0>(result);
+                    current_index = std::get<1>(result);
+                    next_index = std::get<2>(result);
+                }
+                else if (float_less(cur.low, nxt.low)) {
+                    // Python line 610-613: remove_next
+                    auto result = same_tb_remove_next(working_df, previous_index, current_index, next_index);
+                    previous_index = std::get<0>(result);
+                    current_index = std::get<1>(result);
+                    next_index = std::get<2>(result);
+                }
+                else {
+                    int pre_pre_index = trace_back_index(working_df, previous_index);
+                    if (pre_pre_index < 0) {
+                        auto result = same_tb_remove_current(working_df, previous_index, current_index, next_index);
+                        previous_index = std::get<0>(result);
+                        current_index = std::get<1>(result);
+                        next_index = std::get<2>(result);
+                        continue;
+                    }
+                    bool gap_qualify = check_gap_qualify(working_df, pre_pre_index, previous_index, current_index);
+                    if (cur.new_index - prev.new_index >= 4 || gap_qualify) {
+                        auto result = same_tb_remove_next(working_df, previous_index, current_index, next_index);
+                        previous_index = std::get<0>(result);
+                        current_index = std::get<1>(result);
+                        next_index = std::get<2>(result);
+                    }
+                    else {
+                        auto result = same_tb_remove_current(working_df, previous_index, current_index, next_index);
+                        previous_index = std::get<0>(result);
+                        current_index = std::get<1>(result);
+                        next_index = std::get<2>(result);
+                    }
+                }
+            }
+            continue;
+        }
+        
+        // ===== Python line 635-744: Case C - distance checks =====
+        bool gap_qualify = check_gap_qualify(working_df, previous_index, current_index, next_index);
+        
+        // Python line 636-744: prev-cur distance < 4
+        if (cur.new_index - prev.new_index < 4) {
+            // Python line 639-730: cur-next distance >= 4 OR gap_qualify
+            if ((next_index < static_cast<int>(working_df.size()) && 
+                 nxt.new_index - cur.new_index >= 4) || gap_qualify) {
+                
+                int pre_pre_index = trace_back_index(working_df, previous_index);
+                
+                // Python line 643-644: check if pre_pre-pre-cur qualifies
+                bool pre_pre_qualify = false;
+                if (pre_pre_index >= 0) {
+                    pre_pre_qualify = check_gap_qualify(working_df, pre_pre_index, previous_index, current_index);
+                }
+                
+                if (!pre_pre_qualify) {
+                    // Python line 646-687: cur=BOT, prev=TOP, nxt=TOP pattern
+                    if (cur.tb == BOT && prev.tb == TOP && nxt.tb == TOP) {
+                        if (float_more_equal(prev.high, nxt.high)) {
+                            pre_pre_index = trace_back_index(working_df, previous_index);
+                            if (pre_pre_index < 0) {
+                                working_df[current_index].tb = NO_TOPBOT;
+                                current_index = next_index;
+                                next_index = get_next_tb(next_index, working_df);
+                                continue;
+                            }
+                            auto it_pre = std::find(previous_skipped_idx.begin(), previous_skipped_idx.end(), pre_pre_index);
+                            if (it_pre != previous_skipped_idx.end()) {
+                                previous_skipped_idx.erase(it_pre);
+                            }
+                            StandardKLine& pre_pre = working_df[pre_pre_index];
+                            if (float_more_equal(pre_pre.low, cur.low)) {
+                                working_df[pre_pre_index].tb = NO_TOPBOT;
+                                int temp_index = trace_back_index(working_df, pre_pre_index);
+                                if (temp_index < 0) {
+                                    working_df[current_index].tb = NO_TOPBOT;
+                                    current_index = next_index;
+                                    next_index = get_next_tb(next_index, working_df);
+                                }
+                                else {
+                                    next_index = current_index;
+                                    current_index = previous_index;
+                                    previous_index = temp_index;
+                                    auto it_prev = std::find(previous_skipped_idx.begin(), previous_skipped_idx.end(), previous_index);
+                                    if (it_prev != previous_skipped_idx.end()) {
+                                        previous_skipped_idx.erase(it_prev);
+                                    }
+                                }
+                            }
+                            else {
+                                working_df[current_index].tb = NO_TOPBOT;
+                                current_index = previous_index;
+                                previous_index = trace_back_index(working_df, previous_index);
+                                if (previous_index >= 0) {
+                                    auto it_prev = std::find(previous_skipped_idx.begin(), previous_skipped_idx.end(), previous_index);
+                                    if (it_prev != previous_skipped_idx.end()) {
+                                        previous_skipped_idx.erase(it_prev);
+                                    }
+                                }
+                            }
+                        }
+                        else { // prev.high < nxt.high
+                            working_df[previous_index].tb = NO_TOPBOT;
+                            previous_index = trace_back_index(working_df, previous_index);
+                            if (previous_index >= 0) {
+                                auto it_prev = std::find(previous_skipped_idx.begin(), previous_skipped_idx.end(), previous_index);
+                                if (it_prev != previous_skipped_idx.end()) {
+                                    previous_skipped_idx.erase(it_prev);
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                    // Python line 689-730: cur=TOP, prev=BOT, nxt=BOT pattern
+                    else if (cur.tb == TOP && prev.tb == BOT && nxt.tb == BOT) {
+                        if (float_less(prev.low, nxt.low)) {
+                            pre_pre_index = trace_back_index(working_df, previous_index);
+                            if (pre_pre_index < 0) {
+                                working_df[current_index].tb = NO_TOPBOT;
+                                current_index = next_index;
+                                next_index = get_next_tb(next_index, working_df);
+                                continue;
+                            }
+                            auto it_pre = std::find(previous_skipped_idx.begin(), previous_skipped_idx.end(), pre_pre_index);
+                            if (it_pre != previous_skipped_idx.end()) {
+                                previous_skipped_idx.erase(it_pre);
+                            }
+                            StandardKLine& pre_pre = working_df[pre_pre_index];
+                            if (float_less_equal(pre_pre.high, cur.high)) {
+                                working_df[pre_pre_index].tb = NO_TOPBOT;
+                                int temp_index = trace_back_index(working_df, pre_pre_index);
+                                if (temp_index < 0) {
+                                    working_df[current_index].tb = NO_TOPBOT;
+                                    current_index = next_index;
+                                    next_index = get_next_tb(next_index, working_df);
+                                }
+                                else {
+                                    next_index = current_index;
+                                    current_index = previous_index;
+                                    previous_index = temp_index;
+                                    auto it_prev = std::find(previous_skipped_idx.begin(), previous_skipped_idx.end(), previous_index);
+                                    if (it_prev != previous_skipped_idx.end()) {
+                                        previous_skipped_idx.erase(it_prev);
+                                    }
+                                }
+                            }
+                            else {
+                                working_df[current_index].tb = NO_TOPBOT;
+                                current_index = previous_index;
+                                previous_index = trace_back_index(working_df, previous_index);
+                                if (previous_index >= 0) {
+                                    auto it_prev = std::find(previous_skipped_idx.begin(), previous_skipped_idx.end(), previous_index);
+                                    if (it_prev != previous_skipped_idx.end()) {
+                                        previous_skipped_idx.erase(it_prev);
+                                    }
+                                }
+                            }
+                        }
+                        else { // prev.low >= nxt.low
+                            working_df[previous_index].tb = NO_TOPBOT;
+                            previous_index = trace_back_index(working_df, previous_index);
+                            if (previous_index >= 0) {
+                                auto it_prev = std::find(previous_skipped_idx.begin(), previous_skipped_idx.end(), previous_index);
+                                if (it_prev != previous_skipped_idx.end()) {
+                                    previous_skipped_idx.erase(it_prev);
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                } // end if !pre_pre_qualify
+                // If pre_pre_qualify is true, just fall through to move forward
+            }
+            else {
+                // Python line 731-744: cur-next distance < 4 AND not gap_qualify
+                int temp_index = get_next_tb(next_index, working_df);
+                if (temp_index >= static_cast<int>(working_df.size())) {
+                    // Python line 733-737: reached end -> work_on_end
+                    auto result = work_on_end(working_df, previous_index, current_index, next_index);
+                    previous_index = std::get<0>(result);
+                    current_index = std::get<1>(result);
+                    next_index = std::get<2>(result);
+                }
+                else {
+                    // Python line 739-743: leave it for next round
+                    previous_skipped_idx.push_back(previous_index);
+                    previous_index = current_index;
+                    current_index = next_index;
+                    next_index = temp_index;
+                }
+                continue;
+            }
+        }
+        // Python line 746-759: cur-next distance < 4 AND not gap_qualify
+        else if (next_index < static_cast<int>(working_df.size()) && 
+                 nxt.new_index - cur.new_index < 4 && !gap_qualify) {
+            int temp_index = get_next_tb(next_index, working_df);
+            if (temp_index >= static_cast<int>(working_df.size())) {
+                auto result = work_on_end(working_df, previous_index, current_index, next_index);
+                previous_index = std::get<0>(result);
+                current_index = std::get<1>(result);
+                next_index = std::get<2>(result);
+            }
+            else {
+                previous_skipped_idx.push_back(previous_index);
+                previous_index = current_index;
+                current_index = next_index;
+                next_index = temp_index;
+            }
+            continue;
+        }
+        // Python line 760-788: distance >= 4 OR gap_qualify with price validation
+        else if ((next_index < static_cast<int>(working_df.size()) && 
+                  nxt.new_index - cur.new_index >= 4) || gap_qualify) {
+            
+            if (cur.tb == TOP && nxt.tb == BOT && float_more(cur.high, nxt.high)) {
+                // Python line 761: pass - valid
+            }
+            else if (cur.tb == TOP && nxt.tb == BOT && float_less_equal(cur.high, nxt.high)) {
+                // Python line 763-767: remove current
+                working_df[current_index].tb = NO_TOPBOT;
+                current_index = next_index;
+                next_index = get_next_tb(next_index, working_df);
+                continue;
+            }
+            else if (cur.tb == TOP && nxt.tb == BOT && float_less_equal(cur.low, nxt.low)) {
+                // Python line 769-772: remove next
+                working_df[next_index].tb = NO_TOPBOT;
+                next_index = get_next_tb(next_index, working_df);
+                continue;
+            }
+            else if (cur.tb == TOP && nxt.tb == BOT && float_more(cur.low, nxt.low)) {
+                // Python line 773: pass - valid
+            }
+            else if (cur.tb == BOT && nxt.tb == TOP && float_less(cur.low, nxt.low)) {
+                // Python line 776: pass - valid
+            }
+            else if (cur.tb == BOT && nxt.tb == TOP && float_more_equal(cur.low, nxt.low)) {
+                // Python line 778-782: remove current
+                working_df[current_index].tb = NO_TOPBOT;
+                current_index = next_index;
+                next_index = get_next_tb(next_index, working_df);
+                continue;
+            }
+            else if (cur.tb == BOT && nxt.tb == TOP && float_less(cur.high, nxt.high)) {
+                // Python line 783: pass - valid
+            }
+            else if (cur.tb == BOT && nxt.tb == TOP && float_more_equal(cur.high, nxt.high)) {
+                // Python line 785-788: remove next
+                working_df[next_index].tb = NO_TOPBOT;
+                next_index = get_next_tb(next_index, working_df);
+                continue;
+            }
+        }
+        
+        // ===== Python line 790-796: handle previous_skipped_idx =====
+        if (!previous_skipped_idx.empty()) {
+            previous_index = previous_skipped_idx.back();
+            previous_skipped_idx.pop_back();
+            if (working_df[previous_index].tb == NO_TOPBOT) {
+                previous_index = get_next_tb(previous_index, working_df);
+            }
+            current_index = get_next_tb(previous_index, working_df);
+            next_index = get_next_tb(current_index, working_df);
+            continue;
+        }
+        
+        // ===== Python line 798-801: Move forward (confirmed TB) =====
+        previous_index = current_index;
+        current_index = next_index;
+        next_index = get_next_tb(next_index, working_df);
+    }
+    
+    // ===== Python line 803-827: Final cleanup at end (work_on_end equivalent) =====
+    if (next_index >= static_cast<int>(working_df.size())) {
+        // Python line 804-814: Check if last kbar can replace cur/prev
+        if (!working_df.empty() && !original_data.empty()) {
+            // Only proceed if we have valid pointers
+            if (current_index < static_cast<int>(working_df.size()) && 
+                previous_index >= 0 && previous_index < static_cast<int>(working_df.size())) {
+                
+                const KLine& last_origin = original_data.back();
+                
+                // Python line 805-808: if cur is TOP and last high > cur high, or cur is BOT and last low < cur low
+                if (working_df[current_index].tb == TOP && 
+                    float_more(last_origin.high, working_df[current_index].high)) {
+                    working_df.back().tb = working_df[current_index].tb;
+                    working_df[current_index].tb = NO_TOPBOT;
+                }
+                else if (working_df[current_index].tb == BOT && 
+                         float_less(last_origin.low, working_df[current_index].low)) {
+                    working_df.back().tb = working_df[current_index].tb;
+                    working_df[current_index].tb = NO_TOPBOT;
+                }
+                
+                // Python line 810-814: if cur is now invalid, check prev against last
+                if (working_df[current_index].tb == NO_TOPBOT) {
+                    if ((working_df[previous_index].tb == TOP && 
+                         float_more(last_origin.high, working_df[previous_index].high)) ||
+                        (working_df[previous_index].tb == BOT && 
+                         float_less(last_origin.low, working_df[previous_index].low))) {
+                        working_df.back().tb = working_df[previous_index].tb;
+                        working_df[previous_index].tb = NO_TOPBOT;
+                    }
+                }
+                
+                // Python line 816-826: handle same type at end
+                if (previous_index < static_cast<int>(working_df.size()) && 
+                    current_index < static_cast<int>(working_df.size()) &&
+                    working_df[previous_index].tb == working_df[current_index].tb) {
+                    if (working_df[current_index].tb == TOP) {
+                        if (float_more(working_df[current_index].high, working_df[previous_index].high)) {
+                            working_df[previous_index].tb = NO_TOPBOT;
+                        }
+                        else {
+                            working_df[current_index].tb = NO_TOPBOT;
+                        }
+                    }
+                    else if (working_df[current_index].tb == BOT) {
+                        if (float_less(working_df[current_index].low, working_df[previous_index].low)) {
+                            working_df[previous_index].tb = NO_TOPBOT;
+                        }
+                        else {
+                            working_df[current_index].tb = NO_TOPBOT;
+                        }
+                    }
+                }
+            }
         }
     }
     
-    // 第三步：设置chan_price和original_tb
-    for (auto& bi : valid_bi) {
-        if (bi.tb == TOP) {
-            bi.chan_price = bi.high;
-        } else if (bi.tb == BOT) {
-            bi.chan_price = bi.low;
+    // Python line 828: final result
+    std::vector<StandardKLine> result;
+    for (auto& kline : working_df) {
+        if (kline.tb == TOP || kline.tb == BOT) {
+            kline.chan_price = (kline.tb == TOP) ? kline.high : kline.low;
+            result.push_back(kline);
         }
-        bi.original_tb = bi.tb;
     }
     
-    marked_bi = valid_bi;
+    marked_bi = result;
     
-    // 调试输出
     if (is_debug && !marked_bi.empty()) {
-        // 可以添加调试信息
+        // 调试输出保留但不输出到终端
     }
+}
+
+// work_on_end (Python lines 834-862)
+std::tuple<int, int, int> ChanAnalyzer::work_on_end(
+    std::vector<StandardKLine>& working_df,
+    int pre_idx, int cur_idx, int nex_idx) {
+    
+    if (pre_idx < 0 || pre_idx >= static_cast<int>(working_df.size()) ||
+        cur_idx < 0 || cur_idx >= static_cast<int>(working_df.size()) ||
+        nex_idx < 0 || nex_idx >= static_cast<int>(working_df.size())) {
+        return std::make_tuple(pre_idx, cur_idx, nex_idx);
+    }
+    
+    StandardKLine& prev = working_df[pre_idx];
+    StandardKLine& cur = working_df[cur_idx];
+    StandardKLine& nxt = working_df[nex_idx];
+    
+    // Python line 842-850
+    if (cur.tb == TOP) {
+        if (float_more(prev.low, nxt.low)) {
+            working_df[pre_idx].tb = NO_TOPBOT;
+            pre_idx = trace_back_index(working_df, pre_idx);
+        }
+        else {
+            working_df[nex_idx].tb = NO_TOPBOT;
+            nex_idx = cur_idx;
+            cur_idx = pre_idx;
+            pre_idx = trace_back_index(working_df, pre_idx);
+        }
+    }
+    else { // BOT
+        if (float_less(prev.high, nxt.high)) {
+            working_df[pre_idx].tb = NO_TOPBOT;
+            pre_idx = trace_back_index(working_df, pre_idx);
+        }
+        else {
+            working_df[nex_idx].tb = NO_TOPBOT;
+            nex_idx = cur_idx;
+            cur_idx = pre_idx;
+            pre_idx = trace_back_index(working_df, pre_idx);
+        }
+    }
+    
+    if (pre_idx >= 0) {
+        auto it = std::find(previous_skipped_idx.begin(), previous_skipped_idx.end(), pre_idx);
+        if (it != previous_skipped_idx.end()) {
+            previous_skipped_idx.erase(it);
+        }
+    }
+    
+    return std::make_tuple(pre_idx, cur_idx, nex_idx);
 }
 
 // 线段包含关系处理 (Python xd_inclusion line 1075-1082)
@@ -542,150 +1051,72 @@ bool ChanAnalyzer::kbarGapAsXdFull(const std::vector<StandardKLine>& working_df,
     else if (secondElem.tb == BOT) gap_direction = TOP2BOT;
     else return false;
     
-    auto regions = gapRegion(firstElem.date, secondElem.date, gap_direction);
-    regions = combineGaps(regions);
-    if (regions.empty()) return false;
+    auto gap_ranges = gapRegion(firstElem.date, secondElem.date, gap_direction);
+    gap_ranges = combineGaps(gap_ranges);
     
-    // 计算缺口范围总和
-    double gap_range = 0;
-    for (const auto& r : regions) {
-        gap_range += (r.second - r.first);
-    }
+    if (gap_ranges.empty()) return false;
     
-    double price_diff = std::abs(firstElem.chan_price - secondElem.chan_price);
-    if (price_diff < MIN_PRICE_UNIT) return false;
+    // 获取缺口区域
+    double gap_start = gap_ranges[0].first;
+    double gap_end = gap_ranges[0].second;
     
-    // 缺口范围占价格差的比例 >= 黄金分割比
-    bool gap_range_in_portion = float_more_equal(gap_range / price_diff, GOLDEN_RATIO);
-    
-    bool item_price_covered = false;
-    if (compare_idx < 0) {
-        item_price_covered = true;
-    } else if (compare_idx >= static_cast<int>(working_df.size())) {
-        item_price_covered = true;
-    } else {
-        const auto& compareElem = working_df[compare_idx];
-        if (gap_direction == TOP2BOT) {
-            item_price_covered = float_less_equal(regions[0].first, compareElem.chan_price);
-        } else if (gap_direction == BOT2TOP) {
-            item_price_covered = float_more_equal(regions.back().second, compareElem.chan_price);
+    // 检查缺口是否有效 (Python line 1053-1065)
+    if (compare_idx >= 0 && compare_idx < static_cast<int>(working_df.size())) {
+        const auto& compare_elem = working_df[compare_idx];
+        if (secondElem.tb == TOP) {
+            // 对于顶分型：缺口高于比较点的低点
+            return float_less(gap_start, compare_elem.low) && float_less(compare_elem.high, gap_end);
+        } else if (secondElem.tb == BOT) {
+            // 对于底分型：缺口低于比较点的高点
+            return float_more(gap_end, compare_elem.high) && float_more(compare_elem.low, gap_start);
         }
     }
     
-    return gap_range_in_portion && item_price_covered;
+    return true;
 }
 
-// 线段包含关系处理并返回是否无包含、是否有K线缺口线段 (Python is_XD_inclusion_free line 1084-1159)
-std::pair<bool, bool> ChanAnalyzer::isXDInclusionFreeFull(TopBotType direction, 
-        const std::vector<int>& next_valid_elems, std::vector<StandardKLine>& working_df) {
-    if (next_valid_elems.size() < 4) {
+// 检查线段包含关系是否自由 (Python is_XD_inclusion_free line 1084-1220)
+std::pair<bool, bool> ChanAnalyzer::isXDInclusionFreeFull(
+        TopBotType direction, const std::vector<int>& next_valid_elems, 
+        std::vector<StandardKLine>& working_df) {
+    if (next_valid_elems.size() < 2) {
         return std::make_pair(false, false);
     }
     
-    const auto& firstElem = working_df[next_valid_elems[0]];
-    const auto& secondElem = working_df[next_valid_elems[1]];
-    const auto& thirdElem = working_df[next_valid_elems[2]];
-    const auto& forthElem = working_df[next_valid_elems[3]];
+    bool free = true;
+    bool has_kline_gap = false;
     
-    // 根据方向验证tb
-    if (direction == TOP2BOT) {
-        if (!(firstElem.tb == BOT && thirdElem.tb == BOT && secondElem.tb == TOP && forthElem.tb == TOP)) {
-            return std::make_pair(false, false);
+    // Python line 1095: from y = 0 to y < len(x) - 1
+    // Python line 1096: from x = 0 to x < len(results)
+    // This creates a triangular comparison matrix
+    for (size_t i = 0; i + 1 < next_valid_elems.size(); i++) {
+        int idx_i = next_valid_elems[i];
+        int idx_i1 = next_valid_elems[i+1];
+        
+        for (size_t j = 0; j < next_valid_elems.size(); j++) {
+            if (j + 1 >= next_valid_elems.size()) break;
+            int idx_j = next_valid_elems[j];
+            int idx_j1 = next_valid_elems[j+1];
+            
+            // Python line 1097-1098: xd_inclusion check
+            if (xdInclusionFull(working_df[idx_i], working_df[idx_i1], 
+                               working_df[idx_j], working_df[idx_j1])) {
+                free = false;
+                break;
+            }
         }
-    } else if (direction == BOT2TOP) {
-        if (!(firstElem.tb == TOP && thirdElem.tb == TOP && secondElem.tb == BOT && forthElem.tb == BOT)) {
-            return std::make_pair(false, false);
+        if (!free) break;
+    }
+    
+    // Python line 1100-1118: Check for kline_gap_as_xd
+    for (size_t i = 0; i + 4 < next_valid_elems.size(); i++) {
+        if (kbarGapAsXdFull(working_df, next_valid_elems[i+1], next_valid_elems[i+2], next_valid_elems[i])) {
+            has_kline_gap = true;
+            break;
         }
     }
     
-    if (xdInclusionFull(firstElem, secondElem, thirdElem, forthElem)) {
-        // 检查是否有K线缺口可以忽略包含
-        if (kbarGapAsXdFull(working_df, next_valid_elems[0], next_valid_elems[1], -1) ||
-            kbarGapAsXdFull(working_df, next_valid_elems[2], next_valid_elems[3], -1) ||
-            kbarGapAsXdFull(working_df, next_valid_elems[1], next_valid_elems[2], -1)) {
-            return std::make_pair(true, true); // 有缺口，忽略包含
-        }
-        
-        // 处理包含关系 - 移除哪两个取决于方向和价格
-        if (direction == TOP2BOT) {
-            if (float_less(firstElem.chan_price, thirdElem.chan_price)) {
-                working_df[next_valid_elems[1]].tb = NO_TOPBOT;
-                working_df[next_valid_elems[2]].tb = NO_TOPBOT;
-            } else {
-                working_df[next_valid_elems[0]].tb = NO_TOPBOT;
-                working_df[next_valid_elems[3]].tb = NO_TOPBOT;
-            }
-        } else { // BOT2TOP
-            if (float_more(firstElem.chan_price, thirdElem.chan_price)) {
-                working_df[next_valid_elems[1]].tb = NO_TOPBOT;
-                working_df[next_valid_elems[2]].tb = NO_TOPBOT;
-            } else {
-                working_df[next_valid_elems[0]].tb = NO_TOPBOT;
-                working_df[next_valid_elems[3]].tb = NO_TOPBOT;
-            }
-        }
-        return std::make_pair(false, false); // 有包含，已处理
-    }
-    
-    return std::make_pair(true, false); // 无包含
-}
-
-// 按方向检查包含 (Python check_inclusion_by_direction line 1162-1208)
-std::vector<int> ChanAnalyzer::checkInclusionByDirectionFull(int current_loc, 
-        std::vector<StandardKLine>& working_df, TopBotType direction, int count_num) {
-    std::vector<int> next_valid_elems;
-    int i = current_loc;
-    bool first_run = true;
-    
-    while (first_run || (i + count_num - 1 < static_cast<int>(working_df.size()))) {
-        first_run = false;
-        next_valid_elems.clear();
-        
-        // 获取下一个count_num个元素
-        int loc = i;
-        while (loc < static_cast<int>(working_df.size()) && 
-               static_cast<int>(next_valid_elems.size()) < count_num) {
-            if (working_df[loc].tb != NO_TOPBOT) {
-                next_valid_elems.push_back(loc);
-            }
-            loc++;
-        }
-        
-        if (static_cast<int>(next_valid_elems.size()) < count_num) break;
-        
-        if (count_num == 4) {
-            bool is_free, has_kline_gap;
-            std::tie(is_free, has_kline_gap) = isXDInclusionFreeFull(direction, next_valid_elems, working_df);
-            if (is_free) break;
-        } else if (count_num == 6) {
-            std::vector<int> first4(next_valid_elems.begin(), next_valid_elems.begin() + 4);
-            bool is_free, has_kline_gap;
-            std::tie(is_free, has_kline_gap) = isXDInclusionFreeFull(direction, first4, working_df);
-            if (has_kline_gap) break;
-            if (is_free) {
-                std::vector<int> last4(next_valid_elems.begin() + 2, next_valid_elems.end());
-                std::tie(is_free, has_kline_gap) = isXDInclusionFreeFull(direction, last4, working_df);
-                if (is_free) break;
-            }
-        } else { // count_num == 8
-            std::vector<int> first4(next_valid_elems.begin(), next_valid_elems.begin() + 4);
-            bool is_free, has_kline_gap;
-            std::tie(is_free, has_kline_gap) = isXDInclusionFreeFull(direction, first4, working_df);
-            if (has_kline_gap) break;
-            if (is_free) {
-                std::vector<int> mid4(next_valid_elems.begin() + 2, next_valid_elems.begin() + 6);
-                std::tie(is_free, has_kline_gap) = isXDInclusionFreeFull(direction, mid4, working_df);
-                if (has_kline_gap) break;
-                if (is_free) {
-                    std::vector<int> last4(next_valid_elems.begin() + 4, next_valid_elems.end());
-                    std::tie(is_free, has_kline_gap) = isXDInclusionFreeFull(direction, last4, working_df);
-                    if (is_free) break;
-                }
-            }
-        }
-        i++;
-    }
-    return next_valid_elems;
+    return std::make_pair(free, has_kline_gap);
 }
 
 // 检查K线缺口作为线段 (Python check_kline_gap_as_xd line 1258-1297)
@@ -845,1143 +1276,118 @@ int ChanAnalyzer::xdTopbotCandidateFull(const std::vector<int>& next_valid_elems
             end_loc = static_cast<int>(working_df.size());
         }
         
-        // 找受影响的价格范围
-        double min_price = working_df[new_valid_elems[0]].chan_price;
-        double max_price = working_df[new_valid_elems[0]].chan_price;
-        for (int i = new_valid_elems[0]; i < end_loc; i++) {
-            if (float_less(working_df[i].chan_price, min_price)) min_price = working_df[i].chan_price;
-            if (float_more(working_df[i].chan_price, max_price)) max_price = working_df[i].chan_price;
-        }
-        
-        int result_idx = -1;
+        // Python logic: find the max/min within range
         if (current_direction == TOP2BOT) {
-            if (float_less(min_price, working_df[next_valid_elems[1]].chan_price)) {
-                result_idx = next_valid_elems[1];
+            double min_val = std::numeric_limits<double>::max();
+            int min_data_idx = -1;
+            for (int j = next_valid_elems[0]; j < end_loc; j++) {
+                if (j < static_cast<int>(working_df.size())) {
+                    if (float_less(working_df[j].chan_price, min_val)) {
+                        min_val = working_df[j].chan_price;
+                        min_data_idx = j;
+                    }
+                }
+            }
+            if (min_data_idx >= 0) {
+                return new_valid_elems[0];
             }
         } else {
-            if (float_more(max_price, working_df[next_valid_elems[1]].chan_price)) {
-                result_idx = next_valid_elems[1];
+            double max_val = -std::numeric_limits<double>::max();
+            int max_data_idx = -1;
+            for (int j = next_valid_elems[0]; j < end_loc; j++) {
+                if (j < static_cast<int>(working_df.size())) {
+                    if (float_more(working_df[j].chan_price, max_val)) {
+                        max_val = working_df[j].chan_price;
+                        max_data_idx = j;
+                    }
+                }
+            }
+            if (max_data_idx >= 0) {
+                return new_valid_elems[0];
             }
         }
-        
-        if (result_idx >= 0) {
-            restoreTbData(working_df, next_valid_elems[1], new_valid_elems.back());
-        }
-        return result_idx;
     }
     
     return -1;
 }
 
-// 弹出缺口 (Python pop_gap line 1491-1531)
-std::pair<int, TopBotType> ChanAnalyzer::popGapFull(std::vector<StandardKLine>& working_df, 
+// popGap (Python pop_gap line 1482-1499)
+std::pair<int, TopBotType> ChanAnalyzer::popGapFull(
+        std::vector<StandardKLine>& working_df, 
         const std::vector<int>& next_valid_elems, TopBotType current_direction) {
-    if (gap_XD.empty() || next_valid_elems.empty()) {
+    // 从可用元素中弹出缺口分段
+    if (next_valid_elems.size() < 2) {
         return std::make_pair(-1, NO_TOPBOT);
     }
     
-    int prev_gap_idx = gap_XD.back();
-    if (prev_gap_idx < 0 || prev_gap_idx >= static_cast<int>(working_df.size())) {
-        return std::make_pair(-1, NO_TOPBOT);
-    }
+    int pop_idx = next_valid_elems[1];
+    TopBotType pop_direction = (working_df[pop_idx].tb == TOP) ? BOT2TOP : TOP2BOT;
     
-    const auto& prev_gap_elem = working_df[prev_gap_idx];
-    
-    // 检查范围内的价格
-    int start = next_valid_elems.front();
-    int end = next_valid_elems.back();
-    if (start < 0 || end >= static_cast<int>(working_df.size())) {
-        return std::make_pair(-1, NO_TOPBOT);
-    }
-    
-    if (current_direction == TOP2BOT) {
-        double max_price = working_df[start].chan_price;
-        for (int i = start; i <= end; i++) {
-            if (float_more(working_df[i].chan_price, max_price)) {
-                max_price = working_df[i].chan_price;
-            }
-        }
-        if (float_more(max_price, prev_gap_elem.chan_price)) {
-            int popped = gap_XD.back();
-            gap_XD.pop_back();
-            working_df[popped].xd_tb = NO_TOPBOT;
-            restoreTbData(working_df, popped, next_valid_elems.back());
-            current_direction = (current_direction == TOP2BOT) ? BOT2TOP : TOP2BOT;
-            return std::make_pair(popped, current_direction);
-        }
-    } else if (current_direction == BOT2TOP) {
-        double min_price = working_df[start].chan_price;
-        for (int i = start; i <= end; i++) {
-            if (float_less(working_df[i].chan_price, min_price)) {
-                min_price = working_df[i].chan_price;
-            }
-        }
-        if (float_less(min_price, prev_gap_elem.chan_price)) {
-            int popped = gap_XD.back();
-            gap_XD.pop_back();
-            working_df[popped].xd_tb = NO_TOPBOT;
-            restoreTbData(working_df, popped, next_valid_elems.back());
-            current_direction = (current_direction == BOT2TOP) ? TOP2BOT : BOT2TOP;
-            return std::make_pair(popped, current_direction);
-        }
-    }
-    
-    return std::make_pair(-1, current_direction);
+    return std::make_pair(pop_idx, pop_direction);
 }
 
-// 完整线段定义 - 实现Python find_XD (line 1533-1785)
-std::vector<StandardKLine> ChanAnalyzer::findXDFull(int initial_i, TopBotType initial_direction, 
+// 检查前一个元素以避免线段缺口 (Python check_previous_elem_to_avoid_XD_gap line 1208-1225)
+bool ChanAnalyzer::checkPreviousElemToAvoidXdGap(
+        bool with_gap, const std::vector<int>& next_valid_elems, 
         std::vector<StandardKLine>& working_df) {
-    if (initial_i < 0 || initial_i >= static_cast<int>(working_df.size())) {
-        return working_df;
+    if (!with_gap || next_valid_elems.size() < 4) return with_gap;
+    
+    // 检查前一个元素是否会因为缺口导致无效
+    const auto& first = working_df[next_valid_elems[0]];
+    const auto& forth = working_df[next_valid_elems[3]];
+    
+    // 如果第三个是顶分型且 first.chan_price >= forth.chan_price，则没有缺口
+    if (working_df[next_valid_elems[2]].tb == TOP && 
+        float_more_equal(first.chan_price, forth.chan_price)) {
+        return false;
     }
     
-    TopBotType current_direction = initial_direction;
-    int i = initial_i;
-    
-    // 添加安全保护：防止无限循环
-    int max_iterations = static_cast<int>(working_df.size()) * 10;
-    int iteration_count = 0;
-    
-    while (i + 5 < static_cast<int>(working_df.size())) {
-        // 安全保护：防止无限循环
-        iteration_count++;
-        if (iteration_count > max_iterations) {
-            // 紧急退出：记录错误并返回当前结果
-            if (is_debug) {
-                // 可以添加调试输出
-            }
-            break;
-        }
-        bool previous_gap = !gap_XD.empty();
-        
-        if (previous_gap) {
-            // 有之前的缺口：做包含检查
-            std::vector<int> next_valid_elems = checkInclusionByDirectionFull(i, working_df, current_direction, 4);
-            if (static_cast<int>(next_valid_elems.size()) < 4) break;
-            
-            // 方向断言
-            const auto& first_elem = working_df[next_valid_elems[0]];
-            bool direction_ok = (current_direction == BOT2TOP && first_elem.tb == TOP) ||
-                                (current_direction == TOP2BOT && first_elem.tb == BOT);
-            if (!direction_ok) {
-                if (static_cast<int>(next_valid_elems.size()) > 1) {
-                    i = next_valid_elems[1];
-                } else {
-                    i++;
-                }
-                continue;
-            }
-            
-            // 检查当前缺口
-            bool current_gap = checkCurrentGap(working_df, next_valid_elems[0], next_valid_elems[1],
-                                                next_valid_elems[2], next_valid_elems[3]);
-            
-            // 根据缺口情况获取更多元素
-            if (current_gap) {
-                next_valid_elems = checkInclusionByDirectionFull(next_valid_elems[0], working_df, current_direction, 6);
-            } else {
-                next_valid_elems = checkInclusionByDirectionFull(next_valid_elems[0], working_df, current_direction, 8);
-            }
-            
-            if (static_cast<int>(next_valid_elems.size()) < 6) break;
-            
-            // 检查XD顶底
-            auto result = checkXDTopBotDirectedFull(next_valid_elems, current_direction, working_df);
-            TopBotType current_status = std::get<0>(result);
-            bool with_current_gap = std::get<1>(result);
-            bool with_kline_gap_as_xd = std::get<2>(result);
-            
-            if (current_status != NO_TOPBOT) {
-                if (with_current_gap) {
-                    gap_XD.push_back(next_valid_elems[2]);
-                } else {
-                    gap_XD.clear();
-                }
-                working_df[next_valid_elems[2]].xd_tb = current_status;
-                current_direction = (current_status == TOP) ? TOP2BOT : BOT2TOP;
-                i = with_kline_gap_as_xd ? next_valid_elems[1] : next_valid_elems[3];
-                continue;
-            } else {
-                auto pop_result = popGapFull(working_df, next_valid_elems, current_direction);
-                if (pop_result.first >= 0) {
-                    i = pop_result.first;
-                    current_direction = pop_result.second;
-                    continue;
-                }
-                i = next_valid_elems[2];
-            }
-        } else {
-            // 无之前的缺口
-            // 获取下4个元素
-            std::vector<int> next_elems;
-            int loc = i;
-            while (loc < static_cast<int>(working_df.size()) && static_cast<int>(next_elems.size()) < 4) {
-                if (working_df[loc].tb != NO_TOPBOT) next_elems.push_back(loc);
-                loc++;
-            }
-            if (static_cast<int>(next_elems.size()) < 4) break;
-            
-            // 检查当前缺口
-            bool current_gap = checkCurrentGap(working_df, next_elems[0], next_elems[1],
-                                                next_elems[2], next_elems[3]);
-            
-            // 获取同方向的3个元素
-            TopBotType start_tb = (current_direction == BOT2TOP) ? TOP : BOT;
-            std::vector<int> next_single_elems;
-            loc = i;
-            while (loc < static_cast<int>(working_df.size()) && static_cast<int>(next_single_elems.size()) < 3) {
-                if (working_df[loc].tb == start_tb) {
-                    next_single_elems.push_back(loc);
-                }
-                loc++;
-            }
-            
-            if (static_cast<int>(next_single_elems.size()) < 3) {
-                i++;
-                continue;
-            }
-            
-            // 方向断言
-            bool direction_ok = (current_direction == BOT2TOP && working_df[next_single_elems[0]].tb == TOP) ||
-                                (current_direction == TOP2BOT && working_df[next_single_elems[0]].tb == BOT);
-            if (!direction_ok) {
-                i = next_elems[1];
-                continue;
-            }
-            
-            // 候选位置检查
-            int possible_idx = xdTopbotCandidateFull(next_single_elems, current_direction, working_df, current_gap);
-            if (possible_idx >= 0) {
-                i = possible_idx;
-                continue;
-            }
-            
-            // 获取下6个元素
-            std::vector<int> next_valid_elems;
-            loc = next_single_elems[0];
-            while (loc < static_cast<int>(working_df.size()) && static_cast<int>(next_valid_elems.size()) < 6) {
-                if (working_df[loc].tb != NO_TOPBOT) next_valid_elems.push_back(loc);
-                loc++;
-            }
-            if (static_cast<int>(next_valid_elems.size()) < 6) break;
-            
-            // 检查XD顶底
-            auto result = checkXDTopBotDirectedFull(next_valid_elems, current_direction, working_df);
-            TopBotType current_status = std::get<0>(result);
-            bool with_current_gap = std::get<1>(result);
-            bool with_kline_gap_as_xd = std::get<2>(result);
-            
-            if (current_status != NO_TOPBOT) {
-                // 检查前一个线段分型
-                TopBotType reverse_tb = (current_status == TOP) ? BOT : TOP;
-                std::vector<int> prev_elems;
-                int ploc = next_valid_elems[0] - 1;
-                while (ploc >= 0) {
-                    if (working_df[ploc].original_tb == reverse_tb || working_df[ploc].tb == reverse_tb) {
-                        if (!prev_elems.empty() || true) {
-                            prev_elems.insert(prev_elems.begin(), ploc);
-                            if (working_df[ploc].xd_tb == reverse_tb) break;
-                        } else {
-                            prev_elems.insert(prev_elems.begin(), ploc);
-                        }
-                    }
-                    ploc--;
-                }
-                
-                if (!prev_elems.empty()) {
-                    int prev_xd_idx = -1;
-                    for (int idx : prev_elems) {
-                        if (working_df[idx].xd_tb == reverse_tb) {
-                            prev_xd_idx = idx;
-                            break;
-                        }
-                    }
-                    
-                    if (prev_xd_idx >= 0) {
-                        bool invalid = false;
-                        if (working_df[prev_xd_idx].xd_tb == TOP && current_status == BOT) {
-                            if (float_less(working_df[prev_xd_idx].chan_price, working_df[next_valid_elems[2]].chan_price)) {
-                                invalid = true;
-                            }
-                        } else if (working_df[prev_xd_idx].xd_tb == BOT && current_status == TOP) {
-                            if (float_more(working_df[prev_xd_idx].chan_price, working_df[next_valid_elems[2]].chan_price)) {
-                                invalid = true;
-                            }
-                        }
-                        
-                        if (invalid) {
-                            restoreTbData(working_df, prev_xd_idx, next_valid_elems.back());
-                            working_df[prev_xd_idx].xd_tb = NO_TOPBOT;
-                            current_direction = (current_status == TOP) ? TOP2BOT : BOT2TOP;
-                            i = prev_xd_idx;
-                            continue;
-                        }
-                    }
-                }
-                
-                if (with_current_gap) {
-                    gap_XD.push_back(next_valid_elems[2]);
-                }
-                
-                working_df[next_valid_elems[2]].xd_tb = current_status;
-                current_direction = (current_status == TOP) ? TOP2BOT : BOT2TOP;
-                i = with_kline_gap_as_xd ? next_valid_elems[1] : next_valid_elems[3];
-                continue;
-            } else {
-                i = next_valid_elems[2];
-            }
-        }
-    }
-    
-    // 处理末尾 (Python line 1687-1783)
-    // 获取最后一个已确认的线段分型
-    std::vector<int> prev_xd_locs;
-    for (int idx = static_cast<int>(working_df.size()) - 1; idx >= 0; idx--) {
-        if (working_df[idx].xd_tb == TOP || working_df[idx].xd_tb == BOT) {
-            prev_xd_locs.push_back(idx);
-            if (static_cast<int>(prev_xd_locs.size()) >= 2) break;
-        }
-    }
-    
-    if (!prev_xd_locs.empty()) {
-        int prev_xd_loc = prev_xd_locs[0];
-        int working_xd_loc = prev_xd_loc + 3;
-        
-        if (working_xd_loc < static_cast<int>(working_df.size())) {
-            // 获取剩余的分型
-            std::vector<int> remaining;
-            for (int idx = working_xd_loc; idx < static_cast<int>(working_df.size()); idx++) {
-                if (working_df[idx].tb != NO_TOPBOT) {
-                    remaining.push_back(idx);
-                }
-            }
-            
-            if (!remaining.empty()) {
-                // 处理缺口情况
-                if (!gap_XD.empty()) {
-                    if (current_direction == TOP2BOT) {
-                        int max_loc = remaining[0];
-                        for (int idx : remaining) {
-                            if (float_more(working_df[idx].chan_price, working_df[max_loc].chan_price)) {
-                                max_loc = idx;
-                            }
-                        }
-                        if (float_more(working_df[max_loc].chan_price, working_df[prev_xd_loc].chan_price)) {
-                            working_df[prev_xd_loc].xd_tb = NO_TOPBOT;
-                            working_df[max_loc].xd_tb = TOP;
-                        }
-                    } else if (current_direction == BOT2TOP) {
-                        int min_loc = remaining[0];
-                        for (int idx : remaining) {
-                            if (float_less(working_df[idx].chan_price, working_df[min_loc].chan_price)) {
-                                min_loc = idx;
-                            }
-                        }
-                        if (float_less(working_df[min_loc].chan_price, working_df[prev_xd_loc].chan_price)) {
-                            working_df[prev_xd_loc].xd_tb = NO_TOPBOT;
-                            working_df[min_loc].xd_tb = BOT;
-                        }
-                    }
-                }
-                
-                // 假设当前线段结束
-                double max_price = working_df[remaining[0]].chan_price;
-                double min_price = working_df[remaining[0]].chan_price;
-                for (int idx : remaining) {
-                    if (float_more(working_df[idx].chan_price, max_price)) max_price = working_df[idx].chan_price;
-                    if (float_less(working_df[idx].chan_price, min_price)) min_price = working_df[idx].chan_price;
-                }
-                
-                if (current_direction == TOP2BOT) {
-                    if (float_more(working_df[prev_xd_loc].chan_price, max_price)) {
-                        // 前一个顶是最高，假设末尾底是线段底
-                        int min_loc = remaining[0];
-                        for (int idx : remaining) {
-                            if (float_less(working_df[idx].chan_price, working_df[min_loc].chan_price)) {
-                                min_loc = idx;
-                            }
-                        }
-                        working_df[min_loc].xd_tb = BOT;
-                    } else if (float_less(working_df[prev_xd_loc].chan_price, max_price)) {
-                        // 找到更高的顶
-                        int max_loc = remaining[0];
-                        for (int idx : remaining) {
-                            if (float_more(working_df[idx].chan_price, working_df[max_loc].chan_price)) {
-                                max_loc = idx;
-                            }
-                        }
-                        working_df[max_loc].xd_tb = TOP;
-                        working_df[prev_xd_loc].xd_tb = NO_TOPBOT;
-                    }
-                } else if (current_direction == BOT2TOP) {
-                    if (float_less(working_df[prev_xd_loc].chan_price, min_price)) {
-                        int max_loc = remaining[0];
-                        for (int idx : remaining) {
-                            if (float_more(working_df[idx].chan_price, working_df[max_loc].chan_price)) {
-                                max_loc = idx;
-                            }
-                        }
-                        working_df[max_loc].xd_tb = TOP;
-                    } else if (float_more(working_df[prev_xd_loc].chan_price, min_price)) {
-                        int min_loc = remaining[0];
-                        for (int idx : remaining) {
-                            if (float_less(working_df[idx].chan_price, working_df[min_loc].chan_price)) {
-                                min_loc = idx;
-                            }
-                        }
-                        working_df[min_loc].xd_tb = BOT;
-                        working_df[prev_xd_loc].xd_tb = NO_TOPBOT;
-                    }
-                }
-            }
-        }
-    }
-    
-    return working_df;
-}
-
-// 查找初始方向 (Python find_initial_direction line 957-995)
-std::pair<int, TopBotType> ChanAnalyzer::findInitialDirectionFull(
-        std::vector<StandardKLine>& working_df, TopBotType initial_status) {
-    int initial_loc = 0;
-    TopBotType initial_direction = NO_TOPBOT;
-    
-    if (initial_status != NO_TOPBOT) {
-        // 查找前6个元素中的极值
-        int search_end = std::min(6, static_cast<int>(working_df.size()));
-        if (initial_status == TOP) {
-            double max_price = working_df[0].chan_price;
-            for (int i = 1; i < search_end; i++) {
-                if (float_more(working_df[i].chan_price, max_price)) {
-                    max_price = working_df[i].chan_price;
-                    initial_loc = i;
-                }
-            }
-        } else {
-            double min_price = working_df[0].chan_price;
-            for (int i = 1; i < search_end; i++) {
-                if (float_less(working_df[i].chan_price, min_price)) {
-                    min_price = working_df[i].chan_price;
-                    initial_loc = i;
-                }
-            }
-        }
-        working_df[initial_loc].xd_tb = initial_status;
-        initial_direction = (initial_status == TOP) ? TOP2BOT : BOT2TOP;
-    } else {
-        // 自动检测方向
-        int current_loc = 0;
-        while (current_loc + 3 < static_cast<int>(working_df.size())) {
-            const auto& first = working_df[current_loc];
-            const auto& second = working_df[current_loc + 1];
-            const auto& third = working_df[current_loc + 2];
-            const auto& forth = working_df[current_loc + 3];
-            
-            bool found_direction = false;
-            if (float_less(first.chan_price, second.chan_price)) {
-                found_direction = (float_less_equal(first.chan_price, third.chan_price) && float_less(second.chan_price, forth.chan_price)) ||
-                                  (float_more_equal(first.chan_price, third.chan_price) && float_more(second.chan_price, forth.chan_price));
-            } else {
-                found_direction = (float_less(first.chan_price, third.chan_price) && float_less_equal(second.chan_price, forth.chan_price)) ||
-                                  (float_more(first.chan_price, third.chan_price) && float_more_equal(second.chan_price, forth.chan_price));
-            }
-            
-            if (found_direction) {
-                initial_direction = (float_less(first.chan_price, third.chan_price) || float_less(second.chan_price, forth.chan_price)) 
-                                    ? BOT2TOP : TOP2BOT;
-                initial_loc = current_loc;
-                break;
-            }
-            current_loc++;
-        }
-    }
-    
-    return std::make_pair(initial_loc, initial_direction);
-}
-
-// 完整线段定义 - 替代简化版
-void ChanAnalyzer::defineXD(int initial_state) {
-    if (marked_bi.empty()) return;
-    
-    // 工作副本 - 添加 original_tb 和 xd_tb 字段
-    std::vector<StandardKLine> working_df = marked_bi;
-    for (auto& kline : working_df) {
-        kline.original_tb = kline.tb;
-        kline.xd_tb = NO_TOPBOT;
-    }
-    
-    if (working_df.size() == 0) {
-        marked_xd = working_df;
-        return;
-    }
-    
-    // 清除缺口状态
-    gap_XD.clear();
-    previous_skipped_idx.clear();
-    previous_with_xd_gap = false;
-    
-    // 查找初始方向
-    auto init_result = findInitialDirectionFull(working_df, static_cast<TopBotType>(initial_state));
-    int initial_i = init_result.first;
-    TopBotType initial_direction = init_result.second;
-    
-    // 执行完整线段查找
-    working_df = findXDFull(initial_i, initial_direction, working_df);
-    
-    // 过滤出有xd_tb的分型
-    std::vector<StandardKLine> valid_xd;
-    for (const auto& kline : working_df) {
-        if (kline.xd_tb == TOP || kline.xd_tb == BOT) {
-            valid_xd.push_back(kline);
-        }
-    }
-    
-    marked_xd = valid_xd;
-}
-
-std::vector<Bi> ChanAnalyzer::getBi() const {
-    std::vector<Bi> result;
-    
-    // 将连续的顶底分型配对形成笔
-    for (size_t i = 0; i + 1 < marked_bi.size(); i++) {
-        const StandardKLine& start = marked_bi[i];
-        const StandardKLine& end = marked_bi[i+1];
-        
-        // 确保分型类型交替
-        if ((start.tb == BOT && end.tb == TOP) || 
-            (start.tb == TOP && end.tb == BOT)) {
-            
-            Bi bi;
-            bi.start_date = start.date;
-            bi.end_date = end.date;
-            bi.start_price = start.chan_price;
-            bi.end_price = end.chan_price;
-            bi.type = start.tb;
-            bi.start_index = start.new_index;
-            bi.end_index = end.new_index;
-            
-            result.push_back(bi);
-        }
-    }
-    
-    return result;
-}
-
-// 按方向检查包含关系
-std::vector<int> ChanAnalyzer::checkInclusionByDirection(int current_loc, std::vector<StandardKLine>& working_df, TopBotType direction, int count_num) {
-    std::vector<int> result;
-    
-    if (current_loc >= static_cast<int>(working_df.size()) || count_num <= 0) {
-        return result;
-    }
-    
-    // 根据方向查找后续的分型
-    int loc = current_loc;
-    while (result.size() < static_cast<size_t>(count_num) && loc < static_cast<int>(working_df.size())) {
-        if (working_df[loc].tb == TOP || working_df[loc].tb == BOT) {
-            if (directionAssert(working_df[loc], direction)) {
-                result.push_back(loc);
-            }
-        }
-        loc++;
-    }
-    
-    // 如果没有找到足够的分型，尝试查找下一个分型（不考虑方向）
-    if (result.size() < static_cast<size_t>(count_num)) {
-        result.clear();
-        loc = current_loc;
-        while (result.size() < static_cast<size_t>(count_num) && loc < static_cast<int>(working_df.size())) {
-            if (working_df[loc].tb == TOP || working_df[loc].tb == BOT) {
-                result.push_back(loc);
-            }
-            loc++;
-        }
-    }
-    
-    return result;
-}
-
-// 方向断言检查
-bool ChanAnalyzer::directionAssert(const StandardKLine& elem, TopBotType direction) {
-    if (direction == TOP2BOT) {
-        return elem.tb == TOP;
-    } else if (direction == BOT2TOP) {
-        return elem.tb == BOT;
-    }
-    return true; // 对于NO_TOPBOT，接受任何方向
-}
-
-// 获取后续N个元素
-std::vector<int> ChanAnalyzer::getNextNElem(int loc, const std::vector<StandardKLine>& working_df, int N, TopBotType start_tb, bool single_direction) {
-    std::vector<int> result;
-    
-    if (loc >= static_cast<int>(working_df.size()) || N <= 0) {
-        return result;
-    }
-    
-    int i = loc;
-    while (i < static_cast<int>(working_df.size()) && static_cast<int>(result.size()) < N) {
-        const StandardKLine& current = working_df[i];
-        
-        if (current.tb != NO_TOPBOT) {
-            if (start_tb != NO_TOPBOT && result.empty() && current.tb != start_tb) {
-                i++;
-                continue;
-            }
-            
-            if (single_direction && start_tb != NO_TOPBOT && current.tb != start_tb) {
-                i++;
-                continue;
-            }
-            
-            result.push_back(i);
-        }
-        i++;
-    }
-    
-    return result;
-}
-
-// 获取前N个元素
-std::vector<int> ChanAnalyzer::getPreviousNElem(int loc, const std::vector<StandardKLine>& working_df, int N, TopBotType end_tb, bool single_direction) {
-    std::vector<int> result;
-    
-    if (loc <= 0 || N < 0) {
-        return result;
-    }
-    
-    int i = loc - 1;
-    while (i >= 0 && (N == 0 || static_cast<int>(result.size()) < N)) {
-        const StandardKLine& current = working_df[i];
-        
-        if (current.original_tb != NO_TOPBOT) {
-            if (end_tb != NO_TOPBOT && result.empty() && current.original_tb != end_tb) {
-                i--;
-                continue;
-            }
-            
-            if (single_direction) {
-                if (current.original_tb == end_tb) {
-                    result.insert(result.begin(), i);
-                }
-            } else {
-                result.insert(result.begin(), i);
-            }
-            
-            if (N == 0 && (current.xd_tb == TOP || current.xd_tb == BOT)) {
-                break;
-            }
-        }
-        i--;
-    }
-    
-    return result;
-}
-
-// 恢复分型数据
-void ChanAnalyzer::restoreTbData(std::vector<StandardKLine>& working_df, int from_idx, int to_idx) {
-    if (from_idx >= static_cast<int>(working_df.size()) || to_idx >= static_cast<int>(working_df.size()) || from_idx > to_idx) {
-        return;
-    }
-    
-    for (int i = from_idx; i <= to_idx && i < static_cast<int>(working_df.size()); i++) {
-        working_df[i].tb = working_df[i].original_tb;
-    }
-    
-    if (is_debug) {
-        // 简化调试输出
-        // 实际实现中可以添加详细的调试信息
-    }
-}
-
-// 线段顶底分型检查
-std::pair<TopBotType, bool> ChanAnalyzer::checkXDTopBot(const StandardKLine& first, const StandardKLine& second, const StandardKLine& third, 
-                                                       const StandardKLine& fourth, const StandardKLine& fifth, const StandardKLine& sixth) {
-    // 检查上升线段：底分型->顶分型->底分型->顶分型->底分型->顶分型
-    // 标准上升线段：BOT->TOP->BOT->TOP->BOT->TOP
-    // 其中第三个底分型需要高于第一个底分型
-    
-    if (first.tb == BOT && second.tb == TOP && third.tb == BOT && 
-        fourth.tb == TOP && fifth.tb == BOT && sixth.tb == TOP) {
-        
-        // 检查价格关系：第三个底分型高于第一个底分型
-        if (float_more(fifth.chan_price, first.chan_price)) {
-            return std::make_pair(BOT, false); // 找到上升线段的底分型，无缺口
-        }
-    }
-    // 检查下降线段：顶分型->底分型->顶分型->底分型->顶分型->底分型
-    else if (first.tb == TOP && second.tb == BOT && third.tb == TOP && 
-             fourth.tb == BOT && fifth.tb == TOP && sixth.tb == BOT) {
-        
-        // 检查价格关系：第三个顶分型低于第一个顶分型
-        if (float_less(fifth.chan_price, first.chan_price)) {
-            return std::make_pair(TOP, false); // 找到下降线段的顶分型，无缺口
-        }
-    }
-    
-    // 检查带缺口的情况
-    // 简化处理：如果有价格跳空，可能形成缺口线段
-    bool with_gap = false;
-    
-    // 检查是否有明显的价格跳空
-    if (float_less(second.low, first.high - MIN_PRICE_UNIT * 5) || 
-        float_more(second.high, first.low + MIN_PRICE_UNIT * 5)) {
-        with_gap = true;
-    }
-    
-    // 简化处理：返回无分型
-    return std::make_pair(NO_TOPBOT, with_gap);
-}
-
-// K线缺口作为线段检查
-std::tuple<TopBotType, bool, bool> ChanAnalyzer::checkKlineGapAsXd(const std::vector<int>& next_valid_elems, const std::vector<StandardKLine>& working_df, TopBotType direction) {
-    // 简化实现：检查是否有K线缺口可以作为线段
-    bool with_kline_gap_as_xd = false;
-    bool with_current_gap = false;
-    TopBotType result = NO_TOPBOT;
-    
-    if (next_valid_elems.size() >= 4) {
-        const StandardKLine& first = working_df[next_valid_elems[0]];
-        const StandardKLine& second = working_df[next_valid_elems[1]];
-        const StandardKLine& third = working_df[next_valid_elems[2]];
-        const StandardKLine& fourth = working_df[next_valid_elems[3]];
-        
-        // 检查是否有明显的价格跳空
-        if (direction == BOT2TOP) {
-            // 上升方向：检查是否有向上的跳空
-            if (float_more(third.low, second.high + MIN_PRICE_UNIT * 3)) {
-                with_kline_gap_as_xd = true;
-                result = TOP; // 跳空可能形成线段顶分型
-                with_current_gap = true;
-            }
-        } else if (direction == TOP2BOT) {
-            // 下降方向：检查是否有向下的跳空
-            if (float_less(third.high, second.low - MIN_PRICE_UNIT * 3)) {
-                with_kline_gap_as_xd = true;
-                result = BOT; // 跳空可能形成线段底分型
-                with_current_gap = true;
-            }
-        }
-    }
-    
-    return std::make_tuple(result, with_current_gap, with_kline_gap_as_xd);
-}
-
-// 检查前一个元素以避免线段缺口
-bool ChanAnalyzer::checkPreviousElemToAvoidXdGap(bool with_gap, const std::vector<int>& next_valid_elems, std::vector<StandardKLine>& working_df) {
-    if (next_valid_elems.empty() || next_valid_elems.size() < 4) {
-        return with_gap;
-    }
-    
-    const StandardKLine& first = working_df[next_valid_elems[0]];
-    const StandardKLine& fourth = working_df[next_valid_elems[3]];
-    
-    // 获取前一个同类型分型
-    std::vector<int> previous_elem = getPreviousNElem(next_valid_elems[0], working_df, 0, 
-                                                     static_cast<TopBotType>(first.tb), true);
-    
-    if (!previous_elem.empty()) {
-        if (first.tb == TOP) {
-            // 对于顶分型，检查前一个顶分型的价格是否低于第四个分型的价格
-            double max_prev_price = -std::numeric_limits<double>::max();
-            for (int idx : previous_elem) {
-                if (working_df[idx].chan_price > max_prev_price) {
-                    max_prev_price = working_df[idx].chan_price;
-                }
-            }
-            with_gap = float_less(max_prev_price, fourth.chan_price);
-        } else if (first.tb == BOT) {
-            // 对于底分型，检查前一个底分型的价格是否高于第四个分型的价格
-            double min_prev_price = std::numeric_limits<double>::max();
-            for (int idx : previous_elem) {
-                if (working_df[idx].chan_price < min_prev_price) {
-                    min_prev_price = working_df[idx].chan_price;
-                }
-            }
-            with_gap = float_more(min_prev_price, fourth.chan_price);
-        }
-    }
-    
-    if (!with_gap && is_debug) {
-        // 调试输出
+    // 如果第三个是底分型且 first.chan_price <= forth.chan_price，则没有缺口
+    if (working_df[next_valid_elems[2]].tb == BOT && 
+        float_less_equal(first.chan_price, forth.chan_price)) {
+        return false;
     }
     
     return with_gap;
 }
 
-// 线段识别核心函数
-std::tuple<TopBotType, bool, bool> ChanAnalyzer::checkXDTopBotDirected(const std::vector<int>& next_valid_elems, TopBotType direction, const std::vector<StandardKLine>& working_df) {
-    if (next_valid_elems.size() < 6) {
-        return std::make_tuple(NO_TOPBOT, false, false);
-    }
-    
-    const StandardKLine& first = working_df[next_valid_elems[0]];
-    const StandardKLine& second = working_df[next_valid_elems[1]];
-    const StandardKLine& third = working_df[next_valid_elems[2]];
-    const StandardKLine& fourth = working_df[next_valid_elems[3]];
-    const StandardKLine& fifth = working_df[next_valid_elems[4]];
-    const StandardKLine& sixth = working_df[next_valid_elems[5]];
-    
-    bool with_kline_gap_as_xd = false;
-    
-    // 首先检查K线缺口作为线段的情况
-    auto gap_result = checkKlineGapAsXd(next_valid_elems, working_df, direction);
-    TopBotType xd_gap_result = std::get<0>(gap_result);
-    bool with_current_gap = std::get<1>(gap_result);
-    with_kline_gap_as_xd = std::get<2>(gap_result);
-    
-    if (with_kline_gap_as_xd && xd_gap_result != NO_TOPBOT) {
-        return std::make_tuple(xd_gap_result, with_current_gap, with_kline_gap_as_xd);
-    }
-    
-    // 检查标准的线段顶底分型
-    auto result = checkXDTopBot(first, second, third, fourth, fifth, sixth);
-    TopBotType xd_result = result.first;
-    with_current_gap = result.second;
-    
-    // 检查方向是否匹配
-    if ((xd_result == TOP && direction == BOT2TOP) || (xd_result == BOT && direction == TOP2BOT)) {
-        if (with_current_gap) {
-            // 创建working_df的副本用于检查
-            std::vector<StandardKLine> working_df_copy = working_df;
-            with_current_gap = checkPreviousElemToAvoidXdGap(with_current_gap, next_valid_elems, working_df_copy);
-        }
-        return std::make_tuple(xd_result, with_current_gap, with_kline_gap_as_xd);
-    }
-    
-    return std::make_tuple(NO_TOPBOT, with_current_gap, with_kline_gap_as_xd);
-}
-
-// 线段候选位置检查
-int ChanAnalyzer::xdTopbotCandidate(const std::vector<int>& next_valid_elems, TopBotType current_direction, std::vector<StandardKLine>& working_df, bool with_current_gap) {
-    if (next_valid_elems.size() != 3) {
-        if (is_debug) {
-            // 调试输出
-        }
-        return -1;
-    }
-    
-    // 获取价格列表
-    std::vector<double> chan_price_list;
-    for (int idx : next_valid_elems) {
-        chan_price_list.push_back(working_df[idx].chan_price);
-    }
-    
-    // 简单检查：根据方向找到极值位置
-    if (current_direction == TOP2BOT) {
-        auto min_it = std::min_element(chan_price_list.begin(), chan_price_list.end());
-        int min_index = std::distance(chan_price_list.begin(), min_it);
-        
-        if (min_index > 1) { // min_index == 2
-            return next_valid_elems[min_index - 1]; // 导航到当前底分型的起始位置
-        }
-    } else if (current_direction == BOT2TOP) {
-        auto max_it = std::max_element(chan_price_list.begin(), chan_price_list.end());
-        int max_index = std::distance(chan_price_list.begin(), max_it);
-        
-        if (max_index > 1) { // max_index == 2
-            return next_valid_elems[max_index - 1]; // 导航到当前顶分型的起始位置
-        }
-    }
-    
-    // 基于包含关系的检查
-    std::vector<int> new_valid_elems;
-    if (with_current_gap) {
-        new_valid_elems = checkInclusionByDirection(next_valid_elems[1], working_df, current_direction, 4);
-    } else {
-        new_valid_elems = checkInclusionByDirection(next_valid_elems[1], working_df, current_direction, 6);
-    }
-    
-    if (new_valid_elems.size() >= 4) {
-        int end_loc = new_valid_elems[3] + 1;
-        if (end_loc > static_cast<int>(working_df.size())) {
-            end_loc = static_cast<int>(working_df.size());
-        }
-        
-        // 获取受影响的价格范围
-        double min_price = std::numeric_limits<double>::max();
-        double max_price = -std::numeric_limits<double>::max();
-        
-        for (int i = new_valid_elems[0]; i < end_loc; i++) {
-            double price = working_df[i].chan_price;
-            if (price < min_price) min_price = price;
-            if (price > max_price) max_price = price;
-        }
-        
-        if (current_direction == TOP2BOT) {
-            if (float_less(min_price, working_df[next_valid_elems[1]].chan_price)) {
-                // 恢复数据
-                restoreTbData(working_df, next_valid_elems[1], new_valid_elems.back());
-                return next_valid_elems[1]; // 下一个候选位置
-            }
-        } else {
-            if (float_more(max_price, working_df[next_valid_elems[1]].chan_price)) {
-                // 恢复数据
-                restoreTbData(working_df, next_valid_elems[1], new_valid_elems.back());
-                return next_valid_elems[1]; // 下一个候选位置
-            }
-        }
-    }
-    
-    return -1; // 没有找到候选位置
-}
-
-// 实现缺失的函数：缺口区域识别
-std::vector<std::pair<double, double>> ChanAnalyzer::gapRegion(double start_date, double end_date, TopBotType gap_direction) {
-    std::vector<std::pair<double, double>> regions;
-    
-    // 简化实现：在指定日期范围内查找缺口
-    for (const auto& kline : original_data) {
-        if (kline.date >= start_date && kline.date <= end_date && kline.gap != 0) {
-            double start_price = kline.gap_start;
-            double end_price = kline.gap_end;
-            
-            // 根据缺口方向调整顺序
-            if (gap_direction == BOT2TOP) {
-                // 上升缺口
-                if (start_price < end_price) {
-                    regions.push_back(std::make_pair(start_price, end_price));
-                }
-            } else if (gap_direction == TOP2BOT) {
-                // 下降缺口
-                if (start_price > end_price) {
-                    regions.push_back(std::make_pair(end_price, start_price));
-                }
-            }
-        }
-    }
-    
-    return regions;
-}
-
-// 合并缺口区域
-std::vector<std::pair<double, double>> ChanAnalyzer::combineGaps(const std::vector<std::pair<double, double>>& gap_regions) {
-    std::vector<std::pair<double, double>> combined;
-    
-    if (gap_regions.empty()) {
-        return combined;
-    }
-    
-    combined.push_back(gap_regions[0]);
-    
-    for (size_t i = 1; i < gap_regions.size(); i++) {
-        const auto& current = gap_regions[i];
-        auto& last = combined.back();
-        
-        // 检查是否可以合并重叠或相邻的缺口
-        if (current.first <= last.second + MIN_PRICE_UNIT * 2) {
-            // 合并缺口区域
-            last.second = std::max(last.second, current.second);
-        } else {
-            combined.push_back(current);
-        }
-    }
-    
-    return combined;
-}
-
-// K线缺口作为线段检查
-bool ChanAnalyzer::kbarGapAsXd(const std::vector<StandardKLine>& working_df, int first_idx, int second_idx, int compare_idx) {
-    if (first_idx < 0 || second_idx < 0 || compare_idx < 0 || 
-        first_idx >= static_cast<int>(working_df.size()) || 
-        second_idx >= static_cast<int>(working_df.size()) || 
-        compare_idx >= static_cast<int>(working_df.size())) {
-        return false;
-    }
-    
-    const StandardKLine& first = working_df[first_idx];
-    const StandardKLine& second = working_df[second_idx];
-    const StandardKLine& compare = working_df[compare_idx];
-    
-    // 检查是否有明显的价格跳空
-    if (float_more(first.high, compare.low + MIN_PRICE_UNIT * 5) ||
-        float_less(first.low, compare.high - MIN_PRICE_UNIT * 5)) {
-        return true;
-    }
-    
-    // 检查第二个元素是否增强了缺口效应
-    if (float_more(second.high, compare.low + MIN_PRICE_UNIT * 3) ||
-        float_less(second.low, compare.high - MIN_PRICE_UNIT * 3)) {
-        return true;
-    }
-    
-    return false;
-}
-
-// 线段包含关系处理
-bool ChanAnalyzer::xdInclusion(const StandardKLine& first, const StandardKLine& second, const StandardKLine& third, const StandardKLine& forth) {
-    // 检查线段级别的包含关系
-    // 简化的线段包含逻辑：检查四个分型是否形成包含关系
-    
-    // 获取价格范围
-    double min_price1 = std::min(first.chan_price, second.chan_price);
-    double max_price1 = std::max(first.chan_price, second.chan_price);
-    double min_price2 = std::min(third.chan_price, forth.chan_price);
-    double max_price2 = std::max(third.chan_price, forth.chan_price);
-    
-    // 检查包含关系
-    if (float_less_equal(min_price1, min_price2) && float_more_equal(max_price1, max_price2)) {
-        return true; // 第一个线段包含第二个线段
-    } else if (float_less_equal(min_price2, min_price1) && float_more_equal(max_price2, max_price1)) {
-        return true; // 第二个线段包含第一个线段
-    }
-    
-    return false;
-}
-
-// 检查线段包含关系是否自由
-std::pair<bool, bool> ChanAnalyzer::isXDInclusionFree(TopBotType direction, const std::vector<int>& next_valid_elems, std::vector<StandardKLine>& working_df) {
-    if (next_valid_elems.size() < 4) {
-        return std::make_pair(false, false);
-    }
-    
-    bool has_inclusion = false;
-    bool is_free = true;
-    
-    for (size_t i = 0; i < next_valid_elems.size() - 3; i += 2) {
-        int idx1 = next_valid_elems[i];
-        int idx2 = next_valid_elems[i+1];
-        int idx3 = next_valid_elems[i+2];
-        int idx4 = next_valid_elems[i+3];
-        
-        if (idx1 < static_cast<int>(working_df.size()) && idx2 < static_cast<int>(working_df.size()) &&
-            idx3 < static_cast<int>(working_df.size()) && idx4 < static_cast<int>(working_df.size())) {
-            
-            const StandardKLine& first = working_df[idx1];
-            const StandardKLine& second = working_df[idx2];
-            const StandardKLine& third = working_df[idx3];
-            const StandardKLine& fourth = working_df[idx4];
-            
-            if (xdInclusion(first, second, third, fourth)) {
-                has_inclusion = true;
-                
-                // 检查包含关系是否影响当前方向
-                if ((direction == BOT2TOP && first.tb == BOT) ||
-                    (direction == TOP2BOT && first.tb == TOP)) {
-                    is_free = false;
-                }
-            }
-        }
-    }
-    
-    return std::make_pair(has_inclusion, is_free);
-}
-
-// 弹出缺口
-std::pair<int, TopBotType> ChanAnalyzer::popGap(std::vector<StandardKLine>& working_df, const std::vector<int>& next_valid_elems, TopBotType current_direction) {
-    if (next_valid_elems.size() < 2) {
-        return std::make_pair(-1, NO_TOPBOT);
-    }
-    
-    // 查找第一个有意义的缺口
-    for (size_t i = 0; i < next_valid_elems.size() - 1; i++) {
-        int idx1 = next_valid_elems[i];
-        int idx2 = next_valid_elems[i+1];
-        
-        if (idx1 < static_cast<int>(working_df.size()) && idx2 < static_cast<int>(working_df.size())) {
-            const StandardKLine& first = working_df[idx1];
-            const StandardKLine& second = working_df[idx2];
-            
-            // 检查是否有价格跳空
-            if ((current_direction == BOT2TOP && float_more(second.low, first.high + MIN_PRICE_UNIT * 3)) ||
-                (current_direction == TOP2BOT && float_less(second.high, first.low - MIN_PRICE_UNIT * 3))) {
-                
-                // 返回缺口位置和方向
-                return std::make_pair(idx1, current_direction);
-            }
-        }
-    }
-    
-    return std::make_pair(-1, NO_TOPBOT);
-}
-
-// 查找线段
-std::vector<StandardKLine> ChanAnalyzer::findXD(int initial_i, TopBotType initial_direction, std::vector<StandardKLine>& working_df) {
-    std::vector<StandardKLine> result;
-    
-    if (initial_i < 0 || initial_i >= static_cast<int>(working_df.size())) {
-        return result;
-    }
-    
-    int current_idx = initial_i;
-    TopBotType current_direction = initial_direction;
-    bool found_xd = false;
-    
-    // 查找后续的分型
-    std::vector<int> next_elems = getNextNElem(current_idx, working_df, 6, NO_TOPBOT, false);
-    
-    while (!next_elems.empty() && !found_xd) {
-        // 检查是否构成线段
-        auto xd_result = checkXDTopBotDirected(next_elems, current_direction, working_df);
-        TopBotType xd_type = std::get<0>(xd_result);
-        bool with_current_gap = std::get<1>(xd_result);
-        bool with_kline_gap_as_xd = std::get<2>(xd_result);
-        
-        if (xd_type != NO_TOPBOT) {
-            // 找到线段
-            found_xd = true;
-            
-            // 将找到的线段分型添加到结果中
-            for (int idx : next_elems) {
-                if (idx >= 0 && idx < static_cast<int>(working_df.size())) {
-                    StandardKLine kline = working_df[idx];
-                    kline.xd_tb = (idx == next_elems[2] || idx == next_elems[5]) ? xd_type : NO_TOPBOT;
-                    result.push_back(kline);
-                }
-            }
-        } else if (with_current_gap || with_kline_gap_as_xd) {
-            // 处理缺口情况
-            auto gap_info = popGap(working_df, next_elems, current_direction);
-            int gap_idx = gap_info.first;
-            
-            if (gap_idx != -1) {
-                // 跳过缺口，继续查找
-                current_idx = gap_idx + 1;
-                next_elems = getNextNElem(current_idx, working_df, 6, NO_TOPBOT, false);
-                continue;
-            }
-        }
-        
-        // 移动到下一个位置
-        if (!next_elems.empty()) {
-            current_idx = next_elems[0] + 1;
-        } else {
-            current_idx++;
-        }
-        next_elems = getNextNElem(current_idx, working_df, 6, NO_TOPBOT, false);
-    }
-    
-    // 如果没有找到完整的线段，但至少有一些分型，返回部分结果
-    if (result.empty() && !next_elems.empty()) {
-        for (int idx : next_elems) {
-            if (idx >= 0 && idx < static_cast<int>(working_df.size())) {
-                result.push_back(working_df[idx]);
-            }
-        }
-    }
-    
-    return result;
-}
-
-// 增强的线段定义函数
-void ChanAnalyzer::defineXDEnhanced(int initial_state) {
+// XD定义函数 (基于Python defineXD逻辑)
+void ChanAnalyzer::defineXD(int initial_state) {
     if (marked_bi.empty()) return;
     
-    // 使用标记的笔作为起点
+    // 使用marked_bi作为working_df
     std::vector<StandardKLine> working_df = marked_bi;
+    
+    // 确保所有marked_bi都有正确的chan_price
+    for (auto& kline : working_df) {
+        if (kline.chan_price == 0) {
+            kline.chan_price = (kline.tb == TOP) ? kline.high : kline.low;
+        }
+    }
+    
+    // 调用Full版本进行线段定义
+    std::pair<int, TopBotType> initial = findInitialDirectionFull(working_df, static_cast<TopBotType>(initial_state));
+    int initial_loc = initial.first;
+    TopBotType initial_direction = initial.second;
+    
+    if (initial_loc < 0 || initial_loc >= static_cast<int>(working_df.size())) {
+        return;
+    }
+    
+    // 设置初始xd_tb
+    if (initial_state != NO_TOPBOT) {
+        working_df[initial_loc].xd_tb = initial_state;
+    }
+    
+    // 开始查找线段
     std::vector<StandardKLine> xd_result;
+    int current_idx = initial_loc;
     
-    // 确定初始方向
-    TopBotType current_direction = findInitialDirection(working_df, static_cast<TopBotType>(initial_state));
-    
-    // 从头开始查找线段
-    int current_idx = 0;
     while (current_idx < static_cast<int>(working_df.size())) {
-        std::vector<StandardKLine> found_xd = findXD(current_idx, current_direction, working_df);
+        std::vector<StandardKLine> found_xd = findXDFull(current_idx, initial_direction, working_df);
         
         if (!found_xd.empty()) {
-            // 将找到的线段添加到结果中
+            // 添加找到的线段元素
             for (const auto& kline : found_xd) {
                 if (kline.xd_tb != NO_TOPBOT) {
                     xd_result.push_back(kline);
@@ -1999,13 +1405,451 @@ void ChanAnalyzer::defineXDEnhanced(int initial_state) {
             }
             
             // 切换方向
-            current_direction = (current_direction == BOT2TOP) ? TOP2BOT : BOT2TOP;
+            initial_direction = (initial_direction == BOT2TOP) ? TOP2BOT : BOT2TOP;
         } else {
             current_idx++;
         }
     }
     
     marked_xd = xd_result;
+}
+
+// 查找初始方向 (Python find_initial_direction line 957-995)
+std::pair<int, TopBotType> ChanAnalyzer::findInitialDirectionFull(
+        std::vector<StandardKLine>& working_df, TopBotType initial_status) {
+    if (working_df.empty()) {
+        return std::make_pair(-1, NO_TOPBOT);
+    }
+    
+    if (initial_status != NO_TOPBOT) {
+        // Python line 961-968: 根据初始状态在前6个元素中找极值
+        int search_end = std::min(6, static_cast<int>(working_df.size()));
+        if (initial_status == TOP) {
+            int initial_loc = 0;
+            double max_price = working_df[0].chan_price;
+            for (int i = 1; i < search_end; i++) {
+                if (float_more(working_df[i].chan_price, max_price)) {
+                    max_price = working_df[i].chan_price;
+                    initial_loc = i;
+                }
+            }
+            working_df[initial_loc].xd_tb = TOP;
+            return std::make_pair(initial_loc, TOP2BOT);
+        } else if (initial_status == BOT) {
+            int initial_loc = 0;
+            double min_price = working_df[0].chan_price;
+            for (int i = 1; i < search_end; i++) {
+                if (float_less(working_df[i].chan_price, min_price)) {
+                    min_price = working_df[i].chan_price;
+                    initial_loc = i;
+                }
+            }
+            working_df[initial_loc].xd_tb = BOT;
+            return std::make_pair(initial_loc, BOT2TOP);
+        }
+        return std::make_pair(0, NO_TOPBOT);
+    }
+    
+    // Python line 973-994: 无初始状态时，通过检查前4个元素确定方向
+    int current_loc = 0;
+    TopBotType initial_direction = NO_TOPBOT;
+    int initial_loc = 0;
+    
+    while (current_loc + 3 < static_cast<int>(working_df.size())) {
+        const StandardKLine& first = working_df[current_loc];
+        const StandardKLine& second = working_df[current_loc + 1];
+        const StandardKLine& third = working_df[current_loc + 2];
+        const StandardKLine& forth = working_df[current_loc + 3];
+        
+        bool found_direction = false;
+        
+        if (float_less(first.chan_price, second.chan_price)) {
+            found_direction = (float_less_equal(first.chan_price, third.chan_price) && float_less(second.chan_price, forth.chan_price)) ||
+                              (float_more_equal(first.chan_price, third.chan_price) && float_more(second.chan_price, forth.chan_price));
+        } else {
+            found_direction = (float_less(first.chan_price, third.chan_price) && float_less_equal(second.chan_price, forth.chan_price)) ||
+                              (float_more(first.chan_price, third.chan_price) && float_more_equal(second.chan_price, forth.chan_price));
+        }
+        
+        if (found_direction) {
+            initial_direction = (float_less(first.chan_price, third.chan_price) || float_less(second.chan_price, forth.chan_price)) ? BOT2TOP : TOP2BOT;
+            initial_loc = current_loc;
+            break;
+        } else {
+            current_loc++;
+        }
+    }
+    
+    return std::make_pair(initial_loc, initial_direction);
+}
+
+// 查找线段 (Python find_XD line 1423-1540)
+std::vector<StandardKLine> ChanAnalyzer::findXDFull(
+        int initial_i, TopBotType initial_direction, 
+        std::vector<StandardKLine>& working_df) {
+    std::vector<StandardKLine> result;
+    if (initial_i < 0 || initial_i >= static_cast<int>(working_df.size()) || initial_direction == NO_TOPBOT) {
+        return result;
+    }
+    
+    int current_idx = initial_i;
+    TopBotType current_direction = initial_direction;
+    
+    while (current_idx < static_cast<int>(working_df.size())) {
+        // Python line 1465-1517: 检查方向一致性，找齐6个元素
+        std::vector<int> next_valid_elems = getNextNElem(current_idx, working_df, 6, current_direction, true);
+        
+        if (static_cast<int>(next_valid_elems.size()) < 6) {
+            // Python line 1470: 不够6个时尝试更少的
+            next_valid_elems = getNextNElem(current_idx, working_df, 4, current_direction, true);
+            
+            if (static_cast<int>(next_valid_elems.size()) >= 4) {
+                // Python line 1476-1496: 检查4个元素是否构成XD
+                auto [xd_type, with_gap, with_kline_gap] = checkXDTopBotDirectedFull(next_valid_elems, current_direction, working_df);
+                
+                if (xd_type != NO_TOPBOT) {
+                    // Python line 1497: XD found
+                    working_df[next_valid_elems[2]].xd_tb = xd_type;
+                    result.push_back(working_df[next_valid_elems[2]]);
+                    break;
+                }
+            }
+            
+            // Python line 1502: 找到极值位置
+            int candidate = xdTopbotCandidateFull(next_valid_elems, current_direction, working_df, false);
+            if (candidate >= 0) {
+                current_idx = candidate;
+                continue;
+            }
+            break;
+        }
+        
+        // Python line 1465-1517: 主循环 - 检查方向一致性和XD顶底
+        // 先检查前4个是否满足包含关系自由
+        std::vector<int> first4(next_valid_elems.begin(), next_valid_elems.begin() + 4);
+        auto [is_free, has_kline_gap] = isXDInclusionFreeFull(current_direction, first4, working_df);
+        
+        if (has_kline_gap) {
+            // Python line 1505-1517: 有K线缺口，处理并继续
+            auto [xd_type, with_gap, with_kline_gap_flag] = checkXDTopBotDirectedFull(next_valid_elems, current_direction, working_df);
+            
+            if (xd_type != NO_TOPBOT) {
+                working_df[next_valid_elems[2]].xd_tb = xd_type;
+                result.push_back(working_df[next_valid_elems[2]]);
+                break;
+            }
+            
+            // 弹出处理
+            auto [pop_idx, pop_direction] = popGapFull(working_df, next_valid_elems, current_direction);
+            if (pop_idx >= 0) {
+                current_idx = pop_idx;
+                current_direction = pop_direction;
+                continue;
+            }
+            break;
+        }
+        
+        if (is_free) {
+            // Python line 1534-1537: 包含关系自由，检查XD顶底
+            auto [xd_type, with_gap, with_kline_gap_flag] = checkXDTopBotDirectedFull(next_valid_elems, current_direction, working_df);
+            
+            if (xd_type != NO_TOPBOT) {
+                working_df[next_valid_elems[2]].xd_tb = xd_type;
+                result.push_back(working_df[next_valid_elems[2]]);
+                break;
+            }
+            
+            // Python line 1541-1546: 检查后4个
+            std::vector<int> last4(next_valid_elems.begin() + 2, next_valid_elems.end());
+            auto [is_free2, has_kline_gap2] = isXDInclusionFreeFull(current_direction, last4, working_df);
+            
+            if (has_kline_gap2) {
+                auto [pop_idx, pop_direction] = popGapFull(working_df, next_valid_elems, current_direction);
+                if (pop_idx >= 0) {
+                    current_idx = pop_idx;
+                    current_direction = pop_direction;
+                    continue;
+                }
+                break;
+            }
+            
+            if (is_free2) {
+                auto [xd_type2, with_gap2, with_kline_gap_flag2] = checkXDTopBotDirectedFull(next_valid_elems, current_direction, working_df);
+                
+                if (xd_type2 != NO_TOPBOT) {
+                    working_df[next_valid_elems[2]].xd_tb = xd_type2;
+                    result.push_back(working_df[next_valid_elems[2]]);
+                    break;
+                }
+            }
+            
+            // Python line 1580: 使用候选位置
+            int candidate = xdTopbotCandidateFull(next_valid_elems, current_direction, working_df, false);
+            if (candidate >= 0) {
+                current_idx = candidate;
+                continue;
+            }
+        }
+        
+        // 移动到一个新位置
+        if (!next_valid_elems.empty()) {
+            current_idx = next_valid_elems[0] + 1;
+        } else {
+            current_idx++;
+        }
+    }
+    
+    return result;
+}
+
+// 按方向检查包含关系 (Python check_inclusion_by_direction line 1002-1029)
+std::vector<int> ChanAnalyzer::checkInclusionByDirectionFull(
+        int current_loc, std::vector<StandardKLine>& working_df, 
+        TopBotType direction, int count_num) {
+    std::vector<int> next_valid_elems;
+    int i = current_loc;
+    
+    while (i < static_cast<int>(working_df.size()) && 
+           static_cast<int>(next_valid_elems.size()) < count_num) {
+        if (working_df[i].tb != NO_TOPBOT) {
+            next_valid_elems.push_back(i);
+        }
+        i++;
+    }
+    
+    if (static_cast<int>(next_valid_elems.size()) < count_num) return next_valid_elems;
+    
+    // 检查包含关系
+    i = current_loc;
+    while (static_cast<int>(next_valid_elems.size()) < count_num * 2) { // 最多尝试到初始数量的两倍
+        if (i >= static_cast<int>(working_df.size())) break;
+        
+        if (working_df[i].tb == NO_TOPBOT) {
+            i++;
+            continue;
+        }
+        
+        next_valid_elems.push_back(i);
+        
+        if (count_num == 4) {
+            if (static_cast<int>(next_valid_elems.size()) >= 4) {
+                bool is_free, has_kline_gap;
+                std::tie(is_free, has_kline_gap) = isXDInclusionFreeFull(direction, next_valid_elems, working_df);
+                if (is_free) break;
+            }
+        } else if (count_num == 6) {
+            if (static_cast<int>(next_valid_elems.size()) >= 6) {
+                std::vector<int> first4(next_valid_elems.begin(), next_valid_elems.begin() + 4);
+                bool is_free, has_kline_gap;
+                std::tie(is_free, has_kline_gap) = isXDInclusionFreeFull(direction, first4, working_df);
+                if (has_kline_gap) break;
+                if (is_free) {
+                    std::vector<int> last4(next_valid_elems.begin() + 2, next_valid_elems.end());
+                    std::tie(is_free, has_kline_gap) = isXDInclusionFreeFull(direction, last4, working_df);
+                    if (is_free) break;
+                }
+            }
+        } else { // count_num == 8
+            if (static_cast<int>(next_valid_elems.size()) >= 8) {
+                std::vector<int> first4(next_valid_elems.begin(), next_valid_elems.begin() + 4);
+                bool is_free, has_kline_gap;
+                std::tie(is_free, has_kline_gap) = isXDInclusionFreeFull(direction, first4, working_df);
+                if (has_kline_gap) break;
+                if (is_free) {
+                    std::vector<int> mid4(next_valid_elems.begin() + 2, next_valid_elems.begin() + 6);
+                    std::tie(is_free, has_kline_gap) = isXDInclusionFreeFull(direction, mid4, working_df);
+                    if (has_kline_gap) break;
+                    if (is_free) {
+                        std::vector<int> last4(next_valid_elems.begin() + 4, next_valid_elems.end());
+                        std::tie(is_free, has_kline_gap) = isXDInclusionFreeFull(direction, last4, working_df);
+                        if (is_free) break;
+                    }
+                }
+            }
+        }
+        i++;
+    }
+    return next_valid_elems;
+}
+
+// 确保方向一致性地获取N个元素
+std::vector<int> ChanAnalyzer::getNextNElem(int loc, const std::vector<StandardKLine>& working_df, 
+        int N, TopBotType start_tb, bool single_direction) {
+    std::vector<int> result;
+    
+    TopBotType last_tb = start_tb;
+    for (int i = loc; i < static_cast<int>(working_df.size()); i++) {
+        if (working_df[i].tb == TOP || working_df[i].tb == BOT) {
+            if (single_direction && last_tb != NO_TOPBOT) {
+                // 检查方向是否一致
+                if (last_tb == TOP && working_df[i].tb == BOT) continue;
+                if (last_tb == BOT && working_df[i].tb == TOP) continue;
+            }
+            result.push_back(i);
+            last_tb = static_cast<TopBotType>(working_df[i].tb);
+            if (static_cast<int>(result.size()) >= N) break;
+        }
+    }
+    
+    return result;
+}
+
+// 获取前N个有效元素
+std::vector<int> ChanAnalyzer::getPreviousNElem(int loc, const std::vector<StandardKLine>& working_df, 
+        int N, TopBotType end_tb, bool single_direction) {
+    std::vector<int> result;
+    
+    TopBotType last_tb = end_tb;
+    for (int i = loc - 1; i >= 0; i--) {
+        if (working_df[i].tb == TOP || working_df[i].tb == BOT) {
+            if (single_direction && last_tb != NO_TOPBOT) {
+                if (last_tb == TOP && working_df[i].tb == BOT) continue;
+                if (last_tb == BOT && working_df[i].tb == TOP) continue;
+            }
+            result.push_back(i);
+            last_tb = static_cast<TopBotType>(working_df[i].tb);
+            if (static_cast<int>(result.size()) >= N) break;
+        }
+    }
+    
+    std::reverse(result.begin(), result.end());
+    return result;
+}
+
+// 方向断言
+bool ChanAnalyzer::directionAssert(const StandardKLine& elem, TopBotType direction) {
+    if (direction == BOT2TOP) {
+        return elem.tb == BOT;
+    } else if (direction == TOP2BOT) {
+        return elem.tb == TOP;
+    }
+    return false;
+}
+
+// 恢复TB数据
+void ChanAnalyzer::restoreTbData(std::vector<StandardKLine>& working_df, int from_idx, int to_idx) {
+    for (int i = from_idx; i <= to_idx && i < static_cast<int>(working_df.size()); i++) {
+        if (working_df[i].original_tb != NO_TOPBOT) {
+            working_df[i].tb = working_df[i].original_tb;
+        }
+    }
+}
+
+// 滤波去缺口 (Python filter_gap line 1001-1018)
+std::vector<std::pair<double, double>> ChanAnalyzer::gapRegion(double start_date, double end_date, TopBotType gap_direction) {
+    std::vector<std::pair<double, double>> result;
+    
+    // Python gap_region line 313-321
+    for (const auto& kline : original_data) {
+        if (kline.date > start_date && kline.date <= end_date) {
+            if (gap_direction == NO_TOPBOT) {
+                if (kline.gap != 0) {
+                    result.push_back(std::make_pair(kline.gap_start, kline.gap_end));
+                }
+            } else if (gap_direction == TOP2BOT) {
+                if (kline.gap == -1) {
+                    result.push_back(std::make_pair(kline.gap_start, kline.gap_end));
+                }
+            } else if (gap_direction == BOT2TOP) {
+                if (kline.gap == 1) {
+                    result.push_back(std::make_pair(kline.gap_start, kline.gap_end));
+                }
+            }
+        }
+    }
+    
+    return result;
+}
+
+// 合并缺口 (Python combine_gaps line 997-1006)
+std::vector<std::pair<double, double>> ChanAnalyzer::combineGaps(const std::vector<std::pair<double, double>>& gap_regions) {
+    if (gap_regions.empty()) return {};
+    
+    std::vector<std::pair<double, double>> combined;
+    combined.push_back(gap_regions[0]);
+    
+    for (size_t i = 1; i < gap_regions.size(); i++) {
+        auto& last = combined.back();
+        const auto& current = gap_regions[i];
+        
+        // 如果有重叠或相邻，合并
+        if (float_less_equal(last.second, current.first)) {
+            last.second = current.second;
+        } else {
+            combined.push_back(current);
+        }
+    }
+    
+    return combined;
+}
+
+// K线缺口作为线段 (原始版本)
+bool ChanAnalyzer::kbarGapAsXd(const std::vector<StandardKLine>& working_df, 
+                                int first_idx, int second_idx, int compare_idx) {
+    return kbarGapAsXdFull(working_df, first_idx, second_idx, compare_idx);
+}
+
+// XD包含关系 (原始版本)
+bool ChanAnalyzer::xdInclusion(const StandardKLine& first, const StandardKLine& second, 
+                                const StandardKLine& third, const StandardKLine& forth) {
+    return xdInclusionFull(first, second, third, forth);
+}
+
+// 检查XD包含关系是否自由 (原始版本)
+std::pair<bool, bool> ChanAnalyzer::isXDInclusionFree(TopBotType direction, 
+        const std::vector<int>& next_valid_elems, std::vector<StandardKLine>& working_df) {
+    return isXDInclusionFreeFull(direction, next_valid_elems, working_df);
+}
+
+// 按方向检查包含关系 (原始版本)
+std::vector<int> ChanAnalyzer::checkInclusionByDirection(int current_loc, 
+        std::vector<StandardKLine>& working_df, TopBotType direction, int count_num) {
+    return checkInclusionByDirectionFull(current_loc, working_df, direction, count_num);
+}
+
+// XD候选位置 (原始版本)
+int ChanAnalyzer::xdTopbotCandidate(const std::vector<int>& next_valid_elems, 
+        TopBotType current_direction, std::vector<StandardKLine>& working_df, bool with_current_gap) {
+    return xdTopbotCandidateFull(next_valid_elems, current_direction, working_df, with_current_gap);
+}
+
+// popGap (原始版本)
+std::pair<int, TopBotType> ChanAnalyzer::popGap(std::vector<StandardKLine>& working_df, 
+        const std::vector<int>& next_valid_elems, TopBotType current_direction) {
+    return popGapFull(working_df, next_valid_elems, current_direction);
+}
+
+// K线缺口作为线段 (Full版本)
+std::tuple<TopBotType, bool, bool> ChanAnalyzer::checkKlineGapAsXd(
+        const std::vector<int>& next_valid_elems, TopBotType direction, 
+        std::vector<StandardKLine>& working_df) {
+    return checkKlineGapAsXdFull(next_valid_elems, direction, working_df);
+}
+
+// 检查XD顶底 (原始版本)
+std::pair<TopBotType, bool> ChanAnalyzer::checkXDTopBot(const StandardKLine& first, const StandardKLine& second,
+        const StandardKLine& third, const StandardKLine& forth,
+        const StandardKLine& fifth, const StandardKLine& sixth) {
+    return checkXDTopBotFull(first, second, third, forth, fifth, sixth);
+}
+
+// XD顶底方向 (原始版本)
+std::tuple<TopBotType, bool, bool> ChanAnalyzer::checkXDTopBotDirected(
+        const std::vector<int>& next_valid_elems, TopBotType direction, 
+        std::vector<StandardKLine>& working_df) {
+    return checkXDTopBotDirectedFull(next_valid_elems, direction, working_df);
+}
+
+// 查找XD (原始版本)
+std::vector<StandardKLine> ChanAnalyzer::findXD(int initial_i, TopBotType initial_direction, 
+        std::vector<StandardKLine>& working_df) {
+    return findXDFull(initial_i, initial_direction, working_df);
+}
+
+// 增强的线段定义函数
+void ChanAnalyzer::defineXDEnhanced(int initial_state) {
+    // 直接调用主版本
+    defineXD(initial_state);
 }
 
 // 查找初始方向
@@ -2140,15 +1984,15 @@ bool ChanAnalyzer::check_gap_qualify(
     int current_index,
     int next_index) {
     
-    // 检查在指定范围内是否存在缺口
+    // 检查在指定范围内是否存在缺口 (Python check_gap_qualify lines 417-443)
     if (next_index < 0 || next_index >= static_cast<int>(working_df.size()) ||
         current_index < 0 || current_index >= static_cast<int>(working_df.size())) {
         return false;
     }
     
-    // 检查缺口是否存在于当前分型和下一个分型之间
-    if (gapExistsInRange(working_df[current_index].date, working_df[next_index].date)) {
-        // 确定缺口方向
+    // Python line 421: gap exists between current and next
+    if (gapExistsInDateRange(working_df[current_index].date, working_df[next_index].date)) {
+        // Python line 422-424: determine gap direction
         TopBotType gap_direction = NO_TOPBOT;
         if (working_df[next_index].tb == TOP) {
             gap_direction = BOT2TOP;
@@ -2160,28 +2004,28 @@ bool ChanAnalyzer::check_gap_qualify(
             return false;
         }
         
-        // 获取缺口区域
+        // Python line 425-426: get gap region
         auto gap_ranges = gapRegion(working_df[current_index].date, 
                                    working_df[next_index].date, 
                                    gap_direction);
         gap_ranges = combineGaps(gap_ranges);
         
-        // 检查每个缺口是否满足条件
+        // Python line 427-442: check each gap
         for (const auto& gap : gap_ranges) {
-            if (previous_index < 0) {
+            if (previous_index < 0 || previous_index >= static_cast<int>(working_df.size())) {
                 return true;
             }
             
+            // Python line 431-435: for TOP previous
             if (working_df[previous_index].tb == TOP) {
-                // 对于顶分型：缺口高于前一个顶分型的低点
                 bool qualify = float_less(gap.first, working_df[previous_index].low) &&
                               float_less_equal(working_df[previous_index].low, working_df[previous_index].high) &&
                               float_less(working_df[previous_index].high, gap.second);
                 if (qualify) {
                     return true;
                 }
+            // Python line 436-440: for BOT previous
             } else if (working_df[previous_index].tb == BOT) {
-                // 对于底分型：缺口低于前一个底分型的高点
                 bool qualify = float_more(gap.second, working_df[previous_index].high) &&
                               float_more_equal(working_df[previous_index].high, working_df[previous_index].low) &&
                               float_more(working_df[previous_index].low, gap.first);
@@ -2197,24 +2041,52 @@ bool ChanAnalyzer::check_gap_qualify(
 
 // 实现缺失的函数：trace_back_index
 int ChanAnalyzer::trace_back_index(const std::vector<StandardKLine>& working_df, int current_index) {
-    // 回溯查找前一个有效分型
+    // 回溯查找前一个有效分型 (Python trace_back_index lines 249-259)
     for (int i = current_index - 1; i >= 0; i--) {
         if (working_df[i].tb == TOP || working_df[i].tb == BOT) {
             return i;
         }
     }
-    return -1;
+    return -1;  // Python returns None -> -1 in C++
 }
 
 // 实现缺失的函数：get_next_tb
 int ChanAnalyzer::get_next_tb(int current_index, const std::vector<StandardKLine>& working_df) {
-    // 查找下一个有效分型
+    // 查找下一个有效分型 (Python get_next_tb lines 323-332)
     for (int i = current_index + 1; i < static_cast<int>(working_df.size()); i++) {
         if (working_df[i].tb == TOP || working_df[i].tb == BOT) {
             return i;
         }
     }
     return static_cast<int>(working_df.size()); // 返回末尾索引
+}
+
+std::vector<Bi> ChanAnalyzer::getBi() const {
+    std::vector<Bi> result;
+    
+    // 将连续的分型配对形成笔
+    for (size_t i = 0; i + 1 < marked_bi.size(); i++) {
+        const StandardKLine& start = marked_bi[i];
+        const StandardKLine& end = marked_bi[i+1];
+        
+        // 确保分型类型交替
+        if ((start.tb == BOT && end.tb == TOP) || 
+            (start.tb == TOP && end.tb == BOT)) {
+            
+            Bi bi;
+            bi.start_date = start.date;
+            bi.end_date = end.date;
+            bi.start_price = start.chan_price;
+            bi.end_price = end.chan_price;
+            bi.type = start.tb;
+            bi.start_index = start.real_loc;
+            bi.end_index = end.real_loc;
+            
+            result.push_back(bi);
+        }
+    }
+    
+    return result;
 }
 
 std::vector<XianDuan> ChanAnalyzer::getXianDuan() const {
@@ -2235,8 +2107,8 @@ std::vector<XianDuan> ChanAnalyzer::getXianDuan() const {
             xd.start_price = start.chan_price;
             xd.end_price = end.chan_price;
             xd.type = start.xd_tb;
-            xd.start_index = start.new_index;
-            xd.end_index = end.new_index;
+            xd.start_index = start.real_loc;
+            xd.end_index = end.real_loc;
             
             result.push_back(xd);
         }

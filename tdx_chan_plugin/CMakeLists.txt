@@ -3,6 +3,9 @@ project (TDXChanPlugin)
 set (TDXChanPlugin_VERSION_MAJOR 1)
 set (TDXChanPlugin_VERSION_MINOR 0)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # 明确列出源文件，避免包含Main_Simple.cpp
 set(SRCS
     ChanAnalyzer.cpp
