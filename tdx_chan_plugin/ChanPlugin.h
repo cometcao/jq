@@ -171,39 +171,20 @@ private:
     
     // Index lookup
     int getNextLoc(int loc, const std::vector<StandardKLine>& working_df);
-    int getPreviousLoc(int loc, const std::vector<StandardKLine>& working_df);
     
-    // Clean first two top/bottom patterns
-    std::vector<StandardKLine> cleanFirstTwoTB(const std::vector<StandardKLine>& working_df);
+    // Clean first two top/bottom patterns (in-place)
+    void cleanFirstTwoTB(std::vector<StandardKLine>& working_df);
     
-    
-    // Advanced gap processing functions
+    // Gap processing
     std::vector<std::pair<double, double>> gapRegion(double start_date, double end_date, TopBotType gap_direction);
     std::vector<std::pair<double, double>> combineGaps(const std::vector<std::pair<double, double>>& gap_regions);
-    bool kbarGapAsXd(const std::vector<StandardKLine>& working_df, int first_idx, int second_idx, int compare_idx);
     
-    // Line segment inclusion relation processing
-    bool xdInclusion(const StandardKLine& first, const StandardKLine& second, const StandardKLine& third, const StandardKLine& forth);
-    std::pair<bool, bool> isXDInclusionFree(TopBotType direction, const std::vector<int>& next_valid_elems, std::vector<StandardKLine>& working_df);
-    
-    // Advanced line segment recognition
-    std::vector<int> checkInclusionByDirection(int current_loc, std::vector<StandardKLine>& working_df, TopBotType direction, int count_num = 6);
-    std::tuple<TopBotType, bool, bool> checkKlineGapAsXd(const std::vector<int>& next_valid_elems, TopBotType direction, std::vector<StandardKLine>& working_df);
-    std::pair<TopBotType, bool> checkXDTopBot(const StandardKLine& first, const StandardKLine& second, const StandardKLine& third, 
-                                              const StandardKLine& fourth, const StandardKLine& fifth, const StandardKLine& sixth);
-    std::tuple<TopBotType, bool, bool> checkXDTopBotDirected(const std::vector<int>& next_valid_elems, TopBotType direction, std::vector<StandardKLine>& working_df);
-    std::vector<StandardKLine> findXD(int initial_i, TopBotType initial_direction, std::vector<StandardKLine>& working_df);
-    
-    // Helper functions
+    // Core helper functions
     std::vector<int> getNextNElem(int loc, const std::vector<StandardKLine>& working_df, int N = 4, TopBotType start_tb = NO_TOPBOT, bool single_direction = false);
     std::vector<int> getPreviousNElem(int loc, const std::vector<StandardKLine>& working_df, int N = 0, TopBotType end_tb = NO_TOPBOT, bool single_direction = true);
     bool directionAssert(const StandardKLine& elem, TopBotType direction);
-    TopBotType findInitialDirection(const std::vector<StandardKLine>& working_df, TopBotType initial_status);
-    void restoreTbData(std::vector<StandardKLine>& working_df, int from_idx, int to_idx);
-    int xdTopbotCandidate(const std::vector<int>& next_valid_elems, TopBotType current_direction, std::vector<StandardKLine>& working_df, bool with_current_gap);
-    std::pair<int, TopBotType> popGap(std::vector<StandardKLine>& working_df, const std::vector<int>& next_valid_elems, TopBotType current_direction);
     
-    // Full line segment definition helper functions (Full implementation matching Python)
+    // Line segment (XD) Full implementations
     bool xdInclusionFull(const StandardKLine& firstElem, const StandardKLine& secondElem,
                          const StandardKLine& thirdElem, const StandardKLine& forthElem);
     bool checkCurrentGap(const std::vector<StandardKLine>& working_df, int idx0, int idx1, int idx2, int idx3);
@@ -219,14 +200,10 @@ private:
     std::pair<int, TopBotType> popGapFull(std::vector<StandardKLine>& working_df, const std::vector<int>& next_valid_elems, TopBotType current_direction);
     std::vector<StandardKLine> findXDFull(int initial_i, TopBotType initial_direction, std::vector<StandardKLine>& working_df);
     std::pair<int, TopBotType> findInitialDirectionFull(std::vector<StandardKLine>& working_df, TopBotType initial_status);
-    
-    // Check previous element to avoid line segment gap
     bool checkPreviousElemToAvoidXdGap(bool with_gap, const std::vector<int>& next_valid_elems, std::vector<StandardKLine>& working_df);
     
-    // Enhanced line segment definition function
-    void defineXDEnhanced(int initial_state = NO_TOPBOT);
-    
-    // Missing function declarations
+    // Bi definition helpers
+    void restoreTbData(std::vector<StandardKLine>& working_df, int from_idx, int to_idx);
     std::tuple<int, int, int> same_tb_remove_previous(std::vector<StandardKLine>& working_df, int previous_index, int current_index, int next_index);
     std::tuple<int, int, int> same_tb_remove_current(std::vector<StandardKLine>& working_df, int previous_index, int current_index, int next_index);
     std::tuple<int, int, int> same_tb_remove_next(std::vector<StandardKLine>& working_df, int previous_index, int current_index, int next_index);

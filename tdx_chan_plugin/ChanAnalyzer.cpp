@@ -125,15 +125,6 @@ int ChanAnalyzer::getNextLoc(int loc, const std::vector<StandardKLine>& working_
     return static_cast<int>(working_df.size());
 }
 
-int ChanAnalyzer::getPreviousLoc(int loc, const std::vector<StandardKLine>& working_df) {
-    for (int i = loc - 1; i >= 0; i--) {
-        if (working_df[i].tb == TOP || working_df[i].tb == BOT) {
-            return i;
-        }
-    }
-    return -1;
-}
-
 void ChanAnalyzer::standardize(int initial_state) {
     if (original_data.empty()) return;
     
@@ -314,123 +305,96 @@ void ChanAnalyzer::markTopBot(int initial_state, bool mark_last_kbar) {
     }
 }
 
-// 清理前两个顶底分�?(Python clean_first_two_tb lines 334-415)
-std::vector<StandardKLine> ChanAnalyzer::cleanFirstTwoTB(const std::vector<StandardKLine>& working_df) {
-    std::vector<StandardKLine> result = working_df;
-    
-    if (result.size() < 3) return result;
-    
-    // Python code uses a different indexing scheme: 
-    // firstIdx=0, secondIdx=firstIdx+1, thirdIdx=secondIdx+1
-    // and uses get_next_loc to find NEXT valid tb after removal
-    // This is fundamentally different from simple index-based iteration.
-    // The working_df here has already been filtered to only tb entries.
-    // But in Python, working_df is the full numpy array of standardized data,
-    // filtered to non-noTopBot entries via boolean indexing on line 501.
-    // Then clean_first_two_tb works on the filtered array.
-    
-    // The key insight: result here has contiguous tb entries (0,1,2,...)
-    // Python's get_next_loc on a filtered array is just idx+1.
+// 清理前两个顶底分型 (in-place, 匹配Python clean_first_two_tb)
+void ChanAnalyzer::cleanFirstTwoTB(std::vector<StandardKLine>& working_df) {
+    if (working_df.size() < 3) return;
     
     int first_idx = 0;
     int second_idx = 1;
     int third_idx = 2;
     
-    while (third_idx < static_cast<int>(result.size())) {
-        StandardKLine& first = result[first_idx];
-        StandardKLine& second = result[second_idx];
-        StandardKLine& third = result[third_idx];
+    while (third_idx < static_cast<int>(working_df.size())) {
+        StandardKLine& first = working_df[first_idx];
+        StandardKLine& second = working_df[second_idx];
+        StandardKLine& third = working_df[third_idx];
         
-        // Python line 348-352: both TOP, first.high < second.high -> remove first
         if (first.tb == TOP && second.tb == TOP && float_less(first.high, second.high)) {
             first.tb = NO_TOPBOT;
-            first_idx = getNextLoc(first_idx, result);
-            second_idx = getNextLoc(first_idx, result);
-            third_idx = getNextLoc(second_idx, result);
+            first_idx = getNextLoc(first_idx, working_df);
+            second_idx = getNextLoc(first_idx, working_df);
+            third_idx = getNextLoc(second_idx, working_df);
             continue;
         }
-        // Python line 354-358: both TOP, first.high >= second.high -> remove second
         else if (first.tb == TOP && second.tb == TOP && float_more_equal(first.high, second.high)) {
             second.tb = NO_TOPBOT;
-            second_idx = getNextLoc(second_idx, result);
-            third_idx = getNextLoc(second_idx, result);
+            second_idx = getNextLoc(second_idx, working_df);
+            third_idx = getNextLoc(second_idx, working_df);
             continue;
         }
-        // Python line 359-363: both BOT, first.low > second.low -> remove first
         else if (first.tb == BOT && second.tb == BOT && float_more(first.low, second.low)) {
             first.tb = NO_TOPBOT;
-            first_idx = getNextLoc(first_idx, result);
-            second_idx = getNextLoc(first_idx, result);
-            third_idx = getNextLoc(second_idx, result);
+            first_idx = getNextLoc(first_idx, working_df);
+            second_idx = getNextLoc(first_idx, working_df);
+            third_idx = getNextLoc(second_idx, working_df);
             continue;
         }
-        // Python line 365-369: both BOT, first.low <= second.low -> remove second
         else if (first.tb == BOT && second.tb == BOT && float_less_equal(first.low, second.low)) {
             second.tb = NO_TOPBOT;
-            second_idx = getNextLoc(second_idx, result);
-            third_idx = getNextLoc(second_idx, result);
+            second_idx = getNextLoc(second_idx, working_df);
+            third_idx = getNextLoc(second_idx, working_df);
             continue;
         }
-        // Python line 370-395: distance < 4 between first.second
         else if (second.new_index - first.new_index < 4) {
-            // Python: if first.tb == third.tb (same type)
             if (first.tb == third.tb) {
                 if (first.tb == TOP) {
-                    // Python 371-376: both TOP, first.high < third.high -> remove first
                     if (float_less(first.high, third.high)) {
                         first.tb = NO_TOPBOT;
-                        first_idx = getNextLoc(first_idx, result);
-                        second_idx = getNextLoc(first_idx, result);
-                        third_idx = getNextLoc(second_idx, result);
+                        first_idx = getNextLoc(first_idx, working_df);
+                        second_idx = getNextLoc(first_idx, working_df);
+                        third_idx = getNextLoc(second_idx, working_df);
                         continue;
                     }
-                    // Python 377-381: both TOP, first.high >= third.high -> remove second
                     else {
                         second.tb = NO_TOPBOT;
-                        second_idx = getNextLoc(second_idx, result);
-                        third_idx = getNextLoc(second_idx, result);
+                        second_idx = getNextLoc(second_idx, working_df);
+                        third_idx = getNextLoc(second_idx, working_df);
                         continue;
                     }
                 }
                 else if (first.tb == BOT) {
-                    // Python 382-386: both BOT, first.low > third.low -> remove first
                     if (float_more(first.low, third.low)) {
                         first.tb = NO_TOPBOT;
-                        first_idx = getNextLoc(first_idx, result);
-                        second_idx = getNextLoc(first_idx, result);
-                        third_idx = getNextLoc(second_idx, result);
+                        first_idx = getNextLoc(first_idx, working_df);
+                        second_idx = getNextLoc(first_idx, working_df);
+                        third_idx = getNextLoc(second_idx, working_df);
                         continue;
                     }
-                    // Python 388-392: both BOT, first.low <= third.low -> remove second
                     else {
                         second.tb = NO_TOPBOT;
-                        second_idx = getNextLoc(second_idx, result);
-                        third_idx = getNextLoc(second_idx, result);
+                        second_idx = getNextLoc(second_idx, working_df);
+                        third_idx = getNextLoc(second_idx, working_df);
                         continue;
                     }
                 }
             }
             else {
-                // Python line 393-394: something wrong (first.tb != third.tb but distance < 4)
-                // Just break to avoid infinite loop
                 break;
             }
         }
-        // Python line 397-410: overlapping TOP-BOT or BOT-TOP within 4 bars
         else if (first.tb == TOP && second.tb == BOT && float_less_equal(first.high, second.low)) {
             first.tb = NO_TOPBOT;
             second.tb = NO_TOPBOT;
-            first_idx = getNextLoc(first_idx, result);
-            second_idx = getNextLoc(first_idx, result);
-            third_idx = getNextLoc(second_idx, result);
+            first_idx = getNextLoc(first_idx, working_df);
+            second_idx = getNextLoc(first_idx, working_df);
+            third_idx = getNextLoc(second_idx, working_df);
             continue;
         }
         else if (first.tb == BOT && second.tb == TOP && float_more_equal(first.low, second.high)) {
             first.tb = NO_TOPBOT;
             second.tb = NO_TOPBOT;
-            first_idx = getNextLoc(first_idx, result);
-            second_idx = getNextLoc(first_idx, result);
-            third_idx = getNextLoc(second_idx, result);
+            first_idx = getNextLoc(first_idx, working_df);
+            second_idx = getNextLoc(first_idx, working_df);
+            third_idx = getNextLoc(second_idx, working_df);
             continue;
         }
         else {
@@ -438,15 +402,14 @@ std::vector<StandardKLine> ChanAnalyzer::cleanFirstTwoTB(const std::vector<Stand
         }
     }
     
-    // Python line 414: filter out noTopBot entries
+    // 原地移除被清理的元素
     std::vector<StandardKLine> cleaned;
-    for (const auto& kline : result) {
+    for (const auto& kline : working_df) {
         if (kline.tb == TOP || kline.tb == BOT) {
             cleaned.push_back(kline);
         }
     }
-    
-    return cleaned;
+    working_df.swap(cleaned);
 }
 
 // 笔定义：(from Python define_bi lines 489-831) 
@@ -469,8 +432,8 @@ void ChanAnalyzer::defineBi() {
         return;
     }
     
-    // Python line 507: clean_first_two_tb
-    working_df = cleanFirstTwoTB(working_df);
+    // Python line 507: clean_first_two_tb (in-place)
+    cleanFirstTwoTB(working_df);
     
     if (working_df.size() < 2) {
         marked_bi = working_df;
@@ -1927,104 +1890,7 @@ std::vector<std::pair<double, double>> ChanAnalyzer::combineGaps(const std::vect
     return new_gaps;
 }
 
-// K线缺口作为线�?(原始版本)
-bool ChanAnalyzer::kbarGapAsXd(const std::vector<StandardKLine>& working_df, 
-                                int first_idx, int second_idx, int compare_idx) {
-    return kbarGapAsXdFull(working_df, first_idx, second_idx, compare_idx);
-}
 
-// XD包含关系 (原始版本)
-bool ChanAnalyzer::xdInclusion(const StandardKLine& first, const StandardKLine& second, 
-                                const StandardKLine& third, const StandardKLine& forth) {
-    return xdInclusionFull(first, second, third, forth);
-}
-
-// 检查XD包含关系是否自由 (原始版本)
-std::pair<bool, bool> ChanAnalyzer::isXDInclusionFree(TopBotType direction, 
-        const std::vector<int>& next_valid_elems, std::vector<StandardKLine>& working_df) {
-    return isXDInclusionFreeFull(direction, next_valid_elems, working_df);
-}
-
-// 按方向检查包含关�?(原始版本)
-std::vector<int> ChanAnalyzer::checkInclusionByDirection(int current_loc, 
-        std::vector<StandardKLine>& working_df, TopBotType direction, int count_num) {
-    return checkInclusionByDirectionFull(current_loc, working_df, direction, count_num);
-}
-
-// XD候选位�?(原始版本)
-int ChanAnalyzer::xdTopbotCandidate(const std::vector<int>& next_valid_elems, 
-        TopBotType current_direction, std::vector<StandardKLine>& working_df, bool with_current_gap) {
-    return xdTopbotCandidateFull(next_valid_elems, current_direction, working_df, with_current_gap);
-}
-
-// popGap (原始版本)
-std::pair<int, TopBotType> ChanAnalyzer::popGap(std::vector<StandardKLine>& working_df, 
-        const std::vector<int>& next_valid_elems, TopBotType current_direction) {
-    return popGapFull(working_df, next_valid_elems, current_direction);
-}
-
-// K线缺口作为线�?(Full版本)
-std::tuple<TopBotType, bool, bool> ChanAnalyzer::checkKlineGapAsXd(
-        const std::vector<int>& next_valid_elems, TopBotType direction, 
-        std::vector<StandardKLine>& working_df) {
-    return checkKlineGapAsXdFull(next_valid_elems, direction, working_df);
-}
-
-// 检查XD顶底 (原始版本)
-std::pair<TopBotType, bool> ChanAnalyzer::checkXDTopBot(const StandardKLine& first, const StandardKLine& second,
-        const StandardKLine& third, const StandardKLine& forth,
-        const StandardKLine& fifth, const StandardKLine& sixth) {
-    return checkXDTopBotFull(first, second, third, forth, fifth, sixth);
-}
-
-// XD顶底方向 (原始版本)
-std::tuple<TopBotType, bool, bool> ChanAnalyzer::checkXDTopBotDirected(
-        const std::vector<int>& next_valid_elems, TopBotType direction, 
-        std::vector<StandardKLine>& working_df) {
-    return checkXDTopBotDirectedFull(next_valid_elems, direction, working_df);
-}
-
-// 查找XD (原始版本)
-std::vector<StandardKLine> ChanAnalyzer::findXD(int initial_i, TopBotType initial_direction, 
-        std::vector<StandardKLine>& working_df) {
-    return findXDFull(initial_i, initial_direction, working_df);
-}
-
-// 增强的线段定义函�?
-void ChanAnalyzer::defineXDEnhanced(int initial_state) {
-    // 直接调用主版�?
-    defineXD(initial_state);
-}
-
-// 查找初始方向
-TopBotType ChanAnalyzer::findInitialDirection(const std::vector<StandardKLine>& working_df, TopBotType initial_status) {
-    if (working_df.empty()) {
-        return initial_status;
-    }
-    
-    if (initial_status != NO_TOPBOT) {
-        return initial_status;
-    }
-    
-    // 根据第一个分型确定方�?
-    if (working_df[0].tb == BOT) {
-        return BOT2TOP;
-    } else if (working_df[0].tb == TOP) {
-        return TOP2BOT;
-    }
-    
-    // 如果没有分型，尝试根据前两个分型确定方向
-    if (working_df.size() >= 2) {
-        if (working_df[0].chan_price < working_df[1].chan_price) {
-            return BOT2TOP;
-        } else {
-            return TOP2BOT;
-        }
-    }
-    
-    // 默认返回上升方向
-    return BOT2TOP;
-}
 
 // 实现缺失的函数：same_tb_remove_previous
 std::tuple<int, int, int> ChanAnalyzer::same_tb_remove_previous(
