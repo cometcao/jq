@@ -74,8 +74,7 @@ static DataWindow prepareDataWindow(int nCount, float* pHigh, float* pLow,
 
 //=============================================================================
 // 辅助函数：将ChanAnalyzer的笔数据转换为输出数组（支持索引偏移映射）
-// bi_list 中的 start_index/end_index 是截断数据内的原始索引（real_loc），
-// 需要加上 startOffset 才能映射到通达信原始数组位置
+// 笔端点类型总是交替的（BOT→TOP或TOP→BOT），终点类型与起点相反
 //=============================================================================
 static void convertBiToOutputWithOffset(const std::vector<Bi>& bi_list, float* pOut, int nCount, int startOffset)
 {
@@ -83,18 +82,20 @@ static void convertBiToOutputWithOffset(const std::vector<Bi>& bi_list, float* p
     for (const auto& bi : bi_list) {
         int origStart = startOffset + bi.start_index;
         int origEnd = startOffset + bi.end_index;
+        // 起点使用自己的类型
         if (origStart >= 0 && origStart < nCount) {
             pOut[origStart] = (bi.type == TOP) ? 1.0f : -1.0f;
         }
+        // 终点类型与起点相反（笔总是BOT→TOP或TOP→BOT交替）
         if (origEnd >= 0 && origEnd < nCount) {
-            pOut[origEnd] = (bi.type == TOP) ? 1.0f : -1.0f;
+            pOut[origEnd] = (bi.type == TOP) ? -1.0f : 1.0f;
         }
     }
 }
 
 //=============================================================================
 // 辅助函数：将ChanAnalyzer的线段数据转换为输出数组（支持索引偏移映射）
-// 输出值为 ±1，与通达信公式 DRAWLINE 兼容
+// 线段端点类型总是交替的（BOT→TOP或TOP→BOT），终点类型与起点相反
 //=============================================================================
 static void convertXianDuanToOutputWithOffset(const std::vector<XianDuan>& xd_list, float* pOut, int nCount, int startOffset)
 {
@@ -102,11 +103,13 @@ static void convertXianDuanToOutputWithOffset(const std::vector<XianDuan>& xd_li
     for (const auto& xd : xd_list) {
         int origStart = startOffset + xd.start_index;
         int origEnd = startOffset + xd.end_index;
+        // 起点使用自己的类型
         if (origStart >= 0 && origStart < nCount) {
             pOut[origStart] = (xd.type == TOP) ? 1.0f : -1.0f;
         }
+        // 终点类型与起点相反（线段总是BOT→TOP或TOP→BOT交替）
         if (origEnd >= 0 && origEnd < nCount) {
-            pOut[origEnd] = (xd.type == TOP) ? 1.0f : -1.0f;
+            pOut[origEnd] = (xd.type == TOP) ? -1.0f : 1.0f;
         }
     }
 }
@@ -138,7 +141,7 @@ void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
 // 输出函数2号：线段端点（使用ChanAnalyzer真正线段算法 + 数据截断）
 // 输出值：线段顶=+1.0，线段底=-1.0
 //=============================================================================
-void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
+void Func2(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
 {
     if (nCount <= 0 || pOut == nullptr || pHigh == nullptr || pLow == nullptr) {
         return;
