@@ -77,6 +77,16 @@ struct StandardKLine {
     int xd_tb;          // Line segment top/bottom pattern type
 };
 
+// Feature sequence element for XD line segment detection
+struct FeatureSeqElement {
+    TopBotType tb;              // TOP or BOT
+    double price;               // Price for inclusion check (direction-merged: max for up, min for down)
+    double orig_price;          // Price for XD endpoint detection (true market extreme)
+    int orig_market_idx;        // Index of corresponding StandardKLine in working_df
+    bool is_merged;             // Whether this element results from merging
+    std::vector<int> sources;   // Indices of original elements merged into this one (for debugging)
+};
+
 // Pen structure
 struct Bi {
     int start_date;     // Start date
@@ -180,27 +190,30 @@ private:
     std::vector<std::pair<double, double>> combineGaps(const std::vector<std::pair<double, double>>& gap_regions);
     
     // Core helper functions
-    std::vector<int> getNextNElem(int loc, const std::vector<StandardKLine>& working_df, int N = 4, TopBotType start_tb = NO_TOPBOT, bool single_direction = false);
     std::vector<int> getPreviousNElem(int loc, const std::vector<StandardKLine>& working_df, int N = 0, TopBotType end_tb = NO_TOPBOT, bool single_direction = true);
     bool directionAssert(const StandardKLine& elem, TopBotType direction);
     
-    // Line segment (XD) Full implementations
-    bool xdInclusionFull(const StandardKLine& firstElem, const StandardKLine& secondElem,
-                         const StandardKLine& thirdElem, const StandardKLine& forthElem);
-    bool checkCurrentGap(const std::vector<StandardKLine>& working_df, int idx0, int idx1, int idx2, int idx3);
+    // Feature sequence element inclusion processing (Chan Theory compliant)
+    std::vector<FeatureSeqElement> buildFeatureSeq(const std::vector<StandardKLine>& working_df, int start_loc);
+    bool hasFeatureSeqInclusion(const FeatureSeqElement& e0, const FeatureSeqElement& e1,
+                                const FeatureSeqElement& e2, const FeatureSeqElement& e3);
+    std::pair<FeatureSeqElement, FeatureSeqElement> mergeFeatureSeqPair(
+        const FeatureSeqElement& e0, const FeatureSeqElement& e1,
+        const FeatureSeqElement& e2, const FeatureSeqElement& e3);
+    void processInclusions(std::vector<FeatureSeqElement>& seq);
+    void applyCleanSequence(const std::vector<FeatureSeqElement>& feature_seq,
+                            std::vector<StandardKLine>& working_df, int start_loc);
+
+    // FeatureSeqElement-based XD endpoint detection (replaces findXDFull)
+    void findXDOnFeatureSeq(std::vector<FeatureSeqElement>& feature_seq,
+                            std::vector<StandardKLine>& working_df,
+                            int initial_seq_pos, TopBotType initial_direction);
+
+    // Line segment gap detection (retained)
     bool kbarGapAsXdFull(const std::vector<StandardKLine>& working_df, int first_idx, int second_idx, int compare_idx);
-    std::pair<bool, bool> isXDInclusionFreeFull(TopBotType direction, const std::vector<int>& next_valid_elems, std::vector<StandardKLine>& working_df);
-    std::vector<int> checkInclusionByDirectionFull(int current_loc, std::vector<StandardKLine>& working_df, TopBotType direction, int count_num);
-    std::tuple<TopBotType, bool, bool> checkKlineGapAsXdFull(const std::vector<int>& next_valid_elems, TopBotType direction, std::vector<StandardKLine>& working_df);
-    std::pair<TopBotType, bool> checkXDTopBotFull(const StandardKLine& first, const StandardKLine& second,
-                                                   const StandardKLine& third, const StandardKLine& forth,
-                                                   const StandardKLine& fifth, const StandardKLine& sixth);
-    std::tuple<TopBotType, bool, bool> checkXDTopBotDirectedFull(const std::vector<int>& next_valid_elems, TopBotType direction, std::vector<StandardKLine>& working_df);
-    int xdTopbotCandidateFull(const std::vector<int>& next_valid_elems, TopBotType current_direction, std::vector<StandardKLine>& working_df, bool with_current_gap);
-    std::pair<int, TopBotType> popGapFull(std::vector<StandardKLine>& working_df, const std::vector<int>& next_valid_elems, TopBotType current_direction);
-    std::vector<StandardKLine> findXDFull(int initial_i, TopBotType initial_direction, std::vector<StandardKLine>& working_df);
+    
+    // Initial direction
     std::pair<int, TopBotType> findInitialDirectionFull(std::vector<StandardKLine>& working_df, TopBotType initial_status);
-    bool checkPreviousElemToAvoidXdGap(bool with_gap, const std::vector<int>& next_valid_elems, std::vector<StandardKLine>& working_df);
     
     // Bi definition helpers
     void restoreTbData(std::vector<StandardKLine>& working_df, int from_idx, int to_idx);
