@@ -1029,11 +1029,13 @@ std::vector<FeatureSeqElement> ChanAnalyzer::buildFeatureSeq(
         const std::vector<StandardKLine>& working_df, int start_loc) {
     std::vector<FeatureSeqElement> seq;
     for (int i = start_loc; i < static_cast<int>(working_df.size()); i++) {
-        if (working_df[i].tb == TOP || working_df[i].tb == BOT) {
+        if (working_df[i].original_tb == TOP || working_df[i].original_tb == BOT) {
             FeatureSeqElement elem;
-            elem.tb = static_cast<TopBotType>(working_df[i].tb);
-            elem.price = working_df[i].chan_price;
-            elem.orig_price = working_df[i].chan_price;
+            elem.tb = static_cast<TopBotType>(working_df[i].original_tb);
+            double p = (working_df[i].original_tb == TOP)
+                ? working_df[i].high : working_df[i].low;
+            elem.price = p;
+            elem.orig_price = p;
             elem.orig_market_idx = i;
             elem.is_merged = false;
             seq.push_back(elem);
@@ -1121,8 +1123,9 @@ void ChanAnalyzer::processInclusions(std::vector<FeatureSeqElement>& seq, TopBot
 
 void ChanAnalyzer::applyCleanSequence(
         const std::vector<FeatureSeqElement>& feature_seq,
-        std::vector<StandardKLine>& working_df, int start_loc) {
-    for (int i = start_loc; i < static_cast<int>(working_df.size()); i++) {
+        std::vector<StandardKLine>& working_df, int start_loc, int end_loc) {
+    int clear_end = (end_loc < 0) ? static_cast<int>(working_df.size()) : end_loc;
+    for (int i = start_loc; i < clear_end; i++) {
         if (working_df[i].tb != NO_TOPBOT) {
             working_df[i].tb = NO_TOPBOT;
         }
@@ -1131,9 +1134,7 @@ void ChanAnalyzer::applyCleanSequence(
         int idx = elem.orig_market_idx;
         if (idx >= 0 && idx < static_cast<int>(working_df.size())) {
             working_df[idx].tb = elem.tb;
-            if (elem.is_merged) {
-                working_df[idx].chan_price = elem.orig_price;
-            }
+            working_df[idx].chan_price = elem.orig_price;
         }
     }
 }
@@ -1141,20 +1142,19 @@ void ChanAnalyzer::applyCleanSequence(
 
 // ========================================================================
 // FeatureSeqElement-based XD endpoint detection (replaces findXDFull)
+// Processes one segment: finds first XD or rollback, then returns.
+// Caller (defineXD) iterates per segment with rebuild+merge per direction.
 // ========================================================================
 
-void ChanAnalyzer::findXDOnFeatureSeq(
+XDFindResult ChanAnalyzer::findXDOnFeatureSeq(
         std::vector<FeatureSeqElement>& feature_seq,
         std::vector<StandardKLine>& working_df,
-        int initial_seq_pos, TopBotType initial_direction) {
+        int seq_pos, TopBotType direction,
+        int tail_start_market) {
 
-    if (feature_seq.empty()) return;
+    if (feature_seq.empty()) return {false};
 
-    gap_XD.clear();
-    previous_with_xd_gap = false;
-
-    int i = initial_seq_pos;
-    TopBotType direction = initial_direction;
+    int i = seq_pos;
 
     while (i + 5 < static_cast<int>(feature_seq.size())) {
         TopBotType xd_tb_type = (direction == BOT2TOP) ? TOP : BOT;
@@ -1216,9 +1216,11 @@ void ChanAnalyzer::findXDOnFeatureSeq(
                         gap_XD.clear();
                     }
                     working_df[mx].xd_tb = st;
-                    direction = (st == TOP) ? TOP2BOT : BOT2TOP;
-                    i = kg ? (i + 1) : (i + 3);
-                    continue;
+                    TopBotType new_dir = (st == TOP) ? TOP2BOT : BOT2TOP;
+                    int new_i = kg ? (i + 1) : (i + 3);
+                    return {true, mx, st, cgap,
+                            feature_seq[new_i].orig_market_idx,
+                            new_dir, false, 0};
                 }
             }
 
@@ -1252,13 +1254,9 @@ void ChanAnalyzer::findXDOnFeatureSeq(
                                  static_cast<int>(feature_seq.size()) - 1)
                     ].orig_market_idx;
                     restoreTbData(working_df, pg, to);
-                    direction = (direction == TOP2BOT) ? BOT2TOP : TOP2BOT;
-                    for (int s = 0; s < i; s++) {
-                        if (feature_seq[s].orig_market_idx >= pg) {
-                            i = s; break;
-                        }
-                    }
-                    continue;
+                    TopBotType new_dir = (direction == TOP2BOT) ? BOT2TOP : TOP2BOT;
+                    return {false, 0, NO_TOPBOT, false, 0,
+                            new_dir, true, pg};
                 }
             }
 
@@ -1328,15 +1326,17 @@ void ChanAnalyzer::findXDOnFeatureSeq(
                 }
             }
             if (kg_found && kg_result == xd_tb_type) {
-                working_df[feature_seq[i + 2].orig_market_idx].xd_tb =
-                    kg_result;
-                direction = (kg_result == TOP) ? TOP2BOT : BOT2TOP;
-                gap_XD.push_back(feature_seq[i + 2].orig_market_idx);
+                int mx = feature_seq[i + 2].orig_market_idx;
+                working_df[mx].xd_tb = kg_result;
+                gap_XD.push_back(mx);
+                TopBotType new_dir = (kg_result == TOP) ? TOP2BOT : BOT2TOP;
                 bool kkg = (i1 + 1 == i2) &&
                     kbarGapAsXdFull(working_df, i1, i2,
                                     feature_seq[i].orig_market_idx);
-                i = kkg ? (i + 1) : (i + 3);
-                continue;
+                int new_i = kkg ? (i + 1) : (i + 3);
+                return {true, mx, kg_result, true,
+                        feature_seq[new_i].orig_market_idx,
+                        new_dir, false, 0};
             }
 
             // Standard XD endpoint check
@@ -1393,14 +1393,9 @@ void ChanAnalyzer::findXDOnFeatureSeq(
                             restoreTbData(working_df, prev_xd,
                                 feature_seq[i + 5].orig_market_idx + 1);
                             working_df[prev_xd].xd_tb = NO_TOPBOT;
-                            direction = (st == TOP) ? TOP2BOT : BOT2TOP;
-                            for (int s = 0; s < i; s++) {
-                                if (feature_seq[s].orig_market_idx >=
-                                    prev_xd) {
-                                    i = s; break;
-                                }
-                            }
-                            continue;
+                            TopBotType new_dir = (st == TOP) ? TOP2BOT : BOT2TOP;
+                            return {false, 0, NO_TOPBOT, false, 0,
+                                    new_dir, true, prev_xd};
                         }
                     }
 
@@ -1409,16 +1404,19 @@ void ChanAnalyzer::findXDOnFeatureSeq(
                             feature_seq[i + 2].orig_market_idx);
                     }
 
-                    working_df[feature_seq[i + 2].orig_market_idx].xd_tb = st;
-                    direction = (st == TOP) ? TOP2BOT : BOT2TOP;
+                    int mx = feature_seq[i + 2].orig_market_idx;
+                    working_df[mx].xd_tb = st;
+                    TopBotType new_dir = (st == TOP) ? TOP2BOT : BOT2TOP;
 
                     int ki1 = feature_seq[i + 1].orig_market_idx;
                     int ki2 = feature_seq[i + 2].orig_market_idx;
                     bool kg2 = (ki1 + 1 == ki2) &&
                         kbarGapAsXdFull(working_df, ki1, ki2,
                                         feature_seq[i].orig_market_idx);
-                    i = kg2 ? (i + 1) : (i + 3);
-                    continue;
+                    int new_i = kg2 ? (i + 1) : (i + 3);
+                    return {true, mx, st, with_gap,
+                            feature_seq[new_i].orig_market_idx,
+                            new_dir, false, 0};
                 }
             }
 
@@ -1426,8 +1424,66 @@ void ChanAnalyzer::findXDOnFeatureSeq(
         }
     }
 
-    // ========== TAIL INFERENCE ==========
+    return {false};
+}
 
+// XD定义函数 (基于Python defineXD逻辑, 2026-04-28 迭代版)
+void ChanAnalyzer::defineXD(int initial_state) {
+    if (marked_bi.empty()) return;
+    
+    std::vector<StandardKLine> working_df = marked_bi;
+    
+    for (auto& kline : working_df) {
+        if (kline.chan_price == 0) {
+            kline.chan_price = (kline.tb == TOP) ? kline.high : kline.low;
+        }
+    }
+    
+    std::pair<int, TopBotType> initial = findInitialDirectionFull(working_df, static_cast<TopBotType>(initial_state));
+    int initial_loc = initial.first;
+    TopBotType initial_direction = initial.second;
+    
+    if (initial_loc < 0 || initial_loc >= static_cast<int>(working_df.size())) {
+        return;
+    }
+    
+    TopBotType direction = initial_direction;
+    int tail_start = initial_loc;
+    
+    gap_XD.clear();
+    previous_with_xd_gap = false;
+    
+    while (tail_start < static_cast<int>(working_df.size())) {
+        auto seq = buildFeatureSeq(working_df, tail_start);
+        if (seq.size() < 6) break;
+        
+        processInclusions(seq, direction);
+        applyCleanSequence(seq, working_df, tail_start);
+        
+        int seq_pos = 0;
+        TopBotType target_tb = (direction == BOT2TOP) ? TOP : BOT;
+        while (seq_pos < static_cast<int>(seq.size()) &&
+               seq[seq_pos].tb != target_tb) {
+            seq_pos++;
+        }
+        if (seq_pos + 5 >= static_cast<int>(seq.size())) break;
+        
+        auto result = findXDOnFeatureSeq(seq, working_df, seq_pos, direction, tail_start);
+        
+        if (result.is_rollback) {
+            tail_start = result.rollback_start;
+            direction = result.new_direction;
+            continue;
+        }
+        
+        if (!result.found) break;
+        
+        tail_start = result.next_market_start;
+        direction = result.new_direction;
+    }
+    
+    // ========== TAIL INFERENCE ==========
+    
     std::vector<int> prev_xd_locs;
     for (int j = static_cast<int>(working_df.size()) - 1; j >= 0; j--) {
         if (working_df[j].xd_tb == TOP || working_df[j].xd_tb == BOT) {
@@ -1435,10 +1491,10 @@ void ChanAnalyzer::findXDOnFeatureSeq(
             if (prev_xd_locs.size() >= 1) break;
         }
     }
-
+    
     if (!prev_xd_locs.empty()) {
         int prev_loc = prev_xd_locs[0];
-
+        
         std::vector<int> pre_pre;
         for (int j = prev_loc - 1; j >= 0; j--) {
             if (working_df[j].xd_tb == TOP || working_df[j].xd_tb == BOT) {
@@ -1446,7 +1502,7 @@ void ChanAnalyzer::findXDOnFeatureSeq(
                 if (pre_pre.size() >= 1) break;
             }
         }
-
+        
         int work_loc = prev_loc + 3;
         if (work_loc < static_cast<int>(working_df.size())) {
             std::vector<double> tcp;
@@ -1458,14 +1514,14 @@ void ChanAnalyzer::findXDOnFeatureSeq(
                     tidx.push_back(j);
                 }
             }
-
+            
             if (!tcp.empty()) {
                 bool gc = false;
-
+                
                 if (!gap_XD.empty()) {
                     double mx = *std::max_element(tcp.begin(), tcp.end());
                     double mn = *std::min_element(tcp.begin(), tcp.end());
-
+                    
                     if (direction == TOP2BOT) {
                         auto it = std::max_element(tcp.begin(), tcp.end());
                         int wl = tidx[std::distance(tcp.begin(), it)];
@@ -1485,7 +1541,7 @@ void ChanAnalyzer::findXDOnFeatureSeq(
                             gc = true;
                         }
                     }
-
+                    
                     if (gc) {
                         int ci = -1;
                         for (size_t jj = 0; jj < tidx.size(); jj++) {
@@ -1510,11 +1566,11 @@ void ChanAnalyzer::findXDOnFeatureSeq(
                         }
                     }
                 }
-
+                
                 if (!tcp.empty()) {
                     double mx = *std::max_element(tcp.begin(), tcp.end());
                     double mn = *std::min_element(tcp.begin(), tcp.end());
-
+                    
                     if (direction == TOP2BOT) {
                         if (float_more(working_df[prev_loc].chan_price, mx) ||
                             (!pre_pre.empty() &&
@@ -1554,52 +1610,7 @@ void ChanAnalyzer::findXDOnFeatureSeq(
             }
         }
     }
-}
-
-// XD定义函数 (基于Python defineXD逻辑)
-void ChanAnalyzer::defineXD(int initial_state) {
-    if (marked_bi.empty()) return;
     
-    // 使用marked_bi作为working_df
-    std::vector<StandardKLine> working_df = marked_bi;
-    
-    // 确保所有marked_bi都有正确的chan_price
-    for (auto& kline : working_df) {
-        if (kline.chan_price == 0) {
-            kline.chan_price = (kline.tb == TOP) ? kline.high : kline.low;
-        }
-    }
-    
-    // 调用Full版本进行线段定义
-    std::pair<int, TopBotType> initial = findInitialDirectionFull(working_df, static_cast<TopBotType>(initial_state));
-    int initial_loc = initial.first;
-    TopBotType initial_direction = initial.second;
-    
-    if (initial_loc < 0 || initial_loc >= static_cast<int>(working_df.size())) {
-        return;
-    }
-    
-    // 初始状态下设置xd_tb仅在initial_state明确指定时(已由findInitialDirectionFull处理)
-    // NO_TOPBOT路径下，findInitialDirectionFull不设xd_tb，与Python行为一致
-
-    // Phase 1: Build feature sequence and process inclusions
-    auto feature_seq = buildFeatureSeq(working_df, initial_loc);
-    processInclusions(feature_seq, initial_direction);
-    applyCleanSequence(feature_seq, working_df, initial_loc);
-
-    // Phase 2: Find XD endpoints directly on inclusion-free sequence
-    TopBotType target_tb = (initial_direction == BOT2TOP) ? TOP : BOT;
-    int initial_seq_pos = 0;
-    for (size_t s = 0; s < feature_seq.size(); s++) {
-        if (feature_seq[s].tb == target_tb &&
-            feature_seq[s].orig_market_idx >= initial_loc) {
-            initial_seq_pos = static_cast<int>(s);
-            break;
-        }
-    }
-    findXDOnFeatureSeq(feature_seq, working_df, initial_seq_pos, initial_direction);
-    
-    // Collect all elements with xd_tb set
     std::vector<StandardKLine> xd_result;
     for (const auto& kline : working_df) {
         if (kline.xd_tb != NO_TOPBOT) {

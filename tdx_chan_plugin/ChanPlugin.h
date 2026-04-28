@@ -87,6 +87,18 @@ struct FeatureSeqElement {
     std::vector<int> sources;   // Indices of original elements merged into this one (for debugging)
 };
 
+// Result returned by findXDOnFeatureSeq (one XD endpoint per call)
+struct XDFindResult {
+    bool found;                 // Whether an XD endpoint was found
+    int xd_market_idx;          // Market index of the XD endpoint in working_df
+    TopBotType xd_type;         // TOP or BOT
+    bool with_gap;              // Whether gap was involved
+    int next_market_start;      // Market index for next segment's tail_start in working_df
+    TopBotType new_direction;   // Direction for next segment
+    bool is_rollback;           // True for popGap / prev_xd invalidation
+    int rollback_start;         // Market index to rollback tail_start to
+};
+
 // Pen structure
 struct Bi {
     int start_date;     // Start date
@@ -202,12 +214,15 @@ private:
         const FeatureSeqElement& e2, const FeatureSeqElement& e3);
     void processInclusions(std::vector<FeatureSeqElement>& seq, TopBotType direction);
     void applyCleanSequence(const std::vector<FeatureSeqElement>& feature_seq,
-                            std::vector<StandardKLine>& working_df, int start_loc);
+                            std::vector<StandardKLine>& working_df, int start_loc,
+                            int end_loc = -1);
 
     // FeatureSeqElement-based XD endpoint detection (replaces findXDFull)
-    void findXDOnFeatureSeq(std::vector<FeatureSeqElement>& feature_seq,
-                            std::vector<StandardKLine>& working_df,
-                            int initial_seq_pos, TopBotType initial_direction);
+    // Now processes ONE segment per call, returns result for iterative caller
+    XDFindResult findXDOnFeatureSeq(std::vector<FeatureSeqElement>& feature_seq,
+                                    std::vector<StandardKLine>& working_df,
+                                    int seq_pos, TopBotType direction,
+                                    int tail_start_market);
 
     // Line segment gap detection (retained)
     bool kbarGapAsXdFull(const std::vector<StandardKLine>& working_df, int first_idx, int second_idx, int compare_idx);
