@@ -200,7 +200,7 @@ private:
     std::pair<FeatureSeqElement, FeatureSeqElement> mergeFeatureSeqPair(
         const FeatureSeqElement& e0, const FeatureSeqElement& e1,
         const FeatureSeqElement& e2, const FeatureSeqElement& e3);
-    void processInclusions(std::vector<FeatureSeqElement>& seq);
+    void processInclusions(std::vector<FeatureSeqElement>& seq, TopBotType direction);
     void applyCleanSequence(const std::vector<FeatureSeqElement>& feature_seq,
                             std::vector<StandardKLine>& working_df, int start_loc);
 

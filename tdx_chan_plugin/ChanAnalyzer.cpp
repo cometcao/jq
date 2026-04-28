@@ -1054,6 +1054,10 @@ bool ChanAnalyzer::hasFeatureSeqInclusion(
 std::pair<FeatureSeqElement, FeatureSeqElement> ChanAnalyzer::mergeFeatureSeqPair(
         const FeatureSeqElement& e0, const FeatureSeqElement& e1,
         const FeatureSeqElement& e2, const FeatureSeqElement& e3) {
+    // 缠论原文：特征序列包含处理沿线段方向合并。
+    // e0.tb==TOP 表示 (TOP,BOT) 配对 = 向下笔 = 上升线段特征序列 → MAX 合并 (TOP/BOT 两侧都取 max)
+    // e0.tb==BOT 表示 (BOT,TOP) 配对 = 向上笔 = 下降线段特征序列 → MIN 合并 (TOP/BOT 两侧都取 min)
+    // 调用方需先经 processInclusions 对齐起点，使 e0.tb 与线段方向匹配。
     FeatureSeqElement m_top, m_bot;
 
     if (e0.tb == TOP) {
@@ -1062,36 +1066,45 @@ std::pair<FeatureSeqElement, FeatureSeqElement> ChanAnalyzer::mergeFeatureSeqPai
         m_top.price = std::max(e0.price, e2.price);
         m_bot.price = std::max(e1.price, e3.price);
         m_top.orig_price = std::max(e0.orig_price, e2.orig_price);
-        m_bot.orig_price = std::min(e1.orig_price, e3.orig_price);
+        m_bot.orig_price = std::max(e1.orig_price, e3.orig_price);
+        m_top.orig_market_idx = float_more(e0.orig_price, e2.orig_price)
+            ? e0.orig_market_idx : e2.orig_market_idx;
+        m_bot.orig_market_idx = float_more(e1.orig_price, e3.orig_price)
+            ? e1.orig_market_idx : e3.orig_market_idx;
     } else {
         m_top.tb = BOT;
         m_bot.tb = TOP;
         m_top.price = std::min(e0.price, e2.price);
         m_bot.price = std::min(e1.price, e3.price);
         m_top.orig_price = std::min(e0.orig_price, e2.orig_price);
-        m_bot.orig_price = std::max(e1.orig_price, e3.orig_price);
+        m_bot.orig_price = std::min(e1.orig_price, e3.orig_price);
+        m_top.orig_market_idx = float_less(e0.orig_price, e2.orig_price)
+            ? e0.orig_market_idx : e2.orig_market_idx;
+        m_bot.orig_market_idx = float_less(e1.orig_price, e3.orig_price)
+            ? e1.orig_market_idx : e3.orig_market_idx;
     }
 
     m_top.is_merged = true;
     m_bot.is_merged = true;
 
-    if (e0.tb == TOP) {
-        m_top.orig_market_idx = float_more(e0.orig_price, e2.orig_price)
-            ? e0.orig_market_idx : e2.orig_market_idx;
-        m_bot.orig_market_idx = float_less(e1.orig_price, e3.orig_price)
-            ? e1.orig_market_idx : e3.orig_market_idx;
-    } else {
-        m_top.orig_market_idx = float_less(e0.orig_price, e2.orig_price)
-            ? e0.orig_market_idx : e2.orig_market_idx;
-        m_bot.orig_market_idx = float_more(e1.orig_price, e3.orig_price)
-            ? e1.orig_market_idx : e3.orig_market_idx;
-    }
-
     return {m_top, m_bot};
 }
 
-void ChanAnalyzer::processInclusions(std::vector<FeatureSeqElement>& seq) {
-    int i = 0;
+void ChanAnalyzer::processInclusions(std::vector<FeatureSeqElement>& seq, TopBotType direction) {
+    if (seq.empty()) return;
+
+    // 缠论原文：上升线段特征序列 = 向下笔 = (TOP,BOT) 配对，起点必须是 TOP
+    //         下降线段特征序列 = 向上笔 = (BOT,TOP) 配对，起点必须是 BOT
+    // findInitialDirectionFull 把 initial_loc 设为极值分型，刚好是反向类型，
+    // 所以这里跳过领头不匹配的元素，定位到正确的特征序列起点。
+    TopBotType expected_start_tb = (direction == BOT2TOP) ? TOP : BOT;
+    int start_offset = 0;
+    while (start_offset < static_cast<int>(seq.size()) &&
+           seq[start_offset].tb != expected_start_tb) {
+        start_offset++;
+    }
+
+    int i = start_offset;
     while (i + 3 < static_cast<int>(seq.size())) {
         if (hasFeatureSeqInclusion(seq[i], seq[i+1], seq[i+2], seq[i+3])) {
             auto [m0, m1] = mergeFeatureSeqPair(
@@ -1099,7 +1112,7 @@ void ChanAnalyzer::processInclusions(std::vector<FeatureSeqElement>& seq) {
             seq[i] = m0;
             seq[i+1] = m1;
             seq.erase(seq.begin() + i + 2, seq.begin() + i + 4);
-            i = std::max(0, i - 2);
+            i = std::max(start_offset, i - 2);
         } else {
             i += 2;
         }
@@ -1571,7 +1584,7 @@ void ChanAnalyzer::defineXD(int initial_state) {
 
     // Phase 1: Build feature sequence and process inclusions
     auto feature_seq = buildFeatureSeq(working_df, initial_loc);
-    processInclusions(feature_seq);
+    processInclusions(feature_seq, initial_direction);
     applyCleanSequence(feature_seq, working_df, initial_loc);
 
     // Phase 2: Find XD endpoints directly on inclusion-free sequence

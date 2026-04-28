@@ -1,8 +1,57 @@
 # 缠论理论合规性分析 — TDXChanPlugin
 
-> 分析日期: 2026-04-26 (更新: Plan A FeatureSeqElement 合并实现)
-> 上一个版本: 2026-04-25 (旧版删除法)
+> 分析日期: 2026-04-27 (更新: Plan A 方向感知修复)
+> 上一个版本: 2026-04-26 (Plan A FeatureSeqElement 合并实现，方向无关 — 后被发现有 bug)
 > 编译状态: 通过
+
+---
+
+## 2026-04-27 修订 — Plan A 方向感知修复
+
+### 起因
+
+2026-04-26 版本的 Plan A 把"删除法"重构为"合并法"，但 `processInclusions` 没有 `direction` 参数，从 `feature_seq[0]` 开始按 `i+=2` 步进。`findInitialDirectionFull` 把 `initial_loc` 设成极值分型位置（`bot2top` 时是 BOT、`top2bot` 时是 TOP），刚好让 `feature_seq[0]` 是反向类型。结果：
+
+- 上升段：处理的是向上笔配对 (BOT,TOP) 的包含，而缠论原文要求处理向下笔；`mergeFeatureSeqPair` 因 `e0.tb==BOT` 走 MIN 合并分支，方向也错
+- 下降段：对称镜像错误
+
+对于含特征序列包含的真实数据，这个 bug 会让线段端点检测漏判（构造的 5 笔上升段示例中，本应在 TOP 110 形成顶分型的，C++ 主循环因序列被过度合并而无法触发，最终输出 0 个端点）。
+
+### Python 原版的处理方式
+
+Python `is_XD_inclusion_free` (py:1102-1105) 对方向有 assert：
+- `bot2top` → 4 元素必须 (TOP, BOT, TOP, BOT) → 配对 = 向下笔 ✓
+- `top2bot` → 4 元素必须 (BOT, TOP, BOT, TOP) → 配对 = 向上笔 ✓
+
+`find_XD` 主循环每次通过 `get_next_N_elem(start_tb=...)` 跳到正确类型起点，再调 `check_inclusion_by_direction`，所以 Python 始终处理缠论原文要求的特征序列笔类型。
+
+### 修改
+
+1. **`processInclusions` 增加 `direction` 参数**（cpp:1093）
+   - `bot2top` 时跳过领头 BOT，定位到首个 TOP 后开始按 `i+=2` 步进
+   - `top2bot` 时跳过领头 TOP，定位到首个 BOT 后开始
+
+2. **`mergeFeatureSeqPair` 修复 `orig_price` 与 `orig_market_idx`**（cpp:1054）
+   - 旧版按"分类型保极值"（TOP→max, BOT→min）— 与缠论合并方向不一致
+   - 新版按"线段方向合并"（上升 max/max, 下降 min/min），与 `price` 字段语义统一
+   - `orig_market_idx` 同步：上升时 BOT 侧追踪较高 BOT 的位置，下降时 TOP 侧追踪较低 TOP 的位置
+
+3. **`defineXD` 调用处传入方向**（cpp:1587）：`processInclusions(feature_seq, initial_direction)`
+
+4. **`ChanPlugin.h` 第 203 行签名同步**
+
+### 修复后行为验证
+
+5 笔上升段反例：feature_seq=[BOT 80, TOP 100, BOT 90, TOP 95, BOT 92, TOP 110, BOT 105, TOP 108, BOT 100]
+
+- 修复前：processInclusions 处理 (笔1, 笔3) 向上笔配对 + MIN 合并 → 序列被过度合并到 5 元素，主循环 `i+5 < size` 失败，输出 0 个端点
+- 修复后：跳过领头 BOT，从 i=1 起处理 (笔2, 笔4) 向下笔配对 + MAX 合并。笔2 (TOP 100, BOT 90) 与 笔4 (TOP 95, BOT 92) 合并为 (TOP 100, BOT 92)。序列保持 7 元素，主循环在 i=1 处通过 6 元素结构性检查命中 顶分型 → 在 TOP 110 设置线段端点 ✓
+
+### 残留限制（未在本次处理）
+
+- 主循环检测到 XD 端点后切换 direction，但**没有对剩余 feature_seq 重做 processInclusions**。后续段的特征序列若是上一方向合并出来的，对新方向不一定成立。原文对该边界（合并后是否需 restore）没有明确规则；此问题保持现状。
+- popGap 用价格突破近似"反向特征序列分型确认"，原文要求 3 元素结构判定。当前是工程近似。
+- `kbarGapAsXdFull` 的 0.618 阈值是原文未定义的工程补充。
 
 ---
 
@@ -147,29 +196,34 @@ BOT 分型 = {std[1], std[2], std[3]}
 
 ---
 
-## 4. 线段 (XianDuan / Line Segment) — Plan A 重写
+## 4. 线段 (XianDuan / Line Segment) — Plan A + 方向感知修复
 
 ### 4.1 特征序列元素表示
 
-旧版用跨位置的 StandardKLine 代理合并对→新版用独立的 FeatureSeqElement (price+orig_price 同体)。✅
+FeatureSeqElement 用 (e0,e1) 配对隐式表示一笔的两个端点。`price`（包含判断用）与 `orig_price`（XD 端点检测用）在 2026-04-27 修复后语义一致，都是按线段方向合并的值。✅
 
-### 4.2 包含处理
+### 4.2 包含处理（2026-04-27 修复）
 
-`mergeFeatureSeqPair`: e0.tb 定方向 (TOP→TOP2BOT, BOT→BOT2TOP), 操作符与K线包含一致。`processInclusions`: 左到右单趟+回退。✅
+- `processInclusions(seq, direction)`: 根据 direction 跳到正确类型起点（上升→首个 TOP，下降→首个 BOT），再左到右单趟扫描+回退
+- `mergeFeatureSeqPair`: `e0.tb==TOP` 走上升 MAX 合并分支（向下笔），`e0.tb==BOT` 走下降 MIN 合并分支（向上笔）。修复点对齐起点后 `e0.tb` 自动匹配方向，分支语义正确
+
+✅ 与缠论原文一致
 
 ### 4.3 XD端点检测
 
-6元素 orig_price 滑动比较，条件与缠论原文逐字对应。✅
+6元素 orig_price 滑动比较，条件与缠论原文 `check_XD_topbot` 逐字对应。✅
 
 ### 4.4 缺口
 
 `kbarGapAsXdFull` 保留，黄金分割 0.618 阈值是原文未定义的合理补充。✅
 
-### 差异
+### 4.5 残留差异（已知）
 
-**kline gap XD 的 gap_XD 推送** (`line 1321`): 当 kline gap 直接构成 XD 端点时，新版始终推入 `gap_XD`，旧版不推入 (旧版 `wcg = !with_kline_gap`)。差异仅影响后续 popGap 回退的触发时机，不影响端点创建。属于工程差异。
+- **方向切换后不重做 processInclusions**：主循环识别 XD 端点后切换 direction，但剩余 feature_seq 仍按原方向已合并的状态。原文对此边界（合并后是否 restore）未明文规则，保持现状
+- **popGap 用价格突破近似反向分型确认**：原文要求 3 元素结构性反向特征序列分型；当前简化为价格突破检测，在快速突破场景下近似良好
+- **gap_XD 推送时机** (`line 1321`)：与旧版有微小差异，不影响端点创建
 
-结论: Plan A 是缠论最忠实实现。✅
+结论: Plan A + 方向感知修复后是当前最忠实实现。✅
 
 ---
 
@@ -196,7 +250,7 @@ BOT 分型 = {std[1], std[2], std[3]}
 | K线包含 | ✅ | `isBullType` 仅比较 high（非 high+low），实践中无影响 |
 | 分型标记 | ✅ | markTopBot 允许K线共用但 defineBi 后续清理，最终笔输出合规 |
 | 笔定义 | ✅ | 合规。Case C 复杂性来自上游分型阶段 |
-| 线段检测 | ✅ | Plan A — 缠论最忠实实现。price/orig_price 分离 |
+| 线段检测 | ✅ | Plan A + 2026-04-27 方向感知修复。processInclusions 按 direction 跳起点；mergeFeatureSeqPair 沿线段方向合并 |
 | 尾部推断 | ⚪ | 工程补充，非原文定义 |
 
 ### 与旧版相比的改进
