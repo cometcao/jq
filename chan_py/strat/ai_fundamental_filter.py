@@ -141,5 +141,5 @@ def filter_stocks(stock_list: List[str], delay: float = 0.8, debug: bool = False
 if __name__ == "__main__":
     test = ["000001.sz", "000858.sz", "600519.sh", "000639.sz"]
     # 日常使用 debug=False，调试时改为 True
-    result = filter_stocks(test, delay=0.8, debug=False)
+    result = filter_stocks(test, delay=0.8, debug=True)
     print(f"\n最终合规股票池（保持原顺序）: {result}")

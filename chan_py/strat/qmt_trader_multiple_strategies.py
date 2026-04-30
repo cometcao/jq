@@ -17,6 +17,12 @@ import datetime
 import random
 from abc import ABC, abstractmethod
 
+try:
+    from ai_fundamental_filter import filter_stocks as _ai_filter_stocks
+except (ImportError, ValueError):
+    def _ai_filter_stocks(codes, debug=True, **kwargs):
+        return codes
+
 
 # ==================== 自定义异常类 ====================
 class MarketDataException(Exception):
@@ -578,6 +584,10 @@ def read_stock_lists(context):
             data = json.load(f)
         
         all_codes = [item.replace('XSHE', 'SZ').replace('XSHG', 'SH') for item in data]
+        if all_codes:
+            before = len(all_codes)
+            all_codes = _ai_filter_stocks(all_codes)
+            logging.info(f"[{strat['name']}] AI筛选: {before}只 → {len(all_codes)}只")
         context['candidate_pool'] = all_codes[:strat["candidate_pool_size"]]
         context['buy_pool'] = all_codes[:strat["max_holdings"]]
         logging.info(f"[{strat['name']}] 候选池: {len(context['candidate_pool'])}只, 买入池: {len(context['buy_pool'])}只")
