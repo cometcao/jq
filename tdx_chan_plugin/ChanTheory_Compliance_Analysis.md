@@ -560,6 +560,87 @@ for (const auto& elem : feature_seq) {
 
 ---
 
+### 2026-04-30 修订 — `mergeFeatureSeqPair` 产生非单调 `orig_market_idx` 导致 `next_market_start` 退行到 XD 之前
+
+#### 症状
+
+在罕见情况下，一个 笔(Bi) 被当作一个 线段(XianDuan) 输出。具体表征为：`marked_xd` 中某两个相邻 `xd_tb` 端点恰好落在 `marked_bi` 中同一笔的起点和终点。肉眼在该位置未见可见缺口。
+
+#### 根因
+
+**`mergeFeatureSeqPair` 合并后的两个元素，其 `orig_market_idx` 在 `working_df` 中不是升序排列。**
+
+以 TOP2BOT（下降段，MIN 合并）为例。合并前两个笔对为 `(BOT₁, TOP₁)` 和 `(BOT₂, TOP₂)`，在 `working_df` 中顺序为：
+
+```
+BOT₁(idx=A) < TOP₁(idx=A+1) < BOT₂(idx=B) < TOP₂(idx=B+1)
+```
+
+按 MIN 合并：`MergedBOT.orig_market_idx` 取低 BOT 的索引，`MergedTOP.orig_market_idx` 取低 TOP 的索引。若第二个笔更低开更高收（BOT₂ 更低、TOP₂ 更高），则：
+
+```
+MergedBOT 取 BOT₂ 索引 (B)      ← 更大
+MergedTOP 取 TOP₁ 索引 (A+1)    ← 更小
+```
+
+合并后序列为 `[MergedBOT(idx=B), MergedTOP(idx=A+1)]`，其中 B > A+1，**索引逆序**。
+
+若标准检测将 XD 落在 `MergedBOT(idx=B)` 上，正常前进步 `new_i = i+3` 取到 `seq[i+3]` 即 `MergedTOP(idx=A+1)`，则：
+
+```
+next_market_start = A+1  <  B = xd_market_idx
+```
+
+**在完全无缺口的情况下，`next_market_start` 退行到了 XD 之前。** 下一段重建包含当前 XD，方向翻转后对齐跳过，下一个 XD 落在紧邻的笔端点——一笔成一线段。
+
+同样的问题在 BOT2TOP（上升段，MAX 合并）下对称存在：当第一个笔更高顶、第二个笔更高底时，`MergedTOP` 取到第一个笔的索引，`MergedBOT` 取到第二个笔的索引，合并后同为索引逆序。
+
+**关键发现**：此退行与缺口无关。此前怀疑的 kg2 / `kbarGapAsXdFull` / 黄金分割 / `previous_with_xd_gap` 均为红鲱鱼——真实触发场景中 `detectGaps` 甚至未检测到缺口（价差不足 MIN_PRICE_UNIT = 0.01）。
+
+#### 探索历程与排除方案
+
+| # | 方案 | 失败原因 |
+|---|------|---------|
+| 1 | `findXDOnFeatureSeq` 入口重置 `previous_with_xd_gap` | 合规文档 section 四刻意设计跨段持留；测试证明非根因 |
+| 2 | `kbarGapAsXdFull` 提高 `price_diff` 阈值至 `MIN_PRICE_UNIT * 3` | 语义偏差——微小的不是笔端点价差，而是缺口完全不存在 |
+| 3 | `defineXD` 循环加结构守卫 `tail_start >= xd_market_idx` | 守卫等价于禁用 kg2，真实缺口型线段的正确重叠被扼杀，大量端点遗漏 |
+| 4 | `kbarGapAsXdFull` 新增 `total_gap_range >= MIN_PRICE_UNIT * 5` | 缺口根本未被 `detectGaps` 捕获——阈值再低也无意义 |
+
+#### 最终修复
+
+引入 `is_kg2_backstep` 标志区分两种退行：
+
+| 退行来源 | `new_i` | `is_kg2_backstep` | 处理 |
+|---------|---------|-------------------|------|
+| 非单调合并（数据腐化） | i+3 | false | clamp 到 `xd_market_idx` |
+| kg2 缺口重叠（缠论正确行为） | i+1 | true | 保留原值 |
+
+**ChanPlugin.h** — `XDFindResult` 新增字段：
+```cpp
+bool is_kg2_backstep;  // True when new_i == i+1 (gap-based XD overlapping)
+```
+
+**ChanAnalyzer.cpp** — `findXDOnFeatureSeq` 的三个 return 路径在 `new_i == i+1` 时传入 `true`；所有其他 return 传入 `false`。
+
+**ChanAnalyzer.cpp** — `defineXD` 循环中条件 clamp：
+```cpp
+tail_start = result.next_market_start;
+if (!result.is_kg2_backstep && tail_start < result.xd_market_idx) {
+    tail_start = result.xd_market_idx;
+}
+```
+
+#### 缠论合规性判定
+
+此修复**更贴近缠论原文**。缠论要求每个线段的终点即下一段起点——`tail_start` 退行到当前 XD 之前在任何场景下均无原文依据。唯一的例外是 kg2 处理的缺口型线段段间重叠（重叠退到缺口之前，非 XD 之前），被 `is_kg2_backstep` 明确保留。
+
+#### 影响范围
+
+`ChanPlugin.h` — `XDFindResult` 结构体新增 1 个 bool 字段。
+`ChanAnalyzer.cpp` — `findXDOnFeatureSeq()` 的 3 个 XD 检测 return 路径、2 个 rollback return 路径、最终 `return {false}` 各新增一个参数；`defineXD()` 循环体新增 3 行 clamp。
+
+---
+
 ## 概要变更 (Plan A)
 
 2026-04-26 实施了 FeatureSeqElement 合并方案（Plan A），将线段检测的核心从"删除法"重构为"合并法"：

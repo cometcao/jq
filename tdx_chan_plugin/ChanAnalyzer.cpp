@@ -1220,7 +1220,7 @@ XDFindResult ChanAnalyzer::findXDOnFeatureSeq(
                     int new_i = kg ? (i + 1) : (i + 3);
                     return {true, mx, st, cgap,
                             feature_seq[new_i].orig_market_idx,
-                            new_dir, false, 0};
+                            new_dir, false, 0, kg};
                 }
             }
 
@@ -1256,7 +1256,7 @@ XDFindResult ChanAnalyzer::findXDOnFeatureSeq(
                     restoreTbData(working_df, pg, to);
                     TopBotType new_dir = (direction == TOP2BOT) ? BOT2TOP : TOP2BOT;
                     return {false, 0, NO_TOPBOT, false, 0,
-                            new_dir, true, pg};
+                            new_dir, true, pg, false};
                 }
             }
 
@@ -1336,7 +1336,7 @@ XDFindResult ChanAnalyzer::findXDOnFeatureSeq(
                 int new_i = kkg ? (i + 1) : (i + 3);
                 return {true, mx, kg_result, true,
                         feature_seq[new_i].orig_market_idx,
-                        new_dir, false, 0};
+                        new_dir, false, 0, kkg};
             }
 
             // Standard XD endpoint check
@@ -1395,7 +1395,7 @@ XDFindResult ChanAnalyzer::findXDOnFeatureSeq(
                             working_df[prev_xd].xd_tb = NO_TOPBOT;
                             TopBotType new_dir = (st == TOP) ? TOP2BOT : BOT2TOP;
                             return {false, 0, NO_TOPBOT, false, 0,
-                                    new_dir, true, prev_xd};
+                                    new_dir, true, prev_xd, false};
                         }
                     }
 
@@ -1416,7 +1416,7 @@ XDFindResult ChanAnalyzer::findXDOnFeatureSeq(
                     int new_i = kg2 ? (i + 1) : (i + 3);
                     return {true, mx, st, with_gap,
                             feature_seq[new_i].orig_market_idx,
-                            new_dir, false, 0};
+                            new_dir, false, 0, kg2};
                 }
             }
 
@@ -1424,7 +1424,7 @@ XDFindResult ChanAnalyzer::findXDOnFeatureSeq(
         }
     }
 
-    return {false};
+    return {false, 0, NO_TOPBOT, false, 0, NO_TOPBOT, false, 0, false};
 }
 
 // XD定义函数 (基于Python defineXD逻辑, 2026-04-28 迭代版)
@@ -1479,6 +1479,9 @@ void ChanAnalyzer::defineXD(int initial_state) {
         if (!result.found) break;
         
         tail_start = result.next_market_start;
+        if (!result.is_kg2_backstep && tail_start < result.xd_market_idx) {
+            tail_start = result.xd_market_idx;
+        }
         direction = result.new_direction;
     }
     

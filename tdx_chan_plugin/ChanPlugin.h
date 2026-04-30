@@ -98,6 +98,7 @@ struct XDFindResult {
     TopBotType new_direction;   // Direction for next segment
     bool is_rollback;           // True for popGap / prev_xd invalidation
     int rollback_start;         // Market index to rollback tail_start to
+    bool is_kg2_backstep;       // True when new_i == i+1 (gap-based XD overlapping)
 };
 
 // Pen structure
