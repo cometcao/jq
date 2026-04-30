@@ -32,6 +32,7 @@
 
 // Chan theory constant definitions
 const double MIN_PRICE_UNIT = 0.01;  // Minimum price unit
+const double FLOAT_CMP_EPSILON = 1e-10; // Float comparison epsilon (matches np.isclose rtol/atol)
 const double GOLDEN_RATIO = 0.618;   // Golden ratio
 
 // Top/bottom pattern type enumeration
@@ -122,23 +123,23 @@ struct XianDuan {
 };
 
 // Floating point comparison functions (implementation matches KBar_Chan.py)
-inline bool float_less(double a, double b, double epsilon = MIN_PRICE_UNIT) {
+inline bool float_less(double a, double b, double epsilon = FLOAT_CMP_EPSILON) {
     return a < b - epsilon;
 }
 
-inline bool float_more(double a, double b, double epsilon = MIN_PRICE_UNIT) {
+inline bool float_more(double a, double b, double epsilon = FLOAT_CMP_EPSILON) {
     return a > b + epsilon;
 }
 
-inline bool float_less_equal(double a, double b, double epsilon = MIN_PRICE_UNIT) {
+inline bool float_less_equal(double a, double b, double epsilon = FLOAT_CMP_EPSILON) {
     return a < b + epsilon;
 }
 
-inline bool float_more_equal(double a, double b, double epsilon = MIN_PRICE_UNIT) {
+inline bool float_more_equal(double a, double b, double epsilon = FLOAT_CMP_EPSILON) {
     return a > b - epsilon;
 }
 
-inline bool float_equal(double a, double b, double epsilon = MIN_PRICE_UNIT) {
+inline bool float_equal(double a, double b, double epsilon = FLOAT_CMP_EPSILON) {
     return std::abs(a - b) < epsilon;
 }
 
