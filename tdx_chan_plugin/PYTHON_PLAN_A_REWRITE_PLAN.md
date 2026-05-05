@@ -302,6 +302,8 @@ find_xd_on_feature_seq(feature_seq, working_df, direction):
 
 7. **与 `getFenDuan` 的兼容性**: `getFenDuan` 调用 `self.defineXD(initial_state)`, 返回值预期是 `self.kDataFrame_xd`。重写后保持相同的接口和行为。
 
+8. **popGap 无 XD 回退 (2026-05-05 增补)**: 缠论原文规定, 缺口形成的线段是暂定的 (需要后续确认)。如果后续价格突破缺口范围, 缺口型线段应被取消, 方向翻转后重新扫描。当前实现中 `find_xd_on_feature_seq` 返回 `found=False` 且 `gap_XD` 非空时, 需检查 feature_seq 价格是否突破上一个缺口。若突破, popGap + 回退 + flip direction + retry。缺失此处理会导致暂定缺口端点不被取消, 线段划分偏位。
+
 ---
 
 ## 9. 预期结果
@@ -315,3 +317,15 @@ find_xd_on_feature_seq(feature_seq, working_df, direction):
 | 非合并元素 chan_price | 不适用 | 全量刷新, 无前段残留 |
 | 索引非单调 | 不适用 (无合并) | is_kg2_backstep + clamp |
 | 缠论对应 | 删除法 ≠ 原文"合并" | 合并法 = 原文规则 |
+
+---
+
+## 10. C++ vs Python 实现差异（2026-05-05 对比）
+
+| 方面 | C++ (`ChanAnalyzer.cpp`) | Python (`kBar_Chan.py`) | 缠论合规 |
+|------|--------------------------|-------------------------|---------|
+| popGap 位置 | `findXDOnFeatureSeq` 扫描循环内部返回 `{is_rollback=true}` | `defineXD` 循环中 `result.found=False` 后手动检测 | 等同 |
+| `XDFindResult` 结构 | 含 `is_rollback`, `rollback_start`, `new_direction` | 不含 rollback 字段, 在 defineXD 内处理 | 等同 |
+| popGap 触发条件 | 滑动窗口内价格突破 gap_XD[-1] | feature_seq 整体价格突破 gap_XD[-1] | 等同 (语义等价) |
+
+**结论**: C++ 和 Python 的 popGap 处理**路径不同但结果等价**。C++ 在扫描循环内部返回 rollback 信号 (源于旧版 `findXDFull` 的架构延续), Python 在段级别做后处理。两者均正确实现了缠论原文"暂定缺口被突破 → 取消 → 翻转重判"的规则。差异是工程风格, 不影响合规性。参见 `ChanAnalyzer.cpp:1471-1486`。

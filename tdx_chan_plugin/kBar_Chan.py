@@ -1404,6 +1404,21 @@ class KBarChan(object):
 
             result = self.find_xd_on_feature_seq(feature_seq, working_df, direction)
             if not result['found']:
+                if self.gap_XD and len(feature_seq) >= 4:
+                    feat_prices = [elem['orig_price'] for elem in feature_seq]
+                    previous_gap_elem = working_df[self.gap_XD[-1]]
+                    popped = False
+                    if direction == TopBotType.top2bot and float_more(max(feat_prices), previous_gap_elem['chan_price']):
+                        rollback_idx = self.gap_XD.pop()
+                        popped = True
+                    elif direction == TopBotType.bot2top and float_less(min(feat_prices), previous_gap_elem['chan_price']):
+                        rollback_idx = self.gap_XD.pop()
+                        popped = True
+                    if popped:
+                        working_df[rollback_idx]['xd_tb'] = TopBotType.noTopBot.value
+                        direction = TopBotType.reverse(direction)
+                        tail_start = rollback_idx
+                        continue
                 break
 
             xd_idx = result['xd_market_idx']
