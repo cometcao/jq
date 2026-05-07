@@ -1,0 +1,20 @@
+{
+  "sources": {
+    "cninfo": {
+      "name": "巨潮资讯网",
+      "url": "http://www.cninfo.com.cn/new/fulltextSearch/full?searchkey={code}&sdate=2025-01-01&edate=2026-12-31&isfulltext=false&sortName=pubdate&sortType=desc&pageNum=1&pageSize=10"
+    },
+    "eastmoney": {
+      "name": "东方财富",
+      "url": "https://so.eastmoney.com/news/s?keyword={code}&pageindex=1&searchrange=8192&channelid=1"
+    },
+    "sse": {
+      "name": "上交所公告",
+      "url": "http://query.sse.com.cn/security/stock/queryCompanyBulletin.do?stockCode={code}&page=1&pageSize=10"
+    },
+    "szse": {
+      "name": "深交所公告",
+      "url": "https://www.szse.cn/disclosure/listed/notice/index.html?code={code}"
+    }
+  }
+}
