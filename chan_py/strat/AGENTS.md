@@ -51,5 +51,9 @@ python test/verify_integration.py
 python test/simple_test.py
 ```
 
+## Fill Buying Rule
+- `buy_to_fill()` allocates per-stock budget as `buy_cash / max_holdings`, **not** `buy_cash / len(candidates)`.
+- When candidates < max_holdings, each stock still gets only 1/N of buying cash; excess cash stays uninvested.
+
 ## Gitignored in this directory
 Config jsons, `logs/`, `test/`, backup files, and `strategy_positions.json`.

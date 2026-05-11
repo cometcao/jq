@@ -860,7 +860,7 @@ def buy_to_fill(context):
     if not candidates:
         return
 
-    per_stock = buy_cash / len(candidates)
+    per_stock = buy_cash / strat["max_holdings"]
     available_cash = buy_cash
 
     buy_codes = []

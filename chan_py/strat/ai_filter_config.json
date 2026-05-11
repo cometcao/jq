@@ -16,5 +16,19 @@
       "name": "深交所公告",
       "url": "https://www.szse.cn/disclosure/listed/notice/index.html?code={code}"
     }
+  },
+  "violation_tier_rules": {
+    "high": {
+      "types": ["立案调查", "行政处罚", "公开谴责", "留置", "纪律审查", "监察调查"],
+      "lookback_years": 5
+    },
+    "medium": {
+      "types": ["通报批评", "责令改正", "责令整改"],
+      "lookback_years": 3
+    },
+    "low": {
+      "types": ["监管警示函", "警示函", "出具警示函", "监管关注函", "关注函", "监管警示"],
+      "lookback_years": 2
+    }
   }
 }
