@@ -2,15 +2,15 @@
   "sources": {
     "cninfo": {
       "name": "巨潮资讯网",
-      "url": "http://www.cninfo.com.cn/new/fulltextSearch/full?searchkey={code}&sdate=2025-01-01&edate=2026-12-31&isfulltext=false&sortName=pubdate&sortType=desc&pageNum=1&pageSize=10"
+      "url": "https://www.cninfo.com.cn/new/fulltextSearch/full?searchkey={code}&sdate=2025-01-01&edate=2026-12-31&isfulltext=false&sortName=pubdate&sortType=desc&pageNum=1&pageSize=50"
     },
     "eastmoney": {
       "name": "东方财富",
-      "url": "https://so.eastmoney.com/news/s?keyword={code}&pageindex=1&searchrange=8192&channelid=1"
+      "url": "https://np-anotice-stock.eastmoney.com/api/security/ann?page_size=50&page_index=1&ann_type={type}&stock_list={code}"
     },
     "sse": {
       "name": "上交所公告",
-      "url": "http://query.sse.com.cn/security/stock/queryCompanyBulletin.do?stockCode={code}&page=1&pageSize=10"
+      "url": "http://query.sse.com.cn/security/stock/queryCompanyBulletin.do?jsonCallBack=jsonpCallback&isPagination=true&pageHelp.pageNo=1&pageHelp.pageSize=50&reportType=ALL&securityType=0101,120100,020100,020200,120200&productId={code}&beginDate=2025-01-01&endDate=2026-12-31"
     },
     "szse": {
       "name": "深交所公告",
@@ -19,7 +19,7 @@
   },
   "violation_tier_rules": {
     "high": {
-      "types": ["立案调查", "行政处罚", "公开谴责", "留置", "纪律审查", "监察调查"],
+      "types": ["立案调查", "立案", "行政处罚", "公开谴责", "留置", "纪律审查", "监察调查"],
       "lookback_years": 5
     },
     "medium": {
