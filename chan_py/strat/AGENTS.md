@@ -34,7 +34,6 @@ In scheduled mode, strategies fire at `trading_times` defined per strategy (defa
 - After loading a stock list, `qmt_trader_multiple_strategies.py` automatically runs `ai_fundamental_filter.filter_stocks()` on it.
 - The filter strips non-compliant stocks while preserving original order.
 - If `ZHIPU_API_KEY` env var is missing, the import is caught and filtering is silently skipped (no-op).
-- Each stock requires an LLM API call with ~0.8s delay; expect meaningful latency for large lists.
 - **12-rule system** (国九条 framework, ordered by trigger frequency):
   1. ① 面值退市（＜1元连续20日）
   2. ② 监管处罚/立案（原Rule6，关联信号）
@@ -48,93 +47,66 @@ In scheduled mode, strategies fire at `trading_times` defined per strategy (defa
   10. ⑩ 净资产为负
   11. ⑪ 重大财务造假
   12. ⑫ 市值退市（新增，＜5亿）
-- **Deleted**: 三年亏损超2亿（原Rule7，非现行规则）.
-- **Rule ② two-pass system**: `_local_rule2_scan()` performs a pure-code scan on external-info flagged lines (keyword→severity→date→tiered lookback). Hitting any match immediately rejects the stock, skipping the API call. If the local scan finds nothing, the API serves as fallback. Rule ② is the only rule with this split path (all other rules rely on API for threshold verification).
 
-### Rule ② Architecture (final, 2026-05-12)
-#### Why it's complex
-- **qwen3-max started producing generic "经核查，未发现触发..."** for Rule ② (~2026-05-12), while remaining reliable on Rules ①, ③-⑫.
-- Root cause: external model behavior change (cloud API) — model adopted a "conservative clean" strategy for Rule ②, avoiding violation judgments.
-- Attempted prompt/evidence/temperature fixes all failed. This is not fixable locally.
+### Architecture: 4-Layer Deterministic Pipeline (2026-05-13)
 
-#### 2026-05-13 diagnostic: local vs remote inconsistency
-- Compared `debug_search.log` (local) vs `debug_search_remote.log` (remote).
-- **Data sources were identical** between environments — all fetchers returned the same announcements.
-- Divergent results were entirely from LLM nondeterminism — same `external_info` input → different model outputs (e.g. 好想你 PASS locally, FAIL remotely on hallucinated Rule② violation).
-- Root cause: `temperature=0.3` injected randomness. Fixed to `temperature=0`.
-- Secondary bug: model returns `'②'` (U+2461 circled digit) but `_apply_tiered_filter` checked `"2"` (ASCII 50) → evidence cross-verification never executed. Fixed with `_RULE_CIRCLED` translation table + `_normalize_rules()`.
-- `_call_with_fallback` now returns the model name (5th value) for debug traceability.
+每条股票按顺序经过四层流水线，任一层命中即剔除，不进入后续层。
 
-#### Final decision: keep two-pass + API fallback + tiered filter
-| Component | Role | Keep? | Why |
-|-----------|------|-------|-----|
-| `_local_rule2_scan()` | 本地关键字+时效扫描 flagged_lines | ✅ Keep | pageSize=50 让更多标题进入 flagged_lines，覆盖充分 |
-| API fallback (LLM) | 本地未命中时兜底 | ✅ Keep | 模型对 Rule ② 不可靠（已退化），实际靠 `_apply_tiered_filter` 纠偏 |
-| `_apply_tiered_filter` | 模型证据校验+时效豁免+年份回退 | ✅ Keep | 模型对 Rule ② 不可靠，这些防护是必要补丁 |
-| pageSize=50 | 数据源公告数量 | ✅ Key fix | 茅台留置、东亚药业责令改正均由 pageSize=50 的 flagged_lines 捕获 |
-| Rules ①, ③-⑫ via LLM | 模型主判 | ✅ No change | 事实型查询，模型从未退化 |
+```
+Layer 1: 标题关键词扫描 (纯代码，0 API调用)
+  ② 监管处罚/立案     → _local_rule2_scan() [配置关键词→severity→tiered lookback]
+  ⑤ 内控审计否定/无法表示 → "否定意见"/"无法表示意见" 关键词匹配
+  ⑦ 会计差错更正       → "会计差错更正" 关键词匹配
+  ⑪ 财务造假          → "财务造假" 关键词匹配
+  数据源: collect_external_info() 的 RISK_FLAGS flagged_lines + 全量公告标题
+  命中 → 直接剔除，跳过后续所有层
 
-**Pre-search (attempted & removed 2026-05-12)**: Qwen refused to search for negative keywords even in a no-judgment prompt; Zhipu hit rate limits; cninfo keyword fulltext search proved unreliable. Dropped in favor of pageSize=50.
+Layer 2: 金融数据核验 (baostock, 确定性的)
+  ① 面值退市    → 日K线收盘价连续<1元20日
+  ③ 净利润负+营收低 → query_profit_data: netProfit<0 AND MBRevenue<阈值(主板3亿/科创创业板1亿)
+  ④ ST/*ST     → 日K线 isST 字段
+  ⑫ 市值退市    → close×totalShare<5亿连续20日(仅主板适用)
+  数据源: baostock (query_history_k_data_plus, query_profit_data)
+  命中 → 直接剔除，跳过后续层
 
-#### Rule ① stays with LLM — not subject to local bypass
-Rule ① (面值退市) is a simple factual query ("股价＜1元?"), not a semantic judgment. The model handles this fine. Local computation would require xtdata/baostock price data, adding dependency to an otherwise standalone text-analysis module. Same reasoning applies to Rule ⑫ (市值退市).
+Layer 3: LLM 兜底判断 (enable_search=False, 输入完全确定)
+  输入 = 金融数据核验摘要 + 公告标题全文
+  覆盖: 规则⑥(重大诉讼)、⑧(资金占用/违规担保)、⑨(分红不达标)、⑩(净资产为负)
+  同输入→同输出(temperature=0)，无联网搜索波动
+  模型: qwen3-max (fallback: qwen3-plus/turbo → glm-4.7-flash)
 
-#### Tiered time-window filtering (config: `ai_filter_config.json`)
-Applies to Rule ② violations:
-| Severity | Lookback | Triggered by |
-|----------|----------|-------------|
-| high | 5 years | 立案调查, 立案, 行政处罚, 公开谴责, 留置, 纪律审查, 监察调查 |
-| medium | 3 years | 通报批评, 责令改正, 责令整改 |
-| low | 2 years | 监管警示函, 警示函, 出具警示函, 监管关注函, 关注函, 监管警示 |
+Layer 4: 外部搜索查漏补缺 (已实现)
+  Layer 3 判合规(通过) + 标题含高信号关键词 → Bing 搜索查漏杀
+  搜索结果固定格式化后二次调 LLM (仍 enable_search=False)
+  Layer 3 判不合规(剔除)时不触发，不浪费搜索资源
+  同输入→同输出，确保可复现
 
-Violations older than their tier's lookback are exempted.
+### Layer 4 Details
 
-### Data Source Status (2026-05-12)
+- 实现: `_deterministic_search()` → requests 调 Bing，取前 5 条标题+摘要，排除股价/行情类噪声（`-股价 -行情 -走势`）
+- 触发条件: `_should_trigger_layer4()` → Layer 3 判合规(通过) + 标题含高信号关键词
+- 高信号关键词: `涉案金额`、`应诉通知书`、`重大诉讼`、`诉讼进展`、`仲裁进展`、`关联方资金占用`、`违规担保`
+- 注意: `"关联方资金占用"` 而非 `"资金占用"` — 后者会匹配例行审计报告标题（如"非经营性资金占用及其他关联资金往来情况的专项审计说明"）造成大量误触发
+- 搜索结果固定格式化后二次调 LLM (enable_search=False)，同输入同输出
+- 仅 Layer 3 判合规(通过)但标题有高信号时触发，不增加已剔除股票的搜索开销
 
-| Source | Status | Root Cause | Fix |
-|--------|--------|-----------|-----|
-| 巨潮资讯网 (cninfo) | ✅ Fixed | Referer 污染：全局 `Referer: sse.com.cn` 导致 cninfo 判定为跨站请求，返回 HTTP 200 + 空 body | 拆分为 `HEADERS` (无 Referer) + `SSE_HEADERS` (仅 SSE 用)；URL 升级为 https |
-| 东方财富 (eastmoney) | ✅ Fixed | HTML SPA (`<div id="app">`)，CSS 无效 | JSON API: `np-anotice-stock.eastmoney.com/api/security/ann`，数据在 `data.list` |
-| 上交所 (sse) | ✅ Fixed | 缺 `Referer` + 参数名错误 (`security_Code` 被忽略) + JSONP 格式 | `Referer: https://www.sse.com.cn/` + `productId={code}` + strip JSONP + 读 `data.result` |
-| 深交所 (szse) | ❌ Blocked | WAF/CDN，所有 API 403/500 | 已由 eastmoney `ann_type=SZA` 覆盖 |
+### 2026-05-13 Fixes (4-layer rebuild + post-test polish)
 
-**Coverage**: 沪市 cninfo+eastmoney+sse 三重，深市 cninfo+eastmoney 双重。
-
-**Diagnostic script**: `test/test_data_sources.py` — calls `_fetch_from_url(debug=True)` for all 4 sources (gitignored).
-
-**Debug logging strategy** (2026-05-12):
-- Console (debug=True): one-liner summary per source — `[name] OK: N 条` or `[name] EMPTY`
-- `debug_search.log`: full diagnostics (HTTP status, Content-Type, JSON errors, response body, raw data)
-- `_fetch_from_url` uses internal `_diag()` helper: if `log_file` is provided → write to log; if only `debug=True` → print; otherwise silent
-- `collect_external_info` prints its own console summaries (not through `_diag`), keeping the `_fetch_from_url` layer silent when called from the production path
-
-### AI Filter TODOs / Known Risks
-- [x] ~~`_call_qwen` exception branch returned 3 values, callers unpacked 4 → crash~~ (fixed)
-- [x] ~~Year fallback defaulted to `current_year`, making old violations seem recent~~ (now defaults to `current_year - 10` with warning)
-- [x] ~~`_classify_violation` checked nonexistent `vd.type` field → always fell back to `"medium"`~~ (now uses `vd.description`)
-- [x] ~~`vd.rule` comparison assumed string, model may return int~~ (now casts with `str()`)
-- [x] ~~Anomalous-rules check required *all* 10 rules exactly to trigger → too strict~~ (now triggers at >=5 rules)
-- [x] ~~Empty `external_info` silently passed to model, increasing hallucination risk~~ (now prints warning)
-- [x] ~~Prompt lacked exemption for 控股股东高管 (e.g. 浙农股份 汪路平)~~ (added to Rule ② exemption + 【关键判断原则】)
-- [x] ~~`_apply_tiered_filter` returned True after exempting Rule②, ignoring other violated rules (e.g. Rule1+Rule② → stock passed)~~ (now checks `remaining` is empty before returning qualified)
-- [x] ~~`collect_external_info` never received market suffix (normalized code stripped it) → always queried both SSE+SZSE for every stock~~ (now passes `raw_code` with original suffix)
-- [x] ~~`_classify_violation` defaults to `"medium"` when no keyword matches — for unknown severity, `"high"` would be more conservative (5yr vs 3yr lookback).~~ (fixed, default is now `"high"`)
-- [x] ~~Config `violation_tier_rules.high.types` lacks standalone `"立案"` keyword (only has `"立案调查"`). `RISK_FLAGS` includes it but `_classify_violation` won't match.~~ (fixed, added `"立案"` to config)
-- [x] ~~Model still may hallucinate violations.~~ Added Rule ② local-evidence cross-verification: if `external_info` (fixed sources) contains no `RISK_FLAGS` keywords, the model's Rule ② claim is rejected as unverifiable. ~~(2026-05-13: This cross-verification was bypassed — model returns `'②'` (Unicode circled) but code checked `"2"` (ASCII), causing `_apply_tiered_filter` to exit early at line 598. Fixed: `_RULE_CIRCLED` + `_normalize_rules()` normalizes `①②③…` → `123…` at filter entry.)~~
-- [x] ~~**Model nondeterminism** — `temperature=0.3` caused different judgment results for identical inputs across local/remote~~ (fixed 2026-05-13: `temperature=0` in both `_call_qwen` and `_call_zhipu`)
-- [x] ~~**Model name not logged** — `_call_with_fallback` didn't report which model was used~~ (fixed 2026-05-13: returns 5th value `model_used`, logged to `debug_search.log`)
-- [x] ~~**Add comprehensive debug logging to `_fetch_from_url`**~~ (done 2026-05-12)
-- [x] ~~**Run `test/test_data_sources.py`** to get actual HTTP responses from eastmoney/sse/szse~~ (done 2026-05-12)
-- [x] ~~**Fix 东方财富 data source** — update CSS selectors based on actual HTML~~ (fixed: replaced with JSON API)
-- [x] ~~**Fix 上交所 data source** — add Referer header + update parsing~~ (fixed: Referer + JSONP + pageHelp.data)
-- [x] ~~**Fix 深交所 data source** — find actual API endpoint~~ (blocked by WAF, covered by eastmoney)
-- [ ] **Improve `maintain_sources` health check** — `_check_url` should validate response body contains expected content (not just HTTP 200)
-- [x] ~~**Re-test `_local_rule2_scan` on 贵州茅台/东亚药业** after data sources are fixed~~ (verified: both caught by local scan at pageSize=50)
+| Fix | Problem | Solution |
+|-----|---------|----------|
+| 移除 LLM 联网搜索 | `enable_search=True` 导致结果不确定 | qwen/zhipu 均改为 `enable_search=False` |
+| 扩展 Layer 1 标题扫描 | 仅规则②有本地扫描，⑤⑦⑪全靠模型（会幻觉） | `_local_scan_extended()` 覆盖 ②⑤⑦⑪ |
+| Layer 2 金融核验 | 规则①③④⑫全靠模型 | baostock 确定性查询日K线+年报利润表 |
+| 泛化证据交叉校验 | 非规则②的幻觉无防御 | `_apply_tiered_filter` Step 1 对所有规则做关键词证据校验 |
+| Layer 4 方向修正 | FAIL→搜索翻案 | 改为 PASS+高信号→搜索查漏补缺 |
+| L4 关键词修正 | `"资金占用"` 匹配例行审计报告 | 改为 `"关联方资金占用"` |
+| 年份提取修正 | `_extract_year_from_reason` 取 max 可能得未来年份 | 过滤 `> current_year` |
+| Bing 噪声排除 | 返回东方财富/雪球/同花顺股价页 | 加 `-股价 -行情 -走势` + title 过滤 |
 
 ## Dependencies
 - `xtquant` — proprietary miniQMT SDK (not on PyPI).
-- `scipy`, `requests`.
-- `ai_fundamental_filter.py` needs `ZHIPU_API_KEY` env var.
+- `scipy`, `requests`, `baostock`.
+- `ai_fundamental_filter.py` needs `ZHIPU_API_KEY` and `DASHSCOPE_API_KEY` env vars.
 
 ## Testing
 No formal test framework. Tests are standalone scripts in `test/` that mock `xtquant` via `sys.modules` and use bare `assert`.
