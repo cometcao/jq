@@ -57,6 +57,14 @@ In scheduled mode, strategies fire at `trading_times` defined per strategy (defa
 - Root cause: external model behavior change (cloud API) — model adopted a "conservative clean" strategy for Rule ②, avoiding violation judgments.
 - Attempted prompt/evidence/temperature fixes all failed. This is not fixable locally.
 
+#### 2026-05-13 diagnostic: local vs remote inconsistency
+- Compared `debug_search.log` (local) vs `debug_search_remote.log` (remote).
+- **Data sources were identical** between environments — all fetchers returned the same announcements.
+- Divergent results were entirely from LLM nondeterminism — same `external_info` input → different model outputs (e.g. 好想你 PASS locally, FAIL remotely on hallucinated Rule② violation).
+- Root cause: `temperature=0.3` injected randomness. Fixed to `temperature=0`.
+- Secondary bug: model returns `'②'` (U+2461 circled digit) but `_apply_tiered_filter` checked `"2"` (ASCII 50) → evidence cross-verification never executed. Fixed with `_RULE_CIRCLED` translation table + `_normalize_rules()`.
+- `_call_with_fallback` now returns the model name (5th value) for debug traceability.
+
 #### Final decision: keep two-pass + API fallback + tiered filter
 | Component | Role | Keep? | Why |
 |-----------|------|-------|-----|
@@ -112,7 +120,9 @@ Violations older than their tier's lookback are exempted.
 - [x] ~~`collect_external_info` never received market suffix (normalized code stripped it) → always queried both SSE+SZSE for every stock~~ (now passes `raw_code` with original suffix)
 - [x] ~~`_classify_violation` defaults to `"medium"` when no keyword matches — for unknown severity, `"high"` would be more conservative (5yr vs 3yr lookback).~~ (fixed, default is now `"high"`)
 - [x] ~~Config `violation_tier_rules.high.types` lacks standalone `"立案"` keyword (only has `"立案调查"`). `RISK_FLAGS` includes it but `_classify_violation` won't match.~~ (fixed, added `"立案"` to config)
-- [x] ~~Model still may hallucinate violations.~~ Added Rule ② local-evidence cross-verification: if `external_info` (fixed sources) contains no `RISK_FLAGS` keywords, the model's Rule ② claim is rejected as unverifiable.
+- [x] ~~Model still may hallucinate violations.~~ Added Rule ② local-evidence cross-verification: if `external_info` (fixed sources) contains no `RISK_FLAGS` keywords, the model's Rule ② claim is rejected as unverifiable. ~~(2026-05-13: This cross-verification was bypassed — model returns `'②'` (Unicode circled) but code checked `"2"` (ASCII), causing `_apply_tiered_filter` to exit early at line 598. Fixed: `_RULE_CIRCLED` + `_normalize_rules()` normalizes `①②③…` → `123…` at filter entry.)~~
+- [x] ~~**Model nondeterminism** — `temperature=0.3` caused different judgment results for identical inputs across local/remote~~ (fixed 2026-05-13: `temperature=0` in both `_call_qwen` and `_call_zhipu`)
+- [x] ~~**Model name not logged** — `_call_with_fallback` didn't report which model was used~~ (fixed 2026-05-13: returns 5th value `model_used`, logged to `debug_search.log`)
 - [x] ~~**Add comprehensive debug logging to `_fetch_from_url`**~~ (done 2026-05-12)
 - [x] ~~**Run `test/test_data_sources.py`** to get actual HTTP responses from eastmoney/sse/szse~~ (done 2026-05-12)
 - [x] ~~**Fix 东方财富 data source** — update CSS selectors based on actual HTML~~ (fixed: replaced with JSON API)

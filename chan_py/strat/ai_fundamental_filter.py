@@ -463,7 +463,7 @@ def _call_qwen(model: str, code: str, external_info: str, debug: bool = False):
         resp = Generation.call(
             model=model,
             messages=messages,
-            temperature=0.3,
+            temperature=0,
             result_format='message',
             enable_search=True,
             response_format={"type": "json_object"},
@@ -501,7 +501,7 @@ def _call_zhipu(code: str, external_info: str, debug: bool = False) -> Tuple[boo
         resp = zhipu_client.chat.completions.create(
             model="glm-4.7-flash",
             messages=messages,
-            temperature=0.3,
+            temperature=0,
             tools=[{"type": "web_search", "web_search": {"enable": True, "search_result": True}}],
             tool_choice="auto",
             response_format={"type": "json_object"},
@@ -515,14 +515,20 @@ def _call_zhipu(code: str, external_info: str, debug: bool = False) -> Tuple[boo
         print(f"  [FAIL] 智谱调用失败: {e}")
         return True, f"智谱异常，默认合规: {e}", [], []
 
-def _call_with_fallback(code: str, external_info: str, debug: bool = False) -> Tuple[bool, str, List[str], List[dict]]:
+_RULE_CIRCLED = str.maketrans("①②③④⑤⑥⑦⑧⑨⑩⑪⑫", "123456789012")
+
+def _normalize_rules(rules: List[str]) -> List[str]:
+    return [r.translate(_RULE_CIRCLED) for r in rules]
+
+def _call_with_fallback(code: str, external_info: str, debug: bool = False) -> Tuple[bool, str, List[str], List[dict], str]:
     for model in QWEN_MODEL_LIST:
         is_q, reason, viol, vd = _call_qwen(model, code, external_info, debug)
         if is_q is not None:
-            return is_q, reason, viol, vd
+            return is_q, reason, viol, vd, model
     if debug:
         print("  [!] 千问模型均失败，切换至智谱...")
-    return _call_zhipu(code, external_info, debug)
+    is_q, reason, viol, vd = _call_zhipu(code, external_info, debug)
+    return is_q, reason, viol, vd, "glm-4.7-flash"
 
 # -------------------- 分级时效过滤 --------------------
 def _extract_year_from_reason(text: str) -> Optional[int]:
@@ -594,6 +600,12 @@ def _apply_tiered_filter(is_qualified: bool, reason: str,
     """对规则②（监管处罚/立案）违规应用分级×时效过滤，超时效窗口的违规予以豁免"""
     if is_qualified:
         return True, reason, violated_rules
+
+    violated_rules = _normalize_rules(violated_rules)
+    if violation_details:
+        for vd in violation_details:
+            if isinstance(vd.get("rule"), str):
+                vd["rule"] = vd["rule"].translate(_RULE_CIRCLED)
 
     if "2" not in violated_rules:
         return False, reason, violated_rules
@@ -703,8 +715,9 @@ def filter_stocks(stock_list: List[str], delay: float = 2.0, debug: bool = False
                 if debug:
                     print(f"  [!] 存在{len(flagged_lines)}条风险信号但本地扫描未命中，移交API复查")
 
-            model_qualified, reason, rules, violation_details = _call_with_fallback(code, external_info, debug=debug)
+            model_qualified, reason, rules, violation_details, model_used = _call_with_fallback(code, external_info, debug=debug)
             log_file.write(f"\n  ── 模型返回 ──\n")
+            log_file.write(f"  model: {model_used}\n")
             log_file.write(f"  is_qualified: {model_qualified}\n")
             log_file.write(f"  reason: {reason}\n")
             log_file.write(f"  violated_rules: {rules}\n")
@@ -730,7 +743,7 @@ def filter_stocks(stock_list: List[str], delay: float = 2.0, debug: bool = False
     return [original_map[code] for code in qualified]
 
 if __name__ == "__main__":
-    test = ["000001.sz", "000858.sz", "600519.sh", "000639.sz", "605177.sh", "002758.sz"]
-    # test = ["600638.XSHG", "002582.XSHE", "605177.XSHG", "000498.XSHE", "002614.XSHE", "002758.XSHE", "000906.XSHE", "002745.XSHE", "001218.XSHE", "600455.XSHG", "000421.XSHE", "600768.XSHG", "600717.XSHG", "002743.XSHE", "605189.XSHG", "301227.XSHE", "000605.XSHE", "002054.XSHE"]
+    # test = ["000001.sz", "000858.sz", "600519.sh", "000639.sz", "605177.sh", "002758.sz"]
+    test = ["600638.XSHG", "002582.XSHE", "605177.XSHG", "002758.XSHE", "000498.XSHE", "002745.XSHE", "002614.XSHE", "000421.XSHE", "000906.XSHE", "600455.XSHG", "001218.XSHE", "600768.XSHG", "600717.XSHG", "002743.XSHE", "605189.XSHG", "601188.XSHG", "002054.XSHE"]
     result = filter_stocks(test, delay=2.0, debug=True)
     print(f"\n最终合规股票池: {result}")
