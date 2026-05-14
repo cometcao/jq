@@ -82,9 +82,9 @@ class OrderUtils:
                                               context['broker_positions'], timeout=timeout)
             if new_pos is not None:
                 context['broker_positions'] = new_pos
+                _update_tracker_after_trade(context, success_codes)
             else:
                 logging.warning(f"订单等待超时: {success_codes}")
-            _update_tracker_after_trade(context, success_codes)
         
         return success_codes, failed_codes
 
@@ -614,8 +614,9 @@ def init_trader(context):
             trader.set_relaxed_response_order_enabled(True)
             trader.start()
             time.sleep(3)
-            if trader.connect() != 0:
-                raise Exception(f"连接失败，错误码: {trader.connect()}")
+            result = trader.connect()
+            if result != 0:
+                raise Exception(f"连接失败，错误码: {result}")
             context['trader'] = trader
             context['account'] = StockAccount(cfg["account_id"])
             logging.info("交易客户端就绪")
@@ -733,9 +734,9 @@ def sell_out_of_pool(context):
         new_pos = wait_for_order_completion(trader, account, sell_codes, context['broker_positions'], timeout=15)
         if new_pos is not None:
             context['broker_positions'] = new_pos
+            _update_tracker_after_trade(context, sell_codes)
         else:
             logging.warning(f"[{strat['name']}] 卖出等待超时")
-        _update_tracker_after_trade(context, sell_codes)
 
     get_account_status(context)
 
@@ -777,9 +778,9 @@ def rebalance(context):
         new_pos = wait_for_order_completion(trader, account, sell_codes, context['broker_positions'], timeout=15)
         if new_pos is not None:
             context['broker_positions'] = new_pos
+            _update_tracker_after_trade(context, sell_codes)
         else:
             logging.warning(f"[{strat['name']}] 再平衡卖出超时")
-        _update_tracker_after_trade(context, sell_codes)
 
     get_account_status(context)
 
@@ -811,7 +812,7 @@ def rebalance(context):
         new_pos = wait_for_order_completion(trader, account, buy_codes, context['broker_positions'], timeout=15)
         if new_pos is not None:
             context['broker_positions'] = new_pos
-        _update_tracker_after_trade(context, buy_codes)
+            _update_tracker_after_trade(context, buy_codes)
 
     get_account_status(context)
 
@@ -857,7 +858,7 @@ def buy_to_fill(context):
         return
 
     # 使用辅助函数计算现金分配
-    reserve, buy_cash = calculate_cash_allocation(strat, total_asset, cash)
+    _, buy_cash = calculate_cash_allocation(strat, total_asset, cash)
     if buy_cash <= 0:
         logging.warning(f"[{strat['name']}] 可用资金不足")
         return
@@ -885,7 +886,7 @@ def buy_to_fill(context):
         new_pos = wait_for_order_completion(trader, account, buy_codes, context['broker_positions'], timeout=15)
         if new_pos is not None:
             context['broker_positions'] = new_pos
-        _update_tracker_after_trade(context, buy_codes)
+            _update_tracker_after_trade(context, buy_codes)
 
     get_account_status(context)
 
@@ -1236,7 +1237,7 @@ def main_loop(run_now=False, config_file=None):
                         logging.debug(f"跳过执行：距离上次执行时间太短，还需等待 {wait_remaining:.0f} 秒")
                         time.sleep(min(wait_remaining, 5))
             else:
-                # 计算到下一个交易时间点的等待时间
+                # 计算到下一个唤醒时间点（交易或邮件检查）的等待时间
                 next_time = None
                 for t in all_wake_times:
                     hour, minute = map(int, t.split(':'))

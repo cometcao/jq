@@ -134,3 +134,16 @@ python test/simple_test.py
 
 ## Gitignored in this directory
 Config jsons, `logs/`, `test/`, backup files, and `strategy_positions.json`.
+
+## 2026-05-14 Bug Fixes
+
+| Fix | Location | Problem | Solution |
+|-----|----------|---------|----------|
+| `trader.connect()` double call | `init_trader:617` | Error message calls `connect()` again, showing wrong error code | Assign result first: `result = trader.connect()` |
+| Tracker update on timeout | `sell_out_of_pool`, `rebalance`(sell), `rebalance`(buy), `buy_to_fill`, `batch_process_orders` | `_update_tracker_after_trade` called even when `wait_for_order_completion` times out → operates on stale `broker_positions` | Move call inside `if new_pos is not None:` block; timeout delegates to `get_account_status` sync |
+| `buy_to_fill` per-stock allocation | `buy_to_fill:863` | `per_stock = buy_cash / max_holdings` → 1 slot fill gets only 1/8 of available cash | Changed to `buy_cash / slots` |
+| Unused `reserve` variable | `buy_to_fill:861` | `calculate_cash_allocation` returns tuple; `reserve` never read | Changed to `_, buy_cash = ...` |
+| Email module missing | `main_loop` | Email signal check not integrated into multi-strategy scheduler | Merged import + auto-computed check times + `all_wake_times` merge |
+
+### Known Unresolved
+- **No Chinese market holiday awareness**: `is_weekday` only checks Mon–Fri. On holidays the script logs connection errors at each trading time but does not trade (QMT refuses connection). No reliable free holiday data source found.
