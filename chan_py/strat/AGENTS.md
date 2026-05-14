@@ -30,6 +30,15 @@ In scheduled mode, strategies fire at `trading_times` defined per strategy (defa
 - Position tracking per strategy lives in `strategy_positions.json`.
 - **Never commit** config jsons — they contain account IDs and QMT paths.
 
+## Email Signal Check
+- `check_email_for_signal.py` is imported by `qmt_trader_multiple_strategies.py` and called automatically at computed times.
+- **Timing**: auto-computed as `trading_time - email_check_offset_minutes` per strategy. A strategy with `trading_times: ["09:35"]` and `email_check_offset_minutes: 10` triggers email check at `09:25`.
+- **Config**: `email_reader_config.json` (unchanged) provides IMAP credentials, `save_directory`, `target_subject`. Its `run_time` field is ignored (now auto-computed).
+- **Strategy config**: add `"email_check_offset_minutes": <N>` to any strategy that needs email checks. Omit or set `0` to disable for that strategy.
+- **Behavior**: fetches the latest unseen email per `target_subject`, saves attachments, marks them deleted. Retries up to 3 times if no unseen emails found. Failure never blocks strategy execution.
+- If `email_reader_config.json` is missing or invalid, email check is silently disabled.
+- Standalone mode still works: `python check_email_for_signal.py` runs with its own loop at `run_time`.
+
 ## AI Fundamental Filter
 - After loading a stock list, `qmt_trader_multiple_strategies.py` automatically runs `ai_fundamental_filter.filter_stocks()` on it.
 - The filter strips non-compliant stocks while preserving original order.
@@ -119,8 +128,9 @@ python test/simple_test.py
 ```
 
 ## Fill Buying Rule
-- `buy_to_fill()` allocates per-stock budget as `buy_cash / max_holdings`, **not** `buy_cash / len(candidates)`.
-- When candidates < max_holdings, each stock still gets only 1/N of buying cash; excess cash stays uninvested.
+- `buy_to_fill()` allocates per-stock budget as `buy_cash / slots` (where `slots = max_holdings - current_positions`).
+- Since `candidates` is already capped at `slots`, each new stock gets the full target-weight allocation.
+- When there are fewer candidates than slots (pool exhausted), excess cash stays uninvested.
 
 ## Gitignored in this directory
 Config jsons, `logs/`, `test/`, backup files, and `strategy_positions.json`.

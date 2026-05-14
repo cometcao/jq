@@ -23,6 +23,12 @@ except (ImportError, ValueError):
     def _ai_filter_stocks(codes, **kwargs):
         return codes
 
+try:
+    from check_email_for_signal import check_email_and_save_attachment
+except (ImportError, ValueError):
+    def check_email_and_save_attachment(config):
+        pass
+
 
 # ==================== 自定义异常类 ====================
 class MarketDataException(Exception):
@@ -860,7 +866,7 @@ def buy_to_fill(context):
     if not candidates:
         return
 
-    per_stock = buy_cash / strat["max_holdings"]
+    per_stock = buy_cash / slots
     available_cash = buy_cash
 
     buy_codes = []
@@ -1166,9 +1172,35 @@ def main_loop(run_now=False, config_file=None):
     # 转换为排序的时间列表
     sorted_times = sorted(all_trading_times)
     logging.info(f"所有策略的交易时间点: {sorted_times}")
-    
+
+    # Auto-compute email check times: strategy trading_time - email_check_offset_minutes
+    email_config = None
+    email_check_times = set()
+    try:
+        with open('email_reader_config.json', 'r', encoding='utf-8') as f:
+            email_config = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        logging.info("email_reader_config.json not found or invalid, email check disabled")
+
+    for strat_cfg in context['strategy_configs']:
+        offset = strat_cfg.get('email_check_offset_minutes', 0)
+        if offset and offset > 0 and email_config:
+            for t in strat_cfg['trading_times']:
+                h, m = map(int, t.split(':'))
+                total = h * 60 + m - offset
+                if total < 0:
+                    total += 1440
+                email_check_times.add(f"{total // 60:02d}:{total % 60:02d}")
+
+    if email_check_times:
+        logging.info(f"Email check times (auto-computed): {sorted(email_check_times)}")
+
+    # Merge email check times into wake-up schedule
+    all_wake_times = sorted(all_trading_times | email_check_times)
+
     # 记录上次执行时间，避免重复执行
     last_execution_time = None
+    last_email_check_time = None
     
     while True:
         now = datetime.datetime.now()
@@ -1176,6 +1208,17 @@ def main_loop(run_now=False, config_file=None):
         
         # 如果是交易日，检查是否需要执行
         if is_weekday(now.date()):
+            # --- Email check (before strategy execution, never blocks strategies) ---
+            if current_time_str in email_check_times:
+                if email_config and (last_email_check_time is None or (now - last_email_check_time).total_seconds() > 60):
+                    try:
+                        logging.info(f"[email] Checking at {current_time_str}")
+                        check_email_and_save_attachment(email_config)
+                    except Exception as e:
+                        logging.error(f"[email] Check failed (will continue): {e}")
+                    last_email_check_time = now
+                    time.sleep(1)
+
             # 检查当前时间是否在交易时间点中
             if current_time_str in all_trading_times:
                 # 避免短时间内重复执行（至少等待1分钟）
@@ -1195,7 +1238,7 @@ def main_loop(run_now=False, config_file=None):
             else:
                 # 计算到下一个交易时间点的等待时间
                 next_time = None
-                for t in sorted_times:
+                for t in all_wake_times:
                     hour, minute = map(int, t.split(':'))
                     target_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
                     if target_time > now:
@@ -1209,7 +1252,7 @@ def main_loop(run_now=False, config_file=None):
                     while not is_weekday(tomorrow.date()):
                         tomorrow += datetime.timedelta(days=1)
                     
-                    first_time = sorted_times[0]
+                    first_time = all_wake_times[0]
                     hour, minute = map(int, first_time.split(':'))
                     next_time = tomorrow.replace(hour=hour, minute=minute, second=0, microsecond=0)
                 
@@ -1235,7 +1278,7 @@ def main_loop(run_now=False, config_file=None):
             while not is_weekday(next_day.date()):
                 next_day += datetime.timedelta(days=1)
             
-            first_time = sorted_times[0]
+            first_time = all_wake_times[0]
             hour, minute = map(int, first_time.split(':'))
             next_time = next_day.replace(hour=hour, minute=minute, second=0, microsecond=0)
             
