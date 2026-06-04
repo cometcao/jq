@@ -869,6 +869,8 @@ std::vector<int> validIndices;  // 只存储tb != 0的位置
 | 所有 `same_tb_remove_*`, `trace_back_index`, `get_next_tb`, `work_on_end` | ✅ | 全部补全 |
 | `Main.cpp` 接口（Func1=笔, Func2=线段） | ✅ | 简化接口完成 |
 | `CMakeLists.txt` C++17 标准 | ✅ | 已设置 |
+| `CMakeLists.txt` CRT 静态链接 (`/MT`) | ✅ | 2026-06-04 修复退出崩溃 |
+| `Main.cpp` `__stdcall` 调用约定 | ✅ | 2026-06-04 Win32 栈破坏修复 |
 
 **已完成的阶段：**
 - Phase 1: 紧急修复卡死 ✅
@@ -878,9 +880,42 @@ std::vector<int> validIndices;  // 只存储tb != 0的位置
 - Phase 7: 线段端点类型反转+包含关系 ✅
 - Phase 8: defineXD/findXDFull调用结构 ✅
 - Phase 9/9b/9c: 对照Python全面修复(14个差异) ✅
+- Phase 10: 退出崩溃修复（CRT静态链接+调用约定） ✅
 
 **待实施：**
 - Phase 5: 性能优化（消除 vector 拷贝、预计算索引）
+
+---
+
+### 2026-06-04 Phase 10 实施记录 — 退出通达信时崩溃修复（CRT 链接 + 调用约定）
+
+#### 0.22 问题诊断：退出通达信后出现错误
+
+**症状**：插件运行期间正常，但退出通达信后弹窗报错。Win32 和 x64 版本均受影响。
+
+**根因 1：动态 CRT 链接 (`/MD`)**
+
+`CMakeLists.txt` 未设置 `CMAKE_MSVC_RUNTIME_LIBRARY`，MSVC 默认使用 `/MD`（动态链接 CRT）。DLL 依赖外部 `msvcp140.dll` / `vcruntime140.dll`。进程退出时 DLL 卸载顺序不确定——若 CRT DLL 先于本 DLL 卸载，则 `std::vector` / `std::string` / `std::tuple` 等 STL 成员的析构函数调用已卸载的 CRT 代码，导致访问违例崩溃。
+
+项目自身文档 `CONTINUE.md` 已明确指出 *"Do not introduce dynamic C++ runtime dependencies (`/MD`); use `/MT` for distribution"*，但 CMakeLists.txt 未强制执行。
+
+**根因 2：`RegisterTdxFunc` 和函数指针缺少 `__stdcall`（仅影响 Win32）**
+
+`Main.cpp` 中所有其他导出函数（`TDXPlugin_GetInfo`、`TDXPlugin_Calculate` 等）均使用 `__stdcall` 调用约定，但 `RegisterTdxFunc` 和 `pPluginFUNC` 函数指针类型缺少。在 Win32 平台下 `__cdecl` 与 `__stdcall` 的栈清理方式不同，若通达信预期 `__stdcall` 而 DLL 提供 `__cdecl`，每次 `Func1`/`Func2` 调用均会微量破坏栈，累积后可能导致崩溃。
+
+（x64 平台调用约定统一，此问题不生效。）
+
+#### 修复
+
+| 文件 | 改动 | 说明 |
+|------|------|------|
+| `CMakeLists.txt` | 新增 `set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")` | 强制 `/MT`(Release) / `/MTd`(Debug) |
+| `Main.cpp:22` | `pPluginFUNC` typedef 添加 `__stdcall` | 函数指针调用约定与通达信一致 |
+| `Main.cpp:176` | `RegisterTdxFunc` 添加 `__stdcall` | 与 DLL 其他导出函数统一 |
+
+**编译结果**: ✅ 编译成功
+
+**影响范围**：仅编译选项和函数签名，不改变任何算法逻辑。
 
 ---
 

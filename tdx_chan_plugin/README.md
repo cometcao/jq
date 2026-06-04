@@ -74,6 +74,8 @@ tdx_chan_plugin/
 | 笔定义 | `defineBi()` | 基本可用 (见 DEFINEBI_REWRITE_PLAN) |
 | 线段检测 | `defineXD()` → `findXDOnFeatureSeq()` | Plan A 已实施, 合规 |
 | 缺口线段 | `kbarGapAsXdFull()` | 保留, 合规 |
+| CRT 链接 | CMakeLists.txt `/MT` 静态链接 | 2026-06-04 修复退出崩溃 |
+| 调用约定 | `__stdcall` 统一 | 2026-06-04 Win32 栈破坏修复 |
 
 ### 计划中
 
