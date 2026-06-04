@@ -19,7 +19,7 @@ BOOL APIENTRY DllMain(HANDLE hModule, DWORD ul_reason_for_call, LPVOID lpReserve
 }
 
 // 通达信函数指针类型和注册结构体（必须与ChanlunX完全一致）
-typedef void (*pPluginFUNC)(int nCount, float *pOut, float *a, float *b, float *c);
+typedef void (__stdcall *pPluginFUNC)(int nCount, float *pOut, float *a, float *b, float *c);
 
 #pragma pack(push, 1)
 typedef struct tagPluginTCalcFuncInfo
@@ -173,7 +173,7 @@ static PluginTCalcFuncInfo Info[] =
 //=============================================================================
 // 通达信插件注册函数 - 必须导出
 //=============================================================================
-extern "C" __declspec(dllexport) BOOL RegisterTdxFunc(PluginTCalcFuncInfo **pInfo)
+extern "C" __declspec(dllexport) BOOL __stdcall RegisterTdxFunc(PluginTCalcFuncInfo **pInfo)
 {
     if (*pInfo == NULL)
     {
