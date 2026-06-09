@@ -1289,8 +1289,8 @@ XDFindResult ChanAnalyzer::findXDOnFeatureSeq(
                     }
                     if (mi > 1) cand = i + (mi - 1) * 2;
                 }
-                if (cand >= i + 2) {
-                    i = cand; continue;
+                if (cand >= i + 2 && cand + 5 < static_cast<int>(feature_seq.size())) {
+                    i = cand;
                 }
             }
 
@@ -1477,7 +1477,32 @@ void ChanAnalyzer::defineXD(int initial_state) {
         }
         
         if (!result.found) break;
-        
+
+        if (result.found) {
+            int xd_idx = result.xd_market_idx;
+            TopBotType xd_type = result.xd_type;
+
+            for (int j = xd_idx + 1; j < static_cast<int>(working_df.size()); j++) {
+                if (working_df[j].original_tb != xd_type) continue;
+                if (j > xd_idx + 4) break;
+
+                double p_curr = (xd_type == TOP)
+                    ? working_df[xd_idx].high : working_df[xd_idx].low;
+                double p_next = (xd_type == TOP)
+                    ? working_df[j].high : working_df[j].low;
+                bool better = (xd_type == TOP)
+                    ? float_more(p_next, p_curr)
+                    : float_less(p_next, p_curr);
+
+                if (better && j + 2 < static_cast<int>(working_df.size())) {
+                    working_df[xd_idx].xd_tb = NO_TOPBOT;
+                    working_df[j].xd_tb = xd_type;
+                    working_df[j].chan_price = p_next;
+                }
+                break;
+            }
+        }
+
         tail_start = result.next_market_start;
         if (!result.is_kg2_backstep && tail_start < result.xd_market_idx) {
             tail_start = result.xd_market_idx;

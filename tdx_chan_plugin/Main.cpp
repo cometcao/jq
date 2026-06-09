@@ -118,7 +118,7 @@ static void convertXianDuanToOutputWithOffset(const std::vector<XianDuan>& xd_li
 // 输出函数1号：标准笔顶底端点（使用ChanAnalyzer + 数据截断）
 // 输出值：顶分型=+1.0，底分型=-1.0
 //=============================================================================
-void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
+void __stdcall Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
 {
     if (nCount <= 0 || pOut == nullptr || pHigh == nullptr || pLow == nullptr) {
         return;
@@ -141,7 +141,7 @@ void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
 // 输出函数2号：线段端点（使用ChanAnalyzer真正线段算法 + 数据截断）
 // 输出值：线段顶=+1.0，线段底=-1.0
 //=============================================================================
-void Func2(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
+void __stdcall Func2(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
 {
     if (nCount <= 0 || pOut == nullptr || pHigh == nullptr || pLow == nullptr) {
         return;
@@ -173,7 +173,7 @@ static PluginTCalcFuncInfo Info[] =
 //=============================================================================
 // 通达信插件注册函数 - 必须导出
 //=============================================================================
-extern "C" __declspec(dllexport) BOOL __stdcall RegisterTdxFunc(PluginTCalcFuncInfo **pInfo)
+extern "C" __declspec(dllexport) BOOL RegisterTdxFunc(PluginTCalcFuncInfo **pInfo)
 {
     if (*pInfo == NULL)
     {
