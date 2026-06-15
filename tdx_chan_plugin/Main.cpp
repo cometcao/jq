@@ -19,7 +19,7 @@ BOOL APIENTRY DllMain(HANDLE hModule, DWORD ul_reason_for_call, LPVOID lpReserve
 }
 
 // 通达信函数指针类型和注册结构体（必须与ChanlunX完全一致）
-typedef void (__stdcall *pPluginFUNC)(int nCount, float *pOut, float *a, float *b, float *c);
+typedef void (*pPluginFUNC)(int nCount, float *pOut, float *a, float *b, float *c);
 
 #pragma pack(push, 1)
 typedef struct tagPluginTCalcFuncInfo
@@ -118,7 +118,7 @@ static void convertXianDuanToOutputWithOffset(const std::vector<XianDuan>& xd_li
 // 输出函数1号：标准笔顶底端点（使用ChanAnalyzer + 数据截断）
 // 输出值：顶分型=+1.0，底分型=-1.0
 //=============================================================================
-void __stdcall Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
+void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
 {
     if (nCount <= 0 || pOut == nullptr || pHigh == nullptr || pLow == nullptr) {
         return;
@@ -141,7 +141,7 @@ void __stdcall Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *
 // 输出函数2号：线段端点（使用ChanAnalyzer真正线段算法 + 数据截断）
 // 输出值：线段顶=+1.0，线段底=-1.0
 //=============================================================================
-void __stdcall Func2(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
+void Func2(int nCount, float *pOut, float *pHigh, float *pLow, float *pIgnore)
 {
     if (nCount <= 0 || pOut == nullptr || pHigh == nullptr || pLow == nullptr) {
         return;
