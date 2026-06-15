@@ -1,5 +1,6 @@
 # ============================================================
-# 申万二级板块过热监控（忠实原始逻辑：单日成交额占比+单日换手率+周度融资增速+单日融资买入占比）
+# 申万二级板块过热监控（成交额占比动态阈值，20日窗口，99%置信度）
+# 用途：模型选股前的避雷筛选——排除板块拥挤的股票
 # ============================================================
 
 from jqdata import *
@@ -12,20 +13,21 @@ from datetime import date
 
 
 print("=" * 70)
-print("【板块过热监控（忠实原始逻辑）】")
+print("【申万二级板块过热监控（成交额占比动态阈值）】")
 print("=" * 70)
 
 # ==================== 2. 参数配置 ====================
-data_end = None          # None = 自动获取最近交易日
-weeks_back = 4           # 融资余额增速回看周数
+data_end = None               # None = 自动取最近交易日
+lookback_days = 20            # 用于计算动态阈值的历史窗口（交易日）
+z_score_threshold = 1.96      # 均值+1.96倍标准差触发拥挤预警（对应95%置信度）
+weeks_back = 4                # 融资余额增速回看周数
 verbose = False
 min_stocks = 3
 candidate_file = "tomorrow_candidate_list.txt"
 
-# 拥挤阈值（原始表格）
-CROWDED_RATIO = 35.0      # 成交额占比 >35% 拥挤预警
-OVERHEAT_TURNOVER = 10.0  # 换手率 >10% 短炒过热
-LEVERAGE_RATIO = 10.0     # 融资买入额占比 >10% 杠杆过热
+# 固定阈值（其他指标）
+OVERHEAT_TURNOVER = 10.0      # 换手率 >10%
+LEVERAGE_RATIO = 10.0         # 融资买入占比 >10%
 
 # 自动获取最近交易日
 if data_end is None:
@@ -40,9 +42,19 @@ if data_end is None:
 else:
     print(f"✅ 使用手动指定交易日：{data_end}")
 
+# 计算历史起始日期（多取一些交易日保证有足够数据）
+def get_start_date(end_date, days):
+    trade_days_list = get_trade_days(end_date=end_date, count=days + 5)  # 多取5天安全边际
+    if len(trade_days_list) > 0:
+        return trade_days_list[0].strftime('%Y-%m-%d')
+    else:
+        return end_date
+
+history_start = get_start_date(data_end, lookback_days)
+print(f"📅 历史数据区间：{history_start} → {data_end}（至少{lookback_days}个交易日用于滚动窗口）")
+
 # ==================== 辅助函数 ====================
 def get_total_market_amount(date):
-    """全市场单日成交额（上证+深证）"""
     try:
         sh = get_price('000001.XSHG', count=1, end_date=date, frequency='daily', fields=['money'])
         sz = get_price('399001.XSHE', count=1, end_date=date, frequency='daily', fields=['money'])
@@ -53,7 +65,6 @@ def get_total_market_amount(date):
         return 0
 
 def get_sector_margin_balance(stocks, date):
-    """板块融资余额总和"""
     total = 0.0
     for s in stocks:
         try:
@@ -67,7 +78,6 @@ def get_sector_margin_balance(stocks, date):
     return total
 
 def get_sector_fin_buy_amount(stocks, date):
-    """板块融资买入额总和"""
     total = 0.0
     for s in stocks:
         try:
@@ -81,7 +91,6 @@ def get_sector_fin_buy_amount(stocks, date):
     return total
 
 def get_sector_amount_one_day(stocks, date):
-    """板块单日成交额总和"""
     total = 0.0
     for s in stocks:
         try:
@@ -93,7 +102,6 @@ def get_sector_amount_one_day(stocks, date):
     return total
 
 def get_sector_avg_turnover(stocks, date):
-    """板块平均换手率（最新日）"""
     if not stocks:
         return 0.0
     try:
@@ -106,26 +114,24 @@ def get_sector_avg_turnover(stocks, date):
     return 0.0
 
 def get_industry_info(industry_code, date):
-    """获取申万二级行业成分股和名称"""
     try:
         stocks = get_industry_stocks(industry_code, date=date)
         if stocks is None or len(stocks) < min_stocks:
             return None, None
-        all_ind = get_industries(name='sw_l1')
+        all_ind = get_industries(name='sw_l2')
         name = all_ind.loc[industry_code, 'name'] if industry_code in all_ind.index else industry_code
         return stocks, name
     except:
         return None, None
 
 def get_stock_industry(stock_code, date):
-    """获取单只股票的申万二级行业"""
     try:
         result = get_industry(security=[stock_code], date=date)
         if result and stock_code in result:
             ind = result[stock_code]
-            if ind and 'sw_l1' in ind and ind['sw_l1']:
-                code = ind['sw_l1'].get('industry_code')
-                name = ind['sw_l1'].get('industry_name')
+            if ind and 'sw_l2' in ind and ind['sw_l2']:
+                code = ind['sw_l2'].get('industry_code')
+                name = ind['sw_l2'].get('industry_name')
                 return code, name
     except:
         pass
@@ -150,8 +156,7 @@ with open(candidate_file, 'r') as f:
 candidate_stocks = [normalize_stock_code(c) for c in raw_codes]
 print(f"✅ 共读取 {len(candidate_stocks)} 只")
 
-# 识别行业
-print("\n⚙ 识别股票所属行业...")
+print("\n⚙ 识别股票所属申万二级行业...")
 stock_to_industry = {}
 excluded = []
 for stock in candidate_stocks:
@@ -162,11 +167,9 @@ for stock in candidate_stocks:
         excluded.append({'股票代码': stock, '原因': '无法识别申万二级行业'})
 print(f"✅ 识别 {len(stock_to_industry)} 只，剔除 {len(excluded)} 只")
 
-# 收集涉及行业
 involved_codes = set(code for code, _ in stock_to_industry.values())
 print(f"涉及行业数：{len(involved_codes)}")
 
-# 获取有效行业成分股
 print("\n⚙ 获取行业成分股...")
 industry_stocks = {}
 industry_names = {}
@@ -178,7 +181,6 @@ for code in involved_codes:
         industry_names[code] = name
         valid_codes.add(code)
 
-# 剔除行业无效的股票
 final_stocks = {}
 for stock, (code, name) in stock_to_industry.items():
     if code in valid_codes:
@@ -191,39 +193,76 @@ if not industry_stocks:
     print("❌ 无有效行业")
     exit()
 
-# 全市场成交额（单日）
-market_amount = get_total_market_amount(data_end)
-print(f"\n全市场成交额（{data_end}）：{market_amount/1e8:.2f} 亿")
+# ==================== 构建全市场成交额历史序列 ====================
+print(f"\n⚙ 构建全市场成交额历史序列（{history_start} → {data_end}）...")
+trade_days = get_trade_days(start_date=history_start, end_date=data_end)
+market_daily = {}
+for td in trade_days:
+    td_str = td.strftime('%Y-%m-%d')
+    market_daily[td_str] = get_total_market_amount(td_str)
+print(f"✅ 共 {len(market_daily)} 个交易日")
 
-# 计算各行业指标
-print("\n⚙ 计算行业过热指标...")
-industry_status = {}  # {code: {name, metrics, overheat_flags}}
+# ==================== 对每个行业计算动态阈值和当前占比 ====================
+print("\n⚙ 计算各行业成交额占比历史序列及动态阈值...")
+
+industry_status = {}
+
 for code, stocks in industry_stocks.items():
     name = industry_names[code]
     if verbose:
         print(f"处理 {name}...")
 
-    # 单日成交额占比
-    sector_amount = get_sector_amount_one_day(stocks, data_end)
-    ratio = (sector_amount / market_amount * 100) if market_amount else 0
+    # 获取该行业在历史区间内每日的成交额（使用当前成分股回测历史）
+    sector_daily = {}
+    for td_str in market_daily.keys():
+        total = 0.0
+        for s in stocks:
+            try:
+                df = get_price(s, count=1, end_date=td_str, frequency='daily', fields=['money'], skip_paused=True)
+                if df is not None and len(df) > 0:
+                    total += df['money'].iloc[0]
+            except:
+                continue
+        sector_daily[td_str] = total
 
-    # 平均换手率
+    # 计算每日成交额占比
+    ratio_list = []
+    for td_str in market_daily.keys():
+        market = market_daily.get(td_str, 0)
+        sector = sector_daily.get(td_str, 0)
+        if market > 0:
+            ratio_list.append(sector / market * 100)
+        else:
+            ratio_list.append(0.0)
+
+    # 转换为Series
+    s = pd.Series(ratio_list, index=market_daily.keys())
+    
+    # 滚动计算均值+2.58倍标准差（窗口为 lookback_days）
+    rolling_mean = s.rolling(lookback_days).mean()
+    rolling_std = s.rolling(lookback_days).std()
+    rolling_threshold = rolling_mean + z_score_threshold * rolling_std
+    
+    # 当前占比及当日阈值
+    current_ratio = s.iloc[-1] if len(s) > 0 else 0.0
+    current_threshold = rolling_threshold.iloc[-1] if len(rolling_threshold) > 0 else np.inf
+    
+    # 判断成交额占比是否拥挤
+    crowded_flag = (current_ratio > current_threshold)
+    
+    # 其他指标（固定阈值）
     turnover = get_sector_avg_turnover(stocks, data_end)
-
-    # 融资余额周度增速
     end_margin = get_sector_margin_balance(stocks, data_end)
     start_margin_date = (pd.to_datetime(data_end) - timedelta(weeks=weeks_back)).strftime('%Y-%m-%d')
     start_margin = get_sector_margin_balance(stocks, start_margin_date)
     margin_growth = ((end_margin - start_margin) / start_margin * 100) if (start_margin and start_margin > 0) else None
-
-    # 融资买入额占比（单日）
     fin_buy = get_sector_fin_buy_amount(stocks, data_end)
-    fin_ratio = (fin_buy / market_amount * 100) if market_amount else 0
+    market_today = get_total_market_amount(data_end)
+    fin_ratio = (fin_buy / market_today * 100) if market_today > 0 else 0
 
-    # 判断过热标志（按原始三个维度）
     flags = []
-    if ratio > CROWDED_RATIO:
-        flags.append("拥挤预警")
+    if crowded_flag:
+        flags.append("拥挤预警(动态)")
     if turnover > OVERHEAT_TURNOVER:
         flags.append("短炒过热")
     if fin_ratio > LEVERAGE_RATIO:
@@ -235,24 +274,24 @@ for code, stocks in industry_stocks.items():
         'name': name,
         'flags': flags,
         'metrics': {
-            '成交额占比(%)': round(ratio, 2),
+            '成交额占比(%)': round(current_ratio, 2),
+            '动态阈值(20日均值+2.58σ)': round(current_threshold, 2),
             '换手率(%)': round(turnover, 2),
             '融资余额增速(%)': round(margin_growth, 2) if margin_growth else None,
             '融资买入占比(%)': round(fin_ratio, 2)
         }
     }
 
-# 输出过热股票（按股票列出其所属板块的状态）
+# ==================== 输出过热股票（避雷列表） ====================
 print("\n" + "=" * 100)
-print("【候选股票板块拥挤提醒】")
+print(f"【候选股票板块拥挤提醒】（成交额占比动态阈值：{lookback_days}日均值+{z_score_threshold}倍标准差，对应99%置信度）")
 print("=" * 100)
 
 crowded_results = []
 for stock, (code, name) in final_stocks.items():
     if code in industry_status:
-        status_info = industry_status[code]
-        flags = status_info['flags']
-        if "正常" not in flags:  # 只要有任何过热标志就输出
+        flags = industry_status[code]['flags']
+        if "正常" not in flags:
             crowded_results.append({
                 '股票代码': stock,
                 '所属行业': name,
@@ -261,13 +300,13 @@ for stock, (code, name) in final_stocks.items():
 
 if crowded_results:
     df_crowded = pd.DataFrame(crowded_results)
+    print("⚠️ 以下股票所属板块存在拥挤风险，建议从候选池中剔除：")
     print(df_crowded.to_string(index=False))
 else:
     print("✅ 所有候选股票所属板块均正常，无拥挤风险。")
 
-# 输出被剔除股票
 print("\n" + "=" * 100)
-print("【被剔除股票名单】（未参与过热判断）")
+print("【被剔除股票名单】（无法识别行业或行业成分股不足）")
 print("=" * 100)
 if excluded:
     df_excluded = pd.DataFrame(excluded)

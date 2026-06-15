@@ -416,39 +416,40 @@ def filter_chan_early(stock_list):
 
 
 # ============================================================
-# 研究调用入口
+# 研究调用入口 (仅在直接执行时运行)
 # ============================================================
 
-print("=" * 60)
-print("缠论早期过滤器 - 研究环境测试")
-print("=" * 60)
+if __name__ == '__main__':
+    print("=" * 60)
+    print("缠论早期过滤器 - 研究环境测试")
+    print("=" * 60)
 
-# 1. 读取候选股票列表
-filename = 'tomorrow_candidate_list.txt'
-try:
-    with open(filename, 'r', encoding='utf-8') as f:
-        lines = f.readlines()
-    candidate_list = []
-    for line in lines:
-        line = line.strip()
-        if line and not line.startswith('#'):
-            candidate_list.append(line)
-    print("\n从 {0} 读取到 {1} 只候选股票".format(filename, len(candidate_list)))
-except Exception as e:
-    print("\n读取 {0} 失败: {1}".format(filename, e))
-    candidate_list = ['000001.XSHE', '000002.XSHE', '600000.XSHG']
-    print("使用默认测试列表: {0}".format(candidate_list))
+    # 1. 读取候选股票列表
+    filename = 'tomorrow_candidate_list.txt'
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        candidate_list = []
+        for line in lines:
+            line = line.strip()
+            if line and not line.startswith('#'):
+                candidate_list.append(line)
+        print("\n从 {0} 读取到 {1} 只候选股票".format(filename, len(candidate_list)))
+    except Exception as e:
+        print("\n读取 {0} 失败: {1}".format(filename, e))
+        candidate_list = ['000001.XSHE', '000002.XSHE', '600000.XSHG']
+        print("使用默认测试列表: {0}".format(candidate_list))
 
-# 2. 执行过滤
-print()
-filtered = filter_chan_early(candidate_list)
+    # 2. 执行过滤
+    print()
+    filtered = filter_chan_early(candidate_list)
 
-# 3. 输出最终结果
-print()
-print("=" * 40)
-print("最终结果: {0} 只通过".format(len(filtered)))
-print("=" * 40)
-for stock in filtered:
-    print(stock)
+    # 3. 输出最终结果
+    print()
+    print("=" * 40)
+    print("最终结果: {0} 只通过".format(len(filtered)))
+    print("=" * 40)
+    for stock in filtered:
+        print(stock)
 
 
