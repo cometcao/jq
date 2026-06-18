@@ -161,6 +161,10 @@ def analyze_MA_exhaustion_by_direction(direction, zoushi_result, first, second, 
         first_slope = (max(first['high']) - min(first['low'])) / (fst_min_idx - fst_max_idx)
         second_slope = (max(second['high']) - min(second['low'])) / (snd_min_idx - snd_max_idx)
         return abs(second_slope) < abs(first_slope), tail_direction_match
+    elif zoushi_result == ZouShi_Type.Pan_Zheng_Composite:
+        first_slope = (max(first['high']) - min(first['low'])) / (fst_min_idx - fst_max_idx)
+        second_slope = (max(second['high']) - min(second['low'])) / (snd_min_idx - snd_max_idx)
+        return abs(second_slope) < abs(first_slope), tail_direction_match
     else:
         return False, tail_direction_match
 
@@ -311,8 +315,8 @@ def filter_chan_early(stock_list):
     UP_EARLY:  任一级别呈上升走势+背驰 → 移除
     DOWN_EARLY: 所有级别呈下降/盘整+发力 → 移除
     """
-    expected_zoushi_up = [ZouShi_Type.Qu_Shi_Up]
-    expected_exhaustion_up = [Chan_Type.BEICHI]
+    expected_zoushi_up = [ZouShi_Type.Qu_Shi_Up, ZouShi_Type.Pan_Zheng, ZouShi_Type.Pan_Zheng_Composite]
+    expected_exhaustion_up = [Chan_Type.BEICHI, Chan_Type.PANBEI]
     check_level_up = ["1m", "5m", "30m", "60m", "1d"]
 
     expected_zoushi_down = [ZouShi_Type.Qu_Shi_Down, ZouShi_Type.Pan_Zheng]
