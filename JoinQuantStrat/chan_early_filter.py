@@ -308,20 +308,25 @@ def _get_count(period):
         return 1800
 
 
-def filter_chan_early(stock_list):
+def filter_chan_early(stock_list, check_level_up=None, check_level_down=None):
     """
     缠论早期过滤: 任一 UP_EARLY 或 DOWN_EARLY 条件触发即移除.
 
     UP_EARLY:  任一级别呈上升走势+背驰 → 移除
     DOWN_EARLY: 所有级别呈下降/盘整+发力 → 移除
+
+    :param check_level_up:   上升检查的级别列表, 默认 ["1m", "5m", "30m", "60m", "1d"]
+    :param check_level_down: 下降检查的级别列表, 默认 ["1d"]
     """
     expected_zoushi_up = [ZouShi_Type.Qu_Shi_Up, ZouShi_Type.Pan_Zheng, ZouShi_Type.Pan_Zheng_Composite]
     expected_exhaustion_up = [Chan_Type.BEICHI, Chan_Type.PANBEI]
-    check_level_up = ["1m", "5m", "30m", "60m", "1d"]
+    if check_level_up is None:
+        check_level_up = ["1m", "5m", "30m", "60m", "1d"]
 
     expected_zoushi_down = [ZouShi_Type.Qu_Shi_Down, ZouShi_Type.Pan_Zheng]
     expected_exhaustion_down = [Chan_Type.INVIGORATE]
-    check_level_down = ["1d"]
+    if check_level_down is None:
+        check_level_down = ["1d"]
 
     stock_to_remove = set()
     remove_reasons = {}

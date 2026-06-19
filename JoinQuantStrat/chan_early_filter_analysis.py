@@ -16,6 +16,10 @@
 
 from chan_early_filter import filter_chan_early
 
+# ==================== 检查级别配置 (可自行调整) ====================
+CHECK_LEVEL_UP = ["1m", "5m", "30m", "60m", "1d"]
+CHECK_LEVEL_DOWN = ["1d"]
+
 # ==================== 1. 读取候选股票列表 ====================
 filename = 'tomorrow_candidate_list.txt'
 try:
@@ -38,7 +42,9 @@ except Exception as e:
 print()
 
 # ==================== 2. 执行缠论早期过滤 ====================
-filtered = filter_chan_early(candidate_list)
+filtered = filter_chan_early(candidate_list,
+                             check_level_up=CHECK_LEVEL_UP,
+                             check_level_down=CHECK_LEVEL_DOWN)
 
 # ==================== 3. 输出结果 ====================
 print()
