@@ -22,9 +22,10 @@ if not ZHIPU_API_KEY:
 
 # 所有免费联网千问模型（从最强到最弱），智谱作为最终备选
 QWEN_MODEL_LIST = [
+    "qwen3.7-max",
+    "qwen3.7-plus",
+    "qwen3.6-flash",
     "qwen3-max",
-    "qwen3-plus",
-    "qwen3-turbo",
     "qwen-plus",
     "qwen-turbo",
     "qwen-flash",
@@ -1146,7 +1147,7 @@ def filter_stocks(stock_list: List[str], delay: float = 2.0, debug: bool = False
     return [original_map[code] for code in qualified]
 
 if __name__ == "__main__":
-    test = ["000001.sz", "000858.sz", "600519.sh", "000639.sz", "605177.sh", "002758.sz"]
-    # test = ["600638.XSHG", "002582.XSHE", "605177.XSHG", "002758.XSHE", "000498.XSHE", "002745.XSHE", "002614.XSHE", "000421.XSHE", "000906.XSHE", "600455.XSHG", "001218.XSHE", "600768.XSHG", "600717.XSHG", "002743.XSHE", "605189.XSHG", "601188.XSHG", "002054.XSHE"]
+    # test = ["000001.sz", "000858.sz", "600519.sh", "000639.sz", "605177.sh", "002758.sz"]
+    test = ["600638.XSHG", "002582.XSHE", "000498.XSHE", "000421.XSHE", "001218.XSHE", "000906.XSHE", "002614.XSHE", "600455.XSHG", "601188.XSHG", "605177.XSHG", "600768.XSHG", "002758.XSHE", "002054.XSHE", "002745.XSHE"]
     result = filter_stocks(test, delay=2.0, debug=True)
     print(f"\n最终合规股票池: {result}")
