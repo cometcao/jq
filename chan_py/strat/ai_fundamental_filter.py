@@ -6,7 +6,7 @@ import requests
 from typing import List, Tuple, Optional
 import datetime
 from bs4 import BeautifulSoup
-from dashscope import Generation
+from openai import OpenAI
 from zai import ZhipuAiClient
 import baostock as bs
 
@@ -20,17 +20,11 @@ if not DASHSCOPE_API_KEY:
 if not ZHIPU_API_KEY:
     raise ValueError("请设置环境变量 ZHIPU_API_KEY")
 
-# 所有免费联网千问模型（从最强到最弱），智谱作为最终备选
-QWEN_MODEL_LIST = [
-    "qwen3.7-max",
-    "qwen3.7-plus",
-    "qwen3.6-flash",
-    "qwen3-max",
-    "qwen-plus",
-    "qwen-turbo",
-    "qwen-flash",
-]
 zhipu_client = ZhipuAiClient(api_key=ZHIPU_API_KEY)
+
+# 阿里百炼 OpenAI 兼容端点（旧版 Generation 端点未路由 qwen3.7-plus/qwen3.6-flash 等新模型）
+dashscope_client = OpenAI(api_key=DASHSCOPE_API_KEY,
+                          base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -259,6 +253,9 @@ RULE_EVIDENCE_KEYWORDS = {
 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
     config = json.load(f)
 
+# 千问模型名单（配置驱动，顺序=从强到弱降级链）；json 缺失/为空 → 空名单直接走智谱兜底 glm-5.2
+QWEN_MODEL_LIST = [str(m) for m in config.get("qwen_model_list", [])]
+
 # Debug log file (每次运行覆盖写入)
 DEBUG_LOG = "debug_search.log"
 
@@ -348,17 +345,14 @@ def _ai_search_url_qwen(model: str, source_name: str) -> Optional[str]:
         "只返回一个JSON对象：{\"url\": \"完整URL\"}，URL中如需股票代码用{code}占位。"
     )
     try:
-        resp = Generation.call(
+        resp = dashscope_client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
-            result_format='message',
-            enable_search=True,
             response_format={"type": "json_object"},
+            extra_body={"enable_search": True},
         )
-        if resp.status_code != 200:
-            return None
-        content = resp.output.choices[0].message.content.strip()
+        content = resp.choices[0].message.content.strip()
         data = json.loads(content)
         url = data.get("url", "")
         if url and "{code}" not in url:
@@ -375,7 +369,7 @@ def _ai_search_url_zhipu(source_name: str) -> Optional[str]:
     )
     try:
         resp = zhipu_client.chat.completions.create(
-            model="glm-4.7-flash",
+            model="glm-5.2",
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
             tools=[{"type": "web_search", "web_search": {"enable": True, "search_result": True}}],
@@ -669,18 +663,13 @@ def _call_qwen(model: str, code: str, external_info: str, debug: bool = False):
         {"role": "user", "content": user_prompt},
     ]
     try:
-        resp = Generation.call(
+        resp = dashscope_client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=0,
-            result_format='message',
             response_format={"type": "json_object"},
         )
-        if resp.status_code != 200:
-            if debug:
-                print(f"  [!] {model} 状态码 {resp.status_code}")
-            return None, None, None, []
-        content = resp.output.choices[0].message.content.strip()
+        content = resp.choices[0].message.content.strip()
         if debug:
             short = content[:100] + ('...' if len(content) > 100 else '')
             print(f"  [{model}] {short}")
@@ -710,7 +699,7 @@ def _call_zhipu(code: str, external_info: str, debug: bool = False) -> Tuple[boo
     ]
     try:
         resp = zhipu_client.chat.completions.create(
-            model="glm-4.7-flash",
+            model="glm-5.2",
             messages=messages,
             temperature=0,
             response_format={"type": "json_object"},
@@ -737,7 +726,7 @@ def _call_with_fallback(code: str, external_info: str, debug: bool = False) -> T
     if debug:
         print("  [!] 千问模型均失败，切换至智谱...")
     is_q, reason, viol, vd = _call_zhipu(code, external_info, debug)
-    return is_q, reason, viol, vd, "glm-4.7-flash"
+    return is_q, reason, viol, vd, "glm-5.2"
 
 # -------------------- 分级时效过滤 --------------------
 def _extract_year_from_reason(text: str) -> Optional[int]:

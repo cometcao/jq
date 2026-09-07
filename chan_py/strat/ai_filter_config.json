@@ -1,4 +1,13 @@
 {
+  "qwen_model_list": [
+    "qwen3.7-max",
+    "qwen3.7-plus",
+    "qwen3.6-flash",
+    "qwen3-max",
+    "qwen-plus",
+    "qwen-turbo",
+    "qwen-flash"
+  ],
   "sources": {
     "cninfo": {
       "name": "巨潮资讯网",

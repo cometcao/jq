@@ -82,7 +82,7 @@ Layer 3: LLM 兜底判断 (enable_search=False, 输入完全确定)
   输入 = 金融数据核验摘要 + 公告标题全文
   覆盖: 规则⑥(重大诉讼)、⑧(资金占用/违规担保)、⑨(分红不达标)、⑩(净资产为负)
   同输入→同输出(temperature=0)，无联网搜索波动
-  模型: qwen3-max (fallback: qwen3-plus/turbo → glm-4.7-flash)
+  模型: 千问链配置驱动 —— ai_filter_config.json 的 qwen_model_list（顺序=降级链，当前 qwen3.7-max → qwen3.7-plus → qwen3.6-flash → qwen3-max → qwen-plus → qwen-turbo → qwen-flash）；json 缺失/为空 → 空名单直接走智谱兜底 glm-5.2
 
 Layer 4: 外部搜索查漏补缺 (已实现)
   Layer 3 判合规(通过) + 标题含高信号关键词 → Bing 搜索查漏杀
