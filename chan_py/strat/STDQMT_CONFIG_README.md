@@ -157,6 +157,9 @@ python qmt_stdqmt_target.py
 # 计划进程：立即为所有策略生成一次（跳过邮件检查，AI 预算放宽到 600s）
 python qmt_stdqmt_target.py --now
 
+# 计划进程：立即执行一次邮件检查（测试/补查用：不生成文件、不看时刻/offset、不占单例锁）
+python qmt_stdqmt_target.py --email
+
 # 指定配置文件
 python qmt_stdqmt_target.py --config x.json
 ```

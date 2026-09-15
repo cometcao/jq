@@ -76,7 +76,7 @@
 **当前阶段一句话**：生产运行中；target `main_loop` 定时漂移 bug 已修复（§4.1）—— email 检查/生成时刻因"旧 `now` 睡眠"逐日漂移（09:10 → 09:20，跨周末日志显示 `waiting 4320 minutes`），改为绝对时间睡眠 + 跨过计划时刻即查。
 
 **本次修复（2026-09-15，仅 target + AI 过滤模块；executor 不动）**：
-- `qmt_stdqmt_target.py`：新增 `_sleep_until(target)`（按绝对时间分片睡眠，每 ≤60s 重算剩余）；email 检查 + AI 过滤等长任务后重取 `now` 再算 `_next_wake`；email 触发改为"跨过计划时刻即查、每天一次、且 trading_time 未到"（`email_check_deadline` 守卫）
+- `qmt_stdqmt_target.py`：新增 `_sleep_until(target)`（按绝对时间分片睡眠，每 ≤60s 重算剩余）；email 检查 + AI 过滤等长任务后重取 `now` 再算 `_next_wake`；email 触发改为"跨过计划时刻即查、每天一次、且 trading_time 未到"（`email_check_deadline` 守卫）；新增 `--email` 测试开关（立即执行一次邮件检查：不生成文件、不看时刻/offset、不占单例锁）
 - `ai_fundamental_filter.py` + `qmt_stdqmt_target.py`（§4.2）：单次模型调用 20s 超时 + 禁用 SDK 重试；降级链运行内连续失败 2 次跳过 + 成功模型粘性复用（Layer 4 复用 Layer 3 模型）；AI 到点改**部分过滤**（已处理按结论、未处理透传），仅线程卡死兜底才回退整份未过滤
 - 未改动 `qmt_trader_multiple_strategies.py`（旧系统，§0 规定只读）；旧系统已停用
 - 验证：`py_compile` ✅ + helper 冒烟（漂移修复）✅ + AI mock 测试（熔断/粘性/部分过滤/target 三态）✅
@@ -146,7 +146,7 @@
 - **AI 过滤时间预算**：**每策略独立**，上限 10 分钟且**最迟不晚于该策略 trading_time**（executor 触发时刻）→ 到点**部分过滤**（2026-09-15 改，见 §4.2）：已处理股票按结论过滤、未处理透传，记 warning 日志；仅线程卡死兜底（预算 + 30s）才回退未过滤名单
 - **AI 过滤异常**（非超时失败）→ 不生成文件、跳过本轮 + error 日志（保守语义，与旧系统"异常→清仓"不同，见决策记录）
 - **启动校验**：`stock_list_dir` 与 `email_reader_config.json` 的 `save_directory` 必须一致，不一致告警并拒绝生成（防静默读错目录）
-- CLI：`--now`（立即生成，不做 email 检查，同旧系统语义）/ `--config`
+- CLI：`--now`（立即生成，不做 email 检查，同旧系统语义）/ `--email`（立即执行一次邮件检查，测试/补查用：不生成文件、不看时刻/offset、不占单例锁）/ `--config`
 - **部署**：与旧系统同款常驻进程 + 单例锁，正式切换时直接替换旧常驻进程
 
 **不出现的内容**：xtquant、tracker、账户查询、任何金额计算。

@@ -14,6 +14,7 @@ write rebalance_<strategy>_<timestamp>.json
 Usage:
   python qmt_stdqmt_target.py                # resident mode (wakes on trading days per schedule)
   python qmt_stdqmt_target.py --now          # generate once for all strategies immediately (no email check)
+  python qmt_stdqmt_target.py --email        # run the email check once immediately (test; no generation)
   python qmt_stdqmt_target.py --config x.json
 """
 
@@ -340,8 +341,9 @@ def _generate_due(context, generated_set, force=False):
 
 
 # ==================== Main flow ====================
-def main_loop(run_now=False, config_file=None):
-    check_single_instance()
+def main_loop(run_now=False, config_file=None, run_email=False):
+    if not run_email:
+        check_single_instance()
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
                         handlers=[logging.StreamHandler()])
     logging.info("standard QMT target-list process starting")
@@ -369,6 +371,19 @@ def main_loop(run_now=False, config_file=None):
     generated = set()
     email_checked_date = None
     email_checked = set()
+
+    if run_email:
+        log_section("email test mode (--email, no generation)")
+        if context['email_config'] is not None:
+            try:
+                logging.info("[email] test check")
+                check_email_and_save_attachment(context['email_config'])
+            except Exception as e:
+                logging.error(f"[email] test check failed: {e}")
+        else:
+            logging.warning("[email] test check skipped: email_reader_config.json missing or invalid")
+        log_section("email test done")
+        return
 
     if run_now:
         log_section("immediate mode (--now, no email check)")
@@ -429,8 +444,9 @@ def main_loop(run_now=False, config_file=None):
 
 if __name__ == "__main__":
     run_now = "--now" in sys.argv
+    run_email = "--email" in sys.argv
     cfg_file = None
     for i, arg in enumerate(sys.argv):
         if arg == "--config" and i + 1 < len(sys.argv):
             cfg_file = sys.argv[i + 1]
-    main_loop(run_now, cfg_file)
+    main_loop(run_now, cfg_file, run_email)
