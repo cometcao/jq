@@ -208,6 +208,14 @@ def _next_wake(now, wake_times):
     return tomorrow.replace(hour=h, minute=m, second=0, microsecond=0)
 
 
+def _sleep_until(target):
+    while True:
+        remaining = (target - datetime.datetime.now()).total_seconds()
+        if remaining <= 0:
+            return
+        time.sleep(min(remaining, 60))
+
+
 # ==================== List loading (copied from old read_stock_lists, slicing removed) ====================
 def _load_stock_list(strat):
     """Return (codes, note). note in ok/missing/expired/read_error; the latter three
@@ -234,12 +242,16 @@ def _load_stock_list(strat):
 
 # ==================== AI filter (time budget + conservative on exceptions) ====================
 def _ai_filter_with_budget(strat, codes, budget_seconds):
-    """Return (status, codes): ok=filter result / timeout=unfiltered list / error=skip this round."""
+    """Return (status, codes): ok=filter result (may be partial on deadline) /
+    timeout=hard fallback to unfiltered list / error=skip this round."""
     result = {}
+    stats = {}
+    budget = max(budget_seconds, 1)
+    deadline = datetime.datetime.now() + datetime.timedelta(seconds=budget)
 
     def worker():
         try:
-            result['codes'] = _ai_filter_stocks(codes, debug=True)
+            result['codes'] = _ai_filter_stocks(codes, debug=True, deadline=deadline, stats=stats)
             result['ok'] = True
         except Exception as e:
             result['ok'] = False
@@ -247,15 +259,21 @@ def _ai_filter_with_budget(strat, codes, budget_seconds):
 
     t = threading.Thread(target=worker, daemon=True)
     t.start()
-    t.join(max(budget_seconds, 1))
+    t.join(budget + 30)
     if t.is_alive():
-        logging.error(f"[{strat['name']}] AI filter timeout (budget {budget_seconds:.0f}s), "
+        logging.error(f"[{strat['name']}] AI filter hard timeout (budget {budget_seconds:.0f}s + 30s), "
                       f"ignoring AI result, using unfiltered list")
         return "timeout", codes
     if not result.get('ok'):
         logging.error(f"[{strat['name']}] AI filter exception: {result.get('error')} "
                       f"-> skip this round, no file generated")
         return "error", None
+    if stats.get('deadline_hit'):
+        processed = stats.get('processed') or []
+        qualified = stats.get('qualified') or []
+        logging.warning(f"[{strat['name']}] AI filter deadline hit: processed {len(processed)}/{len(codes)}, "
+                        f"qualified {len(qualified)}, "
+                        f"{len(codes) - len(processed)} passed through unfiltered")
     return "ok", result['codes']
 
 
@@ -338,15 +356,19 @@ def main_loop(run_now=False, config_file=None):
     context['schedule'] = _build_schedule(context['strategy_configs'])
     wake_times = sorted(context['schedule'].keys())
     email_check_times = set()
+    email_check_deadline = {}
     for gen, pairs in context['schedule'].items():
         for strat, _t in pairs:
             if strat.get("email_check_offset_minutes", DEFAULT_EMAIL_OFFSET_MINUTES) > 0:
                 email_check_times.add(gen)
+                if _t > email_check_deadline.get(gen, ''):
+                    email_check_deadline[gen] = _t
     logging.info(f"generation times: {wake_times}")
     logging.info(f"email check times: {sorted(email_check_times)}")
 
     generated = set()
-    last_email_check_time = None
+    email_checked_date = None
+    email_checked = set()
 
     if run_now:
         log_section("immediate mode (--now, no email check)")
@@ -360,30 +382,39 @@ def main_loop(run_now=False, config_file=None):
         current_time_str = now.strftime("%H:%M")
 
         if is_weekday(now.date()):
+            today = now.date()
+            if email_checked_date != today:
+                email_checked_date = today
+                email_checked = set()
+
             # --- email check (before generation, failure does not block) ---
-            if (context['email_config'] is not None and current_time_str in email_check_times
-                    and (last_email_check_time is None or (now - last_email_check_time).total_seconds() > 60)):
-                try:
-                    logging.info(f"[email] checking at {current_time_str}")
-                    check_email_and_save_attachment(context['email_config'])
-                except Exception as e:
-                    logging.error(f"[email] check failed (continuing): {e}")
-                last_email_check_time = now
-                time.sleep(1)
+            if context['email_config'] is not None:
+                due = [g for g in sorted(email_check_times)
+                       if g <= current_time_str
+                       and g not in email_checked
+                       and email_check_deadline.get(g, '') >= current_time_str]
+                if due:
+                    email_checked.update(due)
+                    try:
+                        logging.info(f"[email] checking at {current_time_str}")
+                        check_email_and_save_attachment(context['email_config'])
+                    except Exception as e:
+                        logging.error(f"[email] check failed (continuing): {e}")
+                    time.sleep(1)
 
             # --- generate due list files ---
             _generate_due(context, generated)
 
-            # --- wait for next wake point ---
+            # --- wait for next wake point (recompute now: email check + AI filter
+            # may have taken minutes; the stale loop-top now shifted the wake) ---
+            now = datetime.datetime.now()
             next_time = _next_wake(now, wake_times)
             wait_seconds = (next_time - now).total_seconds()
             if wait_seconds > 60:
                 log_section("waiting phase - trading day")
                 logging.info(f"waiting until: {next_time.strftime('%Y-%m-%d %H:%M:%S')} "
                              f"({wait_seconds/60:.0f} minutes later)")
-                time.sleep(wait_seconds)
-            else:
-                time.sleep(min(wait_seconds, 5) if wait_seconds > 0 else 5)
+            _sleep_until(next_time)
         else:
             # non-trading day -> sleep until the first wake point of the next trading day
             next_day = now + datetime.timedelta(days=1)
@@ -393,7 +424,7 @@ def main_loop(run_now=False, config_file=None):
             next_time = next_day.replace(hour=h, minute=m, second=0, microsecond=0)
             log_section("waiting phase - non-trading day")
             logging.info(f"waiting until: {next_time.strftime('%Y-%m-%d %H:%M:%S')}")
-            time.sleep((next_time - now).total_seconds())
+            _sleep_until(next_time)
 
 
 if __name__ == "__main__":

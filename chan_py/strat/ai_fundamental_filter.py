@@ -14,17 +14,20 @@ import baostock as bs
 DASHSCOPE_API_KEY = os.environ.get("DASHSCOPE_API_KEY", "").strip()
 ZHIPU_API_KEY = os.environ.get("ZHIPU_API_KEY", "").strip()
 CONFIG_FILE = "ai_filter_config.json"
+LLM_CALL_TIMEOUT = 20  # 秒，单次模型调用上限（客户端级，同时禁用 SDK 自动重试）
 
 if not DASHSCOPE_API_KEY:
     raise ValueError("请设置环境变量 DASHSCOPE_API_KEY")
 if not ZHIPU_API_KEY:
     raise ValueError("请设置环境变量 ZHIPU_API_KEY")
 
-zhipu_client = ZhipuAiClient(api_key=ZHIPU_API_KEY)
+zhipu_client = ZhipuAiClient(api_key=ZHIPU_API_KEY,
+                             timeout=LLM_CALL_TIMEOUT, max_retries=0)
 
 # 阿里百炼 OpenAI 兼容端点（旧版 Generation 端点未路由 qwen3.7-plus/qwen3.6-flash 等新模型）
 dashscope_client = OpenAI(api_key=DASHSCOPE_API_KEY,
-                          base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
+                          base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+                          timeout=LLM_CALL_TIMEOUT, max_retries=0)
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -396,7 +399,7 @@ def _ai_search_url_fallback(source_name: str, debug: bool = False) -> Optional[s
         print("    -> 千问均失败，尝试智谱...")
     return _ai_search_url_zhipu(source_name)
 
-def maintain_sources(debug: bool = False):
+def maintain_sources(debug: bool = False, deadline=None):
     global config
     updated = False
     for key, src in config["sources"].items():
@@ -412,6 +415,10 @@ def maintain_sources(debug: bool = False):
             if debug:
                 print(f"  [健康] {src['name']} OK")
         else:
+            if deadline is not None and datetime.datetime.now() >= deadline:
+                if debug:
+                    print(f"  [跳过] {src['name']} 修复：已到 AI 截止时间")
+                continue
             if debug:
                 print(f"  [警告] {src['name']} 失效，AI搜索新URL...")
             new_url = _ai_search_url_fallback(src["name"], debug)
@@ -662,6 +669,7 @@ def _call_qwen(model: str, code: str, external_info: str, debug: bool = False):
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_prompt},
     ]
+    start = time.perf_counter()
     try:
         resp = dashscope_client.chat.completions.create(
             model=model,
@@ -671,12 +679,14 @@ def _call_qwen(model: str, code: str, external_info: str, debug: bool = False):
         )
         content = resp.choices[0].message.content.strip()
         if debug:
+            elapsed = time.perf_counter() - start
             short = content[:100] + ('...' if len(content) > 100 else '')
-            print(f"  [{model}] {short}")
+            print(f"  [{model}] {elapsed:.1f}s {short}")
         return _parse_response(content)
     except Exception as e:
         if debug:
-            print(f"  [FAIL] {model} 异常: {e}")
+            elapsed = time.perf_counter() - start
+            print(f"  [FAIL] {model} {elapsed:.1f}s 异常: {e}")
         return None, None, None, []
 
 def _call_zhipu(code: str, external_info: str, debug: bool = False) -> Tuple[bool, str, List[str], List[dict]]:
@@ -697,6 +707,7 @@ def _call_zhipu(code: str, external_info: str, debug: bool = False) -> Tuple[boo
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_prompt},
     ]
+    start = time.perf_counter()
     try:
         resp = zhipu_client.chat.completions.create(
             model="glm-5.2",
@@ -706,11 +717,12 @@ def _call_zhipu(code: str, external_info: str, debug: bool = False) -> Tuple[boo
         )
         content = resp.choices[0].message.content.strip() if resp.choices[0].message.content else ""
         if debug:
+            elapsed = time.perf_counter() - start
             short = content[:100] + ('...' if len(content) > 100 else '')
-            print(f"  [智谱] {short}")
+            print(f"  [智谱] {elapsed:.1f}s {short}")
         return _parse_response(content)
     except Exception as e:
-        print(f"  [FAIL] 智谱调用失败: {e}")
+        print(f"  [FAIL] 智谱调用失败 {time.perf_counter() - start:.1f}s: {e}")
         return True, f"智谱异常，默认合规: {e}", [], []
 
 _RULE_CIRCLED = str.maketrans("①②③④⑤⑥⑦⑧⑨⑩⑪⑫", "123456789012")
@@ -718,11 +730,40 @@ _RULE_CIRCLED = str.maketrans("①②③④⑤⑥⑦⑧⑨⑩⑪⑫", "123456789
 def _normalize_rules(rules: List[str]) -> List[str]:
     return [r.translate(_RULE_CIRCLED) for r in rules]
 
-def _call_with_fallback(code: str, external_info: str, debug: bool = False) -> Tuple[bool, str, List[str], List[dict], str]:
-    for model in QWEN_MODEL_LIST:
+# -------------------- 模型降级链健康状态（每次 filter_stocks 运行重置） --------------------
+MODEL_FAIL_THRESHOLD = 2  # 连续失败达到该次数后，本次运行跳过该模型
+_MODEL_FAILS = {}
+_MODEL_DISABLED = set()
+_LAST_GOOD_MODEL = None
+
+
+def _reset_model_health():
+    global _LAST_GOOD_MODEL
+    _MODEL_FAILS.clear()
+    _MODEL_DISABLED.clear()
+    _LAST_GOOD_MODEL = None
+
+
+def _call_with_fallback(code: str, external_info: str, debug: bool = False,
+                        model_hint: Optional[str] = None) -> Tuple[bool, str, List[str], List[dict], str]:
+    global _LAST_GOOD_MODEL
+    candidates = []
+    for m in (model_hint, _LAST_GOOD_MODEL):
+        if m and m in QWEN_MODEL_LIST and m not in candidates:
+            candidates.append(m)
+    for m in QWEN_MODEL_LIST:
+        if m not in candidates and m not in _MODEL_DISABLED:
+            candidates.append(m)
+    for model in candidates:
         is_q, reason, viol, vd = _call_qwen(model, code, external_info, debug)
         if is_q is not None:
+            _MODEL_FAILS[model] = 0
+            _LAST_GOOD_MODEL = model
             return is_q, reason, viol, vd, model
+        _MODEL_FAILS[model] = _MODEL_FAILS.get(model, 0) + 1
+        if _MODEL_FAILS[model] >= MODEL_FAIL_THRESHOLD and model not in _MODEL_DISABLED:
+            _MODEL_DISABLED.add(model)
+            print(f"  [WARN] {model} 连续失败 {_MODEL_FAILS[model]} 次，本次运行跳过该模型")
     if debug:
         print("  [!] 千问模型均失败，切换至智谱...")
     is_q, reason, viol, vd = _call_zhipu(code, external_info, debug)
@@ -970,14 +1011,21 @@ def _should_trigger_layer4(external_info: str) -> bool:
     return any(kw in external_info for kw in L4_HIGH_SIGNAL)
 
 # -------------------- 主筛选函数 --------------------
-def filter_stocks(stock_list: List[str], delay: float = 2.0, debug: bool = False) -> List[str]:
+def filter_stocks(stock_list: List[str], delay: float = 2.0, debug: bool = False,
+                  deadline=None, stats=None) -> List[str]:
     def norm(code: str) -> str:
         return code.split('.')[0] if '.' in code else code
     original_map = {norm(raw): raw for raw in stock_list}
     normalized = list(original_map.keys())
     qualified = []
+    partial_mode = deadline is not None and stats is not None
+    if stats is not None:
+        stats['processed'] = []
+        stats['qualified'] = qualified
+        stats['deadline_hit'] = False
+    _reset_model_health()
 
-    maintain_sources(debug)
+    maintain_sources(debug, deadline=deadline)
 
     print(f"\n筛选 {len(normalized)} 只股票（4层流水线）")
     if debug:
@@ -993,6 +1041,12 @@ def filter_stocks(stock_list: List[str], delay: float = 2.0, debug: bool = False
         log_file.write(f"=== RUN: {datetime.datetime.now().isoformat()} ===\n")
 
         for idx, code in enumerate(normalized, 1):
+            if partial_mode and datetime.datetime.now() >= deadline:
+                stats['deadline_hit'] = True
+                print(f"  [截止] AI 过滤到点，已处理 {len(stats['processed'])}/{len(normalized)} 只，剩余透传未过滤")
+                break
+            if stats is not None:
+                stats['processed'].append(code)
             raw_code = original_map[code]
             print(f"[{idx}/{len(normalized)}] {code}")
             log_file.write(f"\n{'='*60}\n")
@@ -1075,7 +1129,12 @@ def filter_stocks(stock_list: List[str], delay: float = 2.0, debug: bool = False
             # ======== Layer 4: 外部搜索查漏补缺 ========
             # 仅 Layer 3 判合规 + 标题含高信号关键词时触发（查漏杀）
             l4_triggered = False
-            if is_qualified and _should_trigger_layer4(external_info):
+            deadline_hit_now = partial_mode and datetime.datetime.now() >= deadline
+            if deadline_hit_now:
+                stats['deadline_hit'] = True
+                if debug:
+                    print("  [截止] 跳过 Layer 4 复审，保留 Layer 3 结论")
+            if is_qualified and _should_trigger_layer4(external_info) and not deadline_hit_now:
                 l4_triggered = True
                 search_query = f"{code} 公告 重大诉讼 违规担保 关联方"
                 if debug:
@@ -1091,7 +1150,7 @@ def filter_stocks(stock_list: List[str], delay: float = 2.0, debug: bool = False
                 if search_results:
                     l4_augmented = search_results + "\n\n" + fin_block + external_info
                     retry_q, retry_reason, retry_rules, retry_vd, retry_model = _call_with_fallback(
-                        code, l4_augmented, debug=debug
+                        code, l4_augmented, debug=debug, model_hint=model_used
                     )
                     log_file.write(f"\n  ── Layer 4 复审模型返回 ──\n")
                     log_file.write(f"  model: {retry_model}\n")
@@ -1133,6 +1192,13 @@ def filter_stocks(stock_list: List[str], delay: float = 2.0, debug: bool = False
     _bs_logout()
     print("-" * 60)
     print(f"完成，{len(qualified)}/{len(normalized)} 合规")
+    if partial_mode and stats.get('deadline_hit'):
+        processed_set = set(stats['processed'])
+        qualified_set = set(qualified)
+        final = [c for c in normalized if c not in processed_set or c in qualified_set]
+        print(f"[部分过滤] 已处理 {len(processed_set)} 只（合规 {len(qualified_set)}），"
+              f"未处理 {len(normalized) - len(processed_set)} 只透传未过滤")
+        return [original_map[code] for code in final]
     return [original_map[code] for code in qualified]
 
 if __name__ == "__main__":

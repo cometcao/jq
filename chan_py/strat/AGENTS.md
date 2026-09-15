@@ -31,8 +31,8 @@ In scheduled mode, strategies fire at `trading_times` defined per strategy (defa
 - **Never commit** config jsons — they contain account IDs and QMT paths.
 
 ## Email Signal Check
-- `check_email_for_signal.py` is imported by `qmt_trader_multiple_strategies.py` and called automatically at computed times.
-- **Timing**: auto-computed as `trading_time - email_check_offset_minutes` per strategy. A strategy with `trading_times: ["09:35"]` and `email_check_offset_minutes: 10` triggers email check at `09:25`.
+- `check_email_for_signal.py` is imported by `qmt_trader_multiple_strategies.py` (legacy, frozen) and `qmt_stdqmt_target.py` (std QMT pipeline), and called automatically at computed times.
+- **Timing**: auto-computed as `trading_time - email_check_offset_minutes` per strategy. A strategy with `trading_times: ["09:35"]` and `email_check_offset_minutes: 10` triggers email check at `09:25`. In `qmt_stdqmt_target.py` the check fires once at/after that time (not an exact-minute match) and only while the mapped trading session is still ahead, so a late wake/restart still checks; wake sleeps are absolute-time based (`_sleep_until`) and immune to long email/AI durations.
 - **Config**: `email_reader_config.json` (unchanged) provides IMAP credentials, `save_directory`, `target_subject`. Its `run_time` field is ignored (now auto-computed).
 - **Strategy config**: add `"email_check_offset_minutes": <N>` to any strategy that needs email checks. Omit or set `0` to disable for that strategy.
 - **Behavior**: fetches the latest unseen email per `target_subject`, saves attachments, marks them deleted. Retries up to 3 times if no unseen emails found. Failure never blocks strategy execution.
@@ -43,6 +43,7 @@ In scheduled mode, strategies fire at `trading_times` defined per strategy (defa
 - After loading a stock list, `qmt_trader_multiple_strategies.py` automatically runs `ai_fundamental_filter.filter_stocks()` on it.
 - The filter strips non-compliant stocks while preserving original order.
 - If `ZHIPU_API_KEY` env var is missing, the import is caught and filtering is silently skipped (no-op).
+- **Call-layer hardening (2026-09-15)**: client-level `LLM_CALL_TIMEOUT = 20s` with SDK retries disabled (`max_retries=0`); the qwen chain is sticky (last-good model first, Layer 4 reuses the Layer-3 model via `model_hint`) and keeps run-internal health state (2 consecutive failures → skipped for the rest of the run); `filter_stocks(deadline=..., stats=...)` stops at the deadline and returns partial results (processed verdicts + unprocessed pass-through) instead of falling back to a fully unfiltered list.
 - **12-rule system** (国九条 framework, ordered by trigger frequency):
   1. ① 面值退市（＜1元连续20日）
   2. ② 监管处罚/立案（原Rule6，关联信号）
@@ -147,3 +148,14 @@ Config jsons, `logs/`, `test/`, backup files, and `strategy_positions.json`.
 
 ### Known Unresolved
 - **No Chinese market holiday awareness**: `is_weekday` only checks Mon–Fri. On holidays the script logs connection errors at each trading time but does not trade (QMT refuses connection). No reliable free holiday data source found.
+
+## 2026-09-15 Bug Fixes
+
+| Fix | Location | Problem | Solution |
+|-----|----------|---------|----------|
+| Daily wake-time drift | `qmt_stdqmt_target.py` `main_loop` | `now` captured at loop top, then email check + AI filter (up to 600s) ran before `_next_wake(now, ...)` / `time.sleep(wait_seconds)` → sleep started ~10 min late but still lasted a full day → next wake = scheduled time + body duration (09:10 → 09:20 after AI timeout; Fri 09:10 → Mon 09:20, logged as `waiting 4320 minutes`) | Recompute `now` after the long work; `_sleep_until(target)` sleeps to the absolute target in ≤60s slices |
+| Email check silently skipped | `qmt_stdqmt_target.py` `main_loop` | Exact-minute match (`current_time_str in email_check_times`) missed the check once the wake drifted, and the drift persisted → email never re-checked, files regenerated from the stale attachment | Trigger once per day when the scheduled time has been crossed (`g <= current`) and the mapped `trading_time` is still ahead (`email_check_deadline` guard); per-day dedup set |
+| AI model chain latency | `ai_fundamental_filter.py` client init / `_call_with_fallback` | No per-call timeout (openai SDK default 600s + 2 retries; zai 3 retries) and every stock re-walked the full 7-model chain | Client-level `timeout=20, max_retries=0`; run-internal fail count + sticky last-good model + Layer 4 `model_hint` |
+| AI deadline discarded progress | `ai_fundamental_filter.filter_stocks` / `qmt_stdqmt_target._ai_filter_with_budget` | 600s deadline → whole raw list used (0% filtered) while the daemon thread kept burning API calls in the background | Cooperative deadline (`deadline` + `stats`): processed verdicts kept, unprocessed passed through, thread exits; `join(budget+30)` only as hard fallback |
+
+`qmt_trader_multiple_strategies.py` (legacy, frozen per migration plan §0) has the same stale-`now` sleep pattern; left unmodified (old system retired). Executor needs no change — `schedule_run` fires by absolute `time_point` + `timedelta(days=1)`, independent of callback duration.

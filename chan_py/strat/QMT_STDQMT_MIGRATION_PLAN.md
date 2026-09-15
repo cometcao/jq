@@ -51,7 +51,7 @@
 
 **详见**：§5（现行设计 spec）、§10（决策记录）、§12（进度）、§13.7（事实结论 1-14）、§14.4-6~9（盘中行动记录）
 
-### 0.3 会话恢复速览（2026-09-07 盘中更新 —— 当前权威版，新会话从这里开始）
+### 0.3 会话恢复速览（2026-09-07 盘中更新 —— 历史存档，已被 §0.4 取代）
 
 **当前阶段一句话**：**定时验收通过** —— 2026-09-07 10:00:00.002 `schedule_run` 在 drType:3 下准时派发 `exec_on_time`，全流程真实成交 + tracker 落盘（§14.4-8 关闭）；**唯一剩余动作 = 生产切换**（§14.4-10）。
 
@@ -70,6 +70,20 @@
 - `qmt_exchange/`：`rebalance_low_valuation_20260907_0925.json.done`（22 股，10:00 已消费）；旧 `.done`/`.json` 可清理
 
 **详见**：§5（现行设计 spec）、§10（决策记录）、§12（进度）、§13.7（事实结论 1-14）、§14.4-8（本次验收记录）、§14.4-10（生产切换待办）
+
+### 0.4 会话恢复速览（2026-09-15 更新 —— 当前权威版，新会话从这里开始）
+
+**当前阶段一句话**：生产运行中；target `main_loop` 定时漂移 bug 已修复（§4.1）—— email 检查/生成时刻因"旧 `now` 睡眠"逐日漂移（09:10 → 09:20，跨周末日志显示 `waiting 4320 minutes`），改为绝对时间睡眠 + 跨过计划时刻即查。
+
+**本次修复（2026-09-15，仅 target + AI 过滤模块；executor 不动）**：
+- `qmt_stdqmt_target.py`：新增 `_sleep_until(target)`（按绝对时间分片睡眠，每 ≤60s 重算剩余）；email 检查 + AI 过滤等长任务后重取 `now` 再算 `_next_wake`；email 触发改为"跨过计划时刻即查、每天一次、且 trading_time 未到"（`email_check_deadline` 守卫）
+- `ai_fundamental_filter.py` + `qmt_stdqmt_target.py`（§4.2）：单次模型调用 20s 超时 + 禁用 SDK 重试；降级链运行内连续失败 2 次跳过 + 成功模型粘性复用（Layer 4 复用 Layer 3 模型）；AI 到点改**部分过滤**（已处理按结论、未处理透传），仅线程卡死兜底才回退整份未过滤
+- 未改动 `qmt_trader_multiple_strategies.py`（旧系统，§0 规定只读）；旧系统已停用
+- 验证：`py_compile` ✅ + helper 冒烟（漂移修复）✅ + AI mock 测试（熔断/粘性/部分过滤/target 三态）✅
+
+**生产观察点（下一个交易日）**：`[email] checking at 09:10` 应每天准时出现；`generating list ... (generation time 09:10)` 紧随其后（AI 超时则 ~09:20 完成，但次日仍 09:10 唤醒）；`waiting until` 时长不应再逐日 +10 分钟；AI 日志应显示单模型耗时（如 `[qwen3.7-max] 3.2s`），若到点则出现 `[部分过滤]`/`deadline hit` 而非整份未过滤。
+
+**详见**：§4.1（漂移根因与修复）、§4.2（AI 提速与部分过滤）、§12（进度）
 
 ## 1. 核心原则
 
@@ -129,13 +143,37 @@
 **新增**：
 - `_write_rebalance_files()`：在 email 检查完成后**立即**读名单 + AI 过滤 + 生成/覆盖 `rebalance_<策略>_<YYYYMMDD_HHMM>.json`（无论是否收到新附件；文件在 trading_times 之前（默认 −5 分钟）就绪。全量过滤名单，原子写：tmp + `os.replace`）
 - **名单直读 email 落地文件**：用新配置 `stock_list_dir`（= email 的 `save_directory`）+ `stock_list_files`（策略名→固定附件名）映射，加载时覆盖策略的 `stock_list_file`。email 附件落地即名单文件，无拷贝环节。14 天过期语义不变（mtime = 最近一次邮件落地时间）
-- **AI 过滤时间预算**：**每策略独立**，上限 10 分钟且**最迟不晚于该策略 trading_time**（executor 触发时刻）→ 超限 **忽略 AI 结果**，用未过滤名单写该策略文件 + error 日志（交易照常，名单未过滤可查）
+- **AI 过滤时间预算**：**每策略独立**，上限 10 分钟且**最迟不晚于该策略 trading_time**（executor 触发时刻）→ 到点**部分过滤**（2026-09-15 改，见 §4.2）：已处理股票按结论过滤、未处理透传，记 warning 日志；仅线程卡死兜底（预算 + 30s）才回退未过滤名单
 - **AI 过滤异常**（非超时失败）→ 不生成文件、跳过本轮 + error 日志（保守语义，与旧系统"异常→清仓"不同，见决策记录）
 - **启动校验**：`stock_list_dir` 与 `email_reader_config.json` 的 `save_directory` 必须一致，不一致告警并拒绝生成（防静默读错目录）
 - CLI：`--now`（立即生成，不做 email 检查，同旧系统语义）/ `--config`
 - **部署**：与旧系统同款常驻进程 + 单例锁，正式切换时直接替换旧常驻进程
 
 **不出现的内容**：xtquant、tracker、账户查询、任何金额计算。
+
+### 4.1 定时漂移修复（2026-09-15）
+
+**症状（生产运行）**：`trading_times: ["09:35"]` + `email_check_offset_minutes: 25` → 检查/生成时刻 09:10。9/11（周五）09:10 检查正常，09:20 出现 `AI filter timeout (budget 600s)`，随后日志 `waiting ... (4320 minutes later)`；9/14（周一）实际 09:20 才唤醒，此后每天 09:20 唤醒且邮件检查被静默跳过。
+
+**根因**：`main_loop` 在循环开头取 `now`，随后先执行 email 检查 + `_generate_due`（AI 过滤上限 600s）；再以**旧 `now`** 调 `_next_wake` 并 `time.sleep(wait_seconds)` —— 睡眠实际从 09:20 才开始，却仍睡满"09:10 → 次日 09:10"的时长 → 实际唤醒 = 目标时刻 + 循环体耗时。周五 `_next_wake` 跳过周末取周一 09:10（= 4320 分钟），实际周一 09:20 醒。邮件检查为精确分钟匹配（`current_time_str in email_check_times`），漂到 09:20 后当天检查被跳过、只生成文件（用旧附件）；此后每天循环体固定 ~10 分钟 → 永久停在 09:20，直到 09:10 前重启进程。
+
+**修复**（仅 target；executor 不动 —— `schedule_run` 由框架按绝对 `time_point` + `timedelta(days=1)` 调度，回调耗时不影响次日触发）：
+- 新增 `_sleep_until(target)`：按绝对时间分片睡眠（每 ≤60s 重算剩余），唤醒精度不再受循环体耗时影响；长任务后重取 `now` 再算 `_next_wake`
+- email 触发改为"跨过计划时刻即查、每天一次"：`g <= current` 且当日未查且该时刻映射的 trading_time 尚未到达（`email_check_deadline` 守卫）→ 晚唤醒/晚启动当天补查，交易时段结束后不消耗邮件
+- `qmt_trader_multiple_strategies.py`（旧系统）存在同款旧 `now` 睡眠模式，但按 §0 开工指引"只读参考、绝不修改"未改动；旧系统已停用
+- 验证：`py_compile` ✅ + helper 冒烟（周末跳过 / 同日唤醒 / `_sleep_until` 精度 1ms / 漂移后补查 / 交易后不补查）✅
+
+### 4.2 AI 调用层提速 + 部分过滤（2026-09-15）
+
+**症状**：AI 过滤经常跑满 600s 预算（日志 `AI filter timeout (budget 600s)`），根因是降级链在"某些模型失效/变慢"时每只股票都从链头重试，且单次调用没有超时（openai SDK 默认 600s + 重试 2 次，zai 默认重试 3 次）→ 一个卡住的模型即可吃光预算；到点后 target 丢弃全部 AI 进度、整份名单未过滤放行，同时 daemon 线程继续在后台烧调用。账号 `/models` 核对：7 个配置模型全部存在，属调用级失败/变慢而非模型名失效。
+
+**修复（P0，`ai_fundamental_filter.py` + `qmt_stdqmt_target.py`）**：
+- **20s 单次调用超时**：客户端级 `LLM_CALL_TIMEOUT = 20`，`OpenAI(..., timeout=20, max_retries=0)` / `ZhipuAiClient(..., timeout=20, max_retries=0)`（覆盖 qwen/智谱/URL 搜索全部调用）
+- **运行内健康记忆 + 粘性**：`_call_with_fallback` 按 `model_hint → last_good → 链中未熔断` 顺序；连续失败 2 次 → 本次运行跳过（WARN）；成功即清零并记住；Layer 4 复审传 `model_hint=model_used`，不再从头扫链
+- **协作式截止 + 部分过滤**：`filter_stocks(stock_list, delay, debug, deadline, stats)` 在每只股票开跑前与 Layer 4 前检查 deadline；到点返回 `已处理按结论过滤 + 未处理透传`（保持原顺序），并打印 `[部分过滤]` 摘要；`stats` 记录 processed/qualified/deadline_hit
+- **target 侧**：`_ai_filter_with_budget` 传 deadline + stats，`join(budget + 30)` 仅作线程卡死兜底（仍回退未过滤）；deadline 命中记 warning（processed/qualified/passed-through 数量）
+- 异常语义不变：AI 抛异常 → 本轮不生成文件；`maintain_sources` 修复 URL 前也检查 deadline
+- 验证：`py_compile` ✅ + mock（粘性/model_hint / 连续 2 次熔断 / 截止后全透传 / 卡在第 1 只后部分过滤 / 无截止行为不变 / target 部分-兜底-异常三态）✅
 
 ## 5. executor `qmt_rebalance_executor.py`（QMT 内置框架策略）
 
@@ -297,13 +335,15 @@ executor 内置环境无法依赖相对路径，**配置文件绝对路径以常
 
 ## 12. 进度追踪
 
-> 更新于 2026-09-07 盘中（**当前权威进度版，配合 §0.3 使用**）：run_now 真实成交验收通过（§14.4-7）；run_time 从不触发已定案（startTime 需完整时间戳）；executor 改造为 **schedule_run 纯每日定时版**（代码+冒烟✅）；**定时派发实证通过（2026-09-07 10:00:00.002，§14.4-8）—— 定时验收完成**；本次同时完成 executor 源文件编码 bug 修复（§ ASCII 化）。**剩余动作 = 生产切换（§14.4-10）**。
+> 更新于 2026-09-07 盘中（历史，配合 §0.3）：run_now 真实成交验收通过（§14.4-7）；run_time 从不触发已定案（startTime 需完整时间戳）；executor 改造为 **schedule_run 纯每日定时版**（代码+冒烟✅）；**定时派发实证通过（2026-09-07 10:00:00.002，§14.4-8）—— 定时验收完成**；本次同时完成 executor 源文件编码 bug 修复（§ ASCII 化）。**剩余动作 = 生产切换（§14.4-10）**。
+>
+> 更新于 2026-09-15（**当前权威进度版，配合 §0.4 使用**）：target 定时漂移修复（§4.1）—— email 检查/生成时刻因旧 `now` 睡眠逐日漂移（09:10 → 09:20），`_sleep_until` 绝对时间睡眠 + 跨过计划时刻即查；AI 调用层提速 + 部分过滤（§4.2）—— 20s 单次超时、降级链熔断/粘性、到点部分过滤（已处理生效 + 未处理透传）；`py_compile` + helper 冒烟 + AI mock 测试 ✅。
 
 | 步骤 | 状态 | 说明 |
 |---|---|---|
 | 1. 提交工作区 | 待办 | `ai_fundamental_filter.py` 有未提交改动；计划文档（§0.3/§10/§12/§14.4-8 更新）与 executor（§ ASCII 修复）/target/probe 尚未 git add |
 | 2. 配置 + gitignore | ✅ | `qmt_stdqmt_config.json` 已建（**单配置自包含**：strategies/position_tracking_file 已并入，§6）；`.gitignore` 已加；`qmt_exchange/` 已建 |
-| 3. 外部进程 | 进行中 | `qmt_stdqmt_target.py` 已生成 + 自包含化（只读新配置），`py_compile` 通过；闭环前置检查完成（§14.4-5）；用户自理 email/AI 配置路径，待自测 `--now` |
+| 3. 外部进程 | 进行中 | `qmt_stdqmt_target.py` 已生成 + 自包含化（只读新配置），`py_compile` 通过；闭环前置检查完成（§14.4-5）；**2026-09-15 生产运行中发现并修复定时漂移（§4.1）+ AI 调用层提速/部分过滤（§4.2），py_compile + helper 冒烟 + AI mock 测试 ✅**；用户自理 email/AI 配置路径 |
 | 4. mock 验证 | 未开始 | 用户自测；注意本机无 `Administrator\upload`（`--now` 会生成空文件=清仓），需建目录拷贝名单或对齐路径 |
 | 5. 探针 + executor | **探针✅ / run_time 定时驱动❌（从不触发，定案 §13.7-13）/ run_now 真实成交✅ / schedule_run 纯每日定时改造✅ / 定时派发实证✅（2026-09-07 10:00，§14.4-8）** | executor 已改为 schedule_run 纯每日定时（无轮询/重试/补查）+ py_compile/冒烟✅；09-07 完成 § ASCII 化编码修复 + **定时实证（10:00:00.002 准时触发 → 22 股文件消费 → 卖出/买入真实提交 → tracker 落盘）**（§0.3/§14.4-8） |
 | 6. QMT 验证 | ✅ 定时验收通过（2026-09-07） | run_now 验收 ✅（13:00 真实成交，§14.4-7）；**定时验收 ✅（10:00 实证，§14.4-8）**；下一步 = 生产切换（§14.4-10：换生产账户、`trading_times` 改回、target 路径绝对化、连续 2 交易日验证）；旧系统确认已停 |
