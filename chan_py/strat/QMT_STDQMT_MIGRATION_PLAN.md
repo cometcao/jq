@@ -175,6 +175,21 @@
 - 异常语义不变：AI 抛异常 → 本轮不生成文件；`maintain_sources` 修复 URL 前也检查 deadline
 - 验证：`py_compile` ✅ + mock（粘性/model_hint / 连续 2 次熔断 / 截止后全透传 / 卡在第 1 只后部分过滤 / 无截止行为不变 / target 部分-兜底-异常三态）✅
 
+### 4.3 AI 超时修正 + 智谱兜底修复（2026-09-16）
+
+**症状**：9/15 提速后 AI 失败次数增多。实测（2026-09-16）：
+- 百炼 7 个配置模型全部 `403 Free quota exhausted`（deploy 时手动更新免费模型，属部署动作）；
+- 智谱 glm-5.2 `429 code 1113 余额不足或无可用资源包`（免费模型 glm-4-flash/glm-4.5-flash 可用）；
+- 20s 超时对强模型/大 prompt 过短：glm-4.5-flash 小 prompt 18.2s、中等 prompt 64.4s；
+- `_call_zhipu` 异常被吞成 `(True, "默认合规")` 且 `model_used` 谎报 "glm-5.2" → 全链失败时 AI 过滤无声变空操作（全放行）。
+
+**修复（`ai_fundamental_filter.py` + `qmt_stdqmt_target.py`）**：
+- 超时 20s → 默认 60s（`ai_filter_config.json` 的 `llm_call_timeout_seconds`，非法值回退 60）；URL 维护类保持 per-request 20s（`URL_FIX_TIMEOUT`）；config 加载上移到 client 初始化前（缺失仍为硬报错）
+- deadline 感知：`_call_with_fallback(..., deadline=...)` 每次调用前按剩余时间收敛 per-call timeout（`max(5, min(60, remaining))`），到点停链——保证 worker 在 target `join(budget+30)` 余量内收尾，不再整体丢弃部分结果
+- 智谱兜底：模型由 `zhipu_model` 配置（当前 `glm-4-flash`，缺 key 报 KeyError）；异常返回 `None`；全链失败返回 `(True, "全部模型不可用…透传", [], [], "none")`，`filter_stocks` 记 `stats['llm_failed']` + `[FAIL] 全部模型不可用 → 透传`（fail-open 语义不变，仅日志/统计可见）
+- target 侧：deadline warning 带 `llm_failed`；全量失败记 ERROR「本轮等于未过滤」
+- 验证：`py_compile` ✅ + mock（deadline 收敛/到点零调用/全失败 none 透传/stats 计数）✅ + 智谱真实调用 4.3s ✅ + 2 只股票端到端（qwen 403 降级 → glm-4-flash 判定，`llm_failed=0`）✅ + `--now` 生成文件（2 stocks）✅ + 无 config 目录 import 硬报错 ✅
+
 ## 5. executor `qmt_rebalance_executor.py`（QMT 内置框架策略）
 
 **零第三方依赖**（仅标准库 + QMT 内置 xtquant）。
@@ -338,6 +353,8 @@ executor 内置环境无法依赖相对路径，**配置文件绝对路径以常
 > 更新于 2026-09-07 盘中（历史，配合 §0.3）：run_now 真实成交验收通过（§14.4-7）；run_time 从不触发已定案（startTime 需完整时间戳）；executor 改造为 **schedule_run 纯每日定时版**（代码+冒烟✅）；**定时派发实证通过（2026-09-07 10:00:00.002，§14.4-8）—— 定时验收完成**；本次同时完成 executor 源文件编码 bug 修复（§ ASCII 化）。**剩余动作 = 生产切换（§14.4-10）**。
 >
 > 更新于 2026-09-15（**当前权威进度版，配合 §0.4 使用**）：target 定时漂移修复（§4.1）—— email 检查/生成时刻因旧 `now` 睡眠逐日漂移（09:10 → 09:20），`_sleep_until` 绝对时间睡眠 + 跨过计划时刻即查；AI 调用层提速 + 部分过滤（§4.2）—— 20s 单次超时、降级链熔断/粘性、到点部分过滤（已处理生效 + 未处理透传）；`py_compile` + helper 冒烟 + AI mock 测试 ✅。
+>
+> 更新于 2026-09-16：AI 超时 20s → 60s（`llm_call_timeout_seconds` 可调）+ deadline 感知 per-call 收敛 + 智谱兜底改 `glm-4-flash`（异常不再伪装默认合规）+ `llm_failed` 可见性（§4.3）；mock/真实调用/端到端/`--now` 验证 ✅。
 
 | 步骤 | 状态 | 说明 |
 |---|---|---|

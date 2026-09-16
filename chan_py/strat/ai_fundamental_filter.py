@@ -14,17 +14,33 @@ import baostock as bs
 DASHSCOPE_API_KEY = os.environ.get("DASHSCOPE_API_KEY", "").strip()
 ZHIPU_API_KEY = os.environ.get("ZHIPU_API_KEY", "").strip()
 CONFIG_FILE = "ai_filter_config.json"
-LLM_CALL_TIMEOUT = 20  # 秒，单次模型调用上限（客户端级，同时禁用 SDK 自动重试）
+URL_FIX_TIMEOUT = 20  # 秒，URL 维护类调用上限（短 prompt，快速失败）
 
 if not DASHSCOPE_API_KEY:
     raise ValueError("请设置环境变量 DASHSCOPE_API_KEY")
 if not ZHIPU_API_KEY:
     raise ValueError("请设置环境变量 ZHIPU_API_KEY")
 
+# -------------------- 加载外部配置（缺失即系统问题，直接报错） --------------------
+with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+    config = json.load(f)
+
+try:
+    LLM_CALL_TIMEOUT = int(config.get("llm_call_timeout_seconds", 60))
+    if LLM_CALL_TIMEOUT <= 0:
+        raise ValueError
+except (TypeError, ValueError):
+    LLM_CALL_TIMEOUT = 60  # 秒，单次模型调用上限（客户端级，同时禁用 SDK 自动重试）
+    print(f"[WARN] llm_call_timeout_seconds 非法，回退默认 {LLM_CALL_TIMEOUT}s")
+
+# 千问模型名单（配置驱动，顺序=从强到弱降级链）；名单为空 → 直接走智谱兜底
+QWEN_MODEL_LIST = [str(m) for m in config.get("qwen_model_list", [])]
+ZHIPU_MODEL = str(config["zhipu_model"]).strip()  # 智谱兜底模型（配置驱动，缺 key 直接报错）
+
 zhipu_client = ZhipuAiClient(api_key=ZHIPU_API_KEY,
                              timeout=LLM_CALL_TIMEOUT, max_retries=0)
 
-# 阿里百炼 OpenAI 兼容端点（旧版 Generation 端点未路由 qwen3.7-plus/qwen3.6-flash 等新模型）
+# 阿里百炼 OpenAI 兼容端点（旧版 Generation 端点未路由新版 qwen 模型）
 dashscope_client = OpenAI(api_key=DASHSCOPE_API_KEY,
                           base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
                           timeout=LLM_CALL_TIMEOUT, max_retries=0)
@@ -252,13 +268,6 @@ RULE_EVIDENCE_KEYWORDS = {
     "12": ["市值", "退市"],
 }
 
-# -------------------- 加载外部配置 --------------------
-with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-    config = json.load(f)
-
-# 千问模型名单（配置驱动，顺序=从强到弱降级链）；json 缺失/为空 → 空名单直接走智谱兜底 glm-5.2
-QWEN_MODEL_LIST = [str(m) for m in config.get("qwen_model_list", [])]
-
 # Debug log file (每次运行覆盖写入)
 DEBUG_LOG = "debug_search.log"
 
@@ -354,6 +363,7 @@ def _ai_search_url_qwen(model: str, source_name: str) -> Optional[str]:
             temperature=0,
             response_format={"type": "json_object"},
             extra_body={"enable_search": True},
+            timeout=URL_FIX_TIMEOUT,
         )
         content = resp.choices[0].message.content.strip()
         data = json.loads(content)
@@ -372,12 +382,13 @@ def _ai_search_url_zhipu(source_name: str) -> Optional[str]:
     )
     try:
         resp = zhipu_client.chat.completions.create(
-            model="glm-5.2",
+            model=ZHIPU_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
             tools=[{"type": "web_search", "web_search": {"enable": True, "search_result": True}}],
             tool_choice="auto",
             response_format={"type": "json_object"},
+            timeout=URL_FIX_TIMEOUT,
         )
         content = resp.choices[0].message.content.strip()
         data = json.loads(content)
@@ -651,7 +662,8 @@ def _parse_response(content: str) -> Tuple[bool, str, List[str], List[dict]]:
     return is_qualified, reason, violated, violation_details
 
 # -------------------- 模型调用 --------------------
-def _call_qwen(model: str, code: str, external_info: str, debug: bool = False):
+def _call_qwen(model: str, code: str, external_info: str, debug: bool = False,
+               timeout: int = LLM_CALL_TIMEOUT):
     user_prompt = (
         f"请判断股票{code}目前的合规状况。\n\n"
         f"{external_info}\n"
@@ -676,6 +688,7 @@ def _call_qwen(model: str, code: str, external_info: str, debug: bool = False):
             messages=messages,
             temperature=0,
             response_format={"type": "json_object"},
+            timeout=timeout,
         )
         content = resp.choices[0].message.content.strip()
         if debug:
@@ -689,7 +702,8 @@ def _call_qwen(model: str, code: str, external_info: str, debug: bool = False):
             print(f"  [FAIL] {model} {elapsed:.1f}s 异常: {e}")
         return None, None, None, []
 
-def _call_zhipu(code: str, external_info: str, debug: bool = False) -> Tuple[bool, str, List[str], List[dict]]:
+def _call_zhipu(code: str, external_info: str, debug: bool = False,
+                timeout: int = LLM_CALL_TIMEOUT) -> Tuple[bool, str, List[str], List[dict]]:
     user_prompt = (
         f"请判断股票{code}目前的合规状况。\n\n"
         f"{external_info}\n"
@@ -710,10 +724,11 @@ def _call_zhipu(code: str, external_info: str, debug: bool = False) -> Tuple[boo
     start = time.perf_counter()
     try:
         resp = zhipu_client.chat.completions.create(
-            model="glm-5.2",
+            model=ZHIPU_MODEL,
             messages=messages,
             temperature=0,
             response_format={"type": "json_object"},
+            timeout=timeout,
         )
         content = resp.choices[0].message.content.strip() if resp.choices[0].message.content else ""
         if debug:
@@ -723,7 +738,7 @@ def _call_zhipu(code: str, external_info: str, debug: bool = False) -> Tuple[boo
         return _parse_response(content)
     except Exception as e:
         print(f"  [FAIL] 智谱调用失败 {time.perf_counter() - start:.1f}s: {e}")
-        return True, f"智谱异常，默认合规: {e}", [], []
+        return None, None, None, []
 
 _RULE_CIRCLED = str.maketrans("①②③④⑤⑥⑦⑧⑨⑩⑪⑫", "123456789012")
 
@@ -745,8 +760,19 @@ def _reset_model_health():
 
 
 def _call_with_fallback(code: str, external_info: str, debug: bool = False,
-                        model_hint: Optional[str] = None) -> Tuple[bool, str, List[str], List[dict], str]:
+                        model_hint: Optional[str] = None,
+                        deadline=None) -> Tuple[bool, str, List[str], List[dict], str]:
     global _LAST_GOOD_MODEL
+
+    def _call_timeout():
+        """单次调用超时：无 deadline 用满 LLM_CALL_TIMEOUT；有 deadline 收敛到剩余时间。"""
+        if deadline is None:
+            return LLM_CALL_TIMEOUT
+        remaining = (deadline - datetime.datetime.now()).total_seconds()
+        if remaining <= 0:
+            return None
+        return max(5, min(LLM_CALL_TIMEOUT, remaining))
+
     candidates = []
     for m in (model_hint, _LAST_GOOD_MODEL):
         if m and m in QWEN_MODEL_LIST and m not in candidates:
@@ -755,7 +781,10 @@ def _call_with_fallback(code: str, external_info: str, debug: bool = False,
         if m not in candidates and m not in _MODEL_DISABLED:
             candidates.append(m)
     for model in candidates:
-        is_q, reason, viol, vd = _call_qwen(model, code, external_info, debug)
+        timeout = _call_timeout()
+        if timeout is None:
+            break
+        is_q, reason, viol, vd = _call_qwen(model, code, external_info, debug, timeout=timeout)
         if is_q is not None:
             _MODEL_FAILS[model] = 0
             _LAST_GOOD_MODEL = model
@@ -764,10 +793,17 @@ def _call_with_fallback(code: str, external_info: str, debug: bool = False,
         if _MODEL_FAILS[model] >= MODEL_FAIL_THRESHOLD and model not in _MODEL_DISABLED:
             _MODEL_DISABLED.add(model)
             print(f"  [WARN] {model} 连续失败 {_MODEL_FAILS[model]} 次，本次运行跳过该模型")
+    timeout = _call_timeout()
+    if timeout is None:
+        print("  [FAIL] AI 截止时间已到，智谱兜底跳过 → 透传（未过滤）")
+        return True, "AI 截止时间已到，按合规透传", [], [], "none"
     if debug:
         print("  [!] 千问模型均失败，切换至智谱...")
-    is_q, reason, viol, vd = _call_zhipu(code, external_info, debug)
-    return is_q, reason, viol, vd, "glm-5.2"
+    is_q, reason, viol, vd = _call_zhipu(code, external_info, debug, timeout=timeout)
+    if is_q is None:
+        print("  [FAIL] 智谱兜底失败，全部模型不可用 → 透传（未过滤）")
+        return True, "全部模型不可用（API失败），按合规透传", [], [], "none"
+    return is_q, reason, viol, vd, ZHIPU_MODEL
 
 # -------------------- 分级时效过滤 --------------------
 def _extract_year_from_reason(text: str) -> Optional[int]:
@@ -1023,6 +1059,7 @@ def filter_stocks(stock_list: List[str], delay: float = 2.0, debug: bool = False
         stats['processed'] = []
         stats['qualified'] = qualified
         stats['deadline_hit'] = False
+        stats['llm_failed'] = 0
     _reset_model_health()
 
     maintain_sources(debug, deadline=deadline)
@@ -1113,13 +1150,24 @@ def filter_stocks(stock_list: List[str], delay: float = 2.0, debug: bool = False
             elif not debug:
                 print(f"  [INFO] 外部信息加载完成 ({len(external_info)}字符)")
 
-            model_qualified, reason, rules, violation_details, model_used = _call_with_fallback(code, augmented_info, debug=debug)
+            model_qualified, reason, rules, violation_details, model_used = _call_with_fallback(
+                code, augmented_info, debug=debug, deadline=deadline)
             log_file.write(f"\n  ── 模型返回 ──\n")
             log_file.write(f"  model: {model_used}\n")
             log_file.write(f"  is_qualified: {model_qualified}\n")
             log_file.write(f"  reason: {reason}\n")
             log_file.write(f"  violated_rules: {rules}\n")
             log_file.write(f"  violation_details: {violation_details}\n")
+
+            if model_used == "none":
+                if stats is not None:
+                    stats['llm_failed'] = stats.get('llm_failed', 0) + 1
+                print("  [FAIL] 全部模型不可用 → 透传（未过滤）")
+                log_file.write("  最终: [PASS] 透传（AI 不可用）\n")
+                qualified.append(code)
+                if idx < len(normalized):
+                    time.sleep(delay)
+                continue
 
             is_qualified, reason, rules = _apply_tiered_filter(
                 model_qualified, reason, rules, violation_details,
@@ -1150,7 +1198,7 @@ def filter_stocks(stock_list: List[str], delay: float = 2.0, debug: bool = False
                 if search_results:
                     l4_augmented = search_results + "\n\n" + fin_block + external_info
                     retry_q, retry_reason, retry_rules, retry_vd, retry_model = _call_with_fallback(
-                        code, l4_augmented, debug=debug, model_hint=model_used
+                        code, l4_augmented, debug=debug, model_hint=model_used, deadline=deadline
                     )
                     log_file.write(f"\n  ── Layer 4 复审模型返回 ──\n")
                     log_file.write(f"  model: {retry_model}\n")

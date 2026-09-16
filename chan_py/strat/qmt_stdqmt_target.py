@@ -269,12 +269,18 @@ def _ai_filter_with_budget(strat, codes, budget_seconds):
         logging.error(f"[{strat['name']}] AI filter exception: {result.get('error')} "
                       f"-> skip this round, no file generated")
         return "error", None
+    llm_failed = stats.get('llm_failed', 0)
     if stats.get('deadline_hit'):
         processed = stats.get('processed') or []
         qualified = stats.get('qualified') or []
         logging.warning(f"[{strat['name']}] AI filter deadline hit: processed {len(processed)}/{len(codes)}, "
                         f"qualified {len(qualified)}, "
-                        f"{len(codes) - len(processed)} passed through unfiltered")
+                        f"{len(codes) - len(processed)} passed through unfiltered, "
+                        f"llm_failed {llm_failed}")
+    elif codes and llm_failed >= len(codes):
+        logging.error(f"[{strat['name']}] AI 全部调用失败，本轮等于未过滤（{llm_failed}/{len(codes)} 只透传）")
+    elif llm_failed:
+        logging.warning(f"[{strat['name']}] AI 调用失败透传 {llm_failed}/{len(codes)} 只")
     return "ok", result['codes']
 
 

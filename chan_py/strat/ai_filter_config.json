@@ -1,4 +1,6 @@
 {
+  "llm_call_timeout_seconds": 60,
+  "zhipu_model": "glm-4-flash",
   "qwen_model_list": [
     "qwen3.7-max",
     "qwen3.7-plus",

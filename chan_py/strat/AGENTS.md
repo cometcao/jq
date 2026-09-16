@@ -83,7 +83,7 @@ Layer 3: LLM 兜底判断 (enable_search=False, 输入完全确定)
   输入 = 金融数据核验摘要 + 公告标题全文
   覆盖: 规则⑥(重大诉讼)、⑧(资金占用/违规担保)、⑨(分红不达标)、⑩(净资产为负)
   同输入→同输出(temperature=0)，无联网搜索波动
-  模型: 千问链配置驱动 —— ai_filter_config.json 的 qwen_model_list（顺序=降级链，当前 qwen3.7-max → qwen3.7-plus → qwen3.6-flash → qwen3-max → qwen-plus → qwen-turbo → qwen-flash）；json 缺失/为空 → 空名单直接走智谱兜底 glm-5.2
+  模型: 降级链配置驱动 —— ai_filter_config.json 的 qwen_model_list（顺序=降级链，名单见配置）；名单为空 → 直接走智谱兜底（`zhipu_model` 配置，缺 key 报 KeyError）；单次调用超时 60s（`llm_call_timeout_seconds` 可调，deadline 前自动收敛到剩余时间）
 
 Layer 4: 外部搜索查漏补缺 (已实现)
   Layer 3 判合规(通过) + 标题含高信号关键词 → Bing 搜索查漏杀
@@ -159,3 +159,13 @@ Config jsons, `logs/`, `test/`, backup files, and `strategy_positions.json`.
 | AI deadline discarded progress | `ai_fundamental_filter.filter_stocks` / `qmt_stdqmt_target._ai_filter_with_budget` | 600s deadline → whole raw list used (0% filtered) while the daemon thread kept burning API calls in the background | Cooperative deadline (`deadline` + `stats`): processed verdicts kept, unprocessed passed through, thread exits; `join(budget+30)` only as hard fallback |
 
 `qmt_trader_multiple_strategies.py` (legacy, frozen per migration plan §0) has the same stale-`now` sleep pattern; left unmodified (old system retired). Executor needs no change — `schedule_run` fires by absolute `time_point` + `timedelta(days=1)`, independent of callback duration.
+
+## 2026-09-16 Bug Fixes
+
+| Fix | Location | Problem | Solution |
+|-----|----------|---------|----------|
+| Per-call timeout too short | `ai_fundamental_filter.py:29` | 20s is too short for strong models / large prompts (measured: glm-4.5-flash needs 18s even on a tiny prompt, 64s on a medium one), causing widespread call failures | Default 60s via `llm_call_timeout_seconds` in `ai_filter_config.json` (invalid value falls back to 60); URL-maintenance calls keep per-request `timeout=20` |
+| Deadline-aware fallback chain | `ai_fundamental_filter._call_with_fallback` | A call started 1s before the deadline could run 60s past it, exceeding the target's `join(budget+30)` margin → partial results discarded and full unfiltered list used | Pass `deadline` down: per-call timeout converges to `max(5, min(60, remaining))`, chain stops at the deadline and returns the pass-through marker |
+| Zhipu fallback silently dead | `ai_fundamental_filter._call_zhipu` / `_call_with_fallback` | glm-5.2 requires balance (429 code 1113); the exception was swallowed into `(True, "默认合规")` while still reporting `model_used="glm-5.2"` → AI filter silently became a no-op | Fallback model switched to free `glm-4-flash` (2–5s, works without balance), name now config-driven via `zhipu_model` (missing key → KeyError at startup); exception now returns `None`; total failure returns `model_used="none"` + `stats['llm_failed']` counter — still fail-open (pass-through) but visible in logs |
+| AI failure visibility | `qmt_stdqmt_target._ai_filter_with_budget` | All-LLM-failure runs had no warning | `llm_failed` added to the deadline warning; all-failed run logs ERROR "本轮等于未过滤" |
+| Config load ordering | `ai_fundamental_filter.py:24` | Config was loaded after client init, so `llm_call_timeout_seconds` could not drive the client timeout | Strict config load moved before client init; missing config remains a hard startup error (system problem) |

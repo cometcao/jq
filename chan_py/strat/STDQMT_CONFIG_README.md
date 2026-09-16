@@ -88,7 +88,7 @@
 09:50  计划进程（target，常驻，仅工作日）
        ├─ 邮件检查：check_email_for_signal 拉取目标主题最新未读邮件附件 → 落盘 stock_list_dir
        ├─ 读股票列表（缺失/超14天/读失败 → 空列表 = 清仓语义）
-       ├─ AI 过滤：预算 = min(600s, 距 10:00 剩余时间)；单模型调用 20s 超时 + 降级链健康跳过
+       ├─ AI 过滤：预算 = min(600s, 距 10:00 剩余时间)；单模型调用 60s 超时（`llm_call_timeout_seconds` 可调，deadline 前自动收敛）+ 降级链健康跳过
        │    到点 → 已处理股票按结论过滤，未处理股票透传（记 warning 日志）
        │    异常 → 跳过本轮，不生成文件（保守，不交易）
        └─ 写入 qmt_exchange/rebalance_low_valuation_<YYYYMMDD_HHMM>.json
@@ -101,7 +101,8 @@
 关键语义：
 - **文件必须在交易时刻前就绪**是设计前提，因此 executor 侧无 recheck/重试/补单机制（丢失只影响本轮 diff，下轮自动修正）。
 - 邮件检查失败不阻塞生成；**AI 到点不阻塞交易（2026-09-15 起部分过滤）**：已处理股票按结论过滤、未处理股票透传；仅线程卡死兜底（预算 + 30s）才回退整份未过滤。
-- **AI 调用层硬化（2026-09-15）**：单模型调用 20s 超时（客户端级，禁用 SDK 自动重试）；降级链运行内连续失败 2 次的模型跳过，成功模型优先复用（粘性，Layer 4 复审复用 Layer 3 模型）。
+- **AI 调用层硬化（2026-09-15）**：单模型调用超时（客户端级，禁用 SDK 自动重试）；降级链运行内连续失败 2 次的模型跳过，成功模型优先复用（粘性，Layer 4 复审复用 Layer 3 模型）。
+- **AI 超时修正 + 智谱兜底修复（2026-09-16）**：单模型调用默认 60s（实测 20s 对强模型/大 prompt 过短）；per-call 超时按 deadline 剩余时间收敛（`max(5, min(60, remaining))`），保证在 target `join(budget+30)` 余量内收尾；智谱兜底模型由 `zhipu_model` 配置（当前 `glm-4-flash`，免费可用，glm-5.2 需余额；缺 key 报 KeyError），异常不再伪装成"默认合规"，全链失败返回 `model_used="none"` + `llm_failed` 计数（仍 fail-open 透传，但日志可见）。
 - **唤醒/检查时刻抗漂移（2026-09-15 修复）**：target 用绝对时间睡眠（`_sleep_until`，每 ≤60s 重算剩余），email 检查 + AI 过滤耗时再长（超时上限 600s）也不会推迟次日的唤醒/检查/生成时刻；邮件检查按"跨过计划时刻即查、每天一次"触发，晚唤醒/晚启动当天仍会补查，且交易时段结束后不会消耗邮件。
 - target 仅认 `is_weekday`（无节假日认知）；executor 依赖 QMT 日历。节假日 target 会尝试读邮件/生成文件但 executor 不触发。
 
@@ -131,11 +132,13 @@
 
 ### ai_filter_config.json（AI 合规过滤）
 
-被 `ai_fundamental_filter.py` 消费，文件缺失/为空时自动降级到智谱 GLM（需 `ZHIPU_API_KEY` + `DASHSCOPE_API_KEY` 环境变量）：
+被 `ai_fundamental_filter.py` 消费（文件缺失即报错，属系统问题；`qwen_model_list` 为空时直接走智谱 GLM，需 `ZHIPU_API_KEY` + `DASHSCOPE_API_KEY` 环境变量）：
 
 | 字段 | 说明 |
 |------|------|
-| `qwen_model_list` | 千问模型降级链（顺序 = 失败时依次降级；当前 7 个模型）。单次调用 20s 超时、禁用 SDK 自动重试；运行内连续失败 2 次的模型跳过，成功模型优先复用（粘性） |
+| `qwen_model_list` | 千问模型降级链（顺序 = 失败时依次降级；当前 7 个模型）。单次调用 60s 超时、禁用 SDK 自动重试；运行内连续失败 2 次的模型跳过，成功模型优先复用（粘性） |
+| `llm_call_timeout_seconds` | 单次模型调用超时秒数（默认 60，非法值回退 60）；deadline 前自动收敛到剩余时间；URL 维护类调用固定 20s |
+| `zhipu_model` | 智谱兜底模型名（当前 `glm-4-flash`，免费可用；glm-5.2 需余额）；缺失即启动报 KeyError（系统问题） |
 | `sources` | 公告数据源 URL 模板：`cninfo`(巨潮) / `eastmoney`(东财) / `sse`(上交所) / `szse`(深交所)，含搜索起止日期 |
 | `violation_tier_rules` | 规则②(监管处罚/立案)本地扫描的关键词分级：`high`(立案/处罚等, 回溯5年) / `medium`(通报批评/责令改正, 3年) / `low`(警示函/关注函, 2年) |
 
