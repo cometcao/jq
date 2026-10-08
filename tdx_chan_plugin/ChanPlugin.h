@@ -32,7 +32,9 @@
 
 // Chan theory constant definitions
 const double MIN_PRICE_UNIT = 0.01;  // Minimum price unit
-const double FLOAT_CMP_EPSILON = 1e-10; // Float comparison epsilon (matches np.isclose rtol/atol)
+const double FLOAT_CMP_EPSILON = 1e-10; // 显式 epsilon 下限
+const double FLOAT_CMP_RTOL = 1e-5;     // 对应 np.isclose 默认 rtol
+const double FLOAT_CMP_ATOL = 1e-8;     // 对应 np.isclose 默认 atol
 const double GOLDEN_RATIO = 0.618;   // Golden ratio
 
 // Top/bottom pattern type enumeration
@@ -76,6 +78,11 @@ struct StandardKLine {
     double chan_price;  // Chan price (high for top pattern, low for bottom pattern)
     int original_tb;    // Original pattern type
     int xd_tb;          // Line segment top/bottom pattern type
+    // 已被包含处理合并掉的元素标记。
+    // 注意: 不能用 high/low 置 0 当标记 —— Python 原版里被合并元素保留原始 high/low
+    // (合并结果放在 new_high/new_low), 而 isBullType(past, first) 依赖 past 的原始 high;
+    // 置 0 会让方向判断恒为 BOT2TOP, 合并取 max/min 取错, 分型数量与位置随之全偏。
+    bool merged_away = false;
 };
 
 // Feature sequence element for XD line segment detection
@@ -123,25 +130,36 @@ struct XianDuan {
     int end_index;      // End index
 };
 
-// Floating point comparison functions (implementation matches KBar_Chan.py)
+// 浮点比较 (与 Python chan_common_include.float_* 保持一致)
+// Python: float_less(a,b) = a < b and not np.isclose(a,b)
+//         np.isclose 默认 rtol=1e-5, atol=1e-8 -> 容差 = atol + rtol*|b|
+// 原实现用固定绝对容差 1e-10, 对大价格标的 (如千元股) 会与 Python 判定不同:
+// Python 认为 0.015 元以内的差算"相等", 原实现只有 1e-10 以内才算相等, 于是
+// 包含关系与分型判定发生分歧。
+inline bool float_isclose(double a, double b, double epsilon = FLOAT_CMP_EPSILON) {
+    double tol = FLOAT_CMP_ATOL + FLOAT_CMP_RTOL * std::abs(b);
+    if (tol < epsilon) tol = epsilon;   // 显式传入的 epsilon 仍作为下限生效
+    return std::abs(a - b) <= tol;
+}
+
 inline bool float_less(double a, double b, double epsilon = FLOAT_CMP_EPSILON) {
-    return a < b - epsilon;
+    return a < b && !float_isclose(a, b, epsilon);
 }
 
 inline bool float_more(double a, double b, double epsilon = FLOAT_CMP_EPSILON) {
-    return a > b + epsilon;
+    return a > b && !float_isclose(a, b, epsilon);
 }
 
 inline bool float_less_equal(double a, double b, double epsilon = FLOAT_CMP_EPSILON) {
-    return a < b + epsilon;
+    return a < b || float_isclose(a, b, epsilon);
 }
 
 inline bool float_more_equal(double a, double b, double epsilon = FLOAT_CMP_EPSILON) {
-    return a > b - epsilon;
+    return a > b || float_isclose(a, b, epsilon);
 }
 
 inline bool float_equal(double a, double b, double epsilon = FLOAT_CMP_EPSILON) {
-    return std::abs(a - b) < epsilon;
+    return float_isclose(a, b, epsilon);
 }
 
 // Chan Analyzer main class
@@ -173,6 +191,10 @@ public:
     
     // Get standardized K-lines (for debugging)
     std::vector<StandardKLine> getStandardized() const { return standardized; }
+
+    // Get pen fractal points / segment endpoints (for debugging and diagnostics)
+    std::vector<StandardKLine> getMarkedBi() const { return marked_bi; }
+    std::vector<StandardKLine> getMarkedXd() const { return marked_xd; }
     
 private:
     // Core algorithm methods
@@ -213,7 +235,8 @@ private:
                                 const FeatureSeqElement& e2, const FeatureSeqElement& e3);
     std::pair<FeatureSeqElement, FeatureSeqElement> mergeFeatureSeqPair(
         const FeatureSeqElement& e0, const FeatureSeqElement& e1,
-        const FeatureSeqElement& e2, const FeatureSeqElement& e3);
+        const FeatureSeqElement& e2, const FeatureSeqElement& e3,
+        bool merge_max);
     void processInclusions(std::vector<FeatureSeqElement>& seq, TopBotType direction);
     void applyCleanSequence(const std::vector<FeatureSeqElement>& feature_seq,
                             std::vector<StandardKLine>& working_df, int start_loc,
@@ -228,6 +251,20 @@ private:
 
     // Line segment gap detection (retained)
     bool kbarGapAsXdFull(const std::vector<StandardKLine>& working_df, int first_idx, int second_idx, int compare_idx);
+
+    // Segment endpoint extreme repair (Chan: a segment's endpoints must be the
+    // extreme points of that segment)
+    void repairXdExtremes(std::vector<StandardKLine>& working_df);
+    void cleanXdMarks(std::vector<StandardKLine>& working_df);
+    // Ported from Python check_previous_elem_to_avoid_xd_gap: narrows with_gap
+    // when a previous same-type feature element already crosses element 4.
+    // 原文第67课第二种情况: 反向特征序列出现反向分型才算确认
+    bool secondFeatureSeqConfirms(const std::vector<StandardKLine>& working_df,
+                                  int pivot_idx, TopBotType pivot_type);
+    bool checkPreviousElemToAvoidXdGap(bool with_gap,
+                                       const std::vector<FeatureSeqElement>& seq,
+                                       int i,
+                                       std::vector<StandardKLine>& working_df);
     
     // Initial direction
     std::pair<int, TopBotType> findInitialDirectionFull(std::vector<StandardKLine>& working_df, TopBotType initial_status);
