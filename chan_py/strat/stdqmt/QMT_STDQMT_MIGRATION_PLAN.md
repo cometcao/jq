@@ -493,3 +493,22 @@ executor 内置环境无法依赖相对路径，**配置文件绝对路径以常
 8. ✅ **schedule_run 定时派发实证通过（2026-09-07 10:00，验收完成）**：executor `_register_triggers` 改用 `schedule_run` 注册**纯每日定时任务**（每策略×每 trading_time：首次 = 下一未来 HH:MM，`-1` + `timedelta(days=1)`；**轮询/重试/启动补查全部移除** —— email/AI 先于 executor 完成、文件必就绪；缺文件本轮跳过，重启错过当日 → run_now 手动或下一场次）；`exec_on_time` 模块级函数为回调，`run_now`/`manual_execute` 为手动入口。**当日行动记录**：① 09:21 测试先因编码错误失败 —— `SyntaxError: (unicode error) 'utf-8' codec can't decode byte 0xa1 in position 2471: invalid start byte (<string>, line 60)`；根因 = 面板将源码转存 GBK(ANSI)（09:21:28 加密副本 D: 刷新实证），引擎按 utf-8 cookie 解码，文件内 3 处 `§`(U+00A7 → GBK `0xA1 0xEC`) 首个 0xA1 处爆错（`compile(GBK转存副本,'<string>','exec')` 逐字节复现同款报错文本）→ 修复：3 处 `§` 替换为 ASCII `sec` 写法，文件纯 ASCII（GBK/UTF-8 恒等，免疫面板编码管线）② 测试改期 10:00（`qmt_stdqmt_config.json` `trading_times=["10:00"]`）③ 09:57:26 面板切实盘模式重启 → `daily task registered 10:00 [low_valuation] first=2026-09-07 10:00:00 seq=646` ④ **10:00:00.002 准时派发**：`.done` 消费 22 股文件 → reconcile（001218/300645 移除、600697/300981/301167 修正）→ 卖出 300981 73300sh（部分成交余 16500）+ 买入 000001 93100sh 全成交、600444 76100sh 部分成交余 18600（虚拟盘撮合，正常）→ tracker 10:00:02 落盘（8 只）。无编码错误、无超时、无异常；残余偏差下场/次日 diff 自愈。**drType:3 + schedule_run 定时驱动设计最终验收通过；schedule_run 回调派发不确定性关闭（兜底路线 9 无需启用）**
 9. ➖ **兜底路线（§14.4-8 实证通过后无需启用，备而不删）**：若 schedule_run 曾不派发 → 恢复 handlebar 事件驱动（drType:0）——需重新加回被 §13.6-6 删除的 handlebar + barpos/一次性门控（v11 16 连单教训），并调查条目 drType 分类机制（executor 恒 drType:3 / TEST_PROB 恒 drType:0，创建入口相同，机制未解）
 10. ⏳ **生产切换（下一步，§0.3 恢复第一步）**：生产部署（面板条目、account_id 改回生产号、SCRIPT_DIR/路径确认、target 路径绝对化硬化）→ 切生产 → 连续 2 交易日验证
+
+---
+
+> **2026-10-16 目录迁移注记（正文未改动，仅追加）**
+>
+> 本文写于分目录之前，正文里的裸文件名/旧路径与现在的位置对照如下，**语义与结论不变**：
+>
+> | 正文写法 | 现在的位置 |
+> |---|---|
+> | `qmt_stdqmt_target.py` / `qmt_rebalance_executor.py` / `qmt_stdqmt_probe.py` / `qmt_stdqmt_config.json` | `stdqmt/` |
+> | `qmt_exchange/`（交换目录、其中的 `_selftest/` 夹具） | `stdqmt/qmt_exchange/` |
+> | `qmt_fileorder_bridge.py` / `qmt_basket_bridge.py` / `qmt_manual_extract.py` / `qmt_channel_probe.py` / `qmt_sector_bridge.py` / `QMT_CHANNEL_FALLBACK_OPTIONS.md` | `tools/` |
+> | `qmt_trader*.py` / `qmt_test.py` / `qmt_multi_strategy_config*.json` / `qmt_config*.json` / `MULTI_TIME_SCHEDULE_README.md` | `legacy_miniqmt/`（已停用） |
+> | `check_email_for_signal.py` / `ai_fundamental_filter.py` | `shared/` |
+> | `chan_II_strat.py` | `chan/` |
+> | `logs/` / `test/` / `strategy_positions.json` / `email_reader_config.json` / `qmt_stdqmt_config.json`（旧配置） | 仍在仓库根 |
+>
+> 另：**执行侧已迁往 PTrade，QMT 执行侧 2026-10-16 停运**，现行管线见 [PTRADE_MIGRATION_NOTES.md](../ptrade/PTRADE_MIGRATION_NOTES.md)。
+> 本文件按**存档**保留，正文不再修改。

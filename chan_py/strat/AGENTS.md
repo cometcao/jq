@@ -169,3 +169,89 @@ Config jsons, `logs/`, `test/`, backup files, and `strategy_positions.json`.
 | Zhipu fallback silently dead | `ai_fundamental_filter._call_zhipu` / `_call_with_fallback` | glm-5.2 requires balance (429 code 1113); the exception was swallowed into `(True, "默认合规")` while still reporting `model_used="glm-5.2"` → AI filter silently became a no-op | Fallback model switched to free `glm-4-flash` (2–5s, works without balance), name now config-driven via `zhipu_model` (missing key → KeyError at startup); exception now returns `None`; total failure returns `model_used="none"` + `stats['llm_failed']` counter — still fail-open (pass-through) but visible in logs |
 | AI failure visibility | `qmt_stdqmt_target._ai_filter_with_budget` | All-LLM-failure runs had no warning | `llm_failed` added to the deadline warning; all-failed run logs ERROR "本轮等于未过滤" |
 | Config load ordering | `ai_fundamental_filter.py:24` | Config was loaded after client init, so `llm_call_timeout_seconds` could not drive the client timeout | Strict config load moved before client init; missing config remains a hard startup error (system problem) |
+
+## 2026-10-15 券商收紧大 QMT（禁策略读文件 + 禁策略 HTTP）
+
+**背景**：券商通知约一周后限制大 QMT 的**文件读写**与**网络 HTTP 信号**。现行唯一的跨进程通道
+（`qmt_exchange/rebalance_*.json`，由 QMT 内置策略 `open()`）会断，因此需要换通道。
+
+**关键结论**：限制针对的是**策略沙箱**；QMT **客户端自身**的正式功能不在此列。官方手册
+`config\help\systemfunction\迅投QMT极速策略交易系统说明文档.pdf`（472 页，中文以字形 ID 存储）实证了三条可用通道，
+全部详见 **[QMT_CHANNEL_FALLBACK_OPTIONS.md](QMT_CHANNEL_FALLBACK_OPTIONS.md)**（含页码索引与参数速查表）：
+
+| 优先级 | 通道 | 手册页 | 自动化 |
+|---|---|---|---|
+| ① 主 | **便捷交易（文件单）**：客户端每 N 毫秒扫文件夹读协议文件下单 | p.290-292, 323-327 | 全自动 |
+| ① 主 | **批量预埋单（DBF 双向共享文件）**：下单 + `*_result.dbf` 回报 | p.327-333 | 全自动 |
+| ② 兜底 | **组合交易 + 篮子自动导入 + 人工「一键调仓」**（客户端自己算轧差与买卖方向） | p.176-186, 364 | 半自动 ~15s/天 |
+| ③ 备选 | QMT 内置策略 + **自定义板块**（`get_stock_list_in_sector`，策略零文件 IO） | — | 全自动 |
+| — | **数据导出**（定时导出资产/持仓/委托/成交，DBF/TXT/CSV）＝ ① 的回报回路 | p.337-338 | — |
+
+**新增工具（本次）**：
+- `qmt_fileorder_bridge.py` — ① 主方案的外部执行引擎：读「数据导出」持仓/资金 → 腾讯/新浪行情 →
+  等权目标 + 差额（沿用原 executor 资金算法）→ 生成便捷交易 `.txt` / 预埋单 `.dbf`；`--feedback` 读回报。
+  **默认 dry-run**，需显式 `--execute`。自测夹具：`qmt_exchange/_selftest/`（`--config ... --inspect`）。
+- `qmt_basket_bridge.py` — ② 兜底：名单 → 迅投默认格式等权篮子 CSV → 篮子自动导入目录；
+  `--templates` 打印 `config\help\baskethelp\*.csv` 官方模板。
+- `qmt_manual_extract.py` — 还原官方手册文本（`--toc` / `--search` / `--page` / `--dump`），中文为字形 ID 编码，pdftotext 类工具无效。
+- `qmt_channel_probe.py` — 策略沙箱能力矩阵（面板内跑，不下单；`--safe` 零出站流量；`WATCH_SECTOR_NAME` 测板块热重载）。
+- `qmt_sector_bridge.py` — ③ 备选：外部写 QMT 自定义板块（`datadir\Sector\<组>\<板块名>`，纯文本逗号分隔，无换行）。
+
+**待办 / 未验证**：便捷交易实例数受**券商管理端授权**控制（须问客户经理）；预埋单 DBF 字段长度需首次实盘校准；
+数据导出列名映射见 `qmt_fileorder_bridge.py` 顶部 `COL_*`（`--inspect` 打印实际列名）；便捷交易撤单协议分隔符未实测。
+
+**重要规则（沿用）**：QMT 面板部署的策略源码必须**纯 ASCII**（面板存 GBK / 引擎按 UTF-8 解码）。
+
+> **2026-10-16 目录迁移注记（本节正文未改动，仅追加）**
+>
+> 本节与 2026-05~09 的历史章节写于分目录之前，其中的裸文件名/旧路径与现在的位置对照如下，
+> **语义与结论不变**：
+>
+> | 文中写法 | 现在的位置 |
+> |---|---|
+> | `qmt_stdqmt_target.py` / `qmt_rebalance_executor.py` / `qmt_stdqmt_probe.py` / `qmt_stdqmt_config.json` | `stdqmt/`（后两者中的配置仍在仓库根） |
+> | `qmt_exchange/`（交换目录与 `_selftest/` 夹具） | `stdqmt/qmt_exchange/` |
+> | `QMT_CHANNEL_FALLBACK_OPTIONS.md` / `qmt_fileorder_bridge.py` / `qmt_basket_bridge.py` / `qmt_manual_extract.py` / `qmt_channel_probe.py` / `qmt_sector_bridge.py` | `tools/` |
+> | `qmt_trader*.py` / `qmt_test.py` / `qmt_multi_strategy_config*.json` / `qmt_config*.json` / `MULTI_TIME_SCHEDULE_README.md` | `legacy_miniqmt/`（已停用） |
+> | `check_email_for_signal.py` / `ai_fundamental_filter.py` | `shared/` |
+> | `chan_II_strat.py` | `chan/` |
+> | `logs/` / `test/` / `strategy_positions.json` / `email_reader_config.json` | 仍在仓库根 |
+>
+> QMT 相关文档（本节、`stdqmt/*.md`、`tools/QMT_CHANNEL_FALLBACK_OPTIONS.md`）按**存档**保留、正文不再修改；
+> 现行 PTrade 管线只看下一节与 [ptrade/PTRADE_MIGRATION_NOTES.md](ptrade/PTRADE_MIGRATION_NOTES.md)。
+
+## 2026-10-15（续）执行侧迁往 PTrade → **2026-10-16 上线（多策略）**
+
+**决策**：QMT 路线走不通（便捷交易/文件单、批量埋单在本机 `config\modules.lua` 中开关为 0；组合交易只剩人工点击），
+且选股逻辑不可能进 QMT 沙箱 → **执行侧迁到 PTrade**，本机继续负责选股 + AI 过滤。
+**QMT 执行侧已于 2026-10-16 彻底停运。** 完整说明见 **[ptrade/PTRADE_MIGRATION_NOTES.md](ptrade/PTRADE_MIGRATION_NOTES.md)**。
+
+**通道原理**（均为平台正式功能，非绕过）：PTrade 交易沙箱**禁外网** → 邮件/AI 留本机；
+**研究目录可在回测/交易中读写** + 客户端**定时上传**本地文件夹到研究目录 → 这就是名单入口。
+
+**布局（项目自包含，整个 `ptrade/` 文件夹可拷走）**：
+```
+ptrade/ptrade_target.py        本机名单进程（替代 qmt_stdqmt_target.py；两者绝不能同时跑）
+ptrade/ptrade_config.json      它自己的配置（单一来源：时间 + 参数 + 策略清单）
+ptrade/upload_file/            客户端「定时上传」源目录 → target_<策略>.json（每策略一个）
+ptrade/archive/                本机归档（不上传，供对账）
+ptrade/logs/  ptrade_target.lock
+ptrade/ptrade_rebalance_executor.py   云端策略（粘进 PTrade 编辑器的那一份）
+```
+- **时间与执行参数写在文件里**：本机把 `trading_times`/`capital_ratio`/`max_holdings`/`candidate_pool_size`/
+  `cash_reserve_ratio`/`rebalance_threshold` 连同名单写进 `target_<策略>.json`；云端 `initialize` 按各文件的
+  `trading_times` 注册 `run_daily`，到点按该策略的参数与 **`capital_ratio` 份额**交易 → **config 是唯一来源**，
+  云端不再有第二份要手工同步的常量（改时间/参数不用重传策略，改变要重启策略一次）。
+- **多策略**：一个账户 N 个策略靠 tracker（研究目录 `ptrade_state_positions.json`）+ `_my_share()` 份额归属
+  （移植自 QMT executor）。云端只服务 `TARGET_FILES` 里列出的文件 → **加策略 = config 加一条 + `TARGET_FILES` 加一行 + 重启**。
+- **PTrade 沙箱硬限制**：**禁 `os`/`sys`**（连带 `traceback`/`glob`/`pathlib` 等）；可用 `pandas/numpy/enum/math/
+  time/simplejson/datetime`。因此策略内只有内建 `open()`、无目录列举（只能读固定文件名）、无 `mkdir`（状态/审计
+  文件扁平写在研究目录根）、无原子 rename。详见 notes §4.2。
+- **年龄策略**：目标文件 ≤7 天照用（含上一交易日那份），>7 天清该策略份额；本机拿不到名单时**什么都不写**，
+  于是云端继续用手上那份，而不是立刻清仓。
+- **自测**：`ptrade_executor_selftest.py`（21 组，含多策略份额/年龄策略/价格笼子/ST 两道/重复名单）+
+  `ptrade_target_selftest.py`（本机产出 ↔ 云端读取的契约）。两侧都跑通了才算改完。
+
+**待办**：向国金确认定时上传是否开放/次数上限、是否支持**按文件夹同步**到研究目录下的同名子目录、
+`get_research_path()` 读写、实盘是否有 `run_daily`/`order`；确认本机 `trading_times`（出文件截止）严格早于
+客户端上传、上传严格早于云端下单时刻。

@@ -182,3 +182,20 @@ python qmt_stdqmt_target.py --config x.json
 | `qwen_model_list` / `sources` / `violation_tier_rules` | 重启 target 进程 | AI 过滤在计划进程中以线程方式调用 |
 
 ⚠️ 配置含账户 ID 与本地路径，**禁止提交到 git**。
+
+---
+
+> **2026-10-16 目录迁移注记（正文未改动，仅追加）**
+>
+> 本文写于分目录之前，正文里的裸文件名/旧路径与现在的位置对照如下，**语义与结论不变**：
+>
+> | 正文写法 | 现在的位置 |
+> |---|---|
+> | `qmt_stdqmt_target.py` / `qmt_rebalance_executor.py` / `qmt_stdqmt_probe.py` / 本文件 | `stdqmt/` |
+> | `qmt_stdqmt_config.json` | **仓库根**（`stdqmt/qmt_stdqmt_target.py` 从启动目录按裸名读取） |
+> | `qmt_exchange/` | `stdqmt/qmt_exchange/` |
+> | `check_email_for_signal.py` / `ai_fundamental_filter.py` | `shared/`（由 target 顶部的 `sys.path` 引导找到） |
+> | `tools/` 下的桥接与手册工具（`qmt_fileorder_bridge.py` 等） | `tools/` |
+>
+> 另：**执行侧已迁往 PTrade，QMT 执行侧 2026-10-16 停运**，现行管线见 [PTRADE_MIGRATION_NOTES.md](../ptrade/PTRADE_MIGRATION_NOTES.md)。
+> 本文件按**存档**保留，正文不再修改。

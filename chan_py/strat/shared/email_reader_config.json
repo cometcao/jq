@@ -1,0 +1,8 @@
+{
+    "imap_server": "imap.163.com", 
+    "email_user": "17317768857@163.com", 
+    "email_pass": "", 
+    "save_directory": "C:\\Users\\Administrator\\Desktop\\upload", 
+    "target_subject": ["TTC1"],
+    "run_time": "09:15"
+}

@@ -1,0 +1,23 @@
+{
+    "account_id": "8880475040",
+    "log_file": "logs/stdqmt_plan.log",
+    "executor_log_file": "logs/qmt_executor.log",
+    "exchange_path": "qmt_exchange",
+    "stock_list_dir": "C:\\Users\\Administrator\\Desktop\\upload",
+    "stock_list_files": {"low_valuation": "low_valuation_stocks.json"},
+    "position_tracking_file": "strategy_positions.json",
+    "strategies": [
+        {
+            "name": "low_valuation",
+            "stock_list_file": "C:\\Users\\comet\\Desktop\\low_valuation_stocks.json",
+            "capital_ratio": 1.0,
+            "max_holdings": 8,
+            "candidate_pool_size": 13,
+            "cash_reserve_ratio": 0.0125,
+            "rebalance_threshold": 0.20,
+            "trading_times": ["10:00"],
+            "email_check_offset_minutes": 10
+        }
+    ],
+    "run_now": false
+}
