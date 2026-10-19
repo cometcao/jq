@@ -304,7 +304,13 @@ def _sleep_until(target):
 # ==================== List loading (copied from old read_stock_lists, slicing removed) ====================
 def _load_stock_list(strat):
     """Return (codes, note). note in ok/missing/expired/read_error; the latter three
-    follow old semantics -> empty list = liquidate."""
+    follow old semantics -> empty list = liquidate.
+
+    Codes are passed through EXACTLY as the email attachment spells them (JoinQuant
+    dialect: 600000.XSHG / 000001.XSHE) - the same spelling the cloud strategy uses
+    internally and towards the platform API. The conversion this used to do existed only
+    because QMT's passorder wanted the old suffix form, so it is gone along with QMT.
+    """
     file_path = strat["stock_list_file"]
     if not os.path.exists(file_path):
         logging.warning(f"[{strat['name']}] list file does not exist: {file_path} -> liquidate")
@@ -318,7 +324,7 @@ def _load_stock_list(strat):
     try:
         with open(file_path, encoding='utf-8') as f:
             data = json.load(f)
-        codes = [item.replace('XSHE', 'SZ').replace('XSHG', 'SH') for item in data]
+        codes = [str(item).strip() for item in data if str(item).strip()]
         return codes, "ok"
     except Exception as e:
         logging.error(f"[{strat['name']}] failed to read list file: {e} -> liquidate")

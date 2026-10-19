@@ -24,7 +24,7 @@ TARGET FILE SCHEMA (written by the local process)
   {
     "strategy": "low_valuation",
     "generated_at": "2026-10-16T09:25:00",
-    "stocks": ["600000.SH", "000001.SZ", ...],   # full filtered pool, order = rank
+    "stocks": ["600000.XSHG", "000001.XSHE", ...],   # full filtered pool, order = rank
     "liquidate": false                            # true = wipe the book (optional)
   }
   - stocks == [] together with a fresh generated_at means "liquidate" (as in the old
@@ -109,16 +109,36 @@ TRACKER_FILE = "ptrade_state_positions.json"  # per-strategy holdings (attributi
 
 DRY_RUN = False               # False = live trading. True = rehearsal (log the plan only)
 MISSING_FILE_ACTION = "skip"  # "skip" (safe) or "liquidate" (old QMT semantics)
-# Target age policy (see _load_target): a target up to this many days old is still traded -
-# that is how the PREVIOUS trading day's list keeps working when the local process cannot
-# produce a fresh one (it writes nothing in that case). Older than this -> liquidate that
-# strategy's slice.
+# Target age policy (see _load_target): TODAY ONLY. A target whose generated_at is not today
+# is NOT traded - the run logs an ERROR and leaves positions untouched. This threshold is
+# only the "give up and liquidate this slice" boundary: a whole week without a fresh list
+# means the local process has been dead for a week, so get out.
 MAX_TARGET_AGE_DAYS = 7
 
 PRICE_MODE = "cage"           # "cage" = limit at peer price +-cage, "latest" = no limit price
 CAGE_MULTIPLIER = 1.02        # buy: min(ask*(1+m), ask+offset); sell mirrored
 CAGE_OFFSET = 0.10
 USE_LIMIT_PRICE = True        # if False, order() without limit_price (platform uses last)
+
+# Order_market's limit_price is a PROTECTION bound, not the working price. The production
+# reference strategy sells with the LIMIT-DOWN price as the protection (it sweeps every bid
+# down to the floor) and buys with the LIMIT-UP price. "Sell with everything you have" is the
+# point of this strategy: get out first, then the freed cash has room to buy.
+# BOTH are additionally bounded by the ~2% deviation rule the broker applies to
+# quantitative orders: sell >= last*0.98, buy <= last*1.02 (and by the limit prices).
+SELL_PROTECT_AT_LIMIT_DOWN = True   # sell: as aggressive as the rules allow
+BUY_PROTECT_AT_LIMIT_UP = False     # buy : keep the QMT-era cage (do not chase to limit-up)
+
+# Market-order type per board (order_market(market_type=...)). Values copied from the
+# reference strategy that ran in production here. A wrong value does NOT lose the trade:
+# _place retries the order as a +-2% repriced LIMIT order, and the log tells you it did.
+# STAR market (688) is the one most likely to need a different value per broker - if the log
+# keeps showing "order_market(688xxx ...) was rejected -> retrying as a limit order",
+# change MARKET_TYPE_STAR to 1 and restart.
+MARKET_TYPE_MAIN_SH = 1          # 60xxxx : 1 (best-five-levels, remainder cancelled)
+MARKET_TYPE_STAR = 0             # 688xxx : 0 (counterparty best / best five levels)
+MARKET_TYPE_SZ = 0               # 000/002/300 : 0
+MARKET_TYPE_OTHER = 4            # anything else (BJ etc.)
 
 LOT = 100                     # A-share board lot
 MAX_ORDERS_PER_RUN = 40       # safety brake: abort the whole run above this
@@ -176,9 +196,15 @@ def _to_float(v, default=0.0):
 
 
 def _split_code(code):
-    """'600000.SH' / '600000.SS' / 'SH600000' / '600000' -> ('SH', '600000')."""
-    c = str(code).strip().upper().replace("XSHE", "SZ").replace("XSHG", "SH")
-    parts = c.replace("-", ".").replace("_", ".").split(".")
+    """Any spelling -> ('SH'|'SZ'|'BJ', '600000').
+
+    The market tag is only an internal label for board/limit rules. Codes this strategy
+    PRODUCES are always spelled XSHG / XSHE (see _full_code) - the QMT-era SS/SH/SZ
+    suffixes are only tolerated when READING data that predates 2026-10-19 (an old
+    tracker file, an old target file), never produced.
+    """
+    c = str(code).strip().upper().replace("-", ".").replace("_", ".")
+    parts = c.split(".")
     if len(parts) == 2:
         a, b = parts
         if a.isdigit() and len(a) == 6:
@@ -187,22 +213,36 @@ def _split_code(code):
             return (_norm_market(a), b)
     if len(c) == 6 and c.isdigit():
         if c[0] in "56":
-            return "SH", c
+            return "XSHG", c
         if c[:2] in ("43", "83", "87", "88", "92"):
             return "BJ", c          # Beijing exchange
-        return "SZ", c
-    if len(c) == 8 and c[:2] in ("SH", "SZ", "SS") and c[2:].isdigit():
-        return _norm_market(c[:2]), c[2:]
+        return "XSHE", c
+    if len(c) == 8 and c[:2] in ("SH", "SZ") and c[2:].isdigit():
+        return _norm_market(c[:2]), c[2:]        # legacy SH600000 / SZ000001 form
     return "", ""
 
 
 def _norm_market(m):
+    """Market tag from any suffix spelling (input tolerance only)."""
     m = str(m).upper()
-    if m in ("SS", "SH", "XSHG"):
-        return "SH"
-    if m in ("SZ", "XSHE"):
-        return "SZ"
+    if m in ("XSHG", "SH", "SS"):
+        return "XSHG"
+    if m in ("XSHE", "SZ"):
+        return "XSHE"
     return m
+
+
+def _full_code(code):
+    """Canonical form used everywhere inside this strategy AND towards the platform API:
+    '600697.XSHG' / '000001.XSHE' / '600697' / 'sh600697' -> '600697.XSHG'."""
+    mk, pl = _split_code(code)
+    if not pl:
+        return str(code).strip().upper()
+    if mk == "XSHG":
+        return pl + ".XSHG"
+    if mk == "BJ":
+        return pl + ".BJ"        # Beijing exchange (needs broker confirmation)
+    return pl + ".XSHE"
 
 
 def _limit_ratio(market, plain, name):
@@ -210,9 +250,9 @@ def _limit_ratio(market, plain, name):
     nm = (name or "").upper()
     if "ST" in nm:
         return 0.05
-    if market == "SH" and plain[:3] == "688":
+    if market == "XSHG" and plain[:3] == "688":
         return 0.20
-    if market == "SZ" and plain[:3] in ("300", "301"):
+    if market == "XSHE" and plain[:3] in ("300", "301"):
         return 0.20
     if plain[:2] in ("43", "83", "87", "88", "92"):
         return 0.30
@@ -297,19 +337,14 @@ def _write_json(path, obj):
 # PTrade API adapters - each degrades instead of raising, and initialize()
 # logs which spelling actually worked (see _selfcheck).
 # ============================================================================
-# Code dialect. Verified against a strategy that ran in production on this platform
-# (low_valuation_regression_chan_filter_1d_strategy_full_gj.py):
-#   * the stock-list FILES carry the JoinQuant dialect  XSHE / XSHG
-#   * the platform converts them to SZ / SS before calling get_snapshot/order
-#     (`stock.replace('XSHE','SZ').replace('XSHG','SS')`, benchmark '000300.SS')
-# So the API dialect here is .SS/.SZ; the XSHG/XSHE spellings are kept as candidates for
-# instances that speak that dialect instead. CANDIDATES are the search order (never
-# mutated); _CODE_SUFFIX_* hold the chosen value, which initialize() fills from the
-# platform's own evidence (see _detect_suffixes) and logs.
-SH_SUFFIX_CANDIDATES = ["SS", "SH", "XSHG"]
-SZ_SUFFIX_CANDIDATES = ["SZ", "XSHE"]
-_CODE_SUFFIX_SH = [SH_SUFFIX_CANDIDATES[0]]     # chosen Shanghai suffix (was: SS)
-_CODE_SUFFIX_SZ = [SZ_SUFFIX_CANDIDATES[0]]     # chosen Shenzhen suffix (was: SZ)
+# Code dialect - ONE spelling everywhere: XSHG / XSHE (JoinQuant).
+#   * the email attachment, the target file, this strategy's internal keys and every
+#     platform API call (get_snapshot / get_stock_info / get_stock_status / order_market)
+#     all use 600000.XSHG / 000001.XSHE
+#   * the QMT-era SS/SH/SZ suffixes are gone; _split_code only TOLERATES them when reading
+#     data written before 2026-10-19 (an old tracker file / old target file)
+#   * proven by the reference strategy that ran here in production:
+#     get_stock_info('603822.XSHG', field="stock_name")[code]
 CAPS = {}
 
 
@@ -409,7 +444,12 @@ def _params_from(data):
 # ============================================================================
 def _tracker_load():
     """{strategy: {code: volume}} from the research-dir JSON (attribution is not derivable
-    from the broker, so it has to be remembered)."""
+    from the broker, so it has to be remembered).
+
+    Codes are migrated to the canonical XSHG / XSHE spelling on load: a tracker written
+    before 2026-10-19 used the QMT-era suffix spelling, and leaving those keys in place would
+    make every position look untracked while also double counting in _my_share.
+    """
     raw = _read_json(_tracker_path(), quiet=True)
     out = {}
     if isinstance(raw, dict):
@@ -422,8 +462,12 @@ def _tracker_load():
                     n = int(n)
                 except Exception:
                     continue
-                if n > 0:
-                    clean[code] = n
+                if n <= 0:
+                    continue
+                canon = _full_code(code)
+                if not canon:
+                    continue
+                clean[canon] = clean.get(canon, 0) + n      # merge old + new spellings
             out[k] = clean
     return out
 
@@ -497,18 +541,6 @@ def _tracker_sync(t, strategy_names, params_by_name, broker):
                           "manual correction needed" % (code, holders, total, p["amount"]))
 
 
-def _tracker_after_trade(t, strategy, codes, broker):
-    """Re-derive this strategy's volumes for the codes it just traded."""
-    for code in codes:
-        p = broker.get(code)
-        if p is None or p["amount"] <= 0:
-            t.setdefault(strategy, {}).pop(code, None)
-            continue
-        current = t.get(strategy, {}).get(code, 0)
-        other = _tracked_total(t, code) - current
-        t.setdefault(strategy, {})[code] = max(p["amount"] - other, 0)
-
-
 def _strategy_view(context, params, tracker, strategy):
     """This strategy's slice of the account (port of the QMT get_account_status):
 
@@ -547,98 +579,9 @@ def _strategy_view(context, params, tracker, strategy):
             "broker_total": broker_total, "ratio": ratio}
 
 
-def _detect_suffixes(context):
-    """Decide how THIS instance spells a security code, from the most reliable evidence.
-
-    2026-10-19 (live): the old probe only tried get_snapshot("600000.SS") / ("600000.SH").
-    At 09:05 (pre-open) snapshots are empty, so it kept the default and there was no way to
-    tell SS from SH from XSHG. Snapshots are simply unavailable before the open - the raw
-    position codes and get_stock_info are the reliable evidence.
-
-    Evidence order:
-      1. the RAW code format the platform reports for positions (authoritative)
-      2. get_stock_info() on every candidate (works pre-open)
-      3. a get_snapshot() round trip (both call forms) - unreliable before the open
-    -> (sh_suffix, sz_suffix, evidence string)
-    """
-    try:
-        raw_codes = [str(c).upper() for c in _get_positions_raw(context).keys()]
-    except Exception as e:
-        raw_codes = []
-        _log("WARN", "suffix detect: raw positions unavailable: %s" % e)
-    for c in raw_codes:
-        for suf in SH_SUFFIX_CANDIDATES:
-            if c.endswith("." + suf):
-                return suf, _sz_from_codes(raw_codes), "raw position code %s" % c
-    for c in raw_codes:
-        for suf in SZ_SUFFIX_CANDIDATES:
-            if c.endswith("." + suf):
-                return _CODE_SUFFIX_SH[0], suf, "raw position code %s" % c
-    for suf in SH_SUFFIX_CANDIDATES:
-        try:
-            info = get_stock_info("600000." + suf)
-        except Exception:
-            info = None
-        if info:
-            return suf, _sz_from_info(), "get_stock_info(600000.%s) ok" % suf
-    for suf in SH_SUFFIX_CANDIDATES:
-        for arg in ("600000." + suf, ["600000." + suf]):
-            try:
-                snap = get_snapshot(arg)
-            except Exception:
-                snap = None
-            if snap:
-                return suf, _sz_from_snapshot(), "get_snapshot(%r) ok" % (arg,)
-    return SH_SUFFIX_CANDIDATES[0], SZ_SUFFIX_CANDIDATES[0], \
-        "NO EVIDENCE -> defaulting to %s / %s" % (SH_SUFFIX_CANDIDATES[0], SZ_SUFFIX_CANDIDATES[0])
-
-
-def _sz_from_codes(raw_codes):
-    """Shenzhen suffix implied by the raw codes we were handed (else the default)."""
-    for c in raw_codes:
-        for suf in SZ_SUFFIX_CANDIDATES:
-            if c.endswith("." + suf):
-                return suf
-    return _CODE_SUFFIX_SZ[0]
-
-
-def _sz_from_info():
-    for suf in SZ_SUFFIX_CANDIDATES:
-        try:
-            if get_stock_info("000001." + suf):
-                return suf
-        except Exception:
-            pass
-    return _CODE_SUFFIX_SZ[0]
-
-
-def _sz_from_snapshot():
-    for suf in SZ_SUFFIX_CANDIDATES:
-        for arg in ("000001." + suf, ["000001." + suf]):
-            try:
-                if get_snapshot(arg):
-                    return suf
-            except Exception:
-                pass
-    return _CODE_SUFFIX_SZ[0]
-
-
-def _detect_sh_suffix(context):
-    """-> (sh_suffix, evidence); kept as a thin wrapper for the self-tests."""
-    sh, _sz, ev = _detect_suffixes(context)
-    return sh, ev
-
-
 def _pt_code(code):
-    """Internal '600000.SH' -> whatever suffix this PTrade instance uses."""
-    mk, pl = _split_code(code)
-    if not pl:
-        return code
-    if mk == "SH":
-        return pl + "." + _CODE_SUFFIX_SH[0]
-    if mk == "BJ":
-        return pl + ".BJ"       # Beijing exchange (needs broker confirmation)
-    return pl + "." + _CODE_SUFFIX_SZ[0]
+    """Code handed to the platform API. Same dialect as everything else: XSHG / XSHE."""
+    return _full_code(code)
 
 
 def _total_value(context):
@@ -688,11 +631,11 @@ def _get_positions_raw(context):
 
 
 def _positions(context):
-    """-> { '600000.SH': {'amount':int,'enable':int,'last':float,'name':str} }"""
+    """-> { '600000.XSHG': {'amount':int,'enable':int,'last':float,'name':str} }"""
     out = {}
     for code, pos in _get_positions_raw(context).items():
-        mk, pl = _split_code(code)
-        if not pl:
+        full = _full_code(code)          # canonical XSHG / XSHE
+        if not full:
             continue
         amount = int(_to_float(_pick(pos, ["amount", "total_amount", "current_amount",
                                            "volume", "hold_amount"], 0)))
@@ -703,7 +646,7 @@ def _positions(context):
                                     amount)))
         last = _to_float(_pick(pos, ["last_sale_price", "last_price", "price",
                                      "last_px", "current_price"], 0.0))
-        out[pl + "." + mk] = {
+        out[full] = {
             "amount": amount,
             "enable": enable,
             "last": last,
@@ -788,7 +731,7 @@ def _status_flag(pt_code, kind):
     """get_stock_status(code, 'HALT'|'ST') -> bool.
 
     2026-10-19 (live bug): PTrade returns a DICT keyed by the security
-    ({'600000.SS': False}), exactly as the reference strategy uses it
+    ({'600000.XSHG': False}), exactly as the reference strategy uses it
     (`st_status = get_stock_status(security, 'ST'); if st_status[security]:`).
     Testing the dict itself for truthiness is always True -> every name looked halted and
     every out-of-pool sell was skipped. Handle dict / list / bool / string answers.
@@ -835,15 +778,20 @@ def _is_st(pt_code):
 
 
 def _market_type(pt_code):
-    """Mirrors the reference strategy: 688 -> 0, 60x -> 1, 300/00x -> 0, else 4."""
+    """Market-order type per board (values copied from the reference strategy that ran live).
+
+    If a board rejects the market order, the order is automatically retried as a +-2%
+    repriced LIMIT order (see _place), so a wrong value degrades instead of losing the trade.
+    To force a different type for one board, flip the constant below and restart.
+    """
     plain = pt_code.split(".")[0]
     if plain.startswith("688"):
-        return 0
+        return MARKET_TYPE_STAR
     if plain.startswith("60"):
-        return 1
+        return MARKET_TYPE_MAIN_SH
     if plain.startswith("300") or plain.startswith("00"):
-        return 0
-    return 4
+        return MARKET_TYPE_SZ
+    return MARKET_TYPE_OTHER
 
 
 def _refuse_to_buy_st(q, code):
@@ -856,30 +804,71 @@ def _refuse_to_buy_st(q, code):
     return _is_st(_pt_code(code))
 
 
+def _order_rejected(oid):
+    """Best-effort immediate rejection check.
+
+    PTrade's order objects carry .status, where '9' means rejected (fei dan). It may not be
+    populated the instant the order is submitted, so this is advisory: True only when we can
+    positively tell the order is dead; everything else is treated as accepted.
+    """
+    if oid is None:
+        return True
+    try:
+        getter = globals().get("get_order")
+        if not callable(getter):
+            return False
+        o = getter(oid)
+        if isinstance(o, (list, tuple)):
+            if not o:
+                return False
+            o = o[0]
+        st = _pick(o, ["status", "order_status"], None)
+        if st is None:
+            return False
+        return str(st).strip() == "9"
+    except Exception:
+        return False
+
+
 def _place(context, pt_code, amount, limit_price):
     """Send one order. Positive amount = buy, negative = sell. Returns order id or None.
 
-    API order of preference, matching what the proven in-production reference strategy
-    (low_valuation_regression_chan_filter_1d_strategy_full_gj.py) actually calls:
-      1. order_market(security, amount=..., market_type=..., limit_price=...)  <- proven live
-      2. order(security, amount, limit_price=...)                              <- keep as fallback
-    limit_price is the protective cap (ask+cage for buys, bid-cage for sells), so a
-    "market" order still cannot fill outside our price band.
+    Order path (matching the in-production reference strategy):
+      1. order_market(security, amount, market_type=<per board>, limit_price=protect)
+         - "best five levels / counterparty best" market order with a protective bound
+      2. if that is unavailable / raises / is rejected outright, RETRY as a repriced
+         LIMIT order at the SAME protective price ("bian jie" +-2%), which is always inside
+         the exchange cage and inside [limit-down, limit-up] because that is how protect is
+         built (see _sell_protect / _buy_protect)
+      3. if that also fails -> None (the caller logs ERROR and moves on)
     """
     if amount == 0:
         return None
     shares = int(amount)
     px = _round_price(limit_price) if (USE_LIMIT_PRICE and limit_price and limit_price > 0) else None
+    mt = _market_type(pt_code)
+    tried_market = False
     try:
         om = globals().get("order_market")
         if callable(om):
+            tried_market = True
             if px is not None:
-                return om(pt_code, amount=shares, market_type=_market_type(pt_code),
-                          limit_price=px)
-            return om(pt_code, amount=shares, market_type=_market_type(pt_code))
+                oid = om(pt_code, amount=shares, market_type=mt, limit_price=px)
+            else:
+                oid = om(pt_code, amount=shares, market_type=mt)
+            if not _order_rejected(oid):
+                return oid
+            _log("WARN", "order_market(%s, %d, market_type=%s) was rejected -> retrying as a "
+                         "limit order at protect=%s (+-2%% repriced, inside limit-up/down)"
+                 % (pt_code, shares, mt, px))
     except Exception as e:
-        _log("WARN", "order_market(%s, %d) failed (%s); falling back to order()"
-             % (pt_code, shares, e))
+        _log("WARN", "order_market(%s, %d, market_type=%s) failed (%s: %s) -> retrying as a "
+                     "limit order at protect=%s"
+             % (pt_code, shares, mt, type(e).__name__, e, px))
+    if tried_market and px is None:
+        # no usable price -> a limit retry is impossible, keep the failure visible
+        _log("ERROR", "%s: market order failed and no limit price is available" % pt_code)
+        return None
     try:
         if px is not None:
             return order(pt_code, shares, limit_price=px)
@@ -908,16 +897,15 @@ def _target_day(path, gen):
 
 
 def _load_target(target_file):
-    """-> (status, target); status in ok/missing/stale/bad/liquidate.
+    """-> (status, target); status in ok/not-today/stale/missing/bad/liquidate.
 
-    AGE POLICY (2026-10-16, replaces the old "today only" rule):
-      today                                   -> ok, trade
-      up to MAX_TARGET_AGE_DAYS days old      -> ok, trade the PREVIOUS trading day's list
-                                                 (the local process writes nothing when it
-                                                  cannot get a fresh list, so whatever the
-                                                  upload dir holds stays here)
-      older than MAX_TARGET_AGE_DAYS          -> "stale" -> liquidate this strategy's slice
-      undateable / unreadable / absent        -> missing/bad -> MISSING_FILE_ACTION
+    AGE POLICY (2026-10-19, back to TODAY ONLY):
+      today                          -> "ok", trade
+      1 .. MAX_TARGET_AGE_DAYS old   -> "not-today" -> DO NOT TRADE, log ERROR
+                                        (the local process failed to produce today's list;
+                                         do not silently run yesterday's names)
+      older than MAX_TARGET_AGE_DAYS -> "stale" -> liquidate this strategy's slice
+      undateable / unreadable / absent -> missing/bad -> MISSING_FILE_ACTION
     """
     path, candidates = _find_target(target_file)
     if not path:
@@ -948,15 +936,16 @@ def _load_target(target_file):
     if age_days > MAX_TARGET_AGE_DAYS:
         return "stale", data         # _run turns this into a full liquidation
     if age_days > 0:
+        # TODAY ONLY: the list is not from today -> do not run, raise an error
         data["_stale_days"] = age_days
+        return "not-today", data
     stocks = []
     seen = set()
     dupes = 0
     for c in (data.get("stocks") or []):
-        mk, pl = _split_code(c)
-        if not pl:
+        full = _full_code(c)          # canonical XSHG / XSHE
+        if not full:
             continue
-        full = pl + "." + mk
         if full in seen:
             dupes += 1      # a duplicated code would otherwise be ordered TWICE
             continue
@@ -1015,6 +1004,47 @@ def _sell_price(last, bid, limit_down, preclose=None):
     if limit_down and limit_down > 0:
         cage = max(cage, limit_down)        # QMT: never price a sell below limit-down
     return _round_price(cage)
+
+
+def _sell_protect(last, bid, limit_down, preclose=None):
+    """Protection price handed to the (market) SELL order.
+
+    2026-10-19: order_market's limit_price is a PROTECTION bound, not the working price.
+    The reference strategy passed the LIMIT-DOWN price so the order sweeps every bid down to
+    the floor - "sell with everything you have". But this broker also enforces a
+    quantitative-trading rule that the submitted price may not deviate more than ~2% from
+    the current price, so the aggressive floor has to be the HIGHER of:
+        * last trade * 0.98   (2% band below the last price)
+        * limit-down price    (the exchange floor)
+    i.e. as aggressive as the rules allow, never outside either bound.
+    Falls back to the cage when neither the last price nor the floor is known.
+    """
+    if SELL_PROTECT_AT_LIMIT_DOWN:
+        px = _round_price(last * (2.0 - CAGE_MULTIPLIER)) if (last and last > 0) else 0.0
+        if limit_down and limit_down > 0:
+            px = max(px, _round_price(limit_down))      # never below the exchange floor
+        if px > 0:
+            return px
+    return _sell_price(last, bid, limit_down, preclose)
+
+
+def _buy_protect(last, ask, limit_up, preclose=None):
+    """Protection price for the (market) BUY order.
+
+    Default keeps the QMT-era cage (do not chase) and additionally caps it at
+    last * 1.02 so the 2% deviation rule is never broken.
+    Set BUY_PROTECT_AT_LIMIT_UP = True to mirror the reference strategy (protection = limit-up)
+    - in that case the 2% cap still applies.
+    """
+    px = 0.0
+    if BUY_PROTECT_AT_LIMIT_UP and limit_up and limit_up > 0:
+        px = _round_price(limit_up)
+    else:
+        px = _buy_price(last, ask, limit_up, preclose)
+    cap = _round_price(last * CAGE_MULTIPLIER) if (last and last > 0) else 0.0
+    if px > 0 and cap > 0:
+        px = min(px, cap)          # 2% band above the last price
+    return px
 
 
 def _up_down(q, code):
@@ -1348,6 +1378,14 @@ def _run(context, tag, target_file):
         _log("WARN", "target is %s days old (> %d days) -> LIQUIDATE this strategy's slice"
              % ((target or {}).get("_age_days"), MAX_TARGET_AGE_DAYS))
         plan = _liquidate_plan(view, "target-stale")
+    elif status == "not-today":
+        # TODAY ONLY rule: never trade a list that was not generated today.
+        _log("ERROR", "target is NOT from today (generated %s, %s day(s) old) -> REFUSING to "
+                      "trade this round; positions stay untouched. The local process did not "
+                      "produce today's list (check its log / the upload)."
+             % ((target or {}).get("generated_at"), (target or {}).get("_age_days")))
+        _tracker_save(tracker)
+        return
     elif status in ("missing", "bad"):
         if MISSING_FILE_ACTION == "liquidate":
             _log("WARN", "target %s -> liquidate (MISSING_FILE_ACTION=liquidate)" % status)
@@ -1364,11 +1402,6 @@ def _run(context, tag, target_file):
         plan = _liquidate_plan(view, "target-liquidate")
     else:
         stocks = target.get("_stocks") or []
-        if target.get("_stale_days"):
-            _log("WARN", "using the PREVIOUS target: generated %s (%s days old, limit %d) - "
-                         "the local process could not produce a fresh list"
-                 % (target.get("generated_at"), target.get("_stale_days"),
-                    MAX_TARGET_AGE_DAYS))
         _log("INFO", "pool=%d candidate=%d buy_pool=%d dupes=%s"
              % (len(stocks), min(len(stocks), int(params.get("candidate_pool_size", 0))),
                 min(len(stocks), int(params.get("max_holdings", 0))),
@@ -1376,6 +1409,20 @@ def _run(context, tag, target_file):
         if target.get("_dupes"):
             _log("WARN", "target had %d duplicate code(s); kept first occurrence only"
                  % target.get("_dupes"))
+        if stocks and not CAPS.get("quote_sample"):
+            # get_snapshot() cannot be called from initialize (the platform raises
+            # RuntimeError: not allowed during strategy initialisation), so the first real run is the
+            # first place a quote can be verified - log one sample for the record.
+            try:
+                probe_code = _pt_code(stocks[0])
+                sample = _snap_one(probe_code)
+                CAPS["quote_sample"] = "%s -> %s" % (probe_code, sample)
+                _log("INFO", "quote sample %s -> %s" % (probe_code, sample))
+                if not sample:
+                    _log("WARN", "quote sample is empty: snapshots look unavailable - "
+                                 "orders will be skipped rather than sent blind")
+            except Exception as e:
+                _log("WARN", "quote sample failed: %s: %s" % (type(e).__name__, e))
         # Fail closed on a broken account read: with total<=0 every target would be 0 and
         # the empty-slot budget would still be cash/slots, i.e. it would trade blind.
         if view["broker_total"] <= 0:
@@ -1426,31 +1473,45 @@ def _run(context, tag, target_file):
             q = _snap_one(_pt_code(c))
             last = q.get("last") or p.get("last") or 0.0
             _up, down = _up_down(q, c)
-            price = _sell_price(last, q.get("bid1"), down, q.get("preclose"))
-            if price <= 0:
-                # Never send an unprotected order: a market order without a valid limit is
-                # exactly what the price-cage rule rejects, and it also loses price control.
-                _log("ERROR", "%s: no computable sell price (no bid/last/preclose), "
+            protect = _sell_protect(last, q.get("bid1"), down, q.get("preclose"))
+            if protect <= 0:
+                # Never send an unprotected order: with no limit-down and no usable quote we
+                # cannot bound the price, so skip loudly instead of guessing.
+                _log("ERROR", "%s: no limit-down and no usable quote (bid/last/preclose), "
                               "sell skipped - fix manually" % c)
                 results.append({"code": c, "amount": -v, "reason": r, "order_id": None,
                                 "skipped": "no-price"})
                 continue
-            oid = _place(context, _pt_code(c), -v, price)
-            results.append({"code": c, "amount": -v, "reason": r, "order_id": str(oid)})
-            _log("INFO", "sold %s %d @ %s -> order %s" % (c, v, price, oid))
+            oid = _place(context, _pt_code(c), -v, protect)
+            if oid is None:
+                _log("ERROR", "SELL %s %d protect=%.2f -> REJECTED (no order id)" % (c, v, protect))
+                results.append({"code": c, "amount": -v, "reason": r, "order_id": None,
+                                "rejected": True})
+                continue
+            results.append({"code": c, "amount": -v, "reason": r, "order_id": str(oid),
+                            "protect_price": protect})
+            _log("INFO", "sold %s %d protect=%s (limit-down sweep) -> order %s"
+                 % (c, v, protect, oid))
         for c, v, r in plan["buys"]:
             q = _snap_one(_pt_code(c))
             up, _down = _up_down(q, c)
-            price = _buy_price(q.get("last"), q.get("ask1"), up, q.get("preclose"))
-            if price <= 0:
+            protect = _buy_protect(q.get("last"), q.get("ask1"), up, q.get("preclose"))
+            if protect <= 0:
                 # QMT: a buy without a valid price/limit is SKIPPED, never sent blind.
                 _log("ERROR", "%s: no price/limit-up, buy skipped" % c)
                 results.append({"code": c, "amount": v, "reason": r, "order_id": None,
                                 "skipped": "no-price"})
                 continue
-            oid = _place(context, _pt_code(c), v, price)
-            results.append({"code": c, "amount": v, "reason": r, "order_id": str(oid)})
-            _log("INFO", "bought %s %d @ %.2f -> order %s" % (c, v, price, oid))
+            oid = _place(context, _pt_code(c), v, protect)
+            if oid is None:
+                _log("ERROR", "BUY %s %d protect=%.2f -> REJECTED (no order id; cash may be "
+                              "short because a sell did not go through)" % (c, v, protect))
+                results.append({"code": c, "amount": v, "reason": r, "order_id": None,
+                                "rejected": True})
+                continue
+            results.append({"code": c, "amount": v, "reason": r, "order_id": str(oid),
+                            "protect_price": protect})
+            _log("INFO", "bought %s %d protect=%.2f -> order %s" % (c, v, protect, oid))
 
     path = _audit(strategy, plan, target, results, tag)
     _log("INFO", "audit written: %s" % path)
@@ -1503,36 +1564,33 @@ def _selfcheck(context):
     except Exception as e:
         caps["portfolio_read_error"] = str(e)
     for name in ("get_positions", "get_snapshot", "get_stock_status", "get_stock_info",
-                 "order", "run_daily", "get_research_path", "log"):
+                 "order", "order_market", "run_daily", "get_research_path", "log"):
         f = globals().get(name)
         if f is None:
+            # the platform injects `log` etc. into __builtins__, which may be a dict or a
+            # module depending on the embedder - cover both
             try:
-                f = getattr(__builtins__, name, None)   # the platform injects `log` here
+                b = __builtins__
+                if isinstance(b, dict):
+                    f = b.get(name)
+                else:
+                    f = getattr(b, name, None)
             except Exception:
                 f = None
         caps["has_" + name] = callable(f)
-    caps["sh_suffix"] = _CODE_SUFFIX_SH[0]
-    caps["sz_suffix"] = _CODE_SUFFIX_SZ[0]
-    try:
-        caps["snapshot_600000"] = repr(get_snapshot(["600000." + caps["sh_suffix"]]))[:200]
-    except Exception as e:
-        caps["snapshot_600000"] = "ERR %s: %s" % (type(e).__name__, e)
-    try:
-        caps["quote_600000"] = _snap_one(_pt_code("600000.SH"))
-    except Exception as e:
-        caps["quote_600000"] = "ERR %s" % e
-    try:
-        caps["quote_002001"] = _snap_one(_pt_code("002001.SZ"))
-    except Exception as e:
-        caps["quote_002001"] = "ERR %s" % e
+    caps["code_dialect"] = "XSHG / XSHE (fixed)"
+    caps["order_mode"] = ("order_market + limit_order_retry (market_type: SH60=%s STAR688=%s "
+                          "SZ=%s other=%s)" % (MARKET_TYPE_MAIN_SH, MARKET_TYPE_STAR,
+                                               MARKET_TYPE_SZ, MARKET_TYPE_OTHER))
+    caps["sell_protect"] = "max(last*%.2f, limit-down)" % (2.0 - CAGE_MULTIPLIER)
+    # 2026-10-19: the platform raises RuntimeError (get_snapshot is not allowed during
+    # strategy initialisation), so a quote probe here is meaningless. Quotes are verified
+    # on the first real run instead (see _run's quote sample line).
+    caps["snapshot_at_init"] = "not supported by the platform (get_snapshot raises here)"
     CAPS.clear()
     CAPS.update(caps)
     for k in sorted(caps.keys()):
         _log("INFO", "selfcheck %s = %s" % (k, caps[k]))
-    for k in ("quote_600000", "quote_002001"):
-        if not caps.get(k):
-            _log("WARN", "%s is empty - suffix (%s/%s) may be wrong, or snapshots are "
-                         "unavailable pre-open" % (k, caps["sh_suffix"], caps["sz_suffix"]))
     return caps
 
 
@@ -1542,15 +1600,9 @@ def initialize(context):
     _log("INFO", "ptrade_rebalance_executor init (python 3.5 compatible)")
     _log("INFO", "DRY_RUN=%s MISSING_FILE_ACTION=%s PRICE_MODE=%s TARGET_FILES=%s"
          % (DRY_RUN, MISSING_FILE_ACTION, PRICE_MODE, TARGET_FILES))
-    # suffixes FIRST: quotes/orders are assembled from them, and the best evidence (raw
-    # position codes / get_stock_info) is available before the open whereas snapshots are not.
-    try:
-        sh, sz, ev = _detect_suffixes(context)
-        _CODE_SUFFIX_SH[0] = sh
-        _CODE_SUFFIX_SZ[0] = sz
-        _log("INFO", "code suffix = .%s (SH) / .%s (SZ)  evidence: %s" % (sh, sz, ev))
-    except Exception as e:
-        _log("ERROR", "suffix detection failed: %s: %s" % (type(e).__name__, e))
+    # code dialect is fixed: XSHG / XSHE everywhere (email list, target file, internal
+    # keys, platform API). No detection needed any more.
+    _log("INFO", "code dialect = XSHG / XSHE (fixed)")
     try:
         _selfcheck(context)
     except Exception as e:
@@ -1561,7 +1613,12 @@ def initialize(context):
     seen = []
     for tf in TARGET_FILES:
         _LOG_TAG = _strategy_from_file(tf)
-        times = _order_times(_peek_target(tf))
+        data = _peek_target(tf)
+        times = _order_times(data)
+        if data is None:
+            _log("WARN", "%s is not uploaded yet -> order times come from DEFAULT_ORDER_TIMES "
+                         "%s. RESTART the strategy after the upload so the file's own "
+                         "trading_times are used." % (tf, times))
         _log("INFO", "%s -> order times %s" % (tf, times))
         for t in times:
             if (tf, t) in seen:

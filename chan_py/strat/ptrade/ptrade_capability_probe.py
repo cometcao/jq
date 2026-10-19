@@ -79,11 +79,15 @@ def initialize(context):
         log.info("write into a SUBDIR -> FAIL: %s (no mkdir available -> keep files FLAT)"
                  % type(e).__name__)
 
-    for fn in ("order", "order_target", "order_value", "order_percent",
+    # order_market is what the executor actually uses now (proven in production by the
+    # reference strategy); the rest are kept for comparison.
+    for fn in ("order", "order_market", "order_target", "order_value", "order_percent",
                "get_snapshot", "get_stock_status", "get_stock_info", "get_research_path",
                "run_daily", "run_interval", "set_universe", "get_positions", "get_position",
                "get_all_securities", "get_trading_day", "get_trade_days", "log"):
         log.info("api %-20s -> %s" % (fn, "present" if fn in globals() else "MISSING"))
+    log.info("note: get_snapshot raises RuntimeError when called from initialize "
+             "(verify quotes inside the first real run, not at init)")
 
     try:
         pf = context.portfolio

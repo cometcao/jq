@@ -86,13 +86,18 @@ archive/...              ← 本机归档（不上传），供对账
   "candidate_pool_size": 13,
   "cash_reserve_ratio":  0.0125,
   "rebalance_threshold": 0.20,
-  "stocks": ["605189.SH", "301167.SZ", "..."],
+  "stocks": ["605189.XSHG", "301167.XSHE", "..."],
   "liquidate": false                 // 可选：显式清仓
 }
 ```
-- `stocks`：**全量过滤后的名单，顺序=排名**（策略按 `candidate_pool_size` / `max_holdings` 切片）
+- `stocks`：**全量过滤后的名单，顺序=排名**（策略按 `candidate_pool_size` / `max_holdings` 切片）；
+  **代码方言只有一种：`XSHG`/`XSHE`**（2026-10-19 统一）。邮件源数据、本文件、云端内部键（tracker/审计）、
+  以及每个平台 API 调用（`get_snapshot`/`get_stock_info`/`get_stock_status`/`order_market`）全部是
+  `600000.XSHG` / `000001.XSHE`。QMT 时代的 `.SS`/`.SH`/`.SZ` 拼写已废弃；`_split_code` 仅在
+  **读旧数据**（历史 tracker / 旧 target 文件）时容忍并迁移，`_tracker_load` 按新键合并以防同一持仓被算两次。
+  证据：参考实盘策略的 `get_stock_info('603822.XSHG', field="stock_name")`
 - 执行字段（`trading_times`/`capital_ratio`/四个参数）**缺省回落到策略内置的 `DEFAULT_*`**，所以旧格式文件也能跑
-- `generated_at`：年龄策略用它判断（≤7 天沿用、>7 天清该策略仓位，见 §4.2）
+- `generated_at`：**必须是当天**（非当天 → 云端拒绝交易并记 ERROR；>7 天 → 清该策略仓位，见 §4.2）
 
 ### 多策略（云端）
 
@@ -104,14 +109,17 @@ archive/...              ← 本机归档（不上传），供对账
 | 仓位归属 | 一个账户 N 个策略 → 用研究目录里的 tracker（`ptrade_state_positions.json`）+ `capital_ratio` 切片：`策略总资产=账户总资产×ratio`、`策略现金=min(策略总额−策略持仓市值, 账户可用现金×ratio)`、共享代码按 `_my_share()`（券商持仓 − 其它策略份额）算。逻辑移植自 QMT executor（`_tracker_sync` 对账规则：未跟踪的给 ratio 最大的策略；单一持有者按券商数校正；多持有者不一致 → ERROR 要人工处理） |
 | 成交确认 | PTrade 异步、账户 6 秒同步 → tracker 按**下单量**估算更新，次日 `_tracker_sync` 自动与券商量对账（单一持有者会被自动校正） |
 - `stocks: []` 或 `liquidate: true` → **清仓**（与旧管线语义一致）
-- 代码后缀 SH/SZ 皆可（策略内部归一化，并自动探测该实例用 `SS` 还是 `SH`）
+- 代码方言只有一种：`XSHG` / `XSHE`（云端内部与平台 API 相同，见 §1 与 AGENTS.md）
 
-> ⚠️ **年龄策略（替代早期的"只认当天"）**：目标文件按 `generated_at` 判年龄 →
-> `0 天`：正常交易；`1 ~ MAX_TARGET_AGE_DAYS(7) 天`：**沿用（上一交易日那份照样交易）**，日志记
-> `using the PREVIOUS target: generated ...`；`> 7 天`：**清该策略份额**并记 WARN。
-> 这样"本机拿不到名单就什么都不写"（§3.0）时，云端会继续用手里那份，而不是立刻清仓；
-> 连续 7 天没有新名单才退出。**代价**：上传晚到不会表现为"不交易"，而是"用昨天那份"——所以
-> 上传时刻必须留够余量（日志里 `age_days` 必须是 0）。
+> ⚠️ **只交易"当天"的名单（2026-10-19 定，回到"只认当天"）**：目标文件按 `generated_at` 判年龄 →
+> - `0 天`（今天生成）：正常交易；
+> - `1 ~ MAX_TARGET_AGE_DAYS(7) 天`：**不交易**，日志记
+>   `ERROR target is NOT from today (generated ..., N day(s) old) -> REFUSING to trade this round`，
+>   仓位原样不动（状态 `not-today`）；
+> - `> 7 天`：**清该策略份额**并记 WARN（本机进程已经很久没出过名单了）。
+>
+> 也就是说**上传晚到/漏传 = 当天不交易**，而不是"悄悄用昨天那份"。代价是要盯日志里的
+> `target status=`：出现 `not-today` 就说明本机没出当天的文件（见 §3.0 的时序）。
 
 > ⚠️ **与旧 QMT 语义的一处刻意差异**：QMT 版里"文件缺失 → 清仓"是外部进程写空列表实现的；
 > 这里**文件读不到/无法判定日期默认不动仓**（`MISSING_FILE_ACTION="skip"`，记 ERROR），因为最常见的原因是上传没到。
@@ -158,8 +166,8 @@ archive/...              ← 本机归档（不上传），供对账
   客户端 **09:25** 上传、策略 `trading_times` = **09:35**（你目前在用的时刻）。这样本机是"出文件的截止时刻"，
   云端是"下单时刻"，中间隔着上传，**不能取同一个值**。
 - **实况核对**：本机 `ptrade/logs/ptrade_target.log` 每天有 `upload ...` / `archive ...` 两行，按它加"上传延迟"来定下单时刻。
-- 时序错了不会乱下单：云端会**沿用上一交易日那份**（记 WARN `using the PREVIOUS target`）→ 所以看 `age_days` 必须是 0；
-  连续 7 天没有新名单才会清仓。
+- 时序错了不会乱下单：云端**只交易当天文件**，非当天 → `not-today` → **不交易 + ERROR**（仓位不动）；
+  连续 >7 天没有新名单才清仓。所以日志里 `target status=` 必须是 `ok`、`age_days=0`。
 
 ### 3.1 步骤
 
@@ -189,10 +197,13 @@ archive/...              ← 本机归档（不上传），供对账
 | `DEFAULT_PARAMS` | `capital_ratio 1.0 / max_holdings 8 / candidate_pool_size 13 / cash_reserve_ratio 0.0125 / rebalance_threshold 0.20` | **兜底参数**；正常每个策略用自己文件里的值（`max_holdings`=等权槽位与目标市值分母；`candidate_pool_size`=池内容忍度，池外一律清掉；`rebalance_threshold`=**组合级防 churn 门限**，详见 §4.1） |
 | `TARGET_DIRS` | `["upload_file", ""]` | 目标文件候选目录：先 `<研究目录>/upload_file/`，再研究目录根（防客户端拍平文件夹） |
 | `TRACKER_FILE` | `ptrade_state_positions.json` | 多策略仓位归属（写在研究目录根） |
-| `MAX_TARGET_AGE_DAYS` | **7** | 名单年龄策略：≤7 天沿用（含上一交易日那份）、>7 天**清该策略份额**。见 §4.2 |
+| `MAX_TARGET_AGE_DAYS` | **7** | 只交易**当天**文件；1~7 天 → `not-today` **不交易 + ERROR**；>7 天 → **清该策略份额**。见 §4.2 |
 | `DRY_RUN` | **False** | False = 直接实盘；True = 排练（只记日志与审计，不下单） |
 | `MISSING_FILE_ACTION` | `skip` | 目标文件**读不到/无法判定日期**时：`skip` 不交易 或 `liquidate` 清该策略份额 |
 | `PRICE_MODE` | `cage` | `cage`=对手价 ±2%/0.1 且不越涨跌停；`latest`=不带限价（平台用最新价） |
+| `SELL_PROTECT_AT_LIMIT_DOWN` | **True** | 卖出保护价 = `max(最新价×0.98, 跌停价)`（尽全力卖，见 §4.1.1） |
+| `BUY_PROTECT_AT_LIMIT_UP` | False | True = 买入保护价直接给涨停价（参考策略的激进买法，仍受 2% 约束） |
+| `MARKET_TYPE_MAIN_SH` / `_STAR` / `_SZ` / `_OTHER` | 1 / **0** / 0 / 4 | `order_market` 的 `market_type`（按板块）；科创板不通就把 `_STAR` 改 1，见 §4.1.1.1 |
 | `MAX_ORDERS_PER_RUN` | 40 | 单策略计划超过就整轮放弃（防坏文件清仓） |
 | `ONLY_ONCE_PER_TIME` | True | 同一 `(策略, 日期@时刻)` 只执行一次，跨重启有效 |
 
@@ -247,9 +258,9 @@ if deviation > rebalance_threshold(20%):  -> 触发：把每只【已持仓】�
 | 池内均仓门限 | 组合级（上式） | 同 | ✅ 已对齐 |
 | 空槽买入预算 | `per_stock = (现金−储备) / 空槽数` | 同 | ✅ |
 | 手续费系数 | `min(目标, 可用) × 0.99`，逐笔 `×1.001` 递减 | 同 | ✅ |
-| 买入价 | `min( min(ask×1.02, ask+0.1), 涨停价 )` | 同 | ✅ |
-| 卖出价 | `max( max(bid×0.98, bid−0.1), 跌停价 )` | 同 | ✅ |
-| 卖价锚 | `bid1`（不是最新价） | `bid1` | ✅ |
+| 买入"保护价" | `min( min(ask×1.02, ask+0.1), 涨停价 )`（不追高） | 簇子价再夹 `最新价×1.02` | ✅ |
+| **卖出"保护价"** | `max( max(bid×0.98, bid−0.1), 跌停价 )` | **`max(最新价×0.98, 跌停价)` = 2% 内最狠**（见 §4.1.1） | ⚠️ 有意更狠 |
+| 卖价锚 | `bid1`（不是最新价） | 估算回款用 `bid1` 推；下单保护价用 2% 下限 | ✅ |
 | 价格基准取不到 | **买**：跳过该单；**卖**：退化为"不带限价"挂单 | **买卖都跳过 + ERROR**（不再发无保护市价单，见 §4.1.1） | ⚠️ 刻意更严 |
 | 涨停时买入 | 不检查（ask=0 时会挂涨停价） | **跳过**（更保守） | ⚠️ 有意不对齐 |
 | **ST 股** | 无特别处理（5% 幅度由涨跌停价体现） | **一律不买**：`get_stock_status(code,'ST')` 或行情名含 ST 即判定 → **记 ERROR** 并跳过该票（进日志 + 审计 `errors[]`），本轮其它委托照常 | ⚠️ 有意加严 |
@@ -262,33 +273,67 @@ if deviation > rebalance_threshold(20%):  -> 触发：把每只【已持仓】�
 > 对齐范围：✅ 七项按 QMT 语义实现；⚠️ 四项是 PTrade 侧**刻意更严**（涨停不买、ST 一律不买、停牌跳过、
 > 用可卖量），对齐后会去挂涨停价买单/买入 ST/卖停牌股/下超卖量，不做；⚙️ 三项是平台差异，复刻没有意义。
 
-#### 4.1.1 委托价合规：**绝不能拿涨停价/跌停价当委托价**
+#### 4.1.1 委托价：市价单的"保护价"怎么给（价格笼子 + 2% 规则 + 尽全力卖出）
 
-> 2026-10-19 复核确认。旧 PTrade 策略 `low_valuation_regression_chan_filter_1d_strategy_full_gj.py`
-> 写的是 `order_market(..., limit_price=up_px)` / `limit_price=snap_shot.get("down_px", 0.1)`
-> ——**直接用涨停/跌停价当限价**，这正是"量化交易不被允许"的写法。
+**两个概念别混**：
+| 概念 | 含义 | 谁约束它 |
+|---|---|---|
+| **限价单的委托价** | 真正挂出去的价格 | 交易所**价格笼子** |
+| **市价单的 `limit_price`** | 只是**保护上限/下限**，成交价由盘口决定 | 交易所的市价申报规则 + 券商"偏离现价 ≤2%"风控 |
 
-交易所**连续竞价"价格笼子"**（沪深主板/创业板/科创板）：
+交易所**连续竞价"价格笼子"**（沪深主板/创业板/科创板，限价申报）：
 
 | 方向 | 允许区间 | 基准价（按顺序取） |
 |---|---|---|
 | 买入申报价 | ≤ **max**(基准×102%, 基准+0.1 元) | ① 即时最低卖价 ask → ② 最新成交价 → ③ 前收盘价 |
 | 卖出申报价 | ≥ **min**(基准×98%, 基准−0.1 元) | ① 即时最高买价 bid → ② 最新成交价 → ③ 前收盘价 |
 
-市价单同样必须带**笼内**保护限价。直接挂涨停价（10% 外）在连续竞价里必然越界 → 交易所拒单或券商风控拦单
-（"委托价超出价格笼子"）。
+> 旧 PTrade 策略 `low_valuation_regression_chan_filter_1d_strategy_full_gj.py` 把
+> `up_px`/`down_px`（涨停/跌停价）直接当 `limit_price`。作为**限价**是越界的；
+> 作为**市价单保护价**则要看券商风控——本券商对量化订单还额外要求**不偏离现价 2%**。
 
-**本策略的实现（与 QMT 版一致，且比交易所规则更保守）**：
+**本策略的实现**（`order_market(..., limit_price=保护价)`，保护价按下列规则算）：
 
 ```
-买入价 = min( min(基准×1.02, 基准+0.1), 涨停价 )     基准 = ask → 最新价 → 前收盘
-卖出价 = max( max(基准×0.98, 基准−0.1), 跌停价 )     基准 = bid → 最新价 → 前收盘
+卖出保护价 = max( 最新价 × 0.98 , 跌停价 )        ← 2% 内能报的最低价 = 尽全力卖
+买入保护价 = min( min(ask×1.02, ask+0.1), 最新价×1.02 )   ← 不追高，且在 2% 内
 ```
 
-- 取 ±2% 与 ±0.1 元中的**更保守者**，所以既满足交易所笼子，也满足"不偏离现价 2%"这类券商更严的规则；
-- 涨跌停价**只用来夹值**，永远不作为委托价本身（除非个股已封在停板价上，那时最新价=停板价，属合规）；
-- 基准价按交易所顺序回退：对手价 → 最新成交价 → 前收盘价；
-- **三个都取不到 → 跳过该单并记 ERROR**（旧实现会"不带限价"发市价单，等于放弃价格控制，已删除这条路径）。
+- **卖出"尽全力"**：保护价压到 2% 规则允许的下限（`最新价×0.98`），若个股已接近跌停则用**跌停价**
+  （`max` 取高者，永不越界）。这样市价单能一路扫到 2% 以内的所有买盘，把仓位尽快清掉，
+  回款进预算后买入才有空间。
+- **买入不追高**：沿用 QMT 的簇子（对手价 +0.1 / +2% 取保守者），并再夹 `最新价×1.02`。
+  想改成参考策略那种"直接给涨停价"的激进买法，把 `BUY_PROTECT_AT_LIMIT_UP = True` 即可
+  （仍受 2% 上限约束）。
+- **基准回退**：卖出保护价在拿不到最新价时退回簇子价（`bid×0.98` / `bid−0.1`），再不行才跳过。
+- **三个价都取不到 → 跳过该单并记 ERROR**（不发无保护市价单）。
+- **`market_type` 按市场不同**（与参考文件完全一致，已用测试比对）：
+  `688xxx → MARKET_TYPE_STAR(0)`、`60xxxx → MARKET_TYPE_MAIN_SH(1)`、`00xxxx/300xxx → MARKET_TYPE_SZ(0)`、
+  其它 `→ MARKET_TYPE_OTHER(4)`。四个值都是文件顶部的常量，改一行即可，不用动逻辑。
+- **下单失败自动降级为"±2% 变价限价单"**：`order_market(...)` 若
+  ① 不可用 / 抛异常 / 返回空 / 平台把该单判为废单（`get_order(id).status == '9'`），
+  就**立刻用同一个保护价改发限价单**（`order(..., limit_price=protect)`）——
+  保护价本身就是在 `[跌停价, 涨停价]` 内、且不偏离最新价 2% 的价，所以变价单同样合法。
+  日志会明确写：
+  `WARN order_market(688xxx, 100, market_type=0) was rejected -> retrying as a limit order at protect=12.24 (+-2% repriced, inside limit-up/down)`。
+  两步都失败才记 `ERROR ... REJECTED`（审计里 `"rejected": true`）。
+
+#### 4.1.1.1 科创板（688）下单模式怎么确认
+
+1. **启动时**看 selfcheck 两行：
+   - `has_order_market = True/False`（有没有 `order_market` 这个 API）
+   - `order_mode = order_market + limit_order_retry (market_type: SH60=1 STAR688=0 SZ=0 other=4)`
+2. **首次真实 688 委托时**看日志：
+   - `INFO bought 688xxx ... -> order <id>` → 当前 `MARKET_TYPE_STAR` 可用；
+   - `WARN order_market(688xxx ...) was rejected -> retrying as a limit order ...`
+     → 该 `market_type` 不适用于科创板，把 `MARKET_TYPE_STAR` **从 0 改成 1**、重启策略再试
+     （无论哪种，那一笔**都已经按 ±2% 变价限价单发出去了**，不会丢单）。
+3. 想在上线前就验证，可把 `DRY_RUN = True` 跑一天：日志会打印计划（不会真下单），
+   但**无法验证 market_type 是否被接受**——那个只能靠一笔真实委托，所以第 2 步才是最终确认。
+
+> 已知局限：`order_market` 是异步的，卖出成交价/成交量当场拿不到；买入预算是按
+> "卖价 ×0.995"估算的。若某笔卖单没成交/被拒，买单可能因资金不足被拒（会记 ERROR）——
+> 按你的要求，这属于可接受行为（卖单必须尽力先执行）。
 
 #### 4.1.2 其他安全闸门（不在 QMT 语义内，实盘前加）
 
@@ -336,7 +381,7 @@ if deviation > rebalance_threshold(20%):  -> 触发：把每只【已持仓】�
 | Python 3.5.2 | 不能 `import` 自有包、不能 f-string、单线程、有执行时长/内存上限；本策略已适配 |
 | 账户数据 6 秒同步 | 下单后不要立刻重算；本策略一轮只算一次、当日同刻不重跑 |
 | **持仓变 ST、源头没卖** | 若源头把 ST 从名单剔除（规则④本该如此）→ 它落到 `candidate_pool_size` 之外 → **现有第 1 步"池外清仓"自动卖掉**，无需新逻辑。若源头坏了、ST 还在名单前 13 名内，则策略**不会**自行平仓（只拒绝加仓并报 ERROR）——按"PTrade 不加策略逻辑"的边界，这是**刻意接受的残留风险**，由源头或人工处理 |
-| **上传晚到/漏传** | 会**沿用上一交易日那份**（年龄 ≤7 天）并记 WARN `using the PREVIOUS target` —— 所以必须盯 `age_days=0`；连续 >7 天没有新名单才**清该策略份额**。想改成"晚到就不交易"：把 `MAX_TARGET_AGE_DAYS` 设 0（则非当天即清仓，谨慎） |
+| **上传晚到/漏传** | **当天不交易**：非当天文件 → `not-today` + ERROR，仓位原样不动（不会再"悄悄用昨天那份"）；连续 >7 天没有新名单才**清该策略份额** |
 | **tracker 漂移**（多策略） | 成交是异步的 → tracker 按**下单量**估算；次日 `_tracker_sync` 与券商量对账：单一持有者自动校正，**多持有者且总数不一致 → 记 ERROR 要人工处理**。日志里搜 `reconcile:` 可看全部对账动作 |
 | **加了策略忘了改代码** | 云端只服务 `TARGET_FILES` 里列出的文件 → 新增策略必须**加一行 + 重启**，否则那个策略的文件永远不会被读（`selfcheck` 会打印 `target_files`，一眼可查） |
 | **改了时间没重启** | `run_daily` 只在 `initialize` 注册 → 改 `trading_times` 后要**重启策略**才生效（否则沿用上次注册的时刻，日志 `run_daily registered at ...` 可核对） |
@@ -359,7 +404,7 @@ python ptrade_target_selftest.py
 断言：`shared/` 两个模块**能被搜到且不是假函数**（`check_email_for_signal` / `ai_fundamental_filter`）、
 上传目录里**只有这个策略的一份文件**、归档文件同时生成、**没有 `.tmp` 残留**、云端状态 `ok` 且代码一致、
 **文件名按策略生成、`trading_times` 与执行参数确实随文件到达**、云端在 `<研究目录>/upload_file/` 下找到它、
-**昨天的文件仍会被交易（年龄策略）**。夹具：`ptrade/_selftest/target/`。
+**昨天的文件被判 `not-today`（当天专用）**。夹具：`ptrade/_selftest/target/`。
 
 **② 云端策略逻辑**
 
@@ -371,7 +416,7 @@ python ptrade_executor_selftest.py
 - 初始化/自检（`sh_suffix` 探测、**按文件里的 `trading_times` 注册 `run_daily`**、`DRY_RUN` 默认必须是 False）
 - 等权数学、组合级门限（`test_full_book_never_rebalances` / `test_gate_fires_on_cash_imbalance`）
 - **多策略份额**（`test_two_strategies_share_a_position`：共享代码各拿自己那份、清仓只卖自己那份、未跟踪代码给 ratio 最大者）
-- 年龄策略（`test_previous_day_target_is_used` 沿用昨天 / `test_too_old_target_liquidates` 超期清该策略份额）
+- 当天专用（`test_previous_day_target_is_rejected` 非当天拒绝 + ERROR / `test_too_old_target_liquidates` >7 天清该策略份额）
 - 价格笼子（买不越涨停、卖不低于跌停、卖价锚 bid1 —— `test_cage_respects_limits`）
 - 限价缺失 → 买单跳过（`test_buy_skipped_without_limit_up`）
 - ST：**一律不买**（`test_st_is_never_bought`）+ 5% 涨跌幅（`test_st_uses_five_percent_band`）

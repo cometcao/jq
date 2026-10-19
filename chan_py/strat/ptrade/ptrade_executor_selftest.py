@@ -89,11 +89,14 @@ def fake_get_snapshot(code):
 
 
 def _alt_suffix(code):
-    """QUOTES is keyed <plain>.SS / <plain>.SZ; map any other dialect onto it."""
+    """QUOTES is keyed <plain>.XSHG / <plain>.XSHE; fold any legacy spelling onto that."""
     code = str(code).upper()
-    for a, b in ((".XSHG", ".SS"), (".SH", ".SS"), (".XSHE", ".SZ")):
+    for a in (".XSHG", ".SS", ".SH"):
         if code.endswith(a):
-            return code[:-len(a)] + b
+            return code[:-len(a)] + ".XSHG"
+    for a in (".XSHE", ".SZ"):
+        if code.endswith(a):
+            return code[:-len(a)] + ".XSHE"
     return code
 
 
@@ -110,6 +113,15 @@ def fake_get_stock_status(code, kind):
     if kind == "ST":
         return {code: any(_same_code(code, c) for c in ST_NAMES)}
     return {code: False}
+
+
+def fake_get_stock_info(code, field=None):
+    """The production reference strategy calls get_stock_info('603822.XSHG',
+    field="stock_name")[code] - i.e. the platform API knows the JoinQuant dialect only."""
+    c = str(code).upper()
+    if c.endswith(".XSHG") or c.endswith(".XSHE"):
+        return {code: {"stock_name": "FAKE"}}
+    return {}
 
 
 def fake_get_positions():
@@ -138,6 +150,7 @@ def _install_fakes():
     S.get_research_path = fake_get_research_path
     S.get_snapshot = fake_get_snapshot
     S.get_stock_status = fake_get_stock_status
+    S.get_stock_info = fake_get_stock_info
     S.get_positions = fake_get_positions
     S.order = fake_order
     S.order_market = fake_order_market
@@ -147,9 +160,9 @@ def _install_fakes():
 # ----------------------------------------------------------------------------
 # scenario
 # ----------------------------------------------------------------------------
-POOL = ["605189.SH", "301167.SZ", "002758.SZ", "600697.SH", "600739.SH",
-        "601318.SH", "600036.SH", "000002.SZ", "600030.SH", "000651.SZ",
-        "600887.SH", "601166.SH", "600276.SH"]
+POOL = ["605189.XSHG", "301167.XSHE", "002758.XSHE", "600697.XSHG", "600739.XSHG",
+        "601318.XSHG", "600036.XSHG", "000002.XSHE", "600030.XSHG", "000651.XSHE",
+        "600887.XSHG", "601166.XSHG", "600276.XSHG"]
 
 P = {"605189": 17.85, "301167": 12.80, "002758": 8.20, "600697": 11.24,
      "600739": 10.19, "601318": 52.00, "600036": 38.50, "000002": 8.05,
@@ -160,20 +173,20 @@ P = {"605189": 17.85, "301167": 12.80, "002758": 8.20, "600697": 11.24,
 def build_quotes():
     QUOTES.clear()
     for plain, px in P.items():
-        mk = "SS" if plain[0] in "56" else "SZ"
+        mk = "XSHG" if plain[0] in "56" else "XSHE"
         QUOTES[plain + "." + mk] = {"last": px, "preclose": px}
     # 002758 (Shenzhen) locked at limit up (+10%)
     up = round(P["002758"] * 1.1, 2)
-    QUOTES["002758.SZ"]["last"] = up
+    QUOTES["002758.XSHE"]["last"] = up
     HALTED.clear()
-    HALTED.add("600697.SS")
+    HALTED.add("600697.XSHG")
 
 
 def build_context():
     positions = {
-        "605189.SS": Pos("605189.SS", 3500, 3500, 17.85),   # in pool, within deadband
-        "301167.SZ": Pos("301167.SZ", 1000, 1000, 12.80),   # in pool, under-weight
-        "300750.SZ": Pos("300750.SZ", 200, 200, 200.00),    # out of pool -> sell all
+        "605189.XSHG": Pos("605189.XSHG", 3500, 3500, 17.85),   # in pool, within deadband
+        "301167.XSHE": Pos("301167.XSHE", 1000, 1000, 12.80),   # in pool, under-weight
+        "300750.XSHE": Pos("300750.XSHE", 200, 200, 200.00),    # out of pool -> sell all
     }
     return Context(cash=330000.0, total=520000.0, positions=positions)
 
@@ -259,7 +272,9 @@ def test_initialize_and_selfcheck():
     check("run_daily registered", len(REGISTERED) >= 1, str(REGISTERED))
     check("registered times are the file's order times",
           REGISTERED == [datetime.datetime.now().strftime("%H:%M")], str(REGISTERED))
-    check("sh suffix detected as SS", S.CAPS.get("sh_suffix") == "SS", str(S.CAPS.get("sh_suffix")))
+    check("the code dialect is the fixed JoinQuant one",
+          S.CAPS.get("code_dialect") == "XSHG / XSHE (fixed)",
+          str(S.CAPS.get("code_dialect")))
     check("selfcheck saw the target file", S.CAPS.get("exists_" + STRAT) is True,
           str(S.CAPS.get("exists_" + STRAT)))
     check("selfcheck read the portfolio", S.CAPS.get("total_value") == 520000.0,
@@ -278,8 +293,8 @@ def test_plan_math():
           "%.2f vs %.2f" % (plan["target_per"], target_per))
 
     sells = dict((c, v) for c, v, _r in plan["sells"])
-    check("out-of-pool name fully sold", sells.get("300750.SZ") == 200, str(sells))
-    check("in-pool name inside deadband is untouched", "605189.SH" not in sells)
+    check("out-of-pool name fully sold", sells.get("300750.XSHE") == 200, str(sells))
+    check("in-pool name inside deadband is untouched", "605189.XSHG" not in sells)
     check("only one sell expected", len(plan["sells"]) == 1, str(plan["sells"]))
 
     buys = dict((c, v) for c, v, _r in plan["buys"])
@@ -295,13 +310,13 @@ def test_plan_math():
     check("exactly 4 buys expected (4 new slots, no top-up)",
           len(plan["buys"]) == 4, str(plan["buys"]))
     check("in-pool name untouched while the gate is off",
-          "301167.SZ" not in buys, str(buys))
-    check("limit-up candidate is skipped", "002758.SZ" not in buys)
-    check("halted candidate is skipped", "600697.SH" not in buys)
-    for c in ("600739.SH", "601318.SH", "600036.SH", "000002.SZ"):
+          "301167.XSHE" not in buys, str(buys))
+    check("limit-up candidate is skipped", "002758.XSHE" not in buys)
+    check("halted candidate is skipped", "600697.XSHG" not in buys)
+    for c in ("600739.XSHG", "601318.XSHG", "600036.XSHG", "000002.XSHE"):
         check("new slot filled: %s" % c, c in buys)
     check("no more than max_holdings names held after the run",
-          len(set(["605189.SH", "301167.SZ"]) | set(buys.keys())) <= S.DEFAULT_PARAMS["max_holdings"],
+          len(set(["605189.XSHG", "301167.XSHE"]) | set(buys.keys())) <= S.DEFAULT_PARAMS["max_holdings"],
           str(sorted(buys.keys())))
     for c, v in buys.items():
         check("lot rounding for %s" % c, v > 0 and v % S.LOT == 0, str(v))
@@ -351,8 +366,11 @@ def test_execute_places_sells_then_buys():
     run_job(ctx, "20261016@0936")
     check("orders were placed", len(ORDERS) >= 2, str(len(ORDERS)))
     check("first order is the out-of-pool sell",
-          ORDERS[0]["code"] == "300750.SZ" and ORDERS[0]["amount"] == -200,
+          ORDERS[0]["code"] == S._pt_code("300750.XSHE") and
+          ORDERS[0]["amount"] == -200,
           str(ORDERS[0]))
+    check("the sell protection is as aggressive as the rules allow (max(last*0.98, limit-down))",
+          ORDERS[0]["limit_price"] == 196.0, str(ORDERS[0]))
     check("sells come before buys",
           all(o["amount"] < 0 for o in ORDERS[:1]) and
           any(o["amount"] > 0 for o in ORDERS[1:]), str(ORDERS))
@@ -431,7 +449,11 @@ def test_cash_starved_build():
 
 def test_cage_respects_limits():
     """QMT cage: buy min(min(ask*1.02, ask+0.1), limit_up); sell max(max(bid*0.98,
-    bid-0.1), limit_down); sell anchors on bid, not on the last trade price."""
+    bid-0.1), limit_down); sell anchors on bid, not on the last trade price.
+
+    Separate from the ORDER protection price: order_market's limit_price is a protection
+    bound, and the strategy's rule is "sell with everything you have" -> the sell order is
+    sent with the LIMIT-DOWN price (see test_order_protection_prices)."""
     print("test_cage_respects_limits")
     check("buy cage = ask+0.1 when that is tighter",
           S._buy_price(10.0, 10.0, 11.0) == 10.1, str(S._buy_price(10.0, 10.0, 11.0)))
@@ -443,6 +465,39 @@ def test_cage_respects_limits():
           S._sell_price(10.0, 10.0, 9.95) == 9.95, str(S._sell_price(10.0, 10.0, 9.95)))
     check("sell anchors on bid, not last",
           S._sell_price(10.0, 9.5, 1.0) == 9.4, str(S._sell_price(10.0, 9.5, 1.0)))
+
+
+def test_order_protection_prices():
+    """Sell protection is as aggressive as the rules allow: max(last*0.98, limit-down).
+    The broker's ~2% deviation rule for quant orders must never be broken, and the exchange
+    floor (limit-down) must never be broken either. Buys stay caged and capped at last*1.02."""
+    print("test_order_protection_prices")
+    check("SELL protection = last*0.98 when the 2% band is the binding floor",
+          S._sell_protect(10.0, 9.99, 8.0) == 9.8, str(S._sell_protect(10.0, 9.99, 8.0)))
+    check("SELL protection = limit-down when the stock is already at the floor",
+          S._sell_protect(9.0, 9.0, 9.0) == 9.0, str(S._sell_protect(9.0, 9.0, 9.0)))
+    check("SELL never goes below limit-down",
+          S._sell_protect(10.0, 9.99, 9.9) == 9.9, str(S._sell_protect(10.0, 9.99, 9.9)))
+    check("SELL never goes more than 2% below the last price",
+          S._sell_protect(100.0, 99.9, 90.0) == 98.0, str(S._sell_protect(100.0, 99.9, 90.0)))
+    check("SELL falls back to the cage when the last price is unknown",
+          S._sell_protect(0, 10.0, 0) == 9.9, str(S._sell_protect(0, 10.0, 0)))
+    check("SELL with neither floor nor quote -> 0 (caller skips)",
+          S._sell_protect(0, 0, 0) == 0.0, str(S._sell_protect(0, 0, 0)))
+    check("BUY protection stays inside the cage (no chasing)",
+          S._buy_protect(9.95, 10.0, 11.0) == 10.1, str(S._buy_protect(9.95, 10.0, 11.0)))
+    check("BUY is capped at last*1.02 even when the ask is far above",
+          S._buy_protect(10.0, 12.0, 20.0) == 10.2, str(S._buy_protect(10.0, 12.0, 20.0)))
+    saved = S.BUY_PROTECT_AT_LIMIT_UP
+    try:
+        S.BUY_PROTECT_AT_LIMIT_UP = True
+        check("BUY switched to limit-up is still capped at last*1.02",
+              S._buy_protect(10.0, 10.0, 11.0) == 10.2, str(S._buy_protect(10.0, 10.0, 11.0)))
+    finally:
+        S.BUY_PROTECT_AT_LIMIT_UP = saved
+    up, down = S._up_down(S._snap_one(S._pt_code("300750.XSHE")), "300750.XSHE")
+    check("limit-down is derived from the snapshot (ChiNext 300xxx -> preclose * 0.8)",
+          down == 160.0, "%s / %s" % (up, down))
 
 
 def test_full_book_never_rebalances():
@@ -475,36 +530,36 @@ def test_gate_fires_on_cash_imbalance():
         return max(int((target * mult) // P[plain] // S.LOT) * S.LOT, S.LOT)
 
     positions = {
-        "605189.SH": Pos("605189.SH", vol_for("605189", 3.0), vol_for("605189", 3.0), P["605189"]),
-        "301167.SZ": Pos("301167.SZ", vol_for("301167", 0.5), vol_for("301167", 0.5), P["301167"]),
-        "600739.SH": Pos("600739.SH", vol_for("600739", 1.0), vol_for("600739", 1.0), P["600739"]),
-        "601318.SH": Pos("601318.SH", vol_for("601318", 1.0), vol_for("601318", 1.0), P["601318"]),
+        "605189.XSHG": Pos("605189.XSHG", vol_for("605189", 3.0), vol_for("605189", 3.0), P["605189"]),
+        "301167.XSHE": Pos("301167.XSHE", vol_for("301167", 0.5), vol_for("301167", 0.5), P["301167"]),
+        "600739.XSHG": Pos("600739.XSHG", vol_for("600739", 1.0), vol_for("600739", 1.0), P["600739"]),
+        "601318.XSHG": Pos("601318.XSHG", vol_for("601318", 1.0), vol_for("601318", 1.0), P["601318"]),
     }
     ctx = Context(cash=400000.0, total=total, positions=positions)
     plan = make_plan(ctx, POOL)
     check("gate fired", any("rebalance gate" in n and "ON" in n for n in plan["notes"]),
           str(plan["notes"]))
     sells = dict((c, v) for c, v, _r in plan["sells"])
-    check("over-weight name trimmed", sells.get("605189.SH", 0) > 0, str(sells))
+    check("over-weight name trimmed", sells.get("605189.XSHG", 0) > 0, str(sells))
     buys = dict((c, v) for c, v, _r in plan["buys"])
-    check("under-weight name topped up", "301167.SZ" in buys, str(buys))
+    check("under-weight name topped up", "301167.XSHE" in buys, str(buys))
 
 
 def test_buy_skipped_without_limit_up():
     """QMT: a buy with no usable limit-up is skipped, not sent blind."""
     print("test_buy_skipped_without_limit_up")
-    saved = dict(QUOTES["600036.SS"])
-    QUOTES["600036.SS"] = {"last": saved["last"]}      # no preclose -> no limit price
+    saved = dict(QUOTES["600036.XSHG"])
+    QUOTES["600036.XSHG"] = {"last": saved["last"]}      # no preclose -> no limit price
     try:
         ctx = build_context()
         _status, target = S._load_target(TARGET_FILE)
         plan = make_plan(ctx, target["_stocks"])
         buys = dict((c, v) for c, v, _r in plan["buys"])
-        check("name without limit-up is not bought", "600036.SH" not in buys, str(buys))
+        check("name without limit-up is not bought", "600036.XSHG" not in buys, str(buys))
         check("note explains the skip",
               any("no limit-up available" in n for n in plan["notes"]), str(plan["notes"]))
     finally:
-        QUOTES["600036.SS"] = saved
+        QUOTES["600036.XSHG"] = saved
 
 
 def test_duplicate_pool_codes_deduped():
@@ -531,10 +586,10 @@ def test_st_uses_five_percent_band():
     """ST names have a 5% band; if that were missed the limit checks would think an
     ST stock sitting at +5% is not at its limit."""
     print("test_st_uses_five_percent_band")
-    ST_NAMES.add("600739.SS")
+    ST_NAMES.add("600739.XSHG")
     try:
-        q = S._snap_one("600739.SS")
-        up, down = S._up_down(q, "600739.SH")
+        q = S._snap_one("600739.XSHG")
+        up, down = S._up_down(q, "600739.XSHG")
         px = P["600739"]
         check("ST limit-up = preclose * 1.05",
               abs(up - round(px * 1.05, 2)) < 0.005, "%s vs %s" % (up, round(px * 1.05, 2)))
@@ -542,61 +597,71 @@ def test_st_uses_five_percent_band():
               abs(down - round(px * 0.95, 2)) < 0.005,
               "%s vs %s" % (down, round(px * 0.95, 2)))
     finally:
-        ST_NAMES.discard("600739.SS")
+        ST_NAMES.discard("600739.XSHG")
 
 
 def test_st_is_never_bought():
     """ST names must never be bought: the 12-rule compliance filter should have removed
     them, so one showing up means the upstream list is broken."""
     print("test_st_is_never_bought")
-    ST_NAMES.add("600739.SS")
+    ST_NAMES.add("600739.XSHG")
     try:
         ctx = build_context()
         _status, target = S._load_target(TARGET_FILE)
         plan = make_plan(ctx, target["_stocks"])
         buys = dict((c, v) for c, v, _r in plan["buys"])
-        check("ST name is not bought", "600739.SH" not in buys, str(buys))
+        check("ST name is not bought", "600739.XSHG" not in buys, str(buys))
         check("ST refusal raises an ERROR entry",
-              any("ST name 600739.SH" in e for e in plan["errors"]), str(plan["errors"]))
+              any("ST name 600739.XSHG" in e for e in plan["errors"]), str(plan["errors"]))
         check("ST refusal is not downgraded to a note",
               not any("ST" in n for n in plan["notes"]), str(plan["notes"]))
     finally:
-        ST_NAMES.discard("600739.SS")
+        ST_NAMES.discard("600739.XSHG")
 
 
-def test_previous_day_target_is_used():
-    """List unavailable -> the local process writes nothing -> the PREVIOUS trading day's
-    target is still in the research dir and must be traded (not skipped, not liquidated)
-    as long as it is within MAX_TARGET_AGE_DAYS."""
-    print("test_previous_day_target_is_used")
+def test_previous_day_target_is_rejected():
+    """TODAY ONLY (2026-10-19): a target that was not generated today must NOT be traded -
+    the run raises an ERROR and leaves positions untouched. (Only a target older than
+    MAX_TARGET_AGE_DAYS is liquidated, which the next test covers.)"""
+    print("test_previous_day_target_is_rejected")
     yesterday = datetime.datetime.now() - datetime.timedelta(days=1)
     write_target(generated=yesterday.strftime("%Y-%m-%dT%H:%M:%S"))
     try:
         ctx = build_context()
         status, target = S._load_target(TARGET_FILE)
-        check("yesterday's target is accepted", status == "ok", status)
-        check("its age is reported", target.get("_stale_days") == 1,
+        check("yesterday's target is NOT ok", status == "not-today", status)
+        check("its age is still reported", target.get("_stale_days") == 1,
               str(target.get("_stale_days")))
         ORDERS[:] = []
         _clear_state()
-        run_job(ctx, "20261016@0942")
-        sells = [o for o in ORDERS if o["amount"] < 0]
-        buys = [o for o in ORDERS if o["amount"] > 0]
-        check("it trades the previous list instead of liquidating",
-              len(sells) == 1 and len(buys) >= 1, str(ORDERS))
+        del S.LOGS[:]
+        run_job(ctx, "20261019@0942")
+        check("nothing is traded on a not-today list", ORDERS == [], str(ORDERS))
+        check("an ERROR explains why",
+              any("NOT from today" in l and "ERROR" in l for l in S.LOGS), str(S.LOGS[-3:]))
     finally:
         write_target()
 
 
 def test_too_old_target_liquidates():
-    """No trustworthy list for more than MAX_TARGET_AGE_DAYS -> sell everything."""
+    """No trustworthy list for more than MAX_TARGET_AGE_DAYS -> sell everything.
+    The boundary is checked too: exactly MAX_TARGET_AGE_DAYS old is still only
+    'not-today' (skip), one day older is 'stale' (liquidate)."""
     print("test_too_old_target_liquidates")
-    old = datetime.datetime.now() - datetime.timedelta(days=S.MAX_TARGET_AGE_DAYS + 3)
+    boundary = datetime.datetime.now() - datetime.timedelta(days=S.MAX_TARGET_AGE_DAYS)
+    write_target(generated=boundary.strftime("%Y-%m-%dT%H:%M:%S"))
+    try:
+        status_b, _tb = S._load_target(TARGET_FILE)
+        check("exactly MAX_TARGET_AGE_DAYS old is still only 'not-today'",
+              status_b == "not-today", status_b)
+    finally:
+        write_target()
+    old = datetime.datetime.now() - datetime.timedelta(days=S.MAX_TARGET_AGE_DAYS + 1)
     write_target(generated=old.strftime("%Y-%m-%dT%H:%M:%S"))
     try:
         ctx = build_context()
         status, _t = S._load_target(TARGET_FILE)
-        check("too old -> stale", status == "stale", status)
+        check("older than MAX_TARGET_AGE_DAYS -> stale", status == "stale", status)
         ORDERS[:] = []
         _clear_state()
         run_job(ctx, "20261016@0943")
@@ -608,45 +673,35 @@ def test_too_old_target_liquidates():
         write_target()
 
 
-def test_suffix_detected_from_position_codes():
-    """The code suffix must come from the platform's own spelling, because snapshot probes
-    are empty before the open (live 2026-10-19: it kept 'SS' while the platform uses the
-    JoinQuant dialect XSHG/XSHE, so every 600xxx quote/order carried a wrong suffix)."""
-    print("test_suffix_detected_from_position_codes")
-    saved = (S._CODE_SUFFIX_SH[0], S._CODE_SUFFIX_SZ[0])
-    try:
-        xshg = {"600697.XSHG": Pos("600697.XSHG", 7000, 7000, 10.19),
-                "002209.XSHE": Pos("002209.XSHE", 6000, 6000, 8.20)}
-        ctx = Context(cash=10000.0, total=520000.0, positions=xshg)
-        sh, sz, ev = S._detect_suffixes(ctx)
-        check("XSHG/XSHE detected from raw position codes",
-              sh == "XSHG" and sz == "XSHE", "%s / %s / %s" % (sh, sz, ev))
-        check("the evidence names the raw code", "600697.XSHG" in ev, ev)
-
-        sh2, sz2, ev2 = S._detect_suffixes(build_context())
-        check("SS/SZ detected from .SS position codes",
-              sh2 == "SS" and sz2 == "SZ", "%s / %s / %s" % (sh2, sz2, ev2))
-
-        empty = Context(cash=1.0, total=1.0, positions={})
-        sh3, sz3, ev3 = S._detect_suffixes(empty)
-        check("no evidence -> documented default with a loud note",
-              "NO EVIDENCE" in ev3 and
-              (sh3, sz3) == (S.SH_SUFFIX_CANDIDATES[0], S.SZ_SUFFIX_CANDIDATES[0]),
-              "%s / %s / %s" % (sh3, sz3, ev3))
-
-        # a platform spelled .XSHG must produce orders/comparisons in that dialect
-        S._CODE_SUFFIX_SH[0] = "XSHG"
-        S._CODE_SUFFIX_SZ[0] = "XSHE"
-        check("_pt_code spells Shanghai codes the platform's way",
-              S._pt_code("600739.SH") == "600739.XSHG", S._pt_code("600739.SH"))
-        check("_pt_code spells Shenzhen codes the platform's way",
-              S._pt_code("000002.SZ") == "000002.XSHE", S._pt_code("000002.SZ"))
-        check("quotes still resolve through the dialect mapping",
-              S._snap_one("600739.XSHG").get("last") == P["600739"],
-              str(S._snap_one("600739.XSHG")))
-    finally:
-        S._CODE_SUFFIX_SH[0] = saved[0]
-        S._CODE_SUFFIX_SZ[0] = saved[1]
+def test_code_dialect_is_xshg_xshe():
+    """ONE dialect everywhere (2026-10-19): whatever spelling comes in, everything this
+    strategy produces - internal keys, tracker keys, order/snapshot codes - is XSHG/XSHE.
+    The QMT-era .SH/.SZ forms are only tolerated when reading old data."""
+    print("test_code_dialect_is_xshg_xshe")
+    check("legacy Shanghai suffix -> XSHG", S._full_code("600739.SH") == "600739.XSHG",
+          S._full_code("600739.SH"))
+    check("canonical code passes through", S._full_code("600739.XSHG") == "600739.XSHG",
+          S._full_code("600739.XSHG"))
+    check("bare 6-digit code -> XSHG", S._full_code("600739") == "600739.XSHG",
+          S._full_code("600739"))
+    check("legacy Shenzhen suffix -> XSHE", S._full_code("000002.SZ") == "000002.XSHE",
+          S._full_code("000002.SZ"))
+    check("legacy SH600739 form is still read", S._full_code("SH600739") == "600739.XSHG",
+          S._full_code("SH600739"))
+    check("the API code IS the internal code",
+          S._pt_code("600739.SH") == S._full_code("600739.SH") == "600739.XSHG",
+          S._pt_code("600739.SH"))
+    check("positions are keyed XSHG/XSHE",
+          sorted(S._positions(build_context()).keys()) ==
+          ["300750.XSHE", "301167.XSHE", "605189.XSHG"],
+          str(sorted(S._positions(build_context()).keys())))
+    # an old tracker file must migrate instead of double counting
+    old = {"low_valuation": {"600697.SH": 7000, "002209.SZ": 6000}}
+    with open(S._tracker_path(), "w") as f:
+        json.dump(old, f)
+    t = S._tracker_load()
+    check("old .SH/.SZ tracker keys migrate to XSHG/XSHE",
+          t.get("low_valuation") == {"600697.XSHG": 7000, "002209.XSHE": 6000}, str(t))
 
 
 def test_platform_status_dict_is_handled():
@@ -656,21 +711,21 @@ def test_platform_status_dict_is_handled():
     saved = S.get_stock_status
     try:
         S.get_stock_status = lambda code, kind: {code: code.startswith("601318")}
-        check("dict answer: halted name detected", S._is_halted("601318.SS") is True,
-              repr(S._is_halted("601318.SS")))
+        check("dict answer: halted name detected", S._is_halted("601318.XSHG") is True,
+              repr(S._is_halted("601318.XSHG")))
         check("dict answer: healthy name is NOT halted",
-              S._is_halted("600739.SS") is False, repr(S._is_halted("600739.SS")))
+              S._is_halted("600739.XSHG") is False, repr(S._is_halted("600739.XSHG")))
         check("dict answer: ST uses the same decoding",
-              S._is_st("601318.SS") is True and S._is_st("600739.SS") is False)
+              S._is_st("601318.XSHG") is True and S._is_st("600739.XSHG") is False)
         S.get_stock_status = lambda code, kind: {code: False}
         check("dict {code: False} is false even though the dict is truthy",
-              S._is_halted("600739.SS") is False)
+              S._is_halted("600739.XSHG") is False)
         S.get_stock_status = lambda code, kind: True
-        check("plain bool answer still works", S._is_halted("600739.SS") is True)
+        check("plain bool answer still works", S._is_halted("600739.XSHG") is True)
         S.get_stock_status = lambda code, kind: {}
-        check("empty dict -> not halted", S._is_halted("600739.SS") is False)
+        check("empty dict -> not halted", S._is_halted("600739.XSHG") is False)
         S.get_stock_status = lambda code, kind: "0"
-        check("string '0' -> not halted", S._is_halted("600739.SS") is False)
+        check("string '0' -> not halted", S._is_halted("600739.XSHG") is False)
     finally:
         S.get_stock_status = saved
 
@@ -682,7 +737,7 @@ def test_place_prefers_order_market():
     try:
         ORDER_MARKET_CALLS[:] = []
         ORDERS[:] = []
-        S._place(None, "600739.SS", 300, 10.30)
+        S._place(None, "600739.XSHG", 300, 10.30)
         check("order_market is used when available", len(ORDER_MARKET_CALLS) == 1,
               str(ORDER_MARKET_CALLS))
         call = ORDER_MARKET_CALLS[0] if ORDER_MARKET_CALLS else {}
@@ -691,13 +746,13 @@ def test_place_prefers_order_market():
         check("market_type follows the board map (60x -> 1)", call.get("market_type") == 1,
               str(call.get("market_type")))
         ORDER_MARKET_CALLS[:] = []
-        S._place(None, "000002.SS", -800, None)
+        S._place(None, "000002.XSHG", -800, None)
         check("sells pass a negative amount (300/00x -> market_type 0)",
               ORDER_MARKET_CALLS and ORDER_MARKET_CALLS[-1]["amount"] == -800 and
               ORDER_MARKET_CALLS[-1]["market_type"] == 0, str(ORDER_MARKET_CALLS[-1:]))
         del S.order_market
         ORDERS[:] = []
-        S._place(None, "600739.SS", -300, None)
+        S._place(None, "600739.XSHG", -300, None)
         check("falls back to order() when order_market is missing",
               len(ORDERS) == 1 and ORDERS[0]["amount"] == -300, str(ORDERS))
     finally:
@@ -707,12 +762,69 @@ def test_place_prefers_order_market():
 def test_up_down_prefers_platform_limits():
     print("test_up_down_prefers_platform_limits")
     up, down = S._up_down({"preclose": 10.0, "limit_up": 11.0, "limit_down": 9.0,
-                           "name": ""}, "600739.SH")
+                           "name": ""}, "600739.XSHG")
     check("platform up_px/down_px are used when published", (up, down) == (11.0, 9.0),
           "%s / %s" % (up, down))
-    up2, down2 = S._up_down({"preclose": 10.0, "name": ""}, "600739.SH")
+    up2, down2 = S._up_down({"preclose": 10.0, "name": ""}, "600739.XSHG")
     check("falls back to preclose * board band",
           abs(up2 - 11.0) < 0.011 and abs(down2 - 9.0) < 0.011, "%s / %s" % (up2, down2))
+
+
+def test_order_fallback_when_market_order_fails():
+    """A board (e.g. STAR 688) may reject a market order. The rule: retry as a +-2% repriced
+    LIMIT order at the same protective price (still inside limit-up/down), never send blind."""
+    print("test_order_fallback_when_market_order_fails")
+    saved_om = getattr(S, "order_market", None)
+    saved_get = getattr(S, "get_order", None)
+    try:
+        # (a) order_market returns nothing -> rejected -> limit retry at the same protect price
+        S.order_market = lambda code, amount=None, market_type=None, limit_price=None: None
+        ORDER_MARKET_CALLS[:] = []
+        ORDERS[:] = []
+        del S.LOGS[:]
+        oid = S._place(None, "688001.XSHG", 100, 12.24)
+        check("a rejected market order is retried as a limit order",
+              len(ORDERS) == 1 and ORDERS[0]["limit_price"] == 12.24, str(ORDERS))
+        check("the retry is visible in the log",
+              any("retrying as a limit order" in l for l in S.LOGS), str(S.LOGS[-2:]))
+        check("an order id is still returned", oid is not None, str(oid))
+
+        # (b) the market-order API raises (unsupported) -> same fallback
+        def boom(*a, **k):
+            raise RuntimeError("market order not supported")
+        S.order_market = boom
+        ORDERS[:] = []
+        S._place(None, "688001.XSHG", -100, 11.76)
+        check("an unsupported market-order API still ends up as a limit order",
+              len(ORDERS) == 1 and ORDERS[0]["amount"] == -100 and
+              ORDERS[0]["limit_price"] == 11.76, str(ORDERS))
+
+        # (c) the platform reports the submission as rejected ('9') -> fallback
+        S.order_market = fake_order_market
+        S.get_order = lambda oid: [type("O", (), {"status": "9"})()]
+        ORDERS[:] = []
+        S._place(None, "688001.XSHG", 100, 12.24)
+        check("a '9' (rejected) status triggers the limit retry",
+              len(ORDERS) == 2 and ORDERS[-1]["limit_price"] == 12.24, str(ORDERS))
+
+        # (d) STAR market type is a one-line knob
+        check("STAR market type comes from MARKET_TYPE_STAR",
+              S._market_type("688001.XSHG") == S.MARKET_TYPE_STAR,
+              str(S._market_type("688001.XSHG")))
+        saved_star = S.MARKET_TYPE_STAR
+        try:
+            S.MARKET_TYPE_STAR = 1
+            check("MARKET_TYPE_STAR can be flipped without touching the logic",
+                  S._market_type("688001.XSHG") == 1, str(S._market_type("688001.XSHG")))
+        finally:
+            S.MARKET_TYPE_STAR = saved_star
+    finally:
+        if saved_om is not None:
+            S.order_market = saved_om
+        if saved_get is not None:
+            S.get_order = saved_get
+        elif hasattr(S, "get_order"):
+            del S.get_order
 
 
 def test_price_cage_is_compliant():
@@ -785,12 +897,12 @@ def test_two_strategies_share_a_position():
     may only ever sell its own shares (the ported QMT attribution)."""
     print("test_two_strategies_share_a_position")
     positions = {
-        "605189.SS": Pos("605189.SS", 1000, 1000, P["605189"]),   # shared: alpha 600 + beta 400
-        "301167.SZ": Pos("301167.SZ", 200, 200, P["301167"]),     # beta only
+        "605189.XSHG": Pos("605189.XSHG", 1000, 1000, P["605189"]),   # shared: alpha 600 + beta 400
+        "301167.XSHE": Pos("301167.XSHE", 200, 200, P["301167"]),     # beta only
     }
     ctx = Context(cash=10000.0, total=520000.0, positions=positions)
-    tracker = {"alpha": {"605189.SH": 600},
-               "beta": {"605189.SH": 400, "301167.SZ": 200}}
+    tracker = {"alpha": {"605189.XSHG": 600},
+               "beta": {"605189.XSHG": 400, "301167.XSHE": 200}}
     a = dict(S.DEFAULT_PARAMS)
     a["capital_ratio"] = 0.6
     b = dict(S.DEFAULT_PARAMS)
@@ -799,12 +911,12 @@ def test_two_strategies_share_a_position():
     va = S._strategy_view(ctx, a, tracker, "alpha")
     vb = S._strategy_view(ctx, b, tracker, "beta")
     check("alpha sees only its 600 of the shared name",
-          va["positions"].get("605189.SH", {}).get("amount") == 600, str(va["positions"]))
+          va["positions"].get("605189.XSHG", {}).get("amount") == 600, str(va["positions"]))
     check("beta sees its 400 of the shared name",
-          vb["positions"].get("605189.SH", {}).get("amount") == 400, str(vb["positions"]))
-    check("beta also sees its own name", vb["positions"].get("301167.SZ", {}).get("amount") == 200,
+          vb["positions"].get("605189.XSHG", {}).get("amount") == 400, str(vb["positions"]))
+    check("beta also sees its own name", vb["positions"].get("301167.XSHE", {}).get("amount") == 200,
           str(vb["positions"]))
-    check("alpha does not see beta's own name", "301167.SZ" not in va["positions"],
+    check("alpha does not see beta's own name", "301167.XSHE" not in va["positions"],
           str(va["positions"]))
     check("slice totals follow capital_ratio",
           abs(va["total"] - 520000.0 * 0.6) < 0.01 and
@@ -813,9 +925,9 @@ def test_two_strategies_share_a_position():
 
     sold_a = dict((c, v) for c, v, _r in S._liquidate_plan(va, "test")["sells"])
     sold_b = dict((c, v) for c, v, _r in S._liquidate_plan(vb, "test")["sells"])
-    check("alpha's exit sells exactly its 600 shares", sold_a == {"605189.SH": 600}, str(sold_a))
+    check("alpha's exit sells exactly its 600 shares", sold_a == {"605189.XSHG": 600}, str(sold_a))
     check("beta's exit sells its 400 + its own name",
-          sold_b == {"605189.SH": 400, "301167.SZ": 200}, str(sold_b))
+          sold_b == {"605189.XSHG": 400, "301167.XSHE": 200}, str(sold_b))
 
     print("test_tracker_sync_assigns_untracked")
     # a broker code nobody tracks is handed to the biggest capital_ratio strategy
@@ -823,7 +935,7 @@ def test_two_strategies_share_a_position():
     broker = S._positions(ctx)
     S._tracker_sync(t, ["alpha", "beta"], {"alpha": a, "beta": b}, broker)
     check("untracked names go to the biggest capital_ratio holder",
-          t["alpha"].get("605189.SH") == 1000 and t["alpha"].get("301167.SZ") == 200,
+          t["alpha"].get("605189.XSHG") == 1000 and t["alpha"].get("301167.XSHE") == 200,
           str(t))
 
 
@@ -868,16 +980,18 @@ def main():
              test_idempotent_per_time_tag, test_missing_target_is_skipped,
              test_old_target_is_flagged_stale, test_empty_pool_liquidates,
              test_cash_starved_build, test_cage_respects_limits,
+             test_order_protection_prices,
              test_full_book_never_rebalances, test_gate_fires_on_cash_imbalance,
              test_buy_skipped_without_limit_up, test_duplicate_pool_codes_deduped,
              test_st_uses_five_percent_band, test_st_is_never_bought,
-             test_previous_day_target_is_used, test_too_old_target_liquidates,
+             test_previous_day_target_is_rejected, test_too_old_target_liquidates,
              test_two_strategies_share_a_position,
-             test_suffix_detected_from_position_codes,
+             test_code_dialect_is_xshg_xshe,
              test_platform_status_dict_is_handled,
              test_place_prefers_order_market,
              test_up_down_prefers_platform_limits,
              test_price_cage_is_compliant,
+             test_order_fallback_when_market_order_fails,
              test_target_found_in_upload_file_subfolder, test_only_fixed_name_is_read]
     for t in tests:
         t()

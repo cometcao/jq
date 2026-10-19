@@ -247,22 +247,35 @@ ptrade/ptrade_rebalance_executor.py   云端策略（粘进 PTrade 编辑器的�
 - **PTrade 沙箱硬限制**：**禁 `os`/`sys`**（连带 `traceback`/`glob`/`pathlib` 等）；可用 `pandas/numpy/enum/math/
   time/simplejson/datetime`。因此策略内只有内建 `open()`、无目录列举（只能读固定文件名）、无 `mkdir`（状态/审计
   文件扁平写在研究目录根）、无原子 rename。详见 notes §4.2。
-- **年龄策略**：目标文件 ≤7 天照用（含上一交易日那份），>7 天清该策略份额；本机拿不到名单时**什么都不写**，
-  于是云端继续用手上那份，而不是立刻清仓。
-- **委托价必须落在"价格笼子"内（2026-10-19 实盘复核）**：交易所连续竞价规定买入申报价 ≤
-  `max(基准×102%, 基准+0.1)`、卖出 ≥ `min(基准×98%, 基准−0.1)`，基准按 **对手价 → 最新成交价 → 前收盘价**
-  回退；市价单也要带笼内保护限价。**绝不能把涨停/跌停价当委托价**（旧 PTrade 策略
-  `low_valuation_regression_chan_filter_1d_strategy_full_gj.py` 就是这么写的：`limit_price=up_px/down_px`）。
-  本策略沿用 QMT 的保守写法：买 `min(min(ask×1.02, ask+0.1), 涨停价)`、卖 `max(max(bid×0.98, bid−0.1), 跌停价)`，
-  涨跌停价只用于夹值；三档基准都取不到 → **跳过该单并记 ERROR**（不再发无保护市价单）。详见 notes §4.1.1。
+- **只交易"当天"的名单（2026-10-19）**：目标文件 `generated_at` 不是今天 → 云端 **不交易 + 记 ERROR**
+  （`target is NOT from today ... REFUSING to trade this round`，仓位原样不动）；`> MAX_TARGET_AGE_DAYS(7) 天`
+  才**清该策略份额**。上传晚到/漏传的后果是"当天不交易"，不会再悄悄用昨天那份。
+- **委托价：市价单的"保护价"（2026-10-19 定稿）**：`order_market(limit_price=…)` 传的是**保护价**，不是委托价。
+  **卖出必须尽全力** → 卖出保护价 = **`max(最新价×0.98, 跌停价)`**（2% 规则内能报的最低价，可扫到跌停）；
+  买入不追高 → 簇子价 `min(min(ask×1.02, ask+0.1), 涨停价)` 再夹 `最新价×1.02`
+  （想学参考策略的激进买法：`BUY_PROTECT_AT_LIMIT_UP = True`，仍受 2% 约束）。
+  `market_type` 按市场：`688→MARKET_TYPE_STAR(0)`、`60x→1`、`00x/300x→0`、其它`→4`（与参考文件一致，已测试比对）。
+  **市价单被拒会自动降级为"±2% 变价限价单"**：`order_market` 抛异常/返回空/平台判废单（`status=='9'`）时，
+  立刻用同一个保护价改发 `order(..., limit_price=protect)`（保护价本身就在涨跌停内、且不偏离 2%），
+  日志记 `WARN ... was rejected -> retrying as a limit order`。**科创板怎么确认**：启动看
+  `has_order_market` 与 `order_mode`；首次 688 委托看是 `INFO bought ... -> order id` 还是那条 WARN，
+  后者就把 `MARKET_TYPE_STAR` 0→1 重启（那一笔已按变价单发出，不会丢）。
+  同时还必须满足交易所**价格笼子**（买 ≤ max(基准×102%, 基准+0.1)、卖 ≥ min(基准×98%, 基准−0.1)，
+  基准=对手价→最新价→前收盘），两个界取更严者；都取不到 → **跳过该单并记 ERROR**。详见 notes §4.1.1 / §4.1.1.1。
 - **平台 API 形态（同一份实盘文件证实）**：`get_stock_status(code,'HALT'|'ST')` 返回**字典**要
   `[code]` 取值（把字典当布尔 → 每只票都被判停牌，这是 2026-10-19 `nothing to do` 的真因）；
   `get_snapshot(code)[code]` 字段为 `last_px`/`up_px`/`down_px`；下单用
-  `order_market(code, amount=±shares, market_type=…, limit_price=…)`；名单文件是 `XSHE/XSHG` 方言，
-  **转成 `.SZ`/`.SS` 后**才是 API 方言（基准 `000300.SS`）。
-- **自测**：`ptrade_executor_selftest.py`（**26 组**：多策略份额/年龄策略/价格笼子/涨跌停夹值/ST 两道/
-  重复名单/后缀探测/状态字典解码/order_market 优先）+ `ptrade_target_selftest.py`
-  （本机产出 ↔ 云端读取的契约）。两侧都跑通了才算改完。
+  `order_market(code, amount=±shares, market_type=…, limit_price=…)`；**`get_snapshot` 在
+  `initialize` 阶段不可调用**（平台抛 `RuntimeError`，行情只能在真实运行时验证）。
+- **代码方言只有一种：`XSHG` / `XSHE`（2026-10-19 统一）**：邮件源数据、target 文件、云端内部键（含
+  tracker/审计）、以及每个平台 API 调用（`get_snapshot`/`get_stock_info`/`get_stock_status`/`order_market`）
+  **全部**是 `600000.XSHG` / `000001.XSHE`。QMT 时代的 `.SS`/`.SH`/`.SZ` 拼写已彻底不用，
+  `_split_code` 只在**读旧数据**（历史 tracker / 旧 target 文件）时容忍它们并迁移成 `XSHG`/`XSHE`
+  （`_tracker_load` 会按新键合并，避免同一持仓被算两次）。
+  证据：参考实盘策略 `get_stock_info('603822.XSHG', field="stock_name")`。
+- **自测**：`ptrade_executor_selftest.py`（**26 组**：多策略份额/当天专用(非当天拒绝)/>7 天清仓/价格笼子/
+  涨跌停夹值/ST 两道/重复名单/方言统一/状态字典解码/order_market 优先/拒单记 ERROR）+ `ptrade_target_selftest.py`
+  （本机产出 ↔ 云端读取的契约：源方言 `XSHG/XSHE` 全程不改写）。两侧都跑通了才算改完。
 
 **待办**：向国金确认定时上传是否开放/次数上限、是否支持**按文件夹同步**到研究目录下的同名子目录、
 `get_research_path()` 读写、实盘是否有 `run_daily`/`order`；确认本机 `trading_times`（出文件截止）严格早于

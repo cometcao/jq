@@ -13,6 +13,7 @@ Run:  python ptrade_target_selftest.py
 """
 
 import datetime
+import json
 import os
 import shutil
 import sys
@@ -78,7 +79,9 @@ def main():
     strat = {"name": "low_valuation", "trading_times": ["09:35"], "capital_ratio": 1.0,
              "max_holdings": 8, "candidate_pool_size": 13, "cash_reserve_ratio": 0.0125,
              "rebalance_threshold": 0.20}
-    codes = ["605189.SH", "301167.SZ", "600739.SH"]
+    # The email attachment speaks the JoinQuant dialect (XSHG/XSHE) and _load_stock_list
+    # now passes it through untouched, so the written file must carry exactly that.
+    codes = ["605189.XSHG", "301167.XSHE", "600739.XSHG"]
     now = datetime.datetime.now()
     T._write_rebalance_file(strat, codes, archive, now, upload, "target_%s.json")
 
@@ -92,14 +95,19 @@ def main():
     check("no .tmp leftovers",
           not any(n.endswith(".tmp") for n in up_names + ar_names),
           str(up_names + ar_names))
+    with open(os.path.join(upload, "target_low_valuation.json"), encoding="utf-8") as f:
+        raw_payload = json.load(f)
+    check("the source dialect is preserved verbatim in the file",
+          raw_payload.get("stocks") == codes, str(raw_payload.get("stocks")))
 
     print("test_cloud_side_reads_it")
     import ptrade_rebalance_executor as S
     S.get_research_path = lambda: upload        # the one platform call we cannot make here
     status, target = S._load_target("target_low_valuation.json")
     check("cloud status ok", status == "ok", status)
-    check("cloud sees the same codes",
-          bool(target) and target.get("_stocks") == codes,
+    check("cloud keeps the SAME dialect (XSHG/XSHE) - no rewriting at all",
+          bool(target) and target.get("_stocks") == ["605189.XSHG", "301167.XSHE",
+                                                     "600739.XSHG"],
           str(target and target.get("_stocks")))
     check("cloud found it under <research>/upload_file/ (the real layout)",
           bool(target) and target["_path"].replace("\\", "/").endswith(
@@ -112,12 +120,12 @@ def main():
           bool(target) and S._params_from(target)["max_holdings"] == 8,
           str(target and S._params_from(target)))
 
-    print("test_yesterdays_upload_is_still_used")
+    print("test_yesterdays_upload_is_rejected")
     T._write_rebalance_file(strat, codes, None, now - datetime.timedelta(days=1),
                             upload, "target_%s.json")
     status2, t2 = S._load_target("target_low_valuation.json")
-    check("yesterday's upload is still traded (age policy, not 'today only')",
-          status2 == "ok", status2)
+    check("yesterday's upload is NOT traded (today-only rule)",
+          status2 == "not-today", status2)
     check("its age is reported to the planner",
           bool(t2) and t2.get("_stale_days") == 1, str(t2 and t2.get("_stale_days")))
 
