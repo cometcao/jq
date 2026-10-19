@@ -237,16 +237,25 @@ def _now_str():
 
 
 def _read_json(path, quiet=False):
+    """Read a JSON file. The uploaded file is UTF-8 (written by the local producer) and
+    the platform locale is not ours to choose, so try utf-8 text, then raw bytes."""
     try:
-        f = open(path, "r")
+        f = open(path, "r", encoding="utf-8")
         try:
             return json.loads(f.read())
         finally:
             f.close()
     except Exception as e:
-        if not quiet:
-            _log("WARN", "cannot read %s: %s" % (path, e))
-        return None
+        try:
+            f = open(path, "rb")
+            try:
+                return json.loads(f.read().decode("utf-8"))
+            finally:
+                f.close()
+        except Exception:
+            if not quiet:
+                _log("WARN", "cannot read %s: %s" % (path, e))
+            return None
 
 
 def _join(base, name):
@@ -268,10 +277,11 @@ def _basename(path):
 def _write_json(path, obj):
     """Write a JSON file. Rename/replace is unavailable, so the write is direct
     and then read back: a truncated state file would let a finished tag run twice."""
+    body = json.dumps(obj, ensure_ascii=False, indent=2, sort_keys=True)
     try:
-        f = open(path, "w")
+        f = open(path, "w", encoding="utf-8")
         try:
-            f.write(json.dumps(obj, ensure_ascii=False, indent=2, sort_keys=True))
+            f.write(body)
         finally:
             f.close()
     except Exception as e:
@@ -287,7 +297,19 @@ def _write_json(path, obj):
 # PTrade API adapters - each degrades instead of raising, and initialize()
 # logs which spelling actually worked (see _selfcheck).
 # ============================================================================
-_CODE_SUFFIX_SH = ["SS", "SH"]     # preference order, probed at runtime
+# Code dialect. Verified against a strategy that ran in production on this platform
+# (low_valuation_regression_chan_filter_1d_strategy_full_gj.py):
+#   * the stock-list FILES carry the JoinQuant dialect  XSHE / XSHG
+#   * the platform converts them to SZ / SS before calling get_snapshot/order
+#     (`stock.replace('XSHE','SZ').replace('XSHG','SS')`, benchmark '000300.SS')
+# So the API dialect here is .SS/.SZ; the XSHG/XSHE spellings are kept as candidates for
+# instances that speak that dialect instead. CANDIDATES are the search order (never
+# mutated); _CODE_SUFFIX_* hold the chosen value, which initialize() fills from the
+# platform's own evidence (see _detect_suffixes) and logs.
+SH_SUFFIX_CANDIDATES = ["SS", "SH", "XSHG"]
+SZ_SUFFIX_CANDIDATES = ["SZ", "XSHE"]
+_CODE_SUFFIX_SH = [SH_SUFFIX_CANDIDATES[0]]     # chosen Shanghai suffix (was: SS)
+_CODE_SUFFIX_SZ = [SZ_SUFFIX_CANDIDATES[0]]     # chosen Shenzhen suffix (was: SZ)
 CAPS = {}
 
 
@@ -525,6 +547,88 @@ def _strategy_view(context, params, tracker, strategy):
             "broker_total": broker_total, "ratio": ratio}
 
 
+def _detect_suffixes(context):
+    """Decide how THIS instance spells a security code, from the most reliable evidence.
+
+    2026-10-19 (live): the old probe only tried get_snapshot("600000.SS") / ("600000.SH").
+    At 09:05 (pre-open) snapshots are empty, so it kept the default and there was no way to
+    tell SS from SH from XSHG. Snapshots are simply unavailable before the open - the raw
+    position codes and get_stock_info are the reliable evidence.
+
+    Evidence order:
+      1. the RAW code format the platform reports for positions (authoritative)
+      2. get_stock_info() on every candidate (works pre-open)
+      3. a get_snapshot() round trip (both call forms) - unreliable before the open
+    -> (sh_suffix, sz_suffix, evidence string)
+    """
+    try:
+        raw_codes = [str(c).upper() for c in _get_positions_raw(context).keys()]
+    except Exception as e:
+        raw_codes = []
+        _log("WARN", "suffix detect: raw positions unavailable: %s" % e)
+    for c in raw_codes:
+        for suf in SH_SUFFIX_CANDIDATES:
+            if c.endswith("." + suf):
+                return suf, _sz_from_codes(raw_codes), "raw position code %s" % c
+    for c in raw_codes:
+        for suf in SZ_SUFFIX_CANDIDATES:
+            if c.endswith("." + suf):
+                return _CODE_SUFFIX_SH[0], suf, "raw position code %s" % c
+    for suf in SH_SUFFIX_CANDIDATES:
+        try:
+            info = get_stock_info("600000." + suf)
+        except Exception:
+            info = None
+        if info:
+            return suf, _sz_from_info(), "get_stock_info(600000.%s) ok" % suf
+    for suf in SH_SUFFIX_CANDIDATES:
+        for arg in ("600000." + suf, ["600000." + suf]):
+            try:
+                snap = get_snapshot(arg)
+            except Exception:
+                snap = None
+            if snap:
+                return suf, _sz_from_snapshot(), "get_snapshot(%r) ok" % (arg,)
+    return SH_SUFFIX_CANDIDATES[0], SZ_SUFFIX_CANDIDATES[0], \
+        "NO EVIDENCE -> defaulting to %s / %s" % (SH_SUFFIX_CANDIDATES[0], SZ_SUFFIX_CANDIDATES[0])
+
+
+def _sz_from_codes(raw_codes):
+    """Shenzhen suffix implied by the raw codes we were handed (else the default)."""
+    for c in raw_codes:
+        for suf in SZ_SUFFIX_CANDIDATES:
+            if c.endswith("." + suf):
+                return suf
+    return _CODE_SUFFIX_SZ[0]
+
+
+def _sz_from_info():
+    for suf in SZ_SUFFIX_CANDIDATES:
+        try:
+            if get_stock_info("000001." + suf):
+                return suf
+        except Exception:
+            pass
+    return _CODE_SUFFIX_SZ[0]
+
+
+def _sz_from_snapshot():
+    for suf in SZ_SUFFIX_CANDIDATES:
+        for arg in ("000001." + suf, ["000001." + suf]):
+            try:
+                if get_snapshot(arg):
+                    return suf
+            except Exception:
+                pass
+    return _CODE_SUFFIX_SZ[0]
+
+
+def _detect_sh_suffix(context):
+    """-> (sh_suffix, evidence); kept as a thin wrapper for the self-tests."""
+    sh, _sz, ev = _detect_suffixes(context)
+    return sh, ev
+
+
 def _pt_code(code):
     """Internal '600000.SH' -> whatever suffix this PTrade instance uses."""
     mk, pl = _split_code(code)
@@ -534,7 +638,7 @@ def _pt_code(code):
         return pl + "." + _CODE_SUFFIX_SH[0]
     if mk == "BJ":
         return pl + ".BJ"       # Beijing exchange (needs broker confirmation)
-    return pl + ".SZ"
+    return pl + "." + _CODE_SUFFIX_SZ[0]
 
 
 def _total_value(context):
@@ -668,29 +772,78 @@ def _snap_one(pt_code):
         "name": str(_pick(raw, ["name", "stock_name", "security_name", "symbol"], "") or ""),
         "bid1": 0.0,
         "ask1": 0.0,
+        # the platform publishes the limit prices directly (reference strategy:
+        # snap_shot["up_px"] / snap_shot.get("down_px")); trust them over our own maths
+        "limit_up": _to_float(_pick(raw, ["up_px", "limit_up", "high_limited",
+                                          "up_limit_price"], 0.0)),
+        "limit_down": _to_float(_pick(raw, ["down_px", "limit_down", "low_limited",
+                                            "down_limit_price"], 0.0)),
     }
     out["bid1"] = _first_price(_pick(raw, ["bid_grp", "bid1", "bid_price1"], None))
     out["ask1"] = _first_price(_pick(raw, ["offer_grp", "ask1", "ask_price1"], None))
     return out
 
 
-def _is_halted(pt_code):
+def _status_flag(pt_code, kind):
+    """get_stock_status(code, 'HALT'|'ST') -> bool.
+
+    2026-10-19 (live bug): PTrade returns a DICT keyed by the security
+    ({'600000.SS': False}), exactly as the reference strategy uses it
+    (`st_status = get_stock_status(security, 'ST'); if st_status[security]:`).
+    Testing the dict itself for truthiness is always True -> every name looked halted and
+    every out-of-pool sell was skipped. Handle dict / list / bool / string answers.
+    """
     try:
-        if get_stock_status(pt_code, "HALT"):
-            return True
-    except Exception:
-        pass
-    return False
+        v = get_stock_status(pt_code, kind)
+    except Exception as e:
+        _log("WARN", "get_stock_status(%s, %s) failed: %s" % (pt_code, kind, e))
+        return False
+    if isinstance(v, dict):
+        if pt_code in v:
+            v = v[pt_code]
+        elif len(v) == 1:
+            v = list(v.values())[0]
+        else:
+            for k in list(v.keys()):
+                if str(k).upper() == str(pt_code).upper():
+                    v = v[k]
+                    break
+            else:
+                return False
+    elif isinstance(v, (list, tuple)):
+        if not v:
+            return False
+        v = v[0]
+        if isinstance(v, dict):
+            v = v.get(pt_code, False)
+    if isinstance(v, str):
+        return v.strip().lower() in ("1", "true", "yes", "y", "t")
+    return bool(v)
+
+
+def _is_halted(pt_code):
+    """Halt check; logs the decoded value so a false positive stays visible."""
+    v = _status_flag(pt_code, "HALT")
+    if v:
+        _log("INFO", "halt check %s -> halted" % pt_code)
+    return v
 
 
 def _is_st(pt_code):
     """True when the platform marks the name ST (5% band). Unknown -> False."""
-    try:
-        if get_stock_status(pt_code, "ST"):
-            return True
-    except Exception:
-        pass
-    return False
+    return _status_flag(pt_code, "ST")
+
+
+def _market_type(pt_code):
+    """Mirrors the reference strategy: 688 -> 0, 60x -> 1, 300/00x -> 0, else 4."""
+    plain = pt_code.split(".")[0]
+    if plain.startswith("688"):
+        return 0
+    if plain.startswith("60"):
+        return 1
+    if plain.startswith("300") or plain.startswith("00"):
+        return 0
+    return 4
 
 
 def _refuse_to_buy_st(q, code):
@@ -704,21 +857,41 @@ def _refuse_to_buy_st(q, code):
 
 
 def _place(context, pt_code, amount, limit_price):
-    """order(): positive = buy, negative = sell. Returns order id or None."""
+    """Send one order. Positive amount = buy, negative = sell. Returns order id or None.
+
+    API order of preference, matching what the proven in-production reference strategy
+    (low_valuation_regression_chan_filter_1d_strategy_full_gj.py) actually calls:
+      1. order_market(security, amount=..., market_type=..., limit_price=...)  <- proven live
+      2. order(security, amount, limit_price=...)                              <- keep as fallback
+    limit_price is the protective cap (ask+cage for buys, bid-cage for sells), so a
+    "market" order still cannot fill outside our price band.
+    """
     if amount == 0:
         return None
+    shares = int(amount)
+    px = _round_price(limit_price) if (USE_LIMIT_PRICE and limit_price and limit_price > 0) else None
     try:
-        if USE_LIMIT_PRICE and limit_price and limit_price > 0:
-            return order(pt_code, int(amount), limit_price=_round_price(limit_price))
-        return order(pt_code, int(amount))
+        om = globals().get("order_market")
+        if callable(om):
+            if px is not None:
+                return om(pt_code, amount=shares, market_type=_market_type(pt_code),
+                          limit_price=px)
+            return om(pt_code, amount=shares, market_type=_market_type(pt_code))
+    except Exception as e:
+        _log("WARN", "order_market(%s, %d) failed (%s); falling back to order()"
+             % (pt_code, shares, e))
+    try:
+        if px is not None:
+            return order(pt_code, shares, limit_price=px)
+        return order(pt_code, shares)
     except TypeError:
         try:
-            return order(pt_code, int(amount), _round_price(limit_price))
+            return order(pt_code, shares, px)
         except Exception as e:
-            _log("ERROR", "order(%s, %d) failed: %s" % (pt_code, amount, e))
+            _log("ERROR", "order(%s, %d) failed: %s" % (pt_code, shares, e))
             return None
     except Exception as e:
-        _log("ERROR", "order(%s, %d) failed: %s" % (pt_code, amount, e))
+        _log("ERROR", "order(%s, %d) failed: %s" % (pt_code, shares, e))
         return None
 
 
@@ -802,12 +975,20 @@ def _load_target(target_file):
 # ============================================================================
 # planning (pure enough to unit-test locally)
 # ============================================================================
-def _buy_price(last, ask, limit_up):
-    """QMT calculate_trade_price_and_volume(buy):
+def _buy_price(last, ask, limit_up, preclose=None):
+    """Buy limit price under the exchange "price cage" (continuous-auction price band).
+
+    Rule: a buy may not be priced above max(benchmark*1.02, benchmark+0.1), where benchmark is
+    best ask, else the last trade, else the previous close. Submitting at the limit-up price
+    (what the old PTrade strategy did: order_market(limit_price=up_px)) is outside the cage
+    and gets rejected / risk-blocked.
+
+    This port keeps the QMT-era formula, which is STRICTER than the exchange window:
         final = min( min(ask*1.02, ask+0.1), limit_up )
-    Anchors on ask (askPrice); falls back to last when ask is 0/absent (that is the
-    limit-up case, where the caller has already skipped under the conservative rule)."""
-    px = ask if (ask and ask > 0) else last
+    so it satisfies both the exchange cage and a broker rule of "within 2% of the current
+    price". Slightly passive on high-priced names, never rejected.
+    """
+    px = ask if (ask and ask > 0) else (last if (last and last > 0) else (preclose or 0.0))
     if not px or px <= 0:
         return 0.0
     if PRICE_MODE != "cage":
@@ -820,11 +1001,10 @@ def _buy_price(last, ask, limit_up):
     return _round_price(cage)
 
 
-def _sell_price(last, bid, limit_down):
-    """QMT calculate_trade_price_and_volume(sell):
-        final = max( max(bid*0.98, bid-0.1), limit_down )
-    Anchors on bid (bidPrice), not on the last trade price."""
-    px = bid if (bid and bid > 0) else last
+def _sell_price(last, bid, limit_down, preclose=None):
+    """Sell limit price under the same cage: >= min(benchmark*0.98, benchmark-0.1), benchmark = best bid,
+    else last trade, else previous close. Anchors on bid, not on the last trade price."""
+    px = bid if (bid and bid > 0) else (last if (last and last > 0) else (preclose or 0.0))
     if not px or px <= 0:
         return 0.0
     if PRICE_MODE != "cage":
@@ -838,11 +1018,16 @@ def _sell_price(last, bid, limit_down):
 
 
 def _up_down(q, code):
-    """(limit_up, limit_down) from preclose + board rules; (0,0) if unknown.
+    """(limit_up, limit_down): prefer the platform's own up_px/down_px, else preclose + board
+    rules; (0,0) if unknown.
 
     ST is detected from the snapshot name when present, else by asking the platform
     (get_stock_status 'ST') - an ST name has a 5% band, and getting this wrong would
     make the limit checks think a 5%-limit stock is not at its limit."""
+    up = _to_float(q.get("limit_up") or 0.0)
+    down = _to_float(q.get("limit_down") or 0.0)
+    if up > 0 and down > 0:
+        return up, down                      # the platform's own numbers, authoritative
     if not q.get("preclose"):
         return 0.0, 0.0
     mk, pl = _split_code(code)
@@ -1009,14 +1194,14 @@ def _plan(view, stocks, params):
         p = positions.get(code) or {}
         last = qq.get("last") or p.get("last") or 0.0
         _u, dn = _up_down(qq, code)
-        px = _sell_price(last, qq.get("bid1"), dn) or last
+        px = _sell_price(last, qq.get("bid1"), dn, qq.get("preclose")) or last
         est_in += vol * px
     budget = max(cash + est_in * 0.995 - reserve, 0.0)
 
     planned_buys = []
     for b in buys:
         up, _dn = _up_down(quote(b["code"]), b["code"])
-        price = _buy_price(b["last"], b["ask"], up)
+        price = _buy_price(b["last"], b["ask"], up, b.get("preclose"))
         if price <= 0:
             notes.append("no price, skip buy: %s" % b["code"])
             continue
@@ -1241,20 +1426,22 @@ def _run(context, tag, target_file):
             q = _snap_one(_pt_code(c))
             last = q.get("last") or p.get("last") or 0.0
             _up, down = _up_down(q, c)
-            price = _sell_price(last, q.get("bid1"), down)
+            price = _sell_price(last, q.get("bid1"), down, q.get("preclose"))
             if price <= 0:
-                # QMT place_sell_order fallback: when no price can be computed it still
-                # sends the order, without a limit price (platform uses peer/last price).
-                _log("WARN", "%s: no computable price, sending sell without limit price" % c)
-                oid = _place(context, _pt_code(c), -v, None)
-            else:
-                oid = _place(context, _pt_code(c), -v, price)
+                # Never send an unprotected order: a market order without a valid limit is
+                # exactly what the price-cage rule rejects, and it also loses price control.
+                _log("ERROR", "%s: no computable sell price (no bid/last/preclose), "
+                              "sell skipped - fix manually" % c)
+                results.append({"code": c, "amount": -v, "reason": r, "order_id": None,
+                                "skipped": "no-price"})
+                continue
+            oid = _place(context, _pt_code(c), -v, price)
             results.append({"code": c, "amount": -v, "reason": r, "order_id": str(oid)})
             _log("INFO", "sold %s %d @ %s -> order %s" % (c, v, price, oid))
         for c, v, r in plan["buys"]:
             q = _snap_one(_pt_code(c))
             up, _down = _up_down(q, c)
-            price = _buy_price(q.get("last"), q.get("ask1"), up)
+            price = _buy_price(q.get("last"), q.get("ask1"), up, q.get("preclose"))
             if price <= 0:
                 # QMT: a buy without a valid price/limit is SKIPPED, never sent blind.
                 _log("ERROR", "%s: no price/limit-up, buy skipped" % c)
@@ -1317,31 +1504,35 @@ def _selfcheck(context):
         caps["portfolio_read_error"] = str(e)
     for name in ("get_positions", "get_snapshot", "get_stock_status", "get_stock_info",
                  "order", "run_daily", "get_research_path", "log"):
-        try:
-            caps["has_" + name] = callable(globals().get(name))
-        except Exception:
-            caps["has_" + name] = False
-    probe = ""
-    for suf in ("SS", "SH"):
-        try:
-            if get_snapshot("600000." + suf):
-                probe = suf
-                break
-        except Exception:
-            pass
-    if probe:
-        _CODE_SUFFIX_SH[0] = probe
+        f = globals().get(name)
+        if f is None:
+            try:
+                f = getattr(__builtins__, name, None)   # the platform injects `log` here
+            except Exception:
+                f = None
+        caps["has_" + name] = callable(f)
     caps["sh_suffix"] = _CODE_SUFFIX_SH[0]
+    caps["sz_suffix"] = _CODE_SUFFIX_SZ[0]
+    try:
+        caps["snapshot_600000"] = repr(get_snapshot(["600000." + caps["sh_suffix"]]))[:200]
+    except Exception as e:
+        caps["snapshot_600000"] = "ERR %s: %s" % (type(e).__name__, e)
     try:
         caps["quote_600000"] = _snap_one(_pt_code("600000.SH"))
     except Exception as e:
         caps["quote_600000"] = "ERR %s" % e
+    try:
+        caps["quote_002001"] = _snap_one(_pt_code("002001.SZ"))
+    except Exception as e:
+        caps["quote_002001"] = "ERR %s" % e
     CAPS.clear()
     CAPS.update(caps)
     for k in sorted(caps.keys()):
         _log("INFO", "selfcheck %s = %s" % (k, caps[k]))
-    if not probe:
-        _log("WARN", "could not detect the Shanghai suffix (SS/SH); orders may be rejected")
+    for k in ("quote_600000", "quote_002001"):
+        if not caps.get(k):
+            _log("WARN", "%s is empty - suffix (%s/%s) may be wrong, or snapshots are "
+                         "unavailable pre-open" % (k, caps["sh_suffix"], caps["sz_suffix"]))
     return caps
 
 
@@ -1351,6 +1542,15 @@ def initialize(context):
     _log("INFO", "ptrade_rebalance_executor init (python 3.5 compatible)")
     _log("INFO", "DRY_RUN=%s MISSING_FILE_ACTION=%s PRICE_MODE=%s TARGET_FILES=%s"
          % (DRY_RUN, MISSING_FILE_ACTION, PRICE_MODE, TARGET_FILES))
+    # suffixes FIRST: quotes/orders are assembled from them, and the best evidence (raw
+    # position codes / get_stock_info) is available before the open whereas snapshots are not.
+    try:
+        sh, sz, ev = _detect_suffixes(context)
+        _CODE_SUFFIX_SH[0] = sh
+        _CODE_SUFFIX_SZ[0] = sz
+        _log("INFO", "code suffix = .%s (SH) / .%s (SZ)  evidence: %s" % (sh, sz, ev))
+    except Exception as e:
+        _log("ERROR", "suffix detection failed: %s: %s" % (type(e).__name__, e))
     try:
         _selfcheck(context)
     except Exception as e:

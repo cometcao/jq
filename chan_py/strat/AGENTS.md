@@ -249,8 +249,20 @@ ptrade/ptrade_rebalance_executor.py   云端策略（粘进 PTrade 编辑器的�
   文件扁平写在研究目录根）、无原子 rename。详见 notes §4.2。
 - **年龄策略**：目标文件 ≤7 天照用（含上一交易日那份），>7 天清该策略份额；本机拿不到名单时**什么都不写**，
   于是云端继续用手上那份，而不是立刻清仓。
-- **自测**：`ptrade_executor_selftest.py`（21 组，含多策略份额/年龄策略/价格笼子/ST 两道/重复名单）+
-  `ptrade_target_selftest.py`（本机产出 ↔ 云端读取的契约）。两侧都跑通了才算改完。
+- **委托价必须落在"价格笼子"内（2026-10-19 实盘复核）**：交易所连续竞价规定买入申报价 ≤
+  `max(基准×102%, 基准+0.1)`、卖出 ≥ `min(基准×98%, 基准−0.1)`，基准按 **对手价 → 最新成交价 → 前收盘价**
+  回退；市价单也要带笼内保护限价。**绝不能把涨停/跌停价当委托价**（旧 PTrade 策略
+  `low_valuation_regression_chan_filter_1d_strategy_full_gj.py` 就是这么写的：`limit_price=up_px/down_px`）。
+  本策略沿用 QMT 的保守写法：买 `min(min(ask×1.02, ask+0.1), 涨停价)`、卖 `max(max(bid×0.98, bid−0.1), 跌停价)`，
+  涨跌停价只用于夹值；三档基准都取不到 → **跳过该单并记 ERROR**（不再发无保护市价单）。详见 notes §4.1.1。
+- **平台 API 形态（同一份实盘文件证实）**：`get_stock_status(code,'HALT'|'ST')` 返回**字典**要
+  `[code]` 取值（把字典当布尔 → 每只票都被判停牌，这是 2026-10-19 `nothing to do` 的真因）；
+  `get_snapshot(code)[code]` 字段为 `last_px`/`up_px`/`down_px`；下单用
+  `order_market(code, amount=±shares, market_type=…, limit_price=…)`；名单文件是 `XSHE/XSHG` 方言，
+  **转成 `.SZ`/`.SS` 后**才是 API 方言（基准 `000300.SS`）。
+- **自测**：`ptrade_executor_selftest.py`（**26 组**：多策略份额/年龄策略/价格笼子/涨跌停夹值/ST 两道/
+  重复名单/后缀探测/状态字典解码/order_market 优先）+ `ptrade_target_selftest.py`
+  （本机产出 ↔ 云端读取的契约）。两侧都跑通了才算改完。
 
 **待办**：向国金确认定时上传是否开放/次数上限、是否支持**按文件夹同步**到研究目录下的同名子目录、
 `get_research_path()` 读写、实盘是否有 `run_daily`/`order`；确认本机 `trading_times`（出文件截止）严格早于

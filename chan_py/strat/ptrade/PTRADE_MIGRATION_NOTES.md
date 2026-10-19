@@ -196,6 +196,30 @@ archive/...              ← 本机归档（不上传），供对账
 | `MAX_ORDERS_PER_RUN` | 40 | 单策略计划超过就整轮放弃（防坏文件清仓） |
 | `ONLY_ONCE_PER_TIME` | True | 同一 `(策略, 日期@时刻)` 只执行一次，跨重启有效 |
 
+### 4.0 `ptrade_config.json` 的键位（**本机 `ptrade_target.py` 读的**，云端策略不读它）
+
+**真正有读者的键**：
+
+| 键 | 用途 |
+|---|---|
+| `strategies[]` | 策略清单：`name` / `stock_list_file`(兜底) / `capital_ratio` / `max_holdings` / `candidate_pool_size` / `cash_reserve_ratio` / `rebalance_threshold` / `trading_times` / `email_check_offset_minutes` —— 前六个会**原样写进 target 文件**供云端使用 |
+| `stock_list_dir` + `stock_list_files` | 名单来源：生效路径 = `stock_list_dir/<stock_list_files[策略]>`，且必须与 email 配置的 `save_directory` 一致（否则启动即拒绝） |
+| `log_file` | 本机日志（相对 `ptrade/` 解析） |
+| `exchange_path` | 本机归档目录（默认 `archive`） |
+| `ptrade_upload_path` | 客户端「定时上传」源目录（默认 `upload_file`） |
+| `ptrade_upload_name_tpl` | 上传文件命名模板（默认 `target_%s.json`） |
+
+**QMT 时代的遗留键，ptrade 代码里零引用，部署时可以直接删**：
+
+| 遗留键 | 当年给谁用 | 现在 |
+|---|---|---|
+| **`account_id`** | QMT executor 的 `get_trade_detail_data(account_id, 'STOCK', ...)` | ❌ 无用：云端 `order()` 由平台绑定账户，资产/持仓走 `context.portfolio` |
+| `position_tracking_file` | QMT executor 的 tracker 文件 | ❌ 无用：仓位归属改用研究目录里的 `ptrade_state_positions.json`（云端自己写） |
+| `max_holdings` / `candidate_pool_size` / `cash_reserve_ratio` / `rebalance_threshold`（若同时留了旧副本） | QMT executor 从 config 读 | ⚠️ 现在**必须留**：它们是本机写进 target 文件的执行参数来源（`strategies[]` 里那四个，不是顶层） |
+| `run_now` | 无（脚本只认 `--now` 命令行参数） | ❌ 无用，可删 |
+| `ptrade_upload_filename`（单数旧名） | 早期单策略版 | ❌ 已作废：启动时会打 WARN，改用 `ptrade_upload_name_tpl` |
+| `executor_log_file` | QMT executor 的日志 | ❌ 创建这份配置时就没抄进来 |
+
 ### 4.1 调仓语义（2026-10-15 与 QMT 执行器逐项对齐）
 
 **核心：均仓门限是"组合级"，不是"逐票级"** —— 这是**防 churn** 的设计，**勿改成按单只票的偏离来判断**：
@@ -226,7 +250,7 @@ if deviation > rebalance_threshold(20%):  -> 触发：把每只【已持仓】�
 | 买入价 | `min( min(ask×1.02, ask+0.1), 涨停价 )` | 同 | ✅ |
 | 卖出价 | `max( max(bid×0.98, bid−0.1), 跌停价 )` | 同 | ✅ |
 | 卖价锚 | `bid1`（不是最新价） | `bid1` | ✅ |
-| 涨跌停价取不到 | **买**：跳过该单；**卖**：退化为"不带限价"挂单 | 同（刻意不对称） | ✅ |
+| 价格基准取不到 | **买**：跳过该单；**卖**：退化为"不带限价"挂单 | **买卖都跳过 + ERROR**（不再发无保护市价单，见 §4.1.1） | ⚠️ 刻意更严 |
 | 涨停时买入 | 不检查（ask=0 时会挂涨停价） | **跳过**（更保守） | ⚠️ 有意不对齐 |
 | **ST 股** | 无特别处理（5% 幅度由涨跌停价体现） | **一律不买**：`get_stock_status(code,'ST')` 或行情名含 ST 即判定 → **记 ERROR** 并跳过该票（进日志 + 审计 `errors[]`），本轮其它委托照常 | ⚠️ 有意加严 |
 | 停牌 | 完全没有检查 | `get_stock_status('HALT')` → 跳过 | ⚠️ 有意不对齐 |
@@ -238,7 +262,35 @@ if deviation > rebalance_threshold(20%):  -> 触发：把每只【已持仓】�
 > 对齐范围：✅ 七项按 QMT 语义实现；⚠️ 四项是 PTrade 侧**刻意更严**（涨停不买、ST 一律不买、停牌跳过、
 > 用可卖量），对齐后会去挂涨停价买单/买入 ST/卖停牌股/下超卖量，不做；⚙️ 三项是平台差异，复刻没有意义。
 
-**其他安全闸门（不在 QMT 语义内，实盘前加）**：
+#### 4.1.1 委托价合规：**绝不能拿涨停价/跌停价当委托价**
+
+> 2026-10-19 复核确认。旧 PTrade 策略 `low_valuation_regression_chan_filter_1d_strategy_full_gj.py`
+> 写的是 `order_market(..., limit_price=up_px)` / `limit_price=snap_shot.get("down_px", 0.1)`
+> ——**直接用涨停/跌停价当限价**，这正是"量化交易不被允许"的写法。
+
+交易所**连续竞价"价格笼子"**（沪深主板/创业板/科创板）：
+
+| 方向 | 允许区间 | 基准价（按顺序取） |
+|---|---|---|
+| 买入申报价 | ≤ **max**(基准×102%, 基准+0.1 元) | ① 即时最低卖价 ask → ② 最新成交价 → ③ 前收盘价 |
+| 卖出申报价 | ≥ **min**(基准×98%, 基准−0.1 元) | ① 即时最高买价 bid → ② 最新成交价 → ③ 前收盘价 |
+
+市价单同样必须带**笼内**保护限价。直接挂涨停价（10% 外）在连续竞价里必然越界 → 交易所拒单或券商风控拦单
+（"委托价超出价格笼子"）。
+
+**本策略的实现（与 QMT 版一致，且比交易所规则更保守）**：
+
+```
+买入价 = min( min(基准×1.02, 基准+0.1), 涨停价 )     基准 = ask → 最新价 → 前收盘
+卖出价 = max( max(基准×0.98, 基准−0.1), 跌停价 )     基准 = bid → 最新价 → 前收盘
+```
+
+- 取 ±2% 与 ±0.1 元中的**更保守者**，所以既满足交易所笼子，也满足"不偏离现价 2%"这类券商更严的规则；
+- 涨跌停价**只用来夹值**，永远不作为委托价本身（除非个股已封在停板价上，那时最新价=停板价，属合规）；
+- 基准价按交易所顺序回退：对手价 → 最新成交价 → 前收盘价；
+- **三个都取不到 → 跳过该单并记 ERROR**（旧实现会"不带限价"发市价单，等于放弃价格控制，已删除这条路径）。
+
+#### 4.1.2 其他安全闸门（不在 QMT 语义内，实盘前加）
 
 - `DRY_RUN` 默认 **False**（直接实盘；改成 `True` 可做一次只记不下单的排练）
 - **账户读数保护**：`总资产 <= 0`（接口形状不对/读到空）→ 记 ERROR 并**整轮拒绝交易**，而不是拿 `现金/空槽数` 盲买

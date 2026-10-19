@@ -29,6 +29,7 @@ TARGET_FILE = S.TARGET_FILES[0]
 # fake PTrade API surface
 # ----------------------------------------------------------------------------
 ORDERS = []
+ORDER_MARKET_CALLS = []
 REGISTERED = []
 RESEARCH = None
 QUOTES = {}      # ptrade-style code -> dict
@@ -75,6 +76,7 @@ def fake_get_research_path():
 def fake_get_snapshot(code):
     if isinstance(code, (list, tuple)):
         code = code[0] if code else ""
+    code = _alt_suffix(code)          # tolerate XSHG/XSHE/SS/SH/SZ spellings
     q = QUOTES.get(code)
     if not q:
         return {}
@@ -86,12 +88,28 @@ def fake_get_snapshot(code):
     }
 
 
+def _alt_suffix(code):
+    """QUOTES is keyed <plain>.SS / <plain>.SZ; map any other dialect onto it."""
+    code = str(code).upper()
+    for a, b in ((".XSHG", ".SS"), (".SH", ".SS"), (".XSHE", ".SZ")):
+        if code.endswith(a):
+            return code[:-len(a)] + b
+    return code
+
+
+def _same_code(a, b):
+    return _alt_suffix(a) == _alt_suffix(b)
+
+
 def fake_get_stock_status(code, kind):
+    """Real PTrade returns a DICT keyed by the security (verified against the production
+    reference strategy: `st = get_stock_status(security,'ST'); if st[security]:`).
+    Keep the fake in that shape - a truthiness test on the dict marks EVERYTHING halted."""
     if kind == "HALT":
-        return code in HALTED
+        return {code: any(_same_code(code, c) for c in HALTED)}
     if kind == "ST":
-        return code in ST_NAMES
-    return False
+        return {code: any(_same_code(code, c) for c in ST_NAMES)}
+    return {code: False}
 
 
 def fake_get_positions():
@@ -101,6 +119,14 @@ def fake_get_positions():
 def fake_order(code, amount, limit_price=None):
     ORDERS.append({"code": code, "amount": int(amount), "limit_price": limit_price})
     return "oid%d" % len(ORDERS)
+
+
+def fake_order_market(code, amount=None, market_type=None, limit_price=None):
+    """The API the proven production reference strategy actually calls."""
+    ORDERS.append({"code": code, "amount": int(amount), "limit_price": limit_price})
+    ORDER_MARKET_CALLS.append({"code": code, "amount": int(amount),
+                               "market_type": market_type, "limit_price": limit_price})
+    return "om%d" % len(ORDERS)
 
 
 def fake_run_daily(context, func, when):
@@ -114,6 +140,7 @@ def _install_fakes():
     S.get_stock_status = fake_get_stock_status
     S.get_positions = fake_get_positions
     S.order = fake_order
+    S.order_market = fake_order_market
     S.run_daily = fake_run_daily
 
 
@@ -581,6 +608,143 @@ def test_too_old_target_liquidates():
         write_target()
 
 
+def test_suffix_detected_from_position_codes():
+    """The code suffix must come from the platform's own spelling, because snapshot probes
+    are empty before the open (live 2026-10-19: it kept 'SS' while the platform uses the
+    JoinQuant dialect XSHG/XSHE, so every 600xxx quote/order carried a wrong suffix)."""
+    print("test_suffix_detected_from_position_codes")
+    saved = (S._CODE_SUFFIX_SH[0], S._CODE_SUFFIX_SZ[0])
+    try:
+        xshg = {"600697.XSHG": Pos("600697.XSHG", 7000, 7000, 10.19),
+                "002209.XSHE": Pos("002209.XSHE", 6000, 6000, 8.20)}
+        ctx = Context(cash=10000.0, total=520000.0, positions=xshg)
+        sh, sz, ev = S._detect_suffixes(ctx)
+        check("XSHG/XSHE detected from raw position codes",
+              sh == "XSHG" and sz == "XSHE", "%s / %s / %s" % (sh, sz, ev))
+        check("the evidence names the raw code", "600697.XSHG" in ev, ev)
+
+        sh2, sz2, ev2 = S._detect_suffixes(build_context())
+        check("SS/SZ detected from .SS position codes",
+              sh2 == "SS" and sz2 == "SZ", "%s / %s / %s" % (sh2, sz2, ev2))
+
+        empty = Context(cash=1.0, total=1.0, positions={})
+        sh3, sz3, ev3 = S._detect_suffixes(empty)
+        check("no evidence -> documented default with a loud note",
+              "NO EVIDENCE" in ev3 and
+              (sh3, sz3) == (S.SH_SUFFIX_CANDIDATES[0], S.SZ_SUFFIX_CANDIDATES[0]),
+              "%s / %s / %s" % (sh3, sz3, ev3))
+
+        # a platform spelled .XSHG must produce orders/comparisons in that dialect
+        S._CODE_SUFFIX_SH[0] = "XSHG"
+        S._CODE_SUFFIX_SZ[0] = "XSHE"
+        check("_pt_code spells Shanghai codes the platform's way",
+              S._pt_code("600739.SH") == "600739.XSHG", S._pt_code("600739.SH"))
+        check("_pt_code spells Shenzhen codes the platform's way",
+              S._pt_code("000002.SZ") == "000002.XSHE", S._pt_code("000002.SZ"))
+        check("quotes still resolve through the dialect mapping",
+              S._snap_one("600739.XSHG").get("last") == P["600739"],
+              str(S._snap_one("600739.XSHG")))
+    finally:
+        S._CODE_SUFFIX_SH[0] = saved[0]
+        S._CODE_SUFFIX_SZ[0] = saved[1]
+
+
+def test_platform_status_dict_is_handled():
+    """Live 2026-10-19: get_stock_status() returns a dict keyed by the security, so testing
+    the dict itself marked EVERY name halted and blocked every out-of-pool sell."""
+    print("test_platform_status_dict_is_handled")
+    saved = S.get_stock_status
+    try:
+        S.get_stock_status = lambda code, kind: {code: code.startswith("601318")}
+        check("dict answer: halted name detected", S._is_halted("601318.SS") is True,
+              repr(S._is_halted("601318.SS")))
+        check("dict answer: healthy name is NOT halted",
+              S._is_halted("600739.SS") is False, repr(S._is_halted("600739.SS")))
+        check("dict answer: ST uses the same decoding",
+              S._is_st("601318.SS") is True and S._is_st("600739.SS") is False)
+        S.get_stock_status = lambda code, kind: {code: False}
+        check("dict {code: False} is false even though the dict is truthy",
+              S._is_halted("600739.SS") is False)
+        S.get_stock_status = lambda code, kind: True
+        check("plain bool answer still works", S._is_halted("600739.SS") is True)
+        S.get_stock_status = lambda code, kind: {}
+        check("empty dict -> not halted", S._is_halted("600739.SS") is False)
+        S.get_stock_status = lambda code, kind: "0"
+        check("string '0' -> not halted", S._is_halted("600739.SS") is False)
+    finally:
+        S.get_stock_status = saved
+
+
+def test_place_prefers_order_market():
+    """The proven production reference strategy orders via order_market(limit_price=...)."""
+    print("test_place_prefers_order_market")
+    saved = S.order_market
+    try:
+        ORDER_MARKET_CALLS[:] = []
+        ORDERS[:] = []
+        S._place(None, "600739.SS", 300, 10.30)
+        check("order_market is used when available", len(ORDER_MARKET_CALLS) == 1,
+              str(ORDER_MARKET_CALLS))
+        call = ORDER_MARKET_CALLS[0] if ORDER_MARKET_CALLS else {}
+        check("shares and the protective limit are passed through",
+              call.get("amount") == 300 and call.get("limit_price") == 10.30, str(call))
+        check("market_type follows the board map (60x -> 1)", call.get("market_type") == 1,
+              str(call.get("market_type")))
+        ORDER_MARKET_CALLS[:] = []
+        S._place(None, "000002.SS", -800, None)
+        check("sells pass a negative amount (300/00x -> market_type 0)",
+              ORDER_MARKET_CALLS and ORDER_MARKET_CALLS[-1]["amount"] == -800 and
+              ORDER_MARKET_CALLS[-1]["market_type"] == 0, str(ORDER_MARKET_CALLS[-1:]))
+        del S.order_market
+        ORDERS[:] = []
+        S._place(None, "600739.SS", -300, None)
+        check("falls back to order() when order_market is missing",
+              len(ORDERS) == 1 and ORDERS[0]["amount"] == -300, str(ORDERS))
+    finally:
+        S.order_market = saved
+
+
+def test_up_down_prefers_platform_limits():
+    print("test_up_down_prefers_platform_limits")
+    up, down = S._up_down({"preclose": 10.0, "limit_up": 11.0, "limit_down": 9.0,
+                           "name": ""}, "600739.SH")
+    check("platform up_px/down_px are used when published", (up, down) == (11.0, 9.0),
+          "%s / %s" % (up, down))
+    up2, down2 = S._up_down({"preclose": 10.0, "name": ""}, "600739.SH")
+    check("falls back to preclose * board band",
+          abs(up2 - 11.0) < 0.011 and abs(down2 - 9.0) < 0.011, "%s / %s" % (up2, down2))
+
+
+def test_price_cage_is_compliant():
+    """Exchange price cage (连续竞价价格笼子) + stricter broker rules forbid working an order
+    at the limit-up / limit-down price. The old PTrade strategy did exactly that
+    (order_market(limit_price=up_px) / down_px); the QMT version replaced it with a cage
+    around the counterparty quote, and this port keeps that."""
+    print("test_price_cage_is_compliant")
+    check("buy cage = min(ask*1.02, ask+0.1)", S._buy_price(9.95, 10.00, 11.00) == 10.10,
+          str(S._buy_price(9.95, 10.00, 11.00)))
+    check("buy never exceeds the limit-up price",
+          S._buy_price(10.95, 10.99, 11.00) <= 11.00, str(S._buy_price(10.95, 10.99, 11.00)))
+    check("buy is clamped by a tight limit-up",
+          S._buy_price(10.90, 10.95, 10.96) <= 10.96, str(S._buy_price(10.90, 10.95, 10.96)))
+    check("sell cage = max(bid*0.98, bid-0.1)", S._sell_price(10.05, 10.00, 9.00) == 9.90,
+          str(S._sell_price(10.05, 10.00, 9.00)))
+    check("sell is clamped by a tight limit-down",
+          S._sell_price(9.05, 9.01, 9.00) >= 9.00, str(S._sell_price(9.05, 9.01, 9.00)))
+    # benchmark fallback per the exchange rule: counterparty -> last trade -> previous close
+    check("buy falls back to last when ask is missing",
+          S._buy_price(10.00, 0, 11.00) == 10.10, str(S._buy_price(10.00, 0, 11.00)))
+    check("buy falls back to preclose when ask and last are missing",
+          S._buy_price(0, 0, 11.00, 10.00) == 10.10, str(S._buy_price(0, 0, 11.00, 10.00)))
+    check("sell falls back to last/preclose instead of the limit-down price",
+          S._sell_price(0, 0, 9.00, 10.00) == 9.90, str(S._sell_price(0, 0, 9.00, 10.00)))
+    check("no benchmark at all -> 0.0 so the caller skips (never an unprotected order)",
+          S._sell_price(0, 0, 0, None) == 0.0 and S._buy_price(0, 0, 0, None) == 0.0)
+    check("a buy no longer prices at the limit-up price when the last trade is lower",
+          S._buy_price(10.00, 0, 11.00, 10.00) < 11.00,
+          str(S._buy_price(10.00, 0, 11.00, 10.00)))
+
+
 def test_target_found_in_upload_file_subfolder():
     """The PTrade client mirrors the local upload_file/ folder as a folder of the same
     name, so the real server path is <research>/upload_file/target_low_valuation.json."""
@@ -709,6 +873,11 @@ def main():
              test_st_uses_five_percent_band, test_st_is_never_bought,
              test_previous_day_target_is_used, test_too_old_target_liquidates,
              test_two_strategies_share_a_position,
+             test_suffix_detected_from_position_codes,
+             test_platform_status_dict_is_handled,
+             test_place_prefers_order_market,
+             test_up_down_prefers_platform_limits,
+             test_price_cage_is_compliant,
              test_target_found_in_upload_file_subfolder, test_only_fixed_name_is_read]
     for t in tests:
         t()
