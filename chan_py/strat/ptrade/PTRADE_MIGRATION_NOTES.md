@@ -266,7 +266,7 @@ if deviation > rebalance_threshold(20%):  -> 触发：把每只【已持仓】�
 | **ST 股** | 无特别处理（5% 幅度由涨跌停价体现） | **一律不买**：`get_stock_status(code,'ST')` 或行情名含 ST 即判定 → **记 ERROR** 并跳过该票（进日志 + 审计 `errors[]`），本轮其它委托照常 | ⚠️ 有意加严 |
 | 停牌 | 完全没有检查 | `get_stock_status('HALT')` → 跳过 | ⚠️ 有意不对齐 |
 | T+1 可卖量 | 用全量份额，可能超卖被拒 | 用 `enable_amount` 可卖量 | ⚠️ 有意不对齐 |
-| 阶段推进 | 卖池外 → 查账户 → 门限 → 均仓 → 填空槽，**每阶段重查账户**并等成交（30s 轮询） | **一次规划**，卖出回款按估算计入预算（按将要挂出的卖价 ×0.995，因为平台不允许等成交） | ⚙️ 平台差异（PTrade 异步、无法等成交） |
+| 阶段推进 | 卖池外 → 查账户 → 门限 → 均仓 → 填空槽，**每阶段重查账户**并等成交（30s 轮询） | **一次规划**，但**槽位与买预算都按"卖出之后"的账本算**（`slots = max_holdings − (持仓 − 本轮卖出的票)`，`买预算 = 现金 + 预估回款×0.995`）；卖出后**等 ≤15s** 让回款落账再发买单 | ⚙️ 平台差异（PTrade 异步、无法等成交） |
 | 账户口径 | 策略切片：`总资产×capital_ratio`；`现金=min(策略总额−策略持仓市值，券商可用现金×capital_ratio)`；持仓=tracker 归属 | 直接用账户值 | ⚙️ 单策略（capital_ratio=1.0）下等价；多策略需补切片 |
 | 状态 | `strategy_positions.json` tracker 落盘 | 无 tracker，写 `ptrade_state/orders_*.json` 审计 | ⚙️ 设计使然 |
 
@@ -331,9 +331,11 @@ if deviation > rebalance_threshold(20%):  -> 触发：把每只【已持仓】�
 3. 想在上线前就验证，可把 `DRY_RUN = True` 跑一天：日志会打印计划（不会真下单），
    但**无法验证 market_type 是否被接受**——那个只能靠一笔真实委托，所以第 2 步才是最终确认。
 
-> 已知局限：`order_market` 是异步的，卖出成交价/成交量当场拿不到；买入预算是按
-> "卖价 ×0.995"估算的。若某笔卖单没成交/被拒，买单可能因资金不足被拒（会记 ERROR）——
-> 按你的要求，这属于可接受行为（卖单必须尽力先执行）。
+> **异步成交的补偿（2026-10-20 实盘教训）**：PTrade 下单后立即返回，成交与账户同步是异步的。
+> 所以：① **槽位**按"本轮卖出之后"的账本算（否则满仓时永远 `slots=0`，只卖不买）；
+> ② **买预算** = 当前现金 + 本轮回款估算（×0.995 折扣）；③ 卖完后**等 ≤15s**
+> （`SELL_CASH_WAIT_SECONDS`）让回款落账再发买单，日志会打 `cash while waiting for sell fills: ...`。
+> 若卖单始终没成交，买单会因资金不足被拒并记 ERROR —— 按你的要求这是可接受行为（卖单必须尽力先执行）。
 
 #### 4.1.2 其他安全闸门（不在 QMT 语义内，实盘前加）
 
@@ -344,6 +346,28 @@ if deviation > rebalance_threshold(20%):  -> 触发：把每只【已持仓】�
   **ERROR**（`ST name <code> must be bought (new slot/top-up) - upstream target list is broken; REFUSING and skipping it`）
   并跳过，绝不买入；本轮其它委托照常执行，错误同时写进审计 `errors[]`
 - **ST 涨跌幅**按 5% 计算（否则 5% 限制的票在 +5% 时会被认为"没到涨停"仍去买入/卖出）
+
+### 4.1.4 QMT → PTrade 语义对照：**最容易丢的是"每阶段重读账户"**
+
+> 2026-10-20 复盘。PTrade 版不是逐行照抄，而是把 QMT 的"多阶段 + 每阶段重读账户"压成**一次规划**。
+> 凡是**依赖账户实时状态**的量，都得用"预估"补上——漏补一个就出 10-20 那种"只卖不买"。
+
+| 环节 | QMT 版 | PTrade 移植 | 状态 |
+|---|---|---|---|
+| 账户读取 | **4 次**：初始 → 池外卖出并等成交后 → 均仓卖出/买入后 → 填空槽后 | 1 次快照 + 投影账本 | ⚠️ 结构性差异，已用下面几项补偿 |
+| 空槽数 `slots` | 每阶段用最新持仓算 | 曾用"卖出前"账本 → 满仓永远 0（**10-20 故障**） | ✅ 改为 `max_holdings − (持仓 − 本轮卖出)` |
+| 买入预算 | 用卖出后的真实现金 | `现金 + 预估回款×0.995 − 储备` | ✅ 已补 |
+| 等成交 | `wait_for_order_completion`（轮询持仓，30s） | `_wait_for_proceeds`（现金 + 持仓签名，≤15s） | ✅ 等价（更短） |
+| tracker | 每次成交确认后按**券商持仓**回填 | 先按计划更新；**等待期内确认成交的票**再按券商回填 | ✅ 已补 |
+| 价格算不出 | 卖单退化为"不带限价"发出去 | **跳过 + ERROR**（不发无保护单） | ⚠️ 刻意更严 |
+| 可卖量 | `pos.volume`（可能超卖） | `enable`（T+1 可卖量） | ⚠️ 更安全 |
+| 涨停/停牌/ST | 无 | 涨停不买、停牌跳过、ST 一律不买 | ⚠️ 更严 |
+| 文件接管 | `os.replace` 改名 `.done`（原子） | 研究目录只读 + 审计 tag 幂等 | ⚠️ 平台限制 |
+| 状态落盘 | 原子 rename | 直写 + 回读校验 | ⚠️ 平台限制 |
+
+**结论/纪律**：以后凡是"从账户读到的数"（持仓数、现金、可卖量、市值），在 PTrade 里都必须问一句
+**"这个数在 QMT 里是哪一刻读的？此刻还是那个值吗？"** —— 不是，就用"本轮卖出/买入之后"的投影值，
+并留一条日志把投影和实际都打出来。
 
 ### 4.2 PTrade 沙箱硬限制（2026-10-16 实测 + 平台确认）
 
@@ -411,19 +435,26 @@ python ptrade_target_selftest.py
 ```powershell
 python ptrade_executor_selftest.py
 ```
-用假 PTrade API 跑完整策略，**共 21 组断言**：
+用假 PTrade API 跑完整策略，**共 30 组断言**：
 
-- 初始化/自检（`sh_suffix` 探测、**按文件里的 `trading_times` 注册 `run_daily`**、`DRY_RUN` 默认必须是 False）
+- 初始化/自检（`code_dialect`、**按文件里的 `trading_times` 注册 `run_daily`**、`DRY_RUN` 默认必须是 False）
 - 等权数学、组合级门限（`test_full_book_never_rebalances` / `test_gate_fires_on_cash_imbalance`）
+- **满仓卖出后同轮买入**（`test_full_book_exits_then_buys`：8/8 满仓 + 现金 0 + 2 只池外 → 2 卖 2 买，10-20 的故障回归）
+- **等待成交**（`test_wait_for_proceeds_sees_fills`：能识别"哪只真的成交了 + 回款到账"）
+- **成交后按券商回填 tracker**（`test_tracker_after_trade_uses_broker_volumes`）
 - **多策略份额**（`test_two_strategies_share_a_position`：共享代码各拿自己那份、清仓只卖自己那份、未跟踪代码给 ratio 最大者）
 - 当天专用（`test_previous_day_target_is_rejected` 非当天拒绝 + ERROR / `test_too_old_target_liquidates` >7 天清该策略份额）
 - 价格笼子（买不越涨停、卖不低于跌停、卖价锚 bid1 —— `test_cage_respects_limits`）
+- **保护价**（`test_order_protection_prices`：卖出 = max(最新价×0.98, 跌停价)、买入 ≤ 最新价×1.02；`test_price_cage_is_compliant`）
+- **下单降级**（`test_order_fallback_when_market_order_fails`：市价单被拒/异常/废单 → ±2% 变价限价单；`test_place_prefers_order_market`）
+- **平台返回形态**（`test_platform_status_dict_is_handled`：`get_stock_status` 返回字典）
+- 代码方言（`test_code_dialect_is_xshg_xshe`：XSHG/XSHE 全链路 + 旧 tracker 迁移）
 - 限价缺失 → 买单跳过（`test_buy_skipped_without_limit_up`）
 - ST：**一律不买**（`test_st_is_never_bought`）+ 5% 涨跌幅（`test_st_uses_five_percent_band`）
 - 名单重复代码去重、不产生重复委托（`test_duplicate_pool_codes_deduped`）
 - 涨跌停/停牌过滤、整手取整、现金预算不超支
 - dry-run 不下单但写审计、真实下单先卖后买、同刻幂等
-- 名单缺失/过期/**非当天**（`test_not_today_target_is_skipped`）/空列表清仓、资金不足
+- 名单缺失/过期/**非当天**/空列表清仓、资金不足
 - **只认固定文件名**（`test_only_fixed_name_is_read`：带时间戳的文件读不到，因为沙箱没有目录列举，见 §4.2）
 
 夹具落在 `ptrade/_selftest/executor/`（gitignored），可直接查看 `ptrade_state/orders_*.json`。

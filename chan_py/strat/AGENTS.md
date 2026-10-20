@@ -247,6 +247,10 @@ ptrade/ptrade_rebalance_executor.py   云端策略（粘进 PTrade 编辑器的�
 - **PTrade 沙箱硬限制**：**禁 `os`/`sys`**（连带 `traceback`/`glob`/`pathlib` 等）；可用 `pandas/numpy/enum/math/
   time/simplejson/datetime`。因此策略内只有内建 `open()`、无目录列举（只能读固定文件名）、无 `mkdir`（状态/审计
   文件扁平写在研究目录根）、无原子 rename。详见 notes §4.2。
+- **异步成交：槽位与买预算都按"卖出之后"算（2026-10-20 实盘修复）**：PTrade 下单即返回，成交/账户同步是异步的。
+  `slots = max_holdings − (持仓 − 本轮卖出的票)`（否则满仓时永远 `slots=0` → **只卖不买**，这就是 10-20 的故障：卖了 2 只、一只没买）；
+  `买预算 = 现金 + 本轮回款估算×0.995`；卖完后等 ≤15s（`SELL_CASH_WAIT_SECONDS`）让回款落账再发买单，
+  日志 `cash while waiting for sell fills: ...`。卖单最终没成交 → 买单因资金不足被拒并记 ERROR（可接受）。
 - **只交易"当天"的名单（2026-10-19）**：目标文件 `generated_at` 不是今天 → 云端 **不交易 + 记 ERROR**
   （`target is NOT from today ... REFUSING to trade this round`，仓位原样不动）；`> MAX_TARGET_AGE_DAYS(7) 天`
   才**清该策略份额**。上传晚到/漏传的后果是"当天不交易"，不会再悄悄用昨天那份。
@@ -273,8 +277,9 @@ ptrade/ptrade_rebalance_executor.py   云端策略（粘进 PTrade 编辑器的�
   `_split_code` 只在**读旧数据**（历史 tracker / 旧 target 文件）时容忍它们并迁移成 `XSHG`/`XSHE`
   （`_tracker_load` 会按新键合并，避免同一持仓被算两次）。
   证据：参考实盘策略 `get_stock_info('603822.XSHG', field="stock_name")`。
-- **自测**：`ptrade_executor_selftest.py`（**26 组**：多策略份额/当天专用(非当天拒绝)/>7 天清仓/价格笼子/
-  涨跌停夹值/ST 两道/重复名单/方言统一/状态字典解码/order_market 优先/拒单记 ERROR）+ `ptrade_target_selftest.py`
+- **自测**：`ptrade_executor_selftest.py`（**30 组**：满仓卖出后同轮买入/等待成交识别/成交后回填 tracker/多策略份额/
+  当天专用(非当天拒绝)/>7 天清仓/价格笼子/保护价(卖=max(最新价×0.98,跌停价))/下单降级为变价限价单/ST 两道/
+  重复名单/方言统一/状态字典解码/order_market 优先/拒单记 ERROR）+ `ptrade_target_selftest.py`
   （本机产出 ↔ 云端读取的契约：源方言 `XSHG/XSHE` 全程不改写）。两侧都跑通了才算改完。
 
 **待办**：向国金确认定时上传是否开放/次数上限、是否支持**按文件夹同步**到研究目录下的同名子目录、

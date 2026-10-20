@@ -50,6 +50,7 @@ FIRST RUN
 """
 
 import datetime
+import time          # allowed by the sandbox; used to let sell fills sync before buying
 
 # JSON: the platform provides simplejson (same API). Stdlib json is fetched through
 # __import__ as a fallback so this file contains no "import json" statement at all.
@@ -143,6 +144,10 @@ MARKET_TYPE_OTHER = 4            # anything else (BJ etc.)
 LOT = 100                     # A-share board lot
 MAX_ORDERS_PER_RUN = 40       # safety brake: abort the whole run above this
 ONLY_ONCE_PER_TIME = True     # one execution per (date, time) even across restarts
+# After the sell phase, wait a little before submitting the buys: PTrade fills asynchronously
+# and syncs the account every few seconds, so the proceeds may not be spendable yet.
+# 0 disables the wait (buys are then submitted immediately and may be rejected for cash).
+SELL_CASH_WAIT_SECONDS = 15
 
 # ============================================================================
 # small utilities (no PTrade API here, so they are unit-testable locally)
@@ -476,6 +481,24 @@ def _tracker_save(t):
     out = dict((k, v) for k, v in t.items())
     out["last_updated"] = _now_str()
     _write_json(_tracker_path(), out)
+
+
+def _tracker_after_trade(t, strategy, codes, broker):
+    """Correct this strategy's volumes from the BROKER for codes whose fills were confirmed.
+
+    Port of the QMT executor's _update_tracker_after_trade, which ran right after
+    wait_for_order_completion() saw the position change. Only call it for codes the wait
+    actually observed moving - otherwise a not-yet-synced account would overwrite the
+    planned volumes with stale ones.
+    """
+    for code in codes:
+        p = broker.get(code)
+        if p is None or p.get("amount", 0) <= 0:
+            t.setdefault(strategy, {}).pop(code, None)
+            continue
+        current = t.get(strategy, {}).get(code, 0)
+        other = _tracked_total(t, code) - current
+        t.setdefault(strategy, {})[code] = max(p["amount"] - other, 0)
 
 
 def _tracked_total(t, code):
@@ -1117,6 +1140,22 @@ def _plan(view, stocks, params):
         if vol > 0:
             sells.append((code, vol, "out-of-pool"))
 
+    # ---------- 1b. proceeds this run's sells will bring in ----------
+    # PTrade fills asynchronously and the account syncs every few seconds, so the cash to
+    # buy with is the CURRENT cash plus the projected sell proceeds (the QMT executor saw
+    # the real cash because it polled the account after its sells). Haircut 0.5%.
+    # 2026-10-20 (live): without this the projected cash stayed 0, so a full book that was
+    # selling two names never bought anything.
+    est_in = 0.0
+    for code, vol, _r in sells:
+        qq = quote(code)
+        p = positions.get(code) or {}
+        last = qq.get("last") or p.get("last") or 0.0
+        _u, dn = _up_down(qq, code)
+        px = _sell_price(last, qq.get("bid1"), dn, qq.get("preclose")) or last
+        est_in += vol * px
+    projected_cash = cash + est_in * 0.995
+
     # ---------- 2. in-pool re-equalisation, QMT-style combination gate ----------
     # QMT semantics (this IS the anti-churn design - do not turn it into a per-name check):
     #   the in-pool re-equalisation runs only when
@@ -1126,14 +1165,23 @@ def _plan(view, stocks, params):
     # When it does fire, EVERY held in-pool name is pulled to target_per_stock
     # (no per-name deadband).
     held = set(positions.keys())
-    slots = max_holdings - len(held)
-    cash_for_buy = cash - reserve
+    # Slots are counted on the book AS IT WILL BE after this run's out-of-pool exits.
+    # 2026-10-20 (live): PTrade fills asynchronously, so a FULL book used to compute
+    # slots = max_holdings - len(held) = 0 and never bought, even though two out-of-pool
+    # names were being sold a moment later (the QMT executor re-read the account after its
+    # sells and did buy). Selling frees the slots, so they must be counted here.
+    exiting = set(c for c, _v, _r in sells)
+    projected = len(held - exiting)
+    slots = max_holdings - projected
+    cash_for_buy = projected_cash - reserve
     rebalance_on = False
     if target_per > 0:
         if slots <= 0:
-            notes.append("book full (%d names) -> no in-pool re-equalisation" % len(held))
+            notes.append("book full (%d names after this run's exits) -> no in-pool "
+                         "re-equalisation" % projected)
         elif cash_for_buy <= 0:
-            notes.append("no free cash -> no in-pool re-equalisation")
+            notes.append("no free cash -> no in-pool re-equalisation (sells free slots, "
+                         "their proceeds fund the buys)")
         else:
             deviation = abs(cash_for_buy / float(slots) - target_per) / target_per
             rebalance_on = deviation > threshold
@@ -1215,18 +1263,10 @@ def _plan(view, stocks, params):
             slots -= 1
 
     # ---------- 4. cash budget (QMT: max_amount = min(target, available_cash) * 0.99) ----------
-    # Sell proceeds are estimated at the price we are actually going to send (bid cage),
-    # not at the last trade price, and haircut 0.5%: PTrade plans in one pass and cannot
-    # wait for the fills the way the QMT executor did (30s polling + account re-query).
-    est_in = 0.0
-    for code, vol, _r in sells:
-        qq = quote(code)
-        p = positions.get(code) or {}
-        last = qq.get("last") or p.get("last") or 0.0
-        _u, dn = _up_down(qq, code)
-        px = _sell_price(last, qq.get("bid1"), dn, qq.get("preclose")) or last
-        est_in += vol * px
-    budget = max(cash + est_in * 0.995 - reserve, 0.0)
+    # est_in / projected_cash were computed in step 1b (current cash + projected proceeds,
+    # haircut 0.5%): PTrade plans in one pass and cannot wait for the fills the way the QMT
+    # executor did (30s polling + account re-query).
+    budget = max(projected_cash - reserve, 0.0)
 
     planned_buys = []
     for b in buys:
@@ -1272,6 +1312,50 @@ def _mark_done(strategy, tag, extra):
     st["last_run"] = _now_str()
     st["last_result"] = extra
     _write_json(path, st)
+
+
+def _position_signature(context):
+    """{code: volume} - used to notice fills the way QMT's wait_for_order_completion did."""
+    try:
+        return dict((c, p.get("amount", 0)) for c, p in _positions(context).items())
+    except Exception:
+        return {}
+
+
+def _wait_for_proceeds(context, want, max_seconds):
+    """Wait (up to max_seconds) for the sell fills, watching BOTH cash and positions.
+
+    QMT polled positions for up to 30s after each phase (wait_for_order_completion) and
+    re-read the account; PTrade plans in one pass, so this is the closest equivalent: it
+    gives the platform a chance to sync, logs every movement, and reports which codes
+    actually changed so the tracker can be corrected from the broker.
+    -> (cash_now, set(confirmed_codes))
+    """
+    if max_seconds <= 0:
+        return _cash(context), set()
+    start = _cash(context)
+    cash = start
+    before = _position_signature(context)
+    changed = set()
+    waited = 0
+    while waited < int(max_seconds):
+        if want and want > 0 and cash >= want * 0.9:
+            break
+        time.sleep(1)
+        waited += 1
+        new = _cash(context)
+        if abs(new - cash) > 0.004:
+            _log("INFO", "cash while waiting for sell fills: %.2f -> %.2f (+%ds)"
+                 % (cash, new, waited))
+            cash = new
+        now = _position_signature(context)
+        for code in set(list(before.keys()) + list(now.keys())):
+            if before.get(code) != now.get(code):
+                changed.add(code)
+        before = now
+    _log("INFO", "waiting for fills: cash %.2f -> %.2f (wanted about %.2f), "
+                 "%d code(s) moved in %ds" % (start, cash, want or 0.0, len(changed), waited))
+    return cash, changed
 
 
 def _audit(strategy, plan, target, results, tag=None):
@@ -1458,6 +1542,7 @@ def _run(context, tag, target_file):
         return
 
     results = []
+    filled = set()          # codes whose broker volume moved while waiting for the sells
     if DRY_RUN:
         for c, v, r in plan["sells"]:
             results.append({"code": c, "amount": -v, "reason": r,
@@ -1492,6 +1577,13 @@ def _run(context, tag, target_file):
                             "protect_price": protect})
             _log("INFO", "sold %s %d protect=%s (limit-down sweep) -> order %s"
                  % (c, v, protect, oid))
+        # let the sell fills sync into cash before the buys go out (PTrade is asynchronous);
+        # remember which codes actually moved so the tracker can be corrected from the broker
+        if plan["sells"] and SELL_CASH_WAIT_SECONDS > 0:
+            _cash_now, filled = _wait_for_proceeds(context, plan.get("est_in", 0.0),
+                                                   SELL_CASH_WAIT_SECONDS)
+            if filled:
+                _log("INFO", "fills confirmed while waiting: %s" % sorted(filled))
         for c, v, r in plan["buys"]:
             q = _snap_one(_pt_code(c))
             up, _down = _up_down(q, c)
@@ -1518,6 +1610,11 @@ def _run(context, tag, target_file):
     _mark_done(strategy, tag, {"orders": n_orders})
     if not DRY_RUN:
         _tracker_apply_plan(tracker, strategy, plan)
+        # QMT re-derived the tracker from the broker after each confirmed fill; do the same
+        # for the codes this run actually saw move (after the plan update, so it wins).
+        if filled:
+            _tracker_after_trade(tracker, strategy, sorted(filled), _positions(context))
+            _log("INFO", "tracker corrected from the broker for %s" % sorted(filled))
     _tracker_save(tracker)
 
 

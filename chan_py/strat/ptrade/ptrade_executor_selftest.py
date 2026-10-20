@@ -346,6 +346,44 @@ def _audit_file():
     return audit_file()
 
 
+def test_wait_for_proceeds_sees_fills():
+    """QMT polled positions after each phase (wait_for_order_completion) and then corrected the
+    tracker from the broker. PTrade must at least notice which codes moved, so the tracker can
+    be re-derived from reality instead of the plan."""
+    print("test_wait_for_proceeds_sees_fills")
+    saved_cash, saved_positions, saved_sleep = S._cash, S._positions, S.time.sleep
+    try:
+        S.time.sleep = lambda s: None           # no real sleeping in the test
+        state = {"cash": 0.0, "pos": {"605189.XSHG": 1000, "300750.XSHE": 200}}
+        S._cash = lambda ctx: state["cash"]
+        S._positions = lambda ctx: dict(
+            (c, {"amount": v, "enable": v, "last": 1.0, "name": ""})
+            for c, v in state["pos"].items())
+        # first poll: nothing has filled yet -> we must not report a fill
+        cash1, filled1 = S._wait_for_proceeds(None, 1000.0, 2)
+        check("no movement -> no confirmed fills", filled1 == set(), str(filled1))
+        # then the sell fills WHILE we are waiting: cash arrives, the code disappears
+        def fill_during_sleep(sec):
+            state["cash"] = 800.0
+            state["pos"] = {"605189.XSHG": 1000}
+        S.time.sleep = fill_during_sleep
+        cash2, filled2 = S._wait_for_proceeds(None, 1000.0, 3)
+        check("a filled sell is reported", filled2 == {"300750.XSHE"}, str(filled2))
+        check("the new cash is reported back", cash2 == 800.0, str(cash2))
+    finally:
+        S._cash, S._positions, S.time.sleep = saved_cash, saved_positions, saved_sleep
+
+    print("test_tracker_after_trade_uses_broker_volumes")
+    t = {"low_valuation": {"600697.XSHG": 7000, "002209.XSHE": 6000},
+         "other": {"600697.XSHG": 1000}}
+    broker = {"600697.XSHG": {"amount": 5000}, "002209.XSHE": {"amount": 0}}
+    S._tracker_after_trade(t, "low_valuation", ["600697.XSHG", "002209.XSHE"], broker)
+    check("share is broker minus the other strategies", t["low_valuation"]["600697.XSHG"] == 4000,
+          str(t["low_valuation"]))
+    check("a name the broker no longer holds is removed",
+          "002209.XSHE" not in t["low_valuation"], str(t["low_valuation"]))
+
+
 def test_dry_run_sends_nothing():
     print("test_dry_run_sends_nothing")
     ORDERS[:] = []
@@ -673,6 +711,39 @@ def test_too_old_target_liquidates():
         write_target()
 
 
+def test_full_book_exits_then_buys():
+    """Live 2026-10-20: a FULL book (8/8, cash 0) sold two out-of-pool names and then bought
+    NOTHING, because slots were counted on the pre-sell book (slots=0) and the buy budget
+    used cash=0 instead of the sell proceeds. PTrade fills asynchronously, so the plan must
+    use the slots and the cash that this run's own sells free up."""
+    print("test_full_book_exits_then_buys")
+    QUOTES["002073.XSHE"] = {"last": 5.50, "preclose": 5.50}
+    try:
+        pos = {
+            "300750.XSHE": Pos("300750.XSHE", 200, 200, 200.00),     # out of pool -> sell
+            "002073.XSHE": Pos("002073.XSHE", 13800, 13800, 5.50),   # out of pool -> sell
+            "605189.XSHG": Pos("605189.XSHG", 1000, 1000, P["605189"]),
+            "301167.XSHE": Pos("301167.XSHE", 1000, 1000, P["301167"]),
+            "600697.XSHG": Pos("600697.XSHG", 1000, 1000, P["600697"]),
+            "600036.XSHG": Pos("600036.XSHG", 1000, 1000, P["600036"]),
+            "000002.XSHE": Pos("000002.XSHE", 1000, 1000, P["000002"]),
+            "601318.XSHG": Pos("601318.XSHG", 1000, 1000, P["601318"]),
+        }
+        ctx = Context(cash=0.0, total=616687.52, positions=pos)   # fully invested
+        plan = make_plan(ctx, POOL, dict(S.DEFAULT_PARAMS))
+        check("the two out-of-pool names are sold", len(plan["sells"]) == 2,
+              str(plan["sells"]))
+        check("the slots freed by those sells are used in the SAME run",
+              len(plan["buys"]) == 2, str(plan["buys"]))
+        check("the projected proceeds fund the buys", plan.get("est_in", 0) > 100000,
+              str(plan.get("est_in")))
+        notes = " ".join(plan["notes"])
+        check("the gate/notes count the 2 slots the sells free, in the same run",
+              "slots=2" in notes or "after this run's exits" in notes, notes)
+    finally:
+        QUOTES.pop("002073.XSHE", None)
+
+
 def test_code_dialect_is_xshg_xshe():
     """ONE dialect everywhere (2026-10-19): whatever spelling comes in, everything this
     strategy produces - internal keys, tracker keys, order/snapshot codes - is XSHG/XSHE.
@@ -976,6 +1047,7 @@ def main():
     write_target()
     S.DRY_RUN = True
     tests = [test_initialize_and_selfcheck, test_plan_math,
+             test_wait_for_proceeds_sees_fills,
              test_dry_run_sends_nothing, test_execute_places_sells_then_buys,
              test_idempotent_per_time_tag, test_missing_target_is_skipped,
              test_old_target_is_flagged_stale, test_empty_pool_liquidates,
@@ -986,6 +1058,7 @@ def main():
              test_st_uses_five_percent_band, test_st_is_never_bought,
              test_previous_day_target_is_rejected, test_too_old_target_liquidates,
              test_two_strategies_share_a_position,
+             test_full_book_exits_then_buys,
              test_code_dialect_is_xshg_xshe,
              test_platform_status_dict_is_handled,
              test_place_prefers_order_market,
