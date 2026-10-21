@@ -105,7 +105,7 @@ DEFAULT_PARAMS = {
 TARGET_DIRS = ["upload_file", ""]             # first readable candidate wins
 # state + audit files: written flat into the RESEARCH ROOT (no mkdir available)
 STATE_PREFIX = "ptrade_state_"                # ptrade_state_<strategy>.json
-AUDIT_PREFIX = "ptrade_orders_"               # ptrade_orders_<strategy>_<date>.json
+AUDIT_PREFIX = "ptrade_orders_"               # <strategy>.json (latest) + _d1.._d5.json
 TRACKER_FILE = "ptrade_state_positions.json"  # per-strategy holdings (attribution)
 
 DRY_RUN = False               # False = live trading. True = rehearsal (log the plan only)
@@ -144,10 +144,17 @@ MARKET_TYPE_OTHER = 4            # anything else (BJ etc.)
 LOT = 100                     # A-share board lot
 MAX_ORDERS_PER_RUN = 40       # safety brake: abort the whole run above this
 ONLY_ONCE_PER_TIME = True     # one execution per (date, time) even across restarts
-# After the sell phase, wait a little before submitting the buys: PTrade fills asynchronously
-# and syncs the account every few seconds, so the proceeds may not be spendable yet.
+AUDIT_SLOTS = 5               # daily order files kept (Mon..Fri slots, no delete needed)
+# After the sell phase, wait before submitting the buys: PTrade fills asynchronously and
+# syncs the account every few seconds, so the proceeds may not be spendable yet. The same
+# window is reused for the one retry pass when buys had to be skipped for lack of cash,
+# so a single run can sleep up to 2 x this value.
 # 0 disables the wait (buys are then submitted immediately and may be rejected for cash).
-SELL_CASH_WAIT_SECONDS = 15
+SELL_CASH_WAIT_SECONDS = 30
+# A trimmed buy below this fraction of the planned volume is not worth submitting: a tiny
+# position would stay in the book (a FULL book never re-equalises), so leave the slot empty
+# for the next run instead.
+BUY_MIN_FILL_RATIO = 0.5
 
 # ============================================================================
 # small utilities (no PTrade API here, so they are unit-testable locally)
@@ -369,7 +376,38 @@ def _state_path(strategy):
 
 
 def _audit_path(strategy):
-    return _join(_research_dir(), AUDIT_PREFIX + strategy + "_" + _date_str() + ".json")
+    """The LATEST run's audit file: a stable name, overwritten on every run.
+
+    This is the file to watch for "what did the last run do", and it is also what the
+    idempotency check (_already_done) reads.
+    """
+    return _join(_research_dir(), AUDIT_PREFIX + strategy + ".json")
+
+
+def _audit_daily_slot(day=None, slots=None):
+    """Weekday -> slot number 1..N (Mon=1). Pure helper, so the mapping is unit-testable."""
+    if day is None:
+        day = datetime.date.today()
+    n = int(slots if slots is not None else AUDIT_SLOTS)
+    if n < 1:
+        n = 1
+    slot = day.weekday()
+    if slot >= n:
+        slot = n - 1
+    return slot + 1
+
+
+def _audit_daily_path(strategy):
+    """Rotating daily audit file: one fixed name per WEEKDAY (Mon=d1 ... Fri=d5).
+
+    Retention can only be done by REUSING fixed names. Weekday slots therefore give
+    "at most AUDIT_SLOTS daily files, each at most a week old" with zero deletions, while
+    ptrade_orders_<strategy>.json always holds the most recent run. The run date is inside
+    the file (at / tag), so a file is never ambiguous about which day it belongs to.
+    Set AUDIT_SLOTS = 1 to keep only the latest file per strategy.
+    """
+    return _join(_research_dir(), AUDIT_PREFIX + strategy + "_d%d.json"
+                 % _audit_daily_slot())
 
 
 def _tracker_path():
@@ -1358,9 +1396,77 @@ def _wait_for_proceeds(context, want, max_seconds):
     return cash, changed
 
 
+def _execute_buys(context, buys, results, reserve=0.0):
+    """Submit planned buys, scaled to the cash that is REALLY available right now.
+
+    -> the buys that had to be skipped for lack of cash (callers may retry them once the
+    remaining sell proceeds land).
+
+    2026-10-21 (live): the plan sized three buys from an ESTIMATE of the sell proceeds
+    (223874), but only 150943 had actually settled, so the third order was rejected by the
+    broker with "insufficient available funds". The plan is a plan - the money check belongs
+    at submit time:
+      * affordable            -> planned volume
+      * partly affordable     -> trimmed, but only if >= BUY_MIN_FILL_RATIO of the plan
+      * not worth submitting  -> skipped with a WARN (a tiny position would sit in the book
+                                 forever: a FULL book never re-equalises)
+    `reserve` (cash_reserve_ratio * slice total) is NEVER spent: it is the buffer that makes
+    sure the last slot can still be bought when the sells bring in less than estimated.
+    """
+    skipped = []
+    avail = _cash(context)
+    if avail is None:
+        avail = 0.0
+    spendable = avail - max(reserve or 0.0, 0.0)
+    if spendable < 0:
+        spendable = 0.0
+    _log("INFO", "buy budget: cash=%.2f reserve=%.2f spendable=%.2f (planned buys: %d)"
+         % (avail, reserve or 0.0, spendable, len(buys)))
+    for c, v, r in buys:
+        q = _snap_one(_pt_code(c))
+        up, _down = _up_down(q, c)
+        protect = _buy_protect(q.get("last"), q.get("ask1"), up, q.get("preclose"))
+        if protect <= 0:
+            # QMT: a buy without a valid price/limit is SKIPPED, never sent blind.
+            _log("ERROR", "%s: no price/limit-up, buy skipped" % c)
+            results.append({"code": c, "amount": v, "reason": r, "order_id": None,
+                            "skipped": "no-price"})
+            continue
+        vol = int(v)
+        need = vol * protect
+        if spendable * 0.995 < need:
+            afford = int((spendable * 0.99) // (protect * LOT)) * LOT
+            if afford <= 0 or afford < vol * BUY_MIN_FILL_RATIO:
+                _log("WARN", "%s: cash short (spendable %.2f = cash %.2f - reserve %.2f, "
+                             "this buy needs about %.2f) -> buy left for the next run"
+                     % (c, spendable, avail, reserve or 0.0, need))
+                results.append({"code": c, "amount": vol, "reason": r, "order_id": None,
+                                "skipped": "no-cash"})
+                skipped.append((c, vol, r))
+                continue
+            _log("WARN", "%s: trimming buy %d -> %d shares (spendable %.2f)"
+                 % (c, vol, afford, spendable))
+            vol = afford
+        oid = _place(context, _pt_code(c), vol, protect)
+        if oid is None:
+            _log("ERROR", "BUY %s %d protect=%.2f -> REJECTED (no order id)" % (c, vol, protect))
+            results.append({"code": c, "amount": vol, "reason": r, "order_id": None,
+                            "rejected": True})
+            continue
+        results.append({"code": c, "amount": vol, "reason": r, "order_id": str(oid),
+                        "protect_price": protect})
+        _log("INFO", "bought %s %d protect=%.2f -> order %s" % (c, vol, protect, oid))
+        spendable -= vol * protect * 1.001
+    return skipped
+
+
 def _audit(strategy, plan, target, results, tag=None):
+    """Write the run record twice: the stable "latest" file and the weekday slot.
+
+    -> the latest path (the caller logs it; the slot name goes in the log too).
+    """
     path = _audit_path(strategy)
-    _write_json(path, {
+    payload = {
         "strategy": strategy,
         "at": _now_str(),
         "tag": tag,
@@ -1378,7 +1484,11 @@ def _audit(strategy, plan, target, results, tag=None):
         "buys": plan["buys"],
         "notes": plan["notes"],
         "orders": results,
-    })
+    }
+    _write_json(path, payload)
+    daily = _audit_daily_path(strategy)
+    if daily != path:
+        _write_json(daily, payload)
     return path
 
 
@@ -1583,30 +1693,33 @@ def _run(context, tag, target_file):
             _cash_now, filled = _wait_for_proceeds(context, plan.get("est_in", 0.0),
                                                    SELL_CASH_WAIT_SECONDS)
             if filled:
-                _log("INFO", "fills confirmed while waiting: %s" % sorted(filled))
-        for c, v, r in plan["buys"]:
-            q = _snap_one(_pt_code(c))
-            up, _down = _up_down(q, c)
-            protect = _buy_protect(q.get("last"), q.get("ask1"), up, q.get("preclose"))
-            if protect <= 0:
-                # QMT: a buy without a valid price/limit is SKIPPED, never sent blind.
-                _log("ERROR", "%s: no price/limit-up, buy skipped" % c)
-                results.append({"code": c, "amount": v, "reason": r, "order_id": None,
-                                "skipped": "no-price"})
-                continue
-            oid = _place(context, _pt_code(c), v, protect)
-            if oid is None:
-                _log("ERROR", "BUY %s %d protect=%.2f -> REJECTED (no order id; cash may be "
-                              "short because a sell did not go through)" % (c, v, protect))
-                results.append({"code": c, "amount": v, "reason": r, "order_id": None,
-                                "rejected": True})
-                continue
-            results.append({"code": c, "amount": v, "reason": r, "order_id": str(oid),
-                            "protect_price": protect})
-            _log("INFO", "bought %s %d protect=%.2f -> order %s" % (c, v, protect, oid))
+                _log("INFO", "codes whose volume moved while waiting: %s" % sorted(filled))
+        # buys are scaled to the cash that is REALLY there, never to the estimate
+        # (2026-10-21 live: 3 sells were estimated at 223874 but only 150943 arrived, so the
+        # third buy was rejected by the broker for insufficient funds)
+        skipped_cash = _execute_buys(context, plan["buys"], results,
+                                      plan.get("reserve", 0.0))
+        if skipped_cash and SELL_CASH_WAIT_SECONDS > 0:
+            # the missing proceeds often land a few seconds later - wait once more and retry
+            _log("WARN", "%d buy(s) skipped for lack of cash (%s); waiting once more for the "
+                         "remaining sell proceeds (<=%ds)"
+                 % (len(skipped_cash), ", ".join(c for c, _v, _r in skipped_cash),
+                    SELL_CASH_WAIT_SECONDS))
+            _c2, filled2 = _wait_for_proceeds(context, plan.get("est_in", 0.0),
+                                             SELL_CASH_WAIT_SECONDS)
+            if filled2:
+                filled |= filled2
+                _log("INFO", "codes whose volume moved in the second wait: %s"
+                     % sorted(filled2))
+            still = _execute_buys(context, skipped_cash, results,
+                                    plan.get("reserve", 0.0))
+            if still:
+                _log("WARN", "still short of cash for %s - left for the next run"
+                     % ", ".join(c for c, _v, _r in still))
 
     path = _audit(strategy, plan, target, results, tag)
-    _log("INFO", "audit written: %s" % path)
+    _log("INFO", "audit written: %s (+ daily slot %s)"
+         % (path, _basename(_audit_daily_path(strategy))))
     _mark_done(strategy, tag, {"orders": n_orders})
     if not DRY_RUN:
         _tracker_apply_plan(tracker, strategy, plan)

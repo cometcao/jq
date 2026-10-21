@@ -244,13 +244,24 @@ ptrade/ptrade_rebalance_executor.py   云端策略（粘进 PTrade 编辑器的�
   云端不再有第二份要手工同步的常量（改时间/参数不用重传策略，改变要重启策略一次）。
 - **多策略**：一个账户 N 个策略靠 tracker（研究目录 `ptrade_state_positions.json`）+ `_my_share()` 份额归属
   （移植自 QMT executor）。云端只服务 `TARGET_FILES` 里列出的文件 → **加策略 = config 加一条 + `TARGET_FILES` 加一行 + 重启**。
+- **研究目录文件保留（无 `os.remove`，只能复用文件名）**：`ptrade_orders_<策略>.json` = 最近一轮（固定名，监控看它）；
+  `ptrade_orders_<策略>_d1..d5.json` = 周一…周五五个轮换位，下周同一天覆盖 → **永远最多 5 个日审计**。
+  `AUDIT_SLOTS` 可调（=1 就只留最近一轮）。手工删旧的历史 `_<YYYYMMDD>.json` 一次即可，新版不再生成。
+- **手动调仓后的归属（下次运行时对账，`reconcile:` 日志）**：你手工卖了 → `holds ... broker does not -> dropped`；
+  你手工买了新票 → `untracked -> assigned to '<策略>'`（给 **`capital_ratio` 最大**的策略，不是"第一个"；
+  读不到参数才退回第一个）；单持有者数量不符 → 按券商校正；多持有者总数不符 → ERROR 等人工。详见 notes §4.3.2。
 - **PTrade 沙箱硬限制**：**禁 `os`/`sys`**（连带 `traceback`/`glob`/`pathlib` 等）；可用 `pandas/numpy/enum/math/
   time/simplejson/datetime`。因此策略内只有内建 `open()`、无目录列举（只能读固定文件名）、无 `mkdir`（状态/审计
   文件扁平写在研究目录根）、无原子 rename。详见 notes §4.2。
-- **异步成交：槽位与买预算都按"卖出之后"算（2026-10-20 实盘修复）**：PTrade 下单即返回，成交/账户同步是异步的。
-  `slots = max_holdings − (持仓 − 本轮卖出的票)`（否则满仓时永远 `slots=0` → **只卖不买**，这就是 10-20 的故障：卖了 2 只、一只没买）；
-  `买预算 = 现金 + 本轮回款估算×0.995`；卖完后等 ≤15s（`SELL_CASH_WAIT_SECONDS`）让回款落账再发买单，
-  日志 `cash while waiting for sell fills: ...`。卖单最终没成交 → 买单因资金不足被拒并记 ERROR（可接受）。
+- **异步成交：槽位/预算/下单金额都按"真实之后"算（2026-10-20/21 实盘修复）**：PTrade 下单即返回，成交/账户同步是异步的。
+  ① `slots = max_holdings − (持仓 − 本轮卖出的票)`（否则满仓永远 `slots=0` → **只卖不买**，10-20 故障）；
+  ② 计划预算 = `现金 + 本轮回款估算×0.995`；
+  ③ 卖完等 ≤30s（`SELL_CASH_WAIT_SECONDS`）看回款落账；
+  ④ **下单前再用"实到现金 − 储备"裁一次**（`_execute_buys`：买得起按计划；不够则减量但需 ≥
+  `BUY_MIN_FILL_RATIO`(50%)，否则跳过并记 WARN）—— 10-21 故障就是"按 223,874 的估算下了 3 笔、
+  实际只到账 150,943，第 3 笔被券商以 `[可用资金不足]` 拒掉"；
+  ⑤ 因现金不足跳过的买单会**再等一轮回款并重试**（最多两轮）。
+  `cash_reserve_ratio` = 给最后一个仓位留的余钱，在 ④ 里**永远不花**（`spendable = cash − reserve`）。
 - **只交易"当天"的名单（2026-10-19）**：目标文件 `generated_at` 不是今天 → 云端 **不交易 + 记 ERROR**
   （`target is NOT from today ... REFUSING to trade this round`，仓位原样不动）；`> MAX_TARGET_AGE_DAYS(7) 天`
   才**清该策略份额**。上传晚到/漏传的后果是"当天不交易"，不会再悄悄用昨天那份。

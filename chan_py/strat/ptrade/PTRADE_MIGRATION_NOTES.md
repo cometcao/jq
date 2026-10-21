@@ -22,7 +22,7 @@
   交易策略 ptrade_rebalance_executor.py（单文件、Py3.5.2、无 os/sys）
      initialize: 读每个 TARGET_FILES 文件的 trading_times → 逐个 run_daily 注册
      到点：读该策略名单 → tracker 份额切片 → 等权目标 → 差额 → order()
-     写回：研究目录根 ptrade_orders_<策略>_<日期>.json（审计，含 notes/errors/age）
+     写回：研究目录根 ptrade_orders_<策略>.json（最新一轮，固定名）+ ptrade_orders_<策略>_d1..d5.json（按星期几的 5 个轮换位，见 §4.3）
                        ptrade_state_<策略>.json（幂等标记）
                        ptrade_state_positions.json（tracker：每策略持有哪些代码/多少股）
 ```
@@ -129,7 +129,7 @@ archive/...              ← 本机归档（不上传），供对账
 
 | 文件 | 内容 |
 |---|---|
-| `ptrade_orders_<策略>_<YYYYMMDD>.json` | 当日计划（sells/buys/notes/**errors**）+ 该策略份额的总额/现金 + `estimated_sell_proceeds` + order_id + `target_age_days` + 幂等 `tag` |
+| `ptrade_orders_<策略>.json`（最新一轮）、`..._d1..d5.json`（按星期几轮换，见 §4.3） | 当日计划（sells/buys/notes/**errors**）+ 该策略份额的总额/现金 + `estimated_sell_proceeds` + order_id + `target_age_days` + 幂等 `tag` |
 | `ptrade_state_<策略>.json` | 已执行过的 `(日期@时刻)` 标记（跨重启幂等，保留最近 40 条）+ 上次结果 |
 | `ptrade_state_positions.json` | **tracker**：每个策略持有哪些代码、多少股（多策略份额归属，见 §2 多策略表） |
 
@@ -182,7 +182,7 @@ archive/...              ← 本机归档（不上传），供对账
 4. **直接实盘**（`DRY_RUN` 默认 False）。到点后看日志：`selfcheck`（平台 API 实况，含每个文件的 times/exists）+ `slice: total=.. cash=.. positions=..` + **`rebalance gate: ... -> ON/OFF`**
    （重点确认**满仓时是 OFF**）+ 计划明细（SELL/BUY）+ 每单 `@ price -> order id`。
    想先排练一天就把 `DRY_RUN` 改回 `True`（只记日志与审计，不下单）。
-5. **核对**：`ptrade_orders_<策略>_<日期>.json`（含份额总额/现金、`estimated_sell_proceeds`、`notes`、`errors`、`target_age_days`）与当日成交/持仓对一下。
+5. **核对**：`ptrade_orders_<策略>.json / ..._dN.json`（含份额总额/现金、`estimated_sell_proceeds`、`notes`、`errors`、`target_age_days`）与当日成交/持仓对一下。
 6. **失败兜底**：策略没跑或跑错时人工调仓（QMT 已停运，没有客户端兜底按钮了）。
 7. 上线前**不需要**再管 `qmt_rebalance_executor.py`（QMT 已停运，不会消费名单）。
 
@@ -331,11 +331,22 @@ if deviation > rebalance_threshold(20%):  -> 触发：把每只【已持仓】�
 3. 想在上线前就验证，可把 `DRY_RUN = True` 跑一天：日志会打印计划（不会真下单），
    但**无法验证 market_type 是否被接受**——那个只能靠一笔真实委托，所以第 2 步才是最终确认。
 
-> **异步成交的补偿（2026-10-20 实盘教训）**：PTrade 下单后立即返回，成交与账户同步是异步的。
-> 所以：① **槽位**按"本轮卖出之后"的账本算（否则满仓时永远 `slots=0`，只卖不买）；
-> ② **买预算** = 当前现金 + 本轮回款估算（×0.995 折扣）；③ 卖完后**等 ≤15s**
-> （`SELL_CASH_WAIT_SECONDS`）让回款落账再发买单，日志会打 `cash while waiting for sell fills: ...`。
-> 若卖单始终没成交，买单会因资金不足被拒并记 ERROR —— 按你的要求这是可接受行为（卖单必须尽力先执行）。
+> **异步成交的补偿（2026-10-20/21 实盘教训）**：PTrade 下单后立即返回，成交与账户同步是异步的。
+> 所以：
+> ① **槽位**按"本轮卖出之后"的账本算（否则满仓时永远 `slots=0`，只卖不买）；
+> ② **买预算** = 当前现金 + 本轮回款估算（×0.995 折扣）；
+> ③ 卖完后**等 ≤30s**（`SELL_CASH_WAIT_SECONDS`）让回款落账再发买单，
+> 日志 `cash while waiting for sell fills: ...` / `waiting for fills: ... N code(s) moved in 15s`
+> （⚠️ "N 只票的量变了"≠"全部成交"，所以不能拿它当"钱一定到账"）；
+> ④ **真正下单前按"实到现金 − 储备"再裁一次**（`_execute_buys`）：买得起按计划量；只买得起一部分则减量，
+> 但至少要有计划的 `BUY_MIN_FILL_RATIO`(50%)，否则宁可空着（满仓后不会再均仓，小仓会一直留着）；
+> 买不起就跳过并记 WARN。日志：`buy budget: cash=... reserve=... spendable=...` /
+> `cash short (...) -> buy left for the next run`；
+> ⑤ 因现金不足跳过的买单，**再等一轮回款重试**（最多两轮），把"晚到几十秒的卖单回款"补上。
+>
+> `cash_reserve_ratio` 的用意是**给最后一个仓位留余钱**，所以这笔储备在 ④ 里**永远不花**
+> （`spendable = cash − reserve`）。卖单若始终没成交，买单会被跳过（WARN）或最终被券商拒（ERROR）——
+> 这正是卖出保护价取 `max(最新价×0.98, 跌停价)`（能扫到跌停）的原因：**卖出必须尽全力**。
 
 #### 4.1.2 其他安全闸门（不在 QMT 语义内，实盘前加）
 
@@ -377,13 +388,54 @@ if deviation > rebalance_threshold(20%):  -> 触发：把每只【已持仓】�
 | 限制 | 后果 / 对策 |
 |---|---|
 | **禁 `os`、`sys`** | 策略只 import `datetime` + `simplejson`（**JSON 走 simplejson**，并用 `__import__("json")` 兜底，源码里不出现 `import json` 语句）；文件访问全走内建 `open()`；路径用字符串拼 `"/"`（Windows/POSIX 的 open 都认） |
-| 没有 `os.makedirs` | 状态/审计文件**扁平写在研究目录根下**：`ptrade_state_<策略>.json`、`ptrade_orders_<策略>_<日期>.json` |
+| 没有 `os.makedirs` | 状态/审计文件**扁平写在研究目录根下**：`ptrade_state_<策略>.json`、`ptrade_orders_<策略>.json / ..._dN.json` |
 | 没有 `os.listdir` | **只能读固定文件名** `target_low_valuation.json` → 本机 `ptrade_target.py` 必须写这个固定名（它已经这么做了）；带时间戳的 `rebalance_*.json` **无法被发现** |
 | 没有 `os.replace/os.rename` | 写文件不能原子替换 → 改为「写完再读回校验」，失败记 ERROR；幂等判断额外用当日审计文件兜底 |
 | 没有 `traceback` | 异常只记 `类型 + 消息`（丢栈） |
 
 **不需要探针**：`open()` 与上面的模块清单均已确认。仓库里那个
 [ptrade_capability_probe.py](ptrade_capability_probe.py) 只是留作以后再出沙箱问题时的诊断工具，不用跑。
+
+### 4.3 研究目录里的文件：保留策略 + **手动调仓后的归属**（2026-10-21）
+
+#### 4.3.1 下单/审计文件最多保留 5 个交易日（不靠删除）
+
+沙箱**没有 `os.remove`、也没有目录列举**，所以"删旧文件"做不到。保留只能靠**复用固定文件名**：
+
+| 文件 | 内容 | 更新方式 |
+|---|---|---|
+| `ptrade_orders_<策略>.json` | **最近一轮**的完整计划 + 委托结果 | 每轮覆盖（固定名，监控就看它） |
+| `ptrade_orders_<策略>_d1..d5.json` | 日审计（周一=d1 … 周五=d5） | 每轮只写当天那个位，**下周同一天覆盖它** |
+| `ptrade_state_<策略>.json` | 已完成的 `(日期@时刻)` 记号，保留最近 40 条 | 每轮追加 |
+| `ptrade_state_positions.json` | 各策略持仓归属（tracker） | 每轮对账后覆盖 |
+
+- 净效果：目录里**永远最多 5 个日审计**，每个**最多 7 天**老；文件里的 `at`/`tag` 写明是哪天的运行。
+- `AUDIT_SLOTS = 5` 可调：设 `1` 就只保留"最近一轮"那一个文件（不写 `_dN`）。
+- 想更少/更细：改 `AUDIT_SLOTS` 后重启策略即可；**旧的历史文件（旧的 `_<YYYYMMDD>.json`）需要你在服务器上手工删一次**，
+  新版本不会再生成带日期的那种名字。
+
+#### 4.3.2 你手动调仓之后，归属怎么更新
+
+**时机**：在下一次策略运行时（该策略的 `trading_times` 到点）**先对账、再规划**。不是实时同步。
+对账日志前缀是 `reconcile:`，用的是 `_tracker_sync()`（照 QMT 的 `sync_with_broker` 移植），四条规则：
+
+| 情况 | 处理 | 日志 |
+|---|---|---|
+| tracker 里有、券商里没有（你**手工卖了**或清仓） | 从该策略移除 | `reconcile: <策略> holds <code>(<n>) which the broker does not -> dropped` |
+| 券商有、谁都没登记（你**手工买了新票**） | 归给 **`capital_ratio` 最大**的策略 | `reconcile: <code>(<n>) untracked -> assigned to '<策略>'` |
+| 只有 1 个策略持有、数量对不上（你手工加/减仓） | 按券商数量校正该策略 | `reconcile: <code> '<策略>' corrected <old> -> <new>` |
+| 多个策略都持有、总数对不上 | 无法判断 → 记 ERROR，**不动**等人工 | `reconcile: <code> held by [...], tracked=.. != broker=.., manual correction needed` |
+
+> **注意**：未登记仓位不是"一律给第一策略"，而是给 **`capital_ratio` 最大的那个**；
+> 只有拿不到各策略参数时（例如配置文件读不出来）才退回"第一个策略"。
+> 目前你只有一个策略（`low_valuation`，ratio=1.0），所以效果就是"都归它"——和你观察到的一致。
+
+**其余两点要知道的行为**：
+
+1. **手工买的票如果不在候选池里，下一轮会被当作 out-of-pool 卖掉**（这是设计语义，10-20 的 `600739` 就是这样被处理的）。
+   想让手工仓位留下，就把它放进当天的名单（它会进候选池）或调整 `max_holdings`。
+2. 手工调仓**不会**触发额外交易：对账只改归属数字，是否买卖仍由当天的候选池 + 门限决定；
+   手工买满 8 只后，下一轮"满仓不重均"（防 churn），只会做池外卖出。
 
 ---
 
@@ -477,5 +529,6 @@ python ptrade_executor_selftest.py
 - [x] ~~多策略支持~~ → 已实现：`TARGET_FILES` 驱动 + `trading_times` 每策略自带 + tracker/`capital_ratio` 份额归属（见 §2 多策略表）
 - [ ] ⏰ 定下单时刻：本机 config 的 `trading_times` 要**早于**客户端上传、上传**早于**云端下单（见 §3.0）；本机值≠云端值（中间隔着上传）
 - [ ] 确认 §5 的 5 件事（多一条：客户端「定时上传」是否支持**按文件夹同步**到研究目录下的同名子目录）
-- [ ] 用 `ptrade_orders_<策略>_*.json` 的审计结果与成交对账（含 tracker 的 `reconcile:` 日志）
+- [ ] 用 `ptrade_orders_<策略>*.json` 的审计结果与成交对账（含 tracker 的 `reconcile:` 日志）
+- [ ] 手动调仓后核对：下一次运行日志里的 `reconcile:` 三行是否与你的操作一致（§4.3.2）
 - [x] ~~QMT 组合交易人工兜底~~ → QMT 已停运；失败按"人工调仓"处理（§3.1）

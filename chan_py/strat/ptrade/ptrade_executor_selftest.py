@@ -215,8 +215,13 @@ def state_file(strategy=None):
 
 
 def audit_file(strategy=None):
-    return os.path.join(RESEARCH, S.AUDIT_PREFIX + (strategy or STRAT) + "_" +
-                        S._date_str() + ".json")
+    """The stable 'latest run' audit file (overwritten every run)."""
+    return os.path.join(RESEARCH, S.AUDIT_PREFIX + (strategy or STRAT) + ".json")
+
+
+def audit_daily_file(strategy=None):
+    """The rotating weekday slot the run ALSO writes (retention without os.remove)."""
+    return S._audit_daily_path(strategy or STRAT)
 
 
 def tracker_of(ctx, strategy=None, params=None):
@@ -382,6 +387,79 @@ def test_wait_for_proceeds_sees_fills():
           str(t["low_valuation"]))
     check("a name the broker no longer holds is removed",
           "002209.XSHE" not in t["low_valuation"], str(t["low_valuation"]))
+
+
+def test_buys_scale_to_real_cash():
+    """Live 2026-10-21: three buys were sized from the ESTIMATE of the sell proceeds (223874)
+    while only 150943 had actually settled, so the broker rejected the third with
+    [可用资金不足] and one slot stayed empty. Buys must be scaled to the cash that is really
+    there, and a skipped buy must be retried once the money lands."""
+    print("test_buys_scale_to_real_cash")
+    saved_cash, saved_snap = S._cash, S._snap_one
+    try:
+        px = {"AAA.XSHE": 6.10, "BBB.XSHG": 15.03, "CCC.XSHE": 9.92}
+        S._snap_one = lambda pt: {"last": px[pt], "ask1": px[pt] * 1.001,
+                                  "preclose": px[pt], "limit_up": round(px[pt] * 1.1, 2),
+                                  "limit_down": round(px[pt] * 0.9, 2), "name": ""}
+        buys = [("AAA.XSHE", 11600, "new-slot"), ("BBB.XSHG", 4700, "new-slot"),
+                ("CCC.XSHE", 7100, "new-slot")]
+        S._cash = lambda ctx: 150943.51
+        ORDERS[:] = []
+        results = []
+        skipped = S._execute_buys(None, buys, results, reserve=7735.24)
+        check("only the buys the cash covers are sent", len(ORDERS) == 2, str(ORDERS))
+        spent = sum(o["amount"] * o["limit_price"] for o in ORDERS)
+        check("the cash_reserve_ratio buffer is never spent",
+              spent <= 150943.51 - 7735.24, "spent %.2f" % spent)
+        check("the unaffordable one is skipped, not rejected",
+              len(skipped) == 1 and skipped[0][0] == "CCC.XSHE", str(skipped))
+        check("the skip is recorded as no-cash",
+              any(r.get("skipped") == "no-cash" for r in results), str(results))
+
+        S._cash = lambda ctx: 230000.0     # the remaining sell proceeds landed
+        ORDERS[:] = []
+        skipped2 = S._execute_buys(None, skipped, results)
+        check("the retry buys the slot once the proceeds arrive",
+              len(ORDERS) == 1 and skipped2 == [], str(ORDERS))
+
+        # a position worth less than half the plan is not worth submitting at all
+        S._cash = lambda ctx: 12000.0
+        ORDERS[:] = []
+        tail = S._execute_buys(None, [("CCC.XSHE", 7100, "new-slot")], [])
+        check("a tiny remainder is skipped instead of creating a sub-size position",
+              ORDERS == [] and len(tail) == 1, str(ORDERS))
+    finally:
+        S._cash, S._snap_one = saved_cash, saved_snap
+
+
+def test_audit_retention_uses_fixed_slots():
+    """The sandbox cannot delete or list files, so "keep 5 trading days" must be implemented by
+    REUSING fixed names, not by deleting: <strategy>.json is always the latest run and
+    <strategy>_d1..d5.json are weekday slots (Mon..Fri) overwritten weekly."""
+    print("test_audit_retention_uses_fixed_slots")
+    S.AUDIT_SLOTS = 5
+    latest = S._audit_path(STRAT)
+    slots = set()
+    for i in range(7):
+        day = datetime.date(2026, 10, 19) + datetime.timedelta(days=i)   # Mon..Sun
+        slot = S._audit_daily_slot(day)
+        slots.add(slot)
+        check("weekday %s maps to a slot inside 1..5" % day.strftime("%a"), 1 <= slot <= 5,
+              str(slot))
+    check("all seven days collapse into the five weekday slots", slots == set([1, 2, 3, 4, 5]),
+          str(sorted(slots)))
+    check("the latest file has a stable, date-less name",
+          S._basename(latest) == S.AUDIT_PREFIX + STRAT + ".json", latest)
+    check("the daily file name carries the slot",
+          "_d" in S._basename(S._audit_daily_path(STRAT)), S._audit_daily_path(STRAT))
+    saved = S.AUDIT_SLOTS
+    try:
+        S.AUDIT_SLOTS = 1
+        check("AUDIT_SLOTS=1 keeps a single rotating file",
+              S._basename(S._audit_daily_path(STRAT)).endswith("_d1.json"),
+              S._audit_daily_path(STRAT))
+    finally:
+        S.AUDIT_SLOTS = saved
 
 
 def test_dry_run_sends_nothing():
@@ -1048,6 +1126,8 @@ def main():
     S.DRY_RUN = True
     tests = [test_initialize_and_selfcheck, test_plan_math,
              test_wait_for_proceeds_sees_fills,
+             test_buys_scale_to_real_cash,
+             test_audit_retention_uses_fixed_slots,
              test_dry_run_sends_nothing, test_execute_places_sells_then_buys,
              test_idempotent_per_time_tag, test_missing_target_is_skipped,
              test_old_target_is_flagged_stale, test_empty_pool_liquidates,
