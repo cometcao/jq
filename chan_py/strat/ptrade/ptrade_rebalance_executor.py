@@ -128,7 +128,8 @@ USE_LIMIT_PRICE = True        # if False, order() without limit_price (platform 
 # BOTH are additionally bounded by the ~2% deviation rule the broker applies to
 # quantitative orders: sell >= last*0.98, buy <= last*1.02 (and by the limit prices).
 SELL_PROTECT_AT_LIMIT_DOWN = True   # sell: as aggressive as the rules allow
-BUY_PROTECT_AT_LIMIT_UP = False     # buy : keep the QMT-era cage (do not chase to limit-up)
+BUY_PROTECT_AT_LIMIT_UP = True      # buy : as aggressive as the 2% rule allows (user's choice:
+                                    # "fill first"; still capped at last*1.02 below)
 
 # Market-order type per board (order_market(market_type=...)). Values copied from the
 # reference strategy that ran in production here. A wrong value does NOT lose the trade:
@@ -142,9 +143,13 @@ MARKET_TYPE_SZ = 0               # 000/002/300 : 0
 MARKET_TYPE_OTHER = 4            # anything else (BJ etc.)
 
 LOT = 100                     # A-share board lot
+LOT_STAR = 200                # STAR market (688) minimum order quantity
 MAX_ORDERS_PER_RUN = 40       # safety brake: abort the whole run above this
 ONLY_ONCE_PER_TIME = True     # one execution per (date, time) even across restarts
 AUDIT_SLOTS = 5               # daily order files kept (Mon..Fri slots, no delete needed)
+# One shot per scheduled slot (no catch-up session), so an unfilled sell must be re-sent
+# inside the same run at the freshly recomputed floor. Set False to send each sell once.
+SELL_RETRY_ONCE = True
 # After the sell phase, wait before submitting the buys: PTrade fills asynchronously and
 # syncs the account every few seconds, so the proceeds may not be spendable yet. The same
 # window is reused for the one retry pass when buys had to be skipped for lack of cash,
@@ -891,7 +896,19 @@ def _order_rejected(oid):
         return False
 
 
-def _place(context, pt_code, amount, limit_price):
+def _min_lot(pt_code):
+    """Board minimum order quantity: STAR market (688) needs 200 shares, others 100.
+
+    The exchange rejects a 100-share STAR order, so a 688 name in the list would silently
+    lose its whole buy slot with the old global LOT = 100.
+    """
+    plain = pt_code.split(".")[0]
+    if plain.startswith("688"):
+        return LOT_STAR
+    return LOT
+
+
+def _place(context, pt_code, amount, limit_price, prefer_market=True):
     """Send one order. Positive amount = buy, negative = sell. Returns order id or None.
 
     Order path (matching the in-production reference strategy):
@@ -902,6 +919,12 @@ def _place(context, pt_code, amount, limit_price):
          the exchange cage and inside [limit-down, limit-up] because that is how protect is
          built (see _sell_protect / _buy_protect)
       3. if that also fails -> None (the caller logs ERROR and moves on)
+
+    prefer_market=False skips step 1 and sends the limit order directly. The caller uses that
+    when the account cannot fund a market order: PTrade freezes CASH for a market order at the
+    LIMIT-UP price (NOT at limit_price), while a limit order is frozen at its own price
+    (2026-10-22: a 9600-share market buy with protect 7.92 needed 76032, the broker froze
+    9600 x 9.36 = 89864 and rejected it; 2026-10-21 was the same failure).
     """
     if amount == 0:
         return None
@@ -909,23 +932,24 @@ def _place(context, pt_code, amount, limit_price):
     px = _round_price(limit_price) if (USE_LIMIT_PRICE and limit_price and limit_price > 0) else None
     mt = _market_type(pt_code)
     tried_market = False
-    try:
-        om = globals().get("order_market")
-        if callable(om):
-            tried_market = True
-            if px is not None:
-                oid = om(pt_code, amount=shares, market_type=mt, limit_price=px)
-            else:
-                oid = om(pt_code, amount=shares, market_type=mt)
-            if not _order_rejected(oid):
-                return oid
-            _log("WARN", "order_market(%s, %d, market_type=%s) was rejected -> retrying as a "
-                         "limit order at protect=%s (+-2%% repriced, inside limit-up/down)"
-                 % (pt_code, shares, mt, px))
-    except Exception as e:
-        _log("WARN", "order_market(%s, %d, market_type=%s) failed (%s: %s) -> retrying as a "
-                     "limit order at protect=%s"
-             % (pt_code, shares, mt, type(e).__name__, e, px))
+    if prefer_market:
+        try:
+            om = globals().get("order_market")
+            if callable(om):
+                tried_market = True
+                if px is not None:
+                    oid = om(pt_code, amount=shares, market_type=mt, limit_price=px)
+                else:
+                    oid = om(pt_code, amount=shares, market_type=mt)
+                if not _order_rejected(oid):
+                    return oid
+                _log("WARN", "order_market(%s, %d, market_type=%s) was rejected -> retrying as a "
+                             "limit order at protect=%s (+-2%% repriced, inside limit-up/down)"
+                     % (pt_code, shares, mt, px))
+        except Exception as e:
+            _log("WARN", "order_market(%s, %d, market_type=%s) failed (%s: %s) -> retrying as a "
+                         "limit order at protect=%s"
+                 % (pt_code, shares, mt, type(e).__name__, e, px))
     if tried_market and px is None:
         # no usable price -> a limit retry is impossible, keep the failure visible
         _log("ERROR", "%s: market order failed and no limit price is available" % pt_code)
@@ -1092,10 +1116,13 @@ def _sell_protect(last, bid, limit_down, preclose=None):
 def _buy_protect(last, ask, limit_up, preclose=None):
     """Protection price for the (market) BUY order.
 
-    Default keeps the QMT-era cage (do not chase) and additionally caps it at
-    last * 1.02 so the 2% deviation rule is never broken.
-    Set BUY_PROTECT_AT_LIMIT_UP = True to mirror the reference strategy (protection = limit-up)
-    - in that case the 2% cap still applies.
+    Two modes (BUY_PROTECT_AT_LIMIT_UP):
+      False - keep the QMT-era cage (never chase): min(min(ask*1.02, ask+0.1), limit-up)
+      True  - "buy with everything you have" (2026-10-22, user's choice): the loosest price
+              the broker's ~2% quantitative-trading rule allows, i.e. last * 1.02, capped by
+              the exchange limit-up. With only one scheduled slot per day this is what gives
+              a fill when the ask jumps within the second.
+    Either way the last * 1.02 cap below is applied, so the 2% rule is never broken.
     """
     px = 0.0
     if BUY_PROTECT_AT_LIMIT_UP and limit_up and limit_up > 0:
@@ -1161,6 +1188,15 @@ def _plan(view, stocks, params):
             quotes[code] = _snap_one(_pt_code(code))
         return quotes[code]
 
+    # sanity: when EVERY holding reads as halted the status API is probably broken (exactly
+    # what produced the silent "nothing to do" run on 2026-10-19) - surface it loudly
+    if positions:
+        all_halted = [c for c in positions if _is_halted(_pt_code(c))]
+        if len(all_halted) == len(positions):
+            errors.append("ALL %d holding(s) read as halted -> the platform status API looks "
+                          "broken; check it, this round will not sell anything"
+                          % len(positions))
+
     # ---------- 1. everything outside the candidate pool goes ----------
     for code, p in sorted(positions.items()):
         if code in candidate_set:
@@ -1170,13 +1206,20 @@ def _plan(view, stocks, params):
             notes.append("halted, cannot sell: %s" % code)
             continue
         last = q.get("last") or p.get("last") or 0.0
-        up, _dn = _up_down(q, code)
+        up, dn = _up_down(q, code)
         if up and last and abs(last - up) < 0.011:
             notes.append("limit-up, hold: %s" % code)
             continue
         vol = (p["enable"] // LOT) * LOT
-        if vol > 0:
-            sells.append((code, vol, "out-of-pool"))
+        if vol <= 0:
+            # T+1 lock or a broken position read: say so instead of skipping silently
+            notes.append("nothing sellable (enable=%d of %d): %s"
+                         % (p.get("enable", 0), p.get("amount", 0), code))
+            continue
+        if dn and last and abs(last - dn) < 0.011:
+            # at limit-down there may be no bid at all, but we still try (sell must be pushed)
+            notes.append("limit-down, sending anyway at the floor: %s" % code)
+        sells.append((code, vol, "out-of-pool"))
 
     # ---------- 1b. proceeds this run's sells will bring in ----------
     # PTrade fills asynchronously and the account syncs every few seconds, so the cash to
@@ -1403,13 +1446,17 @@ def _execute_buys(context, buys, results, reserve=0.0):
     remaining sell proceeds land).
 
     2026-10-21 (live): the plan sized three buys from an ESTIMATE of the sell proceeds
-    (223874), but only 150943 had actually settled, so the third order was rejected by the
-    broker with "insufficient available funds". The plan is a plan - the money check belongs
-    at submit time:
-      * affordable            -> planned volume
-      * partly affordable     -> trimmed, but only if >= BUY_MIN_FILL_RATIO of the plan
-      * not worth submitting  -> skipped with a WARN (a tiny position would sit in the book
-                                 forever: a FULL book never re-equalises)
+    (223874), but only 150943 had actually settled -> third order rejected.
+    2026-10-22 (live): the order was "affordable" at the limit price, but PTrade freezes CASH
+    for a MARKET order at the LIMIT-UP price, so the broker froze 9600 x 9.36 = 89864 against
+    86070 available and rejected it. Both cases mean: the money check belongs at submit time
+    AND must use the price the broker actually freezes:
+      * market order freeze = shares x limit-up  (what order_market reserves)
+      * limit order freeze  = shares x limit price
+      so when the market freeze does not fit, buy with a LIMIT order (same price bound,
+      smaller freeze); trim only if even that does not fit, and skip below
+      BUY_MIN_FILL_RATIO (a tiny position would sit in the book forever, because a FULL
+      book never re-equalises).
     `reserve` (cash_reserve_ratio * slice total) is NEVER spent: it is the buffer that makes
     sure the last slot can still be bought when the sells bring in less than estimated.
     """
@@ -1417,12 +1464,18 @@ def _execute_buys(context, buys, results, reserve=0.0):
     avail = _cash(context)
     if avail is None:
         avail = 0.0
-    spendable = avail - max(reserve or 0.0, 0.0)
+    reserve = max(reserve or 0.0, 0.0)
+    spendable = avail - reserve
     if spendable < 0:
         spendable = 0.0
     _log("INFO", "buy budget: cash=%.2f reserve=%.2f spendable=%.2f (planned buys: %d)"
-         % (avail, reserve or 0.0, spendable, len(buys)))
+         % (avail, reserve, spendable, len(buys)))
     for c, v, r in buys:
+        # re-read the broker's available cash for every order: pending freezes and the fills
+        # of the previous order change it, and the platform value is what actually decides
+        live = _cash(context)
+        if live is not None:
+            spendable = min(spendable, max(live - reserve, 0.0))
         q = _snap_one(_pt_code(c))
         up, _down = _up_down(q, c)
         protect = _buy_protect(q.get("last"), q.get("ask1"), up, q.get("preclose"))
@@ -1432,31 +1485,53 @@ def _execute_buys(context, buys, results, reserve=0.0):
             results.append({"code": c, "amount": v, "reason": r, "order_id": None,
                             "skipped": "no-price"})
             continue
-        vol = int(v)
-        need = vol * protect
-        if spendable * 0.995 < need:
-            afford = int((spendable * 0.99) // (protect * LOT)) * LOT
-            if afford <= 0 or afford < vol * BUY_MIN_FILL_RATIO:
-                _log("WARN", "%s: cash short (spendable %.2f = cash %.2f - reserve %.2f, "
-                             "this buy needs about %.2f) -> buy left for the next run"
-                     % (c, spendable, avail, reserve or 0.0, need))
-                results.append({"code": c, "amount": vol, "reason": r, "order_id": None,
-                                "skipped": "no-cash"})
-                skipped.append((c, vol, r))
-                continue
-            _log("WARN", "%s: trimming buy %d -> %d shares (spendable %.2f)"
-                 % (c, vol, afford, spendable))
-            vol = afford
-        oid = _place(context, _pt_code(c), vol, protect)
+        lot = _min_lot(c)
+        vol = (int(v) // lot) * lot
+        if vol <= 0:
+            _log("WARN", "%s: planned %d shares is below the board minimum %d, skipped"
+                 % (c, int(v), lot))
+            results.append({"code": c, "amount": int(v), "reason": r, "order_id": None,
+                            "skipped": "below-min-lot"})
+            continue
+        upx = up or 0.0
+        # what the broker will freeze, per order type (see the docstring)
+        freeze_market = vol * (upx or protect) * 1.002
+        freeze_limit = vol * protect * 1.002
+        prefer_market = bool(upx) and freeze_market <= spendable * 0.995
+        if not prefer_market:
+            if freeze_limit > spendable * 0.995:
+                afford = int((spendable * 0.99) // (protect * 1.002 * lot)) * lot
+                if afford <= 0 or afford < vol * BUY_MIN_FILL_RATIO:
+                    _log("WARN", "%s: cash short (spendable %.2f = cash %.2f - reserve %.2f, "
+                                 "freeze %.2f even at the limit price %.2f) -> buy left for "
+                                 "the next run"
+                         % (c, spendable, avail, reserve, freeze_limit, protect))
+                    results.append({"code": c, "amount": vol, "reason": r, "order_id": None,
+                                    "skipped": "no-cash"})
+                    skipped.append((c, vol, r))
+                    continue
+                _log("WARN", "%s: trimming buy %d -> %d shares (spendable %.2f, limit %.2f)"
+                     % (c, vol, afford, spendable, protect))
+                vol = afford
+                freeze_limit = vol * protect * 1.002
+            else:
+                _log("INFO", "%s: LIMIT order at %.2f (a market order would freeze %.2f at "
+                             "limit-up %.2f, spendable %.2f)"
+                     % (c, protect, freeze_market, upx, spendable))
+        oid = _place(context, _pt_code(c), vol, protect, prefer_market=prefer_market)
         if oid is None:
             _log("ERROR", "BUY %s %d protect=%.2f -> REJECTED (no order id)" % (c, vol, protect))
             results.append({"code": c, "amount": vol, "reason": r, "order_id": None,
                             "rejected": True})
             continue
         results.append({"code": c, "amount": vol, "reason": r, "order_id": str(oid),
-                        "protect_price": protect})
-        _log("INFO", "bought %s %d protect=%.2f -> order %s" % (c, vol, protect, oid))
-        spendable -= vol * protect * 1.001
+                        "protect_price": protect,
+                        "market_order": bool(prefer_market)})
+        _log("INFO", "bought %s %d protect=%.2f (%s) -> order %s"
+             % (c, vol, protect, "market" if prefer_market else "limit", oid))
+        spendable -= (freeze_market if prefer_market else freeze_limit)
+        if spendable < 0:
+            spendable = 0.0
     return skipped
 
 
@@ -1505,19 +1580,59 @@ def _liquidate_plan(view, reason):
             "errors": [], "positions": positions, "candidate": [], "quotes": {}}
 
 
-def _tracker_apply_plan(t, strategy, plan):
-    """Record the volumes we just ORDERED. PTrade cannot wait for fills (async, 6s account
-    sync), so this is an estimate; the next run's _tracker_sync reconciles it with the
-    broker (single holder -> corrected automatically)."""
+def _unsold_sells(context, sells, plan_positions):
+    """Full exits that the broker still shows as sellable -> [(code, shares_left)].
+
+    A market order's remainder is cancelled, so "planned but still held" means the order did
+    not (fully) fill. The caller re-sends those inside the same scheduled run, because there is
+    no catch-up session.
+
+    ONLY full exits qualify: re-sending a partial trim after a stale account read could sell
+    more than the plan wanted. A full exit can at worst be sent twice, and the platform then
+    rejects the second one for lack of shares (harmless, logged).
+    """
+    left = []
+    try:
+        now = _positions(context)
+    except Exception:
+        return left
+    for c, v, _r in sells:
+        before = plan_positions.get(c) or {}
+        if int(v) < (int(before.get("enable", 0)) // LOT) * LOT:
+            continue                      # partial trim -> never re-send
+        after = now.get(c) or {}
+        done = max(int(before.get("amount", 0)) - int(after.get("amount", 0)), 0)
+        remain = min(int(v) - done, int(after.get("enable", 0)))
+        remain = (remain // LOT) * LOT
+        if remain > 0 and remain >= int(v) * 0.2:
+            left.append((c, remain))
+    return left
+
+
+def _tracker_apply_results(t, strategy, results):
+    """Record in the tracker only what was ACTUALLY submitted.
+
+    A buy skipped for lack of cash or rejected by the platform must not be recorded: the book
+    would then look full, the slot would never be re-attempted and the tracker would lie until
+    the next day's reconcile (2026-10-21 and 10-22 both hit this).
+    """
     pos = t.setdefault(strategy, {})
-    for code, vol, _r in plan["sells"]:
-        left = max(pos.get(code, 0) - vol, 0)
-        if left > 0:
-            pos[code] = left
+    for o in results:
+        code = o.get("code")
+        vol = int(o.get("amount", 0) or 0)
+        if not code or not vol:
+            continue
+        if vol < 0:
+            if not o.get("order_id") or o.get("rejected"):
+                continue
+            left_vol = pos.get(code, 0) + vol          # vol is negative
+            if left_vol > 0:
+                pos[code] = left_vol
+            else:
+                pos.pop(code, None)
         else:
-            pos.pop(code, None)
-    for code, vol, _r in plan["buys"]:
-        pos[code] = pos.get(code, 0) + vol
+            if o.get("order_id") and not o.get("rejected") and not o.get("skipped"):
+                pos[code] = pos.get(code, 0) + vol
 
 
 def _registry():
@@ -1694,6 +1809,37 @@ def _run(context, tag, target_file):
                                                    SELL_CASH_WAIT_SECONDS)
             if filled:
                 _log("INFO", "codes whose volume moved while waiting: %s" % sorted(filled))
+        # A market order's remainder is cancelled by the exchange, so an unfilled sell is
+        # simply gone. With only ONE scheduled slot per day (no catch-up session) that would
+        # leave the position and starve the buys, so re-send what is still unsold - still
+        # inside this same run, at the freshly recomputed -2% floor.
+        if SELL_RETRY_ONCE and plan["sells"]:
+            retry_sells = _unsold_sells(context, plan["sells"], plan["positions"])
+            if retry_sells:
+                _log("WARN", "%d sell(s) not filled yet (%s) -> re-sending once inside this "
+                             "run at the new floor"
+                     % (len(retry_sells), ", ".join(c for c, _v in retry_sells)))
+                for c, v in retry_sells:
+                    if len(results) >= MAX_ORDERS_PER_RUN:
+                        _log("ERROR", "MAX_ORDERS_PER_RUN reached, sell retry stopped")
+                        break
+                    q = _snap_one(_pt_code(c))
+                    _u, dn = _up_down(q, c)
+                    protect = _sell_protect(q.get("last"), q.get("bid1"), dn,
+                                            q.get("preclose"))
+                    if protect <= 0:
+                        _log("ERROR", "%s: sell retry has no usable price, skipped" % c)
+                        continue
+                    oid = _place(context, _pt_code(c), -v, protect)
+                    results.append({"code": c, "amount": -v, "reason": "sell-retry",
+                                    "order_id": (str(oid) if oid else None),
+                                    "protect_price": protect, "retry": True})
+                    if oid is None:
+                        _log("ERROR", "SELL(retry) %s %d protect=%.2f -> REJECTED"
+                             % (c, v, protect))
+                    else:
+                        _log("INFO", "sold(retry) %s %d protect=%s -> order %s"
+                             % (c, v, protect, oid))
         # buys are scaled to the cash that is REALLY there, never to the estimate
         # (2026-10-21 live: 3 sells were estimated at 223874 but only 150943 arrived, so the
         # third buy was rejected by the broker for insufficient funds)
@@ -1716,15 +1862,32 @@ def _run(context, tag, target_file):
             if still:
                 _log("WARN", "still short of cash for %s - left for the next run"
                      % ", ".join(c for c, _v, _r in still))
+        # The platform can reject an order AFTER returning an id (2026-10-22: order_market
+        # returned one, then the broker answered "260200 insufficient available funds").
+        # Check every submitted order and make the failure explicit - a silent "bought" is
+        # worse than an ERROR, because the tracker would show a full book and the slot would
+        # never fill.
+        for o in results:
+            oid = o.get("order_id")
+            if not oid or o.get("rejected") or o.get("dry_run"):
+                continue
+            if _order_rejected(oid):
+                o["rejected"] = True
+                _log("ERROR", "%s was REJECTED by the platform after submission (order %s) - "
+                              "check the broker message above; the slot stays open"
+                     % (o.get("code"), oid))
 
     path = _audit(strategy, plan, target, results, tag)
     _log("INFO", "audit written: %s (+ daily slot %s)"
          % (path, _basename(_audit_daily_path(strategy))))
     _mark_done(strategy, tag, {"orders": n_orders})
     if not DRY_RUN:
-        _tracker_apply_plan(tracker, strategy, plan)
+        # apply only what was really submitted: a buy skipped for lack of cash or rejected by
+        # the platform must NOT enter the tracker (otherwise the book looks full and the slot
+        # is never re-attempted - that is exactly what happened on 2026-10-21 and 10-22)
+        _tracker_apply_results(tracker, strategy, results)
         # QMT re-derived the tracker from the broker after each confirmed fill; do the same
-        # for the codes this run actually saw move (after the plan update, so it wins).
+        # for the codes this run actually saw move (after the order update, so it wins).
         if filled:
             _tracker_after_trade(tracker, strategy, sorted(filled), _positions(context))
             _log("INFO", "tracker corrected from the broker for %s" % sorted(filled))

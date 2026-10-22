@@ -155,6 +155,10 @@ def _install_fakes():
     S.order = fake_order
     S.order_market = fake_order_market
     S.run_daily = fake_run_daily
+    # The fixture book never changes, so the in-run sell retry would re-send every sell and
+    # every order-counting test would see duplicates. The retry has its own test, which
+    # switches it back on and fakes the fills.
+    S.SELL_RETRY_ONCE = False
 
 
 # ----------------------------------------------------------------------------
@@ -462,6 +466,125 @@ def test_audit_retention_uses_fixed_slots():
         S.AUDIT_SLOTS = saved
 
 
+def test_buy_falls_back_to_limit_when_market_freeze_is_too_big():
+    """Live 2026-10-22: PTrade freezes CASH for a market order at the LIMIT-UP price, not at
+    limit_price. 9600 sh with protect 7.92 "needed" 76032 <= spendable 78416, so the old code
+    sent a market order; the broker froze 9600 x limit-up 9.36 = 89864 against 86070 available
+    and rejected it with [260200][可用资金不足]. A limit order must be used instead."""
+    print("test_buy_falls_back_to_limit_when_market_freeze_is_too_big")
+    saved_cash, saved_snap = S._cash, S._snap_one
+    try:
+        # ChiNext (20% band): last 7.76 -> protect = min(limit_up 9.36, last*1.02 = 7.92)
+        S._snap_one = lambda pt: {"last": 7.76, "ask1": 7.77, "preclose": 7.80,
+                                  "limit_up": 9.36, "limit_down": 6.24, "name": ""}
+        S._cash = lambda ctx: 86070.75
+        ORDERS[:] = []
+        ORDER_MARKET_CALLS[:] = []
+        results = []
+        skipped = S._execute_buys(None, [("300193.XSHE", 9600, "new-slot")], results, 7654.11)
+        check("no market order is attempted when its freeze exceeds the cash",
+              ORDER_MARKET_CALLS == [], str(ORDER_MARKET_CALLS))
+        check("a LIMIT order is sent instead, at the full planned size",
+              len(ORDERS) == 1 and ORDERS[0]["amount"] == 9600,
+              str(ORDERS))
+        check("the limit order uses the protect price (7.92)",
+              ORDERS[0]["limit_price"] == 7.92, str(ORDERS))
+        check("nothing was skipped", skipped == [], str(skipped))
+        check("the audit records which order type was used",
+              results and results[0].get("market_order") is False, str(results))
+
+        # the same buy WITH enough cash still prefers the market order
+        S._cash = lambda ctx: 200000.0
+        ORDERS[:] = []
+        ORDER_MARKET_CALLS[:] = []
+        S._execute_buys(None, [("300193.XSHE", 9600, "new-slot")], [], 7654.11)
+        check("a market order is used when its freeze fits", len(ORDER_MARKET_CALLS) == 1,
+              str(ORDER_MARKET_CALLS))
+    finally:
+        S._cash, S._snap_one = saved_cash, saved_snap
+
+
+def test_sell_retry_only_for_full_exits():
+    """No catch-up session any more, so an unfilled full exit must be re-sent inside the same
+    run - but a partial trim must NEVER be re-sent (a stale account read would over-sell)."""
+    print("test_sell_retry_only_for_full_exits")
+    saved_positions = S._positions
+    saved_retry = S.SELL_RETRY_ONCE
+    try:
+        src = open(S.__file__.replace(".pyc", ".py"), encoding="utf-8").read()
+        check("production default keeps the in-run sell retry ON",
+              "SELL_RETRY_ONCE = True" in src, "constant not found")
+        plan_pos = {"AAA.XSHE": {"amount": 8800, "enable": 8800},
+                    "BBB.XSHG": {"amount": 5000, "enable": 5000}}
+        sells = [("AAA.XSHE", 8800, "out-of-pool"), ("BBB.XSHG", 1000, "over-weight")]
+
+        S._positions = lambda ctx: {
+            "AAA.XSHE": {"amount": 8800, "enable": 8800, "last": 1.0, "name": ""},
+            "BBB.XSHG": {"amount": 5000, "enable": 5000, "last": 1.0, "name": ""}}
+        out = S._unsold_sells(None, sells, plan_pos)
+        check("nothing filled -> the full exit is re-sent", ("AAA.XSHE" in [c for c, _v in out]),
+              str(out))
+        check("a partial trim is never re-sent", ("BBB.XSHG" not in [c for c, _v in out]),
+              str(out))
+
+        S._positions = lambda ctx: {
+            "AAA.XSHE": {"amount": 3000, "enable": 3000, "last": 1.0, "name": ""}}
+        out = S._unsold_sells(None, sells, plan_pos)
+        check("partial fill -> only the unsold remainder is re-sent",
+              out == [("AAA.XSHE", 3000)], str(out))
+
+        S._positions = lambda ctx: {}
+        check("fully sold -> nothing re-sent", S._unsold_sells(None, sells, plan_pos) == [],
+              str(S._unsold_sells(None, sells, plan_pos)))
+    finally:
+        S._positions = saved_positions
+        S.SELL_RETRY_ONCE = saved_retry
+
+
+def test_rejected_or_skipped_buys_stay_out_of_the_tracker():
+    """A buy skipped for cash or rejected by the platform must not be recorded, otherwise the
+    book looks full and the slot is never attempted again (10-21 and 10-22 both did this)."""
+    print("test_rejected_or_skipped_buys_stay_out_of_the_tracker")
+    results = [{"code": "AAA.XSHE", "amount": 1000, "order_id": "o1"},
+               {"code": "BBB.XSHE", "amount": 2000, "order_id": None,
+                "skipped": "no-cash"},
+               {"code": "CCC.XSHE", "amount": -500, "order_id": "o3"}]
+    t = {"s": {"CCC.XSHE": 500}}
+    S._tracker_apply_results(t, "s", results)
+    check("a submitted buy is recorded", t["s"].get("AAA.XSHE") == 1000, str(t["s"]))
+    check("a buy skipped for cash is NOT recorded", "BBB.XSHE" not in t["s"], str(t["s"]))
+    check("a submitted sell is applied", "CCC.XSHE" not in t["s"], str(t["s"]))
+
+    results[0]["rejected"] = True
+    t2 = {"s": {}}
+    S._tracker_apply_results(t2, "s", results)
+    check("a rejected buy is NOT recorded", "AAA.XSHE" not in t2["s"], str(t2["s"]))
+
+
+def test_star_market_minimum_lot():
+    """STAR (688) rejects 100-share orders: the minimum is 200, so a 688 name must never be
+    sized on the 100-share board lot."""
+    print("test_star_market_minimum_lot")
+    check("STAR uses 200", S._min_lot("688001.XSHG") == 200, str(S._min_lot("688001.XSHG")))
+    check("main board keeps 100", S._min_lot("600000.XSHG") == 100, "")
+    check("ChiNext keeps 100", S._min_lot("300750.XSHE") == 100, "")
+    saved_cash, saved_snap = S._cash, S._snap_one
+    try:
+        S._snap_one = lambda pt: {"last": 10.0, "ask1": 10.01, "preclose": 10.0,
+                                  "limit_up": 12.0, "limit_down": 8.0, "name": ""}
+        S._cash = lambda ctx: 1000000.0
+        ORDERS[:] = []
+        S._execute_buys(None, [("688001.XSHG", 15010, "new-slot")], [], 0.0)
+        check("a 688 buy is rounded down to a 200 multiple",
+              ORDERS and ORDERS[0]["amount"] == 15000, str(ORDERS))
+        ORDERS[:] = []
+        tail = S._execute_buys(None, [("688001.XSHG", 100, "new-slot")], [], 0.0)
+        check("a 100-share 688 buy is skipped, not sent",
+              ORDERS == [] and len(tail) == 0, str(ORDERS))
+    finally:
+        S._cash, S._snap_one = saved_cash, saved_snap
+
+
 def test_dry_run_sends_nothing():
     print("test_dry_run_sends_nothing")
     ORDERS[:] = []
@@ -600,12 +723,20 @@ def test_order_protection_prices():
           S._sell_protect(0, 10.0, 0) == 9.9, str(S._sell_protect(0, 10.0, 0)))
     check("SELL with neither floor nor quote -> 0 (caller skips)",
           S._sell_protect(0, 0, 0) == 0.0, str(S._sell_protect(0, 0, 0)))
-    check("BUY protection stays inside the cage (no chasing)",
-          S._buy_protect(9.95, 10.0, 11.0) == 10.1, str(S._buy_protect(9.95, 10.0, 11.0)))
-    check("BUY is capped at last*1.02 even when the ask is far above",
+    # 2026-10-22 decision: buys chase as hard as the broker's 2% rule allows
+    # (BUY_PROTECT_AT_LIMIT_UP = True), so the protection is last*1.02 - NOT the old cage.
+    check("BUY protection = last*1.02 (as aggressive as the 2% rule allows)",
+          S._buy_protect(9.95, 10.0, 11.0) == 10.15, str(S._buy_protect(9.95, 10.0, 11.0)))
+    check("BUY is capped at the 2% band even when the ask is far above",
           S._buy_protect(10.0, 12.0, 20.0) == 10.2, str(S._buy_protect(10.0, 12.0, 20.0)))
+    check("BUY never above limit-up",
+          S._buy_protect(10.0, 10.0, 10.1) == 10.1, str(S._buy_protect(10.0, 10.0, 10.1)))
     saved = S.BUY_PROTECT_AT_LIMIT_UP
     try:
+        S.BUY_PROTECT_AT_LIMIT_UP = False
+        check("the conservative cage is still available (one-line switch)",
+              S._buy_protect(9.95, 10.0, 11.0) == 10.1,
+              str(S._buy_protect(9.95, 10.0, 11.0)))
         S.BUY_PROTECT_AT_LIMIT_UP = True
         check("BUY switched to limit-up is still capped at last*1.02",
               S._buy_protect(10.0, 10.0, 11.0) == 10.2, str(S._buy_protect(10.0, 10.0, 11.0)))
@@ -1127,6 +1258,10 @@ def main():
     tests = [test_initialize_and_selfcheck, test_plan_math,
              test_wait_for_proceeds_sees_fills,
              test_buys_scale_to_real_cash,
+             test_buy_falls_back_to_limit_when_market_freeze_is_too_big,
+             test_sell_retry_only_for_full_exits,
+             test_rejected_or_skipped_buys_stay_out_of_the_tracker,
+             test_star_market_minimum_lot,
              test_audit_retention_uses_fixed_slots,
              test_dry_run_sends_nothing, test_execute_places_sells_then_buys,
              test_idempotent_per_time_tag, test_missing_target_is_skipped,

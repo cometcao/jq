@@ -258,7 +258,7 @@ if deviation > rebalance_threshold(20%):  -> 触发：把每只【已持仓】�
 | 池内均仓门限 | 组合级（上式） | 同 | ✅ 已对齐 |
 | 空槽买入预算 | `per_stock = (现金−储备) / 空槽数` | 同 | ✅ |
 | 手续费系数 | `min(目标, 可用) × 0.99`，逐笔 `×1.001` 递减 | 同 | ✅ |
-| 买入"保护价" | `min( min(ask×1.02, ask+0.1), 涨停价 )`（不追高） | 簇子价再夹 `最新价×1.02` | ✅ |
+| 买入"保护价" | `min( min(ask×1.02, ask+0.1), 涨停价 )`（不追高） | **`min(涨停价, 最新价×1.02)` = 2% 内最狠**（`BUY_PROTECT_AT_LIMIT_UP=True`，见 §4.1.1） | ⚠️ 有意更狠 |
 | **卖出"保护价"** | `max( max(bid×0.98, bid−0.1), 跌停价 )` | **`max(最新价×0.98, 跌停价)` = 2% 内最狠**（见 §4.1.1） | ⚠️ 有意更狠 |
 | 卖价锚 | `bid1`（不是最新价） | 估算回款用 `bid1` 推；下单保护价用 2% 下限 | ✅ |
 | 价格基准取不到 | **买**：跳过该单；**卖**：退化为"不带限价"挂单 | **买卖都跳过 + ERROR**（不再发无保护市价单，见 §4.1.1） | ⚠️ 刻意更严 |
@@ -296,15 +296,15 @@ if deviation > rebalance_threshold(20%):  -> 触发：把每只【已持仓】�
 
 ```
 卖出保护价 = max( 最新价 × 0.98 , 跌停价 )        ← 2% 内能报的最低价 = 尽全力卖
-买入保护价 = min( min(ask×1.02, ask+0.1), 最新价×1.02 )   ← 不追高，且在 2% 内
+买入保护价 = min( 涨停价 , 最新价 × 1.02 )        ← 2% 内能报的最高价 = 尽全力买（2026-10-22 定稿）
 ```
 
 - **卖出"尽全力"**：保护价压到 2% 规则允许的下限（`最新价×0.98`），若个股已接近跌停则用**跌停价**
   （`max` 取高者，永不越界）。这样市价单能一路扫到 2% 以内的所有买盘，把仓位尽快清掉，
   回款进预算后买入才有空间。
-- **买入不追高**：沿用 QMT 的簇子（对手价 +0.1 / +2% 取保守者），并再夹 `最新价×1.02`。
-  想改成参考策略那种"直接给涨停价"的激进买法，把 `BUY_PROTECT_AT_LIMIT_UP = True` 即可
-  （仍受 2% 上限约束）。
+- **买入也"尽全力"（2026-10-22 决定）**：`BUY_PROTECT_AT_LIMIT_UP = True` → 保护价 = `min(涨停价, 最新价×1.02)`，
+  即 2% 规则允许的最高价。原因：**一天只有一个时点、没有补仓时段**，盘口在 1 秒内跳涨就会错过整个仓位。
+  仍受两条硬约束：券商 2% 偏离规则、交易所涨停价。想回到"不追高"的簇子价，把常量改成 `False` 即可（一行）。
 - **基准回退**：卖出保护价在拿不到最新价时退回簇子价（`bid×0.98` / `bid−0.1`），再不行才跳过。
 - **三个价都取不到 → 跳过该单并记 ERROR**（不发无保护市价单）。
 - **`market_type` 按市场不同**（与参考文件完全一致，已用测试比对）：
@@ -317,6 +317,36 @@ if deviation > rebalance_threshold(20%):  -> 触发：把每只【已持仓】�
   日志会明确写：
   `WARN order_market(688xxx, 100, market_type=0) was rejected -> retrying as a limit order at protect=12.24 (+-2% repriced, inside limit-up/down)`。
   两步都失败才记 `ERROR ... REJECTED`（审计里 `"rejected": true`）。
+
+#### 4.1.1.0 **市价单按涨停价冻结资金**（2026-10-21/22 连续两天实盘踩到）
+
+**平台事实**：`order_market(...)` 冻结的资金 = **股数 × 涨停价**，与传进去的 `limit_price` **无关**
+（`limit_price` 只是成交的价格边界）；限价单 `order(...)` 才按自己的限价冻结。
+
+| 日期 | 股数 | 券商冻结 | 每股 | 该股涨停价 | 我传的保护价 |
+|---|---|---|---|---|---|
+| 10-22 | 9,600 | 89,864.17 | **9.3609** | **9.36**（创业板 20%） | 7.92 |
+| 10-21 | 7,100 | 76,758.05 | **10.8110** | **10.81**（主板 10%） | 9.92 |
+
+**后果**：20% 涨跌幅的票（创业板/科创板），市价单需要的冻结额是限价单的 **1.2 倍**；在"卖一个仓位、
+买一个仓位、现金刚好够"的满仓换股场景里，按限价算够、按涨停价算就不够 → 券商 `[260200][可用资金不足]` 拒单。
+
+**处置（`_execute_buys`）**：两种冻结额都算，选能装下的那种：
+
+```
+freeze_market = 股数 × 涨停价 × 1.002
+freeze_limit  = 股数 × 保护价 × 1.002
+能装下 freeze_market → 用 order_market（扫五档，最快）
+否则能装下 freeze_limit → 用 order(limit_price=保护价)（价格上界一样，冻结更小）
+否则 → 按限价裁剪股数（≥ 计划的 50% 才发，否则跳过并记 WARN）
+```
+日志：`INFO 300193.XSHE: LIMIT order at 7.92 (a market order would freeze 90035.71 at limit-up 9.36, spendable 78416.64)`；
+审计里每笔带 `"market_order": true/false`。`spendable` **每笔下单前重读券商可用资金**并与本地剩余取更严者。
+
+> 另一条同期教训：**平台可能"返回了订单号之后才拒单"**（10-22 日志先打 `bought ... -> order 7723...`，随后
+> `委托失败 [260200][可用资金不足]`）。所以每笔提交后都会用 `get_order` 复核一次，判废则记
+> `ERROR ... was REJECTED by the platform after submission` 并标 `rejected: true`，
+> 且 **tracker 只记录"确实提交且未被判废"的委托**（`_tracker_apply_results`）。
 
 #### 4.1.1.1 科创板（688）下单模式怎么确认
 
@@ -347,6 +377,18 @@ if deviation > rebalance_threshold(20%):  -> 触发：把每只【已持仓】�
 > `cash_reserve_ratio` 的用意是**给最后一个仓位留余钱**，所以这笔储备在 ④ 里**永远不花**
 > （`spendable = cash − reserve`）。卖单若始终没成交，买单会被跳过（WARN）或最终被券商拒（ERROR）——
 > 这正是卖出保护价取 `max(最新价×0.98, 跌停价)`（能扫到跌停）的原因：**卖出必须尽全力**。
+>
+> **只有一个交易时点、不做补仓（2026-10-22 定案）**：`run_daily` 数量 = 策略 × 其 `trading_times`，
+> **没有 14:45 尾盘补仓、没有漏跑补做、没有收盘兜底**。既然只有一枪，同一轮回调内的补救就必须做足
+> （这些都在预定时点之内、相隔几秒到几十秒，不是新的时段）：
+>
+> | 补救 | 常量 | 说明 |
+> |---|---|---|
+> | 卖完等回款 | `SELL_CASH_WAIT_SECONDS = 30` | 等不到就按实到现金裁剪 |
+> | **未成交卖单补发一次** | `SELL_RETRY_ONCE = True` | 市价单剩余会被交易所撤销 → 一轮内重发；**只补"整仓清出"的单**（局部减仓不重发，避免陈旧持仓数据导致超卖） |
+> | 现金不足的买单再等一轮重试 | 同上 30s | 晚到几十秒的回款能补上最后一个仓位 |
+>
+> 日志（补发）：`WARN 1 sell(s) not filled yet (002452.XSHE) -> re-sending once inside this run at the new floor`。
 
 #### 4.1.2 其他安全闸门（不在 QMT 语义内，实盘前加）
 
@@ -357,6 +399,12 @@ if deviation > rebalance_threshold(20%):  -> 触发：把每只【已持仓】�
   **ERROR**（`ST name <code> must be bought (new slot/top-up) - upstream target list is broken; REFUSING and skipping it`）
   并跳过，绝不买入；本轮其它委托照常执行，错误同时写进审计 `errors[]`
 - **ST 涨跌幅**按 5% 计算（否则 5% 限制的票在 +5% 时会被认为"没到涨停"仍去买入/卖出）
+- **科创板最小申报 200 股**：`LOT = 100` 只适用于主板/创业板；688 用 `LOT_STAR = 200`（`_min_lot()` 按代码判断，
+  买入量向下取整到 200 的倍数；不足 200 的计划直接跳过并记 `below-min-lot`，不会发出去被交易所拒）
+- **可卖量为 0 要说出来**：`enable=0`（T+1 锁定或持仓接口异常）时记 note `nothing sellable (enable=0 of N): <code>`，
+  不再静默跳过；跌停的票记 `limit-down, sending anyway at the floor`（照发，尽最大努力）
+- **全票停牌 = 接口可疑**：若所有持仓都被判停牌，记 ERROR（`ALL N holding(s) read as halted ...`）——
+  2026-10-19 的"静默 nothing to do"就是状态接口把字典当布尔导致的
 
 ### 4.1.4 QMT → PTrade 语义对照：**最容易丢的是"每阶段重读账户"**
 
@@ -367,9 +415,9 @@ if deviation > rebalance_threshold(20%):  -> 触发：把每只【已持仓】�
 |---|---|---|---|
 | 账户读取 | **4 次**：初始 → 池外卖出并等成交后 → 均仓卖出/买入后 → 填空槽后 | 1 次快照 + 投影账本 | ⚠️ 结构性差异，已用下面几项补偿 |
 | 空槽数 `slots` | 每阶段用最新持仓算 | 曾用"卖出前"账本 → 满仓永远 0（**10-20 故障**） | ✅ 改为 `max_holdings − (持仓 − 本轮卖出)` |
-| 买入预算 | 用卖出后的真实现金 | `现金 + 预估回款×0.995 − 储备` | ✅ 已补 |
+| 买入预算 | 用卖出后的真实现金 | `现金 + 预估回款×0.995 − 储备`，**下单前每笔重读实到现金** | ✅ 已补 |
 | 等成交 | `wait_for_order_completion`（轮询持仓，30s） | `_wait_for_proceeds`（现金 + 持仓签名，≤15s） | ✅ 等价（更短） |
-| tracker | 每次成交确认后按**券商持仓**回填 | 先按计划更新；**等待期内确认成交的票**再按券商回填 | ✅ 已补 |
+| tracker | 每次成交确认后按**券商持仓**回填 | 按**实际提交且未被判废**的委托更新（跳过/被拒的不写），确认成交的票再按券商回填 | ✅ 已补 |
 | 价格算不出 | 卖单退化为"不带限价"发出去 | **跳过 + ERROR**（不发无保护单） | ⚠️ 刻意更严 |
 | 可卖量 | `pos.volume`（可能超卖） | `enable`（T+1 可卖量） | ⚠️ 更安全 |
 | 涨停/停牌/ST | 无 | 涨停不买、停牌跳过、ST 一律不买 | ⚠️ 更严 |
@@ -487,12 +535,17 @@ python ptrade_target_selftest.py
 ```powershell
 python ptrade_executor_selftest.py
 ```
-用假 PTrade API 跑完整策略，**共 30 组断言**：
+用假 PTrade API 跑完整策略，**共 36 组断言**：
 
 - 初始化/自检（`code_dialect`、**按文件里的 `trading_times` 注册 `run_daily`**、`DRY_RUN` 默认必须是 False）
 - 等权数学、组合级门限（`test_full_book_never_rebalances` / `test_gate_fires_on_cash_imbalance`）
 - **满仓卖出后同轮买入**（`test_full_book_exits_then_buys`：8/8 满仓 + 现金 0 + 2 只池外 → 2 卖 2 买，10-20 的故障回归）
 - **等待成交**（`test_wait_for_proceeds_sees_fills`：能识别"哪只真的成交了 + 回款到账"）
+- **卖单补发**（`test_sell_retry_only_for_full_exits`：整仓清出会补发、局部减仓绝不补发、部分成交只补剩余）
+- **市价冻结按涨停价**（`test_buy_falls_back_to_limit_when_market_freeze_is_too_big`：10-22 的 9600×9.36 场景，
+  现金不够冻结时改发限价单、股数不减）
+- **只记真实委托**（`test_rejected_or_skipped_buys_stay_out_of_the_tracker`）
+- **科创板 200 股**（`test_star_market_minimum_lot`）
 - **成交后按券商回填 tracker**（`test_tracker_after_trade_uses_broker_volumes`）
 - **多策略份额**（`test_two_strategies_share_a_position`：共享代码各拿自己那份、清仓只卖自己那份、未跟踪代码给 ratio 最大者）
 - 当天专用（`test_previous_day_target_is_rejected` 非当天拒绝 + ERROR / `test_too_old_target_liquidates` >7 天清该策略份额）
