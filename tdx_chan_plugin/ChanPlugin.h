@@ -1,4 +1,4 @@
-﻿// ChanPlugin.h - Tongdaxin Chan Theory Plugin Header File
+// ChanPlugin.h - Tongdaxin Chan Theory Plugin Header File
 // Plugin supports any period, real-time updates, draws pen and line segments on main K chart
 
 // Prevent conflicts between min/max macros in windows.h and std::min/std::max
@@ -224,6 +224,22 @@ private:
     // Gap processing
     std::vector<std::pair<double, double>> gapRegion(double start_date, double end_date, TopBotType gap_direction);
     std::vector<std::pair<double, double>> combineGaps(const std::vector<std::pair<double, double>>& gap_regions);
+
+    // ---- 缺口查询加速 (与"逐根全表日期过滤"完全等价, 输出逐字节相同) ----------
+    // gap_prefix_[i]    = 前 i 根K线中"带缺口(gap != 0)"的根数
+    // dates_monotonic_  = 日期数组是否"非递减"; 只有非递减才能把日期区间安全地换算成
+    //                     K线下标区间。非递减(允许相等, 分钟线常见同日多根)即可;
+    //                     一旦检测到倒退(d[i] < d[i-1])则所有加速路径自动回退到
+    //                     原来的逐根扫描, 因此绝不影响结果。
+    std::vector<int> gap_prefix_;
+    bool dates_monotonic_ = false;
+    std::pair<int, int> barIndexRangeByDate(double start_date, double end_date) const;
+    // A2: defineXD 开头为每个笔端点元素预计算 "日期之后第一根K线的下标"
+    // (日期非递减时可用, 查询从 O(log n) 降到 O(1); 与二分结果完全一致)
+    std::vector<int> elem_after_date_;
+    // 按下标区间收集缺口 (gapRegion 的 O(1) 边界版本)
+    std::vector<std::pair<double, double>> gapRegionInBars(int b_from, int b_to_excl,
+                                                           TopBotType gap_direction) const;
     
     // Core helper functions
     std::vector<int> getPreviousNElem(int loc, const std::vector<StandardKLine>& working_df, int N = 0, TopBotType end_tb = NO_TOPBOT, bool single_direction = true);
@@ -231,6 +247,26 @@ private:
     
     // Feature sequence element inclusion processing (Chan Theory compliant)
     std::vector<FeatureSeqElement> buildFeatureSeq(const std::vector<StandardKLine>& working_df, int start_loc);
+    // 同 buildFeatureSeq, 但复用调用方提供的缓冲 (内容完全一致, 只为避免每轮重新分配)
+    void buildFeatureSeqInto(const std::vector<StandardKLine>& working_df, int start_loc,
+                             std::vector<FeatureSeqElement>& seq);
+    // defineXD 主循环复用的特征序列缓冲
+    std::vector<FeatureSeqElement> seq_buf_;
+
+    // ---- A3: 特征序列缓存 ------------------------------------------------------
+    // (tail_start, direction) -> buildFeatureSeq + processInclusions 的结果。
+    // 二者只依赖 original_tb / high / low (笔阶段之后不再变化) 与方向, 因此同一对
+    // 键必然得到同一序列, 可安全复用; 每次 defineXD 开始与 setData 时清空。
+    // applied: 该序列对应的 chan_price 回写是否已执行过 (回写是幂等的, 重复执行无效果)。
+    struct SeqCacheEntry {
+        int tail_start = -1;
+        int direction = 0;
+        bool applied = false;
+        long long tick = 0;
+        std::vector<FeatureSeqElement> seq;
+    };
+    std::vector<SeqCacheEntry> seq_cache_;
+    long long seq_cache_tick_ = 0;
     bool hasFeatureSeqInclusion(const FeatureSeqElement& e0, const FeatureSeqElement& e1,
                                 const FeatureSeqElement& e2, const FeatureSeqElement& e3);
     std::pair<FeatureSeqElement, FeatureSeqElement> mergeFeatureSeqPair(
@@ -244,7 +280,8 @@ private:
 
     // FeatureSeqElement-based XD endpoint detection (replaces findXDFull)
     // Now processes ONE segment per call, returns result for iterative caller
-    XDFindResult findXDOnFeatureSeq(std::vector<FeatureSeqElement>& feature_seq,
+    // (只读 feature_seq: 该函数从不修改序列, 便于 A3 缓存复用)
+    XDFindResult findXDOnFeatureSeq(const std::vector<FeatureSeqElement>& feature_seq,
                                     std::vector<StandardKLine>& working_df,
                                     int seq_pos, TopBotType direction,
                                     int tail_start_market);

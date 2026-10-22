@@ -1,4 +1,4 @@
-﻿// ChanAnalyzer.cpp - Chan Theory Analyzer Implementation
+// ChanAnalyzer.cpp - Chan Theory Analyzer Implementation
 // Implementation of pen and line segment algorithm from kBar_Chan.py
 
 #include "ChanPlugin.h"
@@ -35,6 +35,11 @@ void ChanAnalyzer::setData(const std::vector<KLine>& data) {
     gap_XD.clear();
     previous_skipped_idx.clear();
     previous_with_xd_gap = false;
+    gap_prefix_.clear();
+    dates_monotonic_ = false;
+    elem_after_date_.clear();
+    seq_cache_.clear();
+    seq_cache_tick_ = 0;
 }
 
 void ChanAnalyzer::analyze() {
@@ -113,17 +118,57 @@ void ChanAnalyzer::detectGaps() {
             current.gap_end = prev.low;
         }
     }
+
+    // ---- 加速用索引结构: 前缀缺口计数 + 日期非递减校验 --------------------------
+    // 只影响查询方式, 不改变任何划分逻辑; 校验不通过时全部走回退路径。
+    gap_prefix_.assign(original_data.size() + 1, 0);
+    dates_monotonic_ = true;
+    for (size_t i = 0; i < original_data.size(); i++) {
+        gap_prefix_[i + 1] = gap_prefix_[i] + (original_data[i].gap != 0 ? 1 : 0);
+        if (i > 0 && original_data[i].date < original_data[i - 1].date) {
+            dates_monotonic_ = false;      // 日期倒退 -> 回退到逐根扫描
+        }
+    }
 }
 
 bool ChanAnalyzer::gapExistsInRange(int start_idx, int end_idx) {
     if (original_data.empty()) return false;
-    
+
+    // ---- 加速路径: 前缀缺口计数 + 下标区间 (与下面的逐根日期过滤完全等价) ----
+    if (dates_monotonic_) {
+        std::pair<int, int> r = barIndexRangeByDate(start_idx, end_idx);
+        if (r.first > r.second) return false;                 // 空区间
+        return (gap_prefix_[r.second + 1] - gap_prefix_[r.first]) > 0;
+    }
+
     for (const auto& kline : original_data) {
         if (kline.date > start_idx && kline.date <= end_idx) {
             if (kline.gap != 0) return true;
         }
     }
     return false;
+}
+
+// 日期区间 (start_date, end_date] -> K线下标闭区间 [first, last]
+// 仅当日期"非递减"时可用; 空区间返回 (1, 0) 以便调用方用 first > second 判空。
+// 注意: 起端用严格 > (排除所有与 start 同日的K线), 末端用 <= (包含所有与 end 同日的
+// K线), 因此即使存在重复日期(分钟线同日多根), 结果与逐根过滤完全一致。
+std::pair<int, int> ChanAnalyzer::barIndexRangeByDate(double start_date, double end_date) const {
+    const int n = static_cast<int>(original_data.size());
+    int lo = 0, hi = n;                 // 第一个 date > start_date
+    while (lo < hi) {
+        int mid = (lo + hi) / 2;
+        if (original_data[mid].date > start_date) hi = mid; else lo = mid + 1;
+    }
+    const int first = lo;
+    lo = 0; hi = n;                     // 第一个 date > end_date
+    while (lo < hi) {
+        int mid = (lo + hi) / 2;
+        if (original_data[mid].date <= end_date) lo = mid + 1; else hi = mid;
+    }
+    const int last_excl = lo;
+    if (first >= last_excl) return std::make_pair(1, 0);
+    return std::make_pair(first, last_excl - 1);
 }
 
 bool ChanAnalyzer::gapExistsInDateRange(double start_date, double end_date) {
@@ -995,15 +1040,32 @@ bool ChanAnalyzer::kbarGapAsXdFull(const std::vector<StandardKLine>& working_df,
     
     const auto& firstElem = working_df[first_idx];
     const auto& secondElem = working_df[second_idx];
-    
-    if (!gapExistsInRange(firstElem.date, secondElem.date)) return false;
-    
+
+    // A2: 用预计算的 "日期之后第一根K线下标" 直接得到 [b1, b2) 区间, 省掉两次二分。
+    // 只有在日期非递减且预计算表匹配当前 working_df 时才启用, 否则回退到按日期查询。
+    bool fast_path = dates_monotonic_ &&
+        second_idx >= 0 &&
+        second_idx < static_cast<int>(elem_after_date_.size()) &&
+        first_idx >= 0 &&
+        first_idx < static_cast<int>(elem_after_date_.size());
+    int b1 = 0, b2 = 0;
+    if (fast_path) {
+        b1 = elem_after_date_[first_idx];
+        b2 = elem_after_date_[second_idx];
+        if (b2 <= b1) return false;                                 // 空日期区间
+        if (gap_prefix_[b2] - gap_prefix_[b1] <= 0) return false;   // 区间内无缺口
+    } else {
+        if (!gapExistsInRange(firstElem.date, secondElem.date)) return false;
+    }
+
     TopBotType gap_direction = NO_TOPBOT;
     if (secondElem.tb == TOP) gap_direction = BOT2TOP;
     else if (secondElem.tb == BOT) gap_direction = TOP2BOT;
     else return false;
-    
-    auto regions = gapRegion(firstElem.date, secondElem.date, gap_direction);
+
+    auto regions = fast_path
+        ? gapRegionInBars(b1, b2, gap_direction)
+        : gapRegion(firstElem.date, secondElem.date, gap_direction);
     if (regions.empty()) return false;
     regions = combineGaps(regions);
     if (regions.empty()) return false;
@@ -1043,6 +1105,18 @@ bool ChanAnalyzer::kbarGapAsXdFull(const std::vector<StandardKLine>& working_df,
 std::vector<FeatureSeqElement> ChanAnalyzer::buildFeatureSeq(
         const std::vector<StandardKLine>& working_df, int start_loc) {
     std::vector<FeatureSeqElement> seq;
+    buildFeatureSeqInto(working_df, start_loc, seq);
+    return seq;
+}
+
+// 与上面的版本输出完全一致; 复用外部缓冲, 避免主循环每轮重新分配
+void ChanAnalyzer::buildFeatureSeqInto(
+        const std::vector<StandardKLine>& working_df, int start_loc,
+        std::vector<FeatureSeqElement>& seq) {
+    seq.clear();
+    if (start_loc < static_cast<int>(working_df.size())) {
+        seq.reserve(static_cast<size_t>(static_cast<int>(working_df.size()) - start_loc) / 2 + 8);
+    }
     for (int i = start_loc; i < static_cast<int>(working_df.size()); i++) {
         if (working_df[i].original_tb == TOP || working_df[i].original_tb == BOT) {
             FeatureSeqElement elem;
@@ -1056,7 +1130,6 @@ std::vector<FeatureSeqElement> ChanAnalyzer::buildFeatureSeq(
             seq.push_back(elem);
         }
     }
-    return seq;
 }
 
 bool ChanAnalyzer::hasFeatureSeqInclusion(
@@ -1121,44 +1194,66 @@ void ChanAnalyzer::processInclusions(std::vector<FeatureSeqElement>& seq, TopBot
         start_offset++;
     }
 
-    int i = start_offset;
-    while (i + 3 < static_cast<int>(seq.size())) {
-        if (hasFeatureSeqInclusion(seq[i], seq[i+1], seq[i+2], seq[i+3])) {
+    // ---- 与原实现逐元素等价的"栈式"版本 ----------------------------------------
+    // 原实现: i 从 start_offset 起以 2 为步长前进; 命中包含时把 (i,i+1) 与 (i+2,i+3)
+    // 合并进 (i,i+1)、删掉后两个, 然后 i -= 2 回头再看一次。
+    // 这与"按 2 个一组压栈, 只要栈顶两组构成包含就合并"完全等价, 但把原来的
+    // vector::erase (每次搬移 O(L)) 换成了 O(1) 的 pop_back, 整体从 O(L^2) 降到 O(L)。
+    // 前缀 [0, start_offset) 不参与处理, 原样保留。
+    std::vector<FeatureSeqElement> out;
+    out.reserve(seq.size());
+    for (int k = 0; k < start_offset; k++) out.push_back(seq[k]);
+    const size_t prefix = out.size();
+
+    for (int i = start_offset; i + 1 < static_cast<int>(seq.size()); i += 2) {
+        out.push_back(seq[i]);
+        out.push_back(seq[i + 1]);
+
+        while (out.size() >= prefix + 4) {
+            const size_t n = out.size();
+            if (!hasFeatureSeqInclusion(out[n - 4], out[n - 3], out[n - 2], out[n - 1])) {
+                break;
+            }
             // 与笔阶段一致: 用前一个特征元素与当前元素的高点比较确定方向
             bool merge_max;
-            if (i == start_offset) {
+            if (n - 4 == prefix) {
                 merge_max = (direction == BOT2TOP);
             } else {
-                double prev_high = std::max(seq[i-2].price, seq[i-1].price);
-                double cur_high = std::max(seq[i].price, seq[i+1].price);
+                double prev_high = std::max(out[n - 6].price, out[n - 5].price);
+                double cur_high = std::max(out[n - 4].price, out[n - 3].price);
                 // 与笔阶段同一规则(同 isBullType): 严格比较, 等号情形原文前提已排除
                 merge_max = float_less(prev_high, cur_high);
             }
-            auto [m0, m1] = mergeFeatureSeqPair(
-                seq[i], seq[i+1], seq[i+2], seq[i+3], merge_max);
-            seq[i] = m0;
-            seq[i+1] = m1;
-            seq.erase(seq.begin() + i + 2, seq.begin() + i + 4);
-            i = std::max(start_offset, i - 2);
-        } else {
-            i += 2;
+            std::pair<FeatureSeqElement, FeatureSeqElement> m =
+                mergeFeatureSeqPair(out[n - 4], out[n - 3], out[n - 2], out[n - 1],
+                                    merge_max);
+            out[n - 4] = m.first;
+            out[n - 3] = m.second;
+            out.pop_back();
+            out.pop_back();
         }
     }
+
+    // 若 (size - start_offset) 为奇数, 末尾单元素不参与配对, 需原样保留
+    if (((static_cast<int>(seq.size()) - start_offset) & 1) != 0) {
+        out.push_back(seq.back());
+    }
+
+    seq.swap(out);
 }
 
 void ChanAnalyzer::applyCleanSequence(
         const std::vector<FeatureSeqElement>& feature_seq,
         std::vector<StandardKLine>& working_df, int start_loc, int end_loc) {
-    int clear_end = (end_loc < 0) ? static_cast<int>(working_df.size()) : end_loc;
-    for (int i = start_loc; i < clear_end; i++) {
-        if (working_df[i].tb != NO_TOPBOT) {
-            working_df[i].tb = NO_TOPBOT;
-        }
-    }
+    // 注意: 线段阶段从不读取 working_df 的 tb (buildFeatureSeq / findXDOnFeatureSeq /
+    // checkPreviousElemToAvoidXdGap / getPreviousNElem 全部使用 original_tb 或特征序列
+    // 自身的 tb), 因此原来"从 start_loc 清零到末尾"的 O(n) 循环属于死代码, 已删除;
+    // 只保留真正影响结果的 chan_price 回写。
+    (void)start_loc;
+    (void)end_loc;
     for (const auto& elem : feature_seq) {
         int idx = elem.orig_market_idx;
         if (idx >= 0 && idx < static_cast<int>(working_df.size())) {
-            working_df[idx].tb = elem.tb;
             working_df[idx].chan_price = elem.orig_price;
         }
     }
@@ -1172,7 +1267,7 @@ void ChanAnalyzer::applyCleanSequence(
 // ========================================================================
 
 XDFindResult ChanAnalyzer::findXDOnFeatureSeq(
-        std::vector<FeatureSeqElement>& feature_seq,
+        const std::vector<FeatureSeqElement>& feature_seq,
         std::vector<StandardKLine>& working_df,
         int seq_pos, TopBotType direction,
         int tail_start_market) {
@@ -1532,7 +1627,24 @@ void ChanAnalyzer::defineXD(int initial_state) {
     if (marked_bi.empty()) return;
     
     std::vector<StandardKLine> working_df = marked_bi;
-    
+
+    // A2: 为每个端点元素预计算 "该元素日期之后第一根K线的下标"。
+    // 端点元素按时间顺序取自 standardized, 日期非递减, 因此一次双指针扫描即可;
+    // 结果与 barIndexRangeByDate 的二分完全一致, 只是把查询降到 O(1)。
+    elem_after_date_.clear();
+    if (dates_monotonic_ && !working_df.empty()) {
+        elem_after_date_.assign(working_df.size(), 0);
+        int ptr = 0;
+        const int n_bars = static_cast<int>(original_data.size());
+        for (size_t i = 0; i < working_df.size(); i++) {
+            const double d = static_cast<double>(working_df[i].date);
+            while (ptr < n_bars && static_cast<double>(original_data[ptr].date) <= d) {
+                ++ptr;
+            }
+            elem_after_date_[i] = ptr;
+        }
+    }
+
     for (auto& kline : working_df) {
         if (kline.chan_price == 0) {
             kline.chan_price = (kline.tb == TOP) ? kline.high : kline.low;
@@ -1552,13 +1664,50 @@ void ChanAnalyzer::defineXD(int initial_state) {
     
     gap_XD.clear();
     previous_with_xd_gap = false;
-    
-    while (tail_start < static_cast<int>(working_df.size())) {
-        auto seq = buildFeatureSeq(working_df, tail_start);
-        if (seq.size() < 6) break;
+    // A3: 每次 defineXD 都从干净缓存开始 (缓存只在本工作集内有效)
+    seq_cache_.clear();
+    const size_t kSeqCacheCap = 96;
+    seq_cache_.reserve(kSeqCacheCap + 1);
+    seq_cache_tick_ = 0;
 
-        processInclusions(seq, direction);
-        applyCleanSequence(seq, working_df, tail_start);
+    while (tail_start < static_cast<int>(working_df.size())) {
+        // ---- A3: 取 (tail_start, direction) 的特征序列 (缓存命中则零构建成本) ----
+        SeqCacheEntry* cache_hit = nullptr;
+        for (auto& e : seq_cache_) {
+            if (e.tail_start == tail_start && e.direction == static_cast<int>(direction)) {
+                cache_hit = &e;
+                break;
+            }
+        }
+        if (cache_hit) {
+            cache_hit->tick = ++seq_cache_tick_;
+        } else {
+            buildFeatureSeqInto(working_df, tail_start, seq_buf_);
+            // 与原实现一致: 先按"未处理"的长度判 6, 再做强包含处理
+            if (static_cast<int>(seq_buf_.size()) < 6) break;
+            processInclusions(seq_buf_, direction);
+            if (seq_cache_.size() < kSeqCacheCap) {
+                seq_cache_.emplace_back();
+                cache_hit = &seq_cache_.back();
+            } else {
+                size_t oldest = 0;
+                for (size_t k = 1; k < seq_cache_.size(); k++) {
+                    if (seq_cache_[k].tick < seq_cache_[oldest].tick) oldest = k;
+                }
+                cache_hit = &seq_cache_[oldest];
+            }
+            cache_hit->tail_start = tail_start;
+            cache_hit->direction = static_cast<int>(direction);
+            cache_hit->applied = false;
+            cache_hit->tick = ++seq_cache_tick_;
+            cache_hit->seq = seq_buf_;
+        }
+        const std::vector<FeatureSeqElement>& seq = cache_hit->seq;
+        // chan_price 回写是幂等的 (写入值恒为 high/low 派生的原价), 同一键只需执行一次
+        if (!cache_hit->applied) {
+            applyCleanSequence(seq, working_df, tail_start);
+            cache_hit->applied = true;
+        }
 
         XDFindResult result = findXDOnFeatureSeq(seq, working_df, 0,
                                                  direction, tail_start);
@@ -1620,10 +1769,7 @@ void ChanAnalyzer::defineXD(int initial_state) {
                     rollback_idx = gap_XD.back();
                     gap_XD.pop_back();
                     working_df[rollback_idx].xd_tb = NO_TOPBOT;
-                    int to = (result.next_market_start > 0)
-                        ? result.next_market_start
-                        : static_cast<int>(working_df.size()) - 1;
-                    restoreTbData(working_df, rollback_idx, to);
+                    // (restoreTbData 只写 tb, 而线段阶段不读 tb -> 已移除, 结果不变)
                     direction = (direction == TOP2BOT) ? BOT2TOP : TOP2BOT;
                     tail_start = rollback_idx;
                     continue;
@@ -1651,8 +1797,7 @@ void ChanAnalyzer::defineXD(int initial_state) {
                     invalid = true;
                 }
                 if (invalid) {
-                    restoreTbData(working_df, prev_idx,
-                                  static_cast<int>(working_df.size()) - 1);
+                    // (restoreTbData 只写 tb, 而线段阶段不读 tb -> 已移除, 结果不变)
                     working_df[prev_idx].xd_tb = NO_TOPBOT;
                     direction = (result.xd_type == TOP) ? TOP2BOT : BOT2TOP;
                     tail_start = prev_idx;
@@ -1815,6 +1960,7 @@ cleanXdMarks(working_df);
     repairXdExtremes(working_df);
 #endif
 
+
     // ===== 少于三笔的相邻端点对不成线段 (线段待形成) =====
     // 原文第65课: 线段至少三笔; 若相邻两个端点的跨度不足三笔, 那一段尚未成为线段,
     // 不应作为线段输出 —— 去掉后一个端点, 让它并入相邻线段待其形成。
@@ -1962,28 +2108,68 @@ void ChanAnalyzer::restoreTbData(std::vector<StandardKLine>& working_df, int fro
 }
 
 // 滤波去缺�?(Python filter_gap line 1001-1018)
-std::vector<std::pair<double, double>> ChanAnalyzer::gapRegion(double start_date, double end_date, TopBotType gap_direction) {
+// 按下标区间收集缺口 (与按日期过滤完全等价, 供 A2 的 O(1) 边界使用)
+std::vector<std::pair<double, double>> ChanAnalyzer::gapRegionInBars(
+        int b_from, int b_to_excl, TopBotType gap_direction) const {
     std::vector<std::pair<double, double>> result;
-    
-    // Python gap_region line 313-321
-    for (const auto& kline : original_data) {
-        if (kline.date > start_date && kline.date <= end_date) {
-            if (gap_direction == NO_TOPBOT) {
-                if (kline.gap != 0) {
-                    result.push_back(std::make_pair(kline.gap_start, kline.gap_end));
-                }
-            } else if (gap_direction == TOP2BOT) {
-                if (kline.gap == -1) {
-                    result.push_back(std::make_pair(kline.gap_start, kline.gap_end));
-                }
-            } else if (gap_direction == BOT2TOP) {
-                if (kline.gap == 1) {
-                    result.push_back(std::make_pair(kline.gap_start, kline.gap_end));
-                }
+    if (b_from < 0) b_from = 0;
+    if (b_to_excl > static_cast<int>(original_data.size())) {
+        b_to_excl = static_cast<int>(original_data.size());
+    }
+    for (int i = b_from; i < b_to_excl; i++) {
+        const KLine& kline = original_data[i];
+        if (gap_direction == NO_TOPBOT) {
+            if (kline.gap != 0) {
+                result.push_back(std::make_pair(kline.gap_start, kline.gap_end));
+            }
+        } else if (gap_direction == TOP2BOT) {
+            if (kline.gap == -1) {
+                result.push_back(std::make_pair(kline.gap_start, kline.gap_end));
+            }
+        } else if (gap_direction == BOT2TOP) {
+            if (kline.gap == 1) {
+                result.push_back(std::make_pair(kline.gap_start, kline.gap_end));
             }
         }
     }
-    
+    return result;
+}
+
+std::vector<std::pair<double, double>> ChanAnalyzer::gapRegion(double start_date, double end_date, TopBotType gap_direction) {
+    std::vector<std::pair<double, double>> result;
+
+    // 加速: 只扫描命中的K线下标区间 (与逐根日期过滤完全等价); 否则回退全表扫描
+    int i_from = 0;
+    int i_to = static_cast<int>(original_data.size()) - 1;
+    if (dates_monotonic_) {
+        std::pair<int, int> r = barIndexRangeByDate(start_date, end_date);
+        if (r.first > r.second) return result;   // 空区间, 与原逻辑一致
+        i_from = r.first;
+        i_to = r.second;
+    }
+
+    // Python gap_region line 313-321
+    for (int i = i_from; i <= i_to; i++) {
+        const KLine& kline = original_data[i];
+        if (!dates_monotonic_ &&
+            !(kline.date > start_date && kline.date <= end_date)) {
+            continue;                            // 回退路径保留原来的日期过滤
+        }
+        if (gap_direction == NO_TOPBOT) {
+            if (kline.gap != 0) {
+                result.push_back(std::make_pair(kline.gap_start, kline.gap_end));
+            }
+        } else if (gap_direction == TOP2BOT) {
+            if (kline.gap == -1) {
+                result.push_back(std::make_pair(kline.gap_start, kline.gap_end));
+            }
+        } else if (gap_direction == BOT2TOP) {
+            if (kline.gap == 1) {
+                result.push_back(std::make_pair(kline.gap_start, kline.gap_end));
+            }
+        }
+    }
+
     return result;
 }
 

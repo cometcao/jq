@@ -209,3 +209,28 @@ C++ `standardize` 用 `high=0/low=0` 当"已被合并"的标记, 而 Python 原�
 
 实测 (20 组): 少于三笔的线段 1 -> **0**; 线段 95 -> 93; 非极值端点 4 (4.3%); 真实 600519 端点序列
 与 Python 原版仍完全一致 (12 段, 0 个不足三笔)。
+
+### 性能优化 (15000 根窗口) —— 全部通过逐字节等价验证
+
+背景: 窗口由 6000 提到 15000 后单次计算从 43ms 涨到 5.6s。剖析发现主因不是缺口查询本身,
+而是 defineXD 主循环在 >=9000 根时出现的"重放": 980 笔却跑出 35,664 轮 / 25,751 次"找到" /
+8,955 次回退 (回退后从旧位置重扫, 把同一串端点重复提交)。
+
+已落地 (每一步都与优化前的 27 个数据集 + 9000/12000/15000 三份参照逐字节比对, 全部相同):
+
+1. 缺口查询索引化: detectGaps 里建 gap_prefix_ 前缀计数 + 日期非递减校验,
+   gapExistsInRange/gapRegion 改按K线下标区间查询; 日期倒退时自动回退到原逐根扫描。
+2. 删除线段阶段的 tb 死维护: applyCleanSequence 的 O(n) 清零循环、两处 restoreTbData
+   (线段阶段只读 original_tb / xd_tb / 特征序列自身的 tb, working_df.tb 从不被读取)。
+3. buildFeatureSeqInto: 主循环复用特征序列缓冲, 不再每轮重新分配。
+4. processInclusions 由 O(L^2) 的 vector::erase 改为等价的"栈式"合并 (O(L)),
+   保留 [0,start_offset) 前缀与"先判长度<6 再处理"的原有顺序。
+5. A3: (tail_start, direction) -> 特征序列的 LRU 缓存 (96 条, 每次 defineXD 与 setData 时清空)。
+   依据: 特征序列只依赖 original_tb / high / low (笔阶段后不变) 与方向; chan_price 回写幂等,
+   同一键只需执行一次。findXDOnFeatureSeq 改为 const 引用 (已验证其从不修改序列)。
+
+实测 (同一合成序列, 取 3 次最优):
+  1500 -> 1.2ms | 3000 -> 4.2ms | 6000 -> 12.1ms | 9000 -> 82.9ms | 12000 -> 118.9ms | 15000 -> 161.2ms
+  (优化前同尺寸: 6000 为 26ms, 15000 为 5631ms)
+
+MAX_PROCESS_COUNT 6000 -> 15000 (Main.cpp)。
