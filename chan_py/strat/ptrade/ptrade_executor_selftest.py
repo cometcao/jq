@@ -310,20 +310,28 @@ def test_plan_math():
     check("no duplicate code in the buy list",
           len(set(c for c, _v, _r in plan["buys"])) == len(plan["buys"]),
           str(plan["buys"]))
-    # fixture: 3 held / cash 330000 -> slots=5, cash_for_buy=323500, avg=64700 vs
-    # target 64187.5 -> deviation 0.8% <= 20% -> the combination gate stays OFF, so the
-    # in-pool names are NOT touched and only the 4 fillable empty slots are bought.
+    # fixture: 3 held (one of them out-of-pool and being sold) / cash 330000 -> 6 empty slots
+    # after the projected exit, gate OFF (balanced) -> only empty slots are filled, never a
+    # top-up. 002758 (limit-up) and 600697 (halted) cannot be bought, so since 2026-10-29 the
+    # loop walks the WHOLE candidate pool and the two leftover slots go to the next ranked
+    # names instead of leaving cash idle.
     check("gate stays off for a balanced book",
           any("rebalance gate" in n and "OFF" in n for n in plan["notes"]),
           str(plan["notes"]))
-    check("exactly 4 buys expected (4 new slots, no top-up)",
-          len(plan["buys"]) == 4, str(plan["buys"]))
+    check("every empty slot is filled (6), lower ranks used when needed",
+          len(plan["buys"]) == 6, str(plan["buys"]))
     check("in-pool name untouched while the gate is off",
           "301167.XSHE" not in buys, str(buys))
     check("limit-up candidate is skipped", "002758.XSHE" not in buys)
     check("halted candidate is skipped", "600697.XSHG" not in buys)
     for c in ("600739.XSHG", "601318.XSHG", "600036.XSHG", "000002.XSHE"):
         check("new slot filled: %s" % c, c in buys)
+    check("a name outside the top-8 fills a slot the limit-up/halted names could not",
+          any(c in buys for c in ("600030.XSHG", "000651.XSHE")), str(sorted(buys.keys())))
+    check("the fallback is explained in the notes",
+          any("slot fallback" in n for n in plan["notes"]), str(plan["notes"]))
+    check("the fallback never goes outside the candidate pool",
+          all(c in POOL for c in buys), str(sorted(buys.keys())))
     check("no more than max_holdings names held after the run",
           len(set(["605189.XSHG", "301167.XSHE"]) | set(buys.keys())) <= S.DEFAULT_PARAMS["max_holdings"],
           str(sorted(buys.keys())))

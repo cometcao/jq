@@ -269,6 +269,11 @@ ptrade/ptrade_rebalance_executor.py   云端策略（粘进 PTrade 编辑器的�
   ⑩ **科创板最小 200 股**（`LOT_STAR`、`_min_lot()`；100 股的单会被交易所拒）。
   `cash_reserve_ratio` = 给最后一个仓位留的余钱，在 ④ 里**永远不花**（`spendable = cash − reserve`）。
   **不做任何补仓时段**（2026-10-22 明确）：`run_daily` 只有"策略 × `trading_times`"，③⑤⑦ 都在同一轮回调内。
+- **空槽补位：买不到就取候选池的下一只（2026-10-29）**：`_plan` 第 3 步按排名遍历**整个 `candidate`**
+  （不再只在前 `max_holdings` 只里找），停牌/涨停/无行情/ST/低于最小申报量的票跳过、继续往下取，直到槽位填满。
+  日志：`note: slot fallback: <code> (rank N, outside the top 8) fills a slot that a better-ranked name could not fill`。
+  **边界：只在候选池（`candidate_pool_size`）内补位，绝不越到池外** —— 池外的票下一轮会被 out-of-pool 强卖
+  （买了就卖，白交手续费+滑点）。代价：替补票会占住格子直到它自己掉出候选池（既有"满仓不重均"防 churn 的必然结果）。
 - **只交易"当天"的名单（2026-10-19）**：目标文件 `generated_at` 不是今天 → 云端 **不交易 + 记 ERROR**
   （`target is NOT from today ... REFUSING to trade this round`，仓位原样不动）；`> MAX_TARGET_AGE_DAYS(7) 天`
   才**清该策略份额**。上传晚到/漏传的后果是"当天不交易"，不会再悄悄用昨天那份。

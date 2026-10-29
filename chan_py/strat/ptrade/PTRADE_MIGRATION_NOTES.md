@@ -390,6 +390,24 @@ freeze_limit  = 股数 × 保护价 × 1.002
 >
 > 日志（补发）：`WARN 1 sell(s) not filled yet (002452.XSHE) -> re-sending once inside this run at the new floor`。
 
+#### 4.1.1.2 空槽补位规则：**买不到就取候选池里的下一只**（2026-10-29）
+
+**实盘问题**：`buy_pool = 名单前 max_holdings(8)` 只含 8 只，其中 600727 涨停 → 该槽跳过，
+**剩下约 8.9 万回款闲置**，当天满仓少一格（用户只能手工补）。
+
+**现行规则**（`_plan` 第 3 步）：填空槽时**按排名遍历整个 `candidate`（候选池，本例 13 只）**，
+遇到不能买的（停牌 / 涨停 / 无行情 / ST / 低于板块最小单位）就继续往下取，直到槽位填满或候选池走完。
+日志会写：
+`note: limit-up, skip buy: 600727.XSHG` +
+`note: slot fallback: 600000.XSHG (rank 9, outside the top 8) fills a slot that a better-ranked name could not fill`
+
+**边界（必须守住，否则会来回折腾）**：只在 **`candidate`（候选池，`candidate_pool_size`）之内**补位，
+**绝不越到候选池之外**——池外的票下一轮会被当 out-of-pool 强制卖出，等于买了就卖（手续费 + 滑点白给）。
+所以：
+- 候选池内的替补票 → 下一轮仍在 `candidate_set` 里，**不会被池外清仓规则卖掉**，是稳定持仓；
+- 代价：满仓后不再均仓，这只排名靠后的票会占着格子，直到它自己掉出候选池或你调名单。
+  这是既有"满仓不重均"防 churn 规则的必然结果，比"留一格空仓 + 现金闲置"更符合"尽最大努力"。
+
 #### 4.1.2 其他安全闸门（不在 QMT 语义内，实盘前加）
 
 - `DRY_RUN` 默认 **False**（直接实盘；改成 `True` 可做一次只记不下单的排练）

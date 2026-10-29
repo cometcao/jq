@@ -1313,9 +1313,15 @@ def _plan(view, stocks, params):
     # ---------- 3. fill empty slots (QMT buy_to_fill: per_stock = buy_cash / slots) ----------
     # NOTE: divides by the number of EMPTY slots, not by max_holdings - a partially
     # filled book therefore puts more money into each new name than target_per_stock.
+    #
+    # 2026-10-29 (live): one of the top `max_holdings` names was at limit-up, so the slot
+    # stayed empty while ~89k of sell proceeds sat idle. The loop therefore walks the WHOLE
+    # candidate pool in rank order and takes the next name it can actually buy. It never goes
+    # beyond the candidate pool: those names are out-of-pool and would be force-sold again
+    # next round (needless churn + fees).
     if slots > 0 and cash_for_buy > 0:
         per_stock = cash_for_buy / float(slots)
-        for code in buy_pool:
+        for code in candidate:
             if slots <= 0:
                 break
             if code in held:
@@ -1341,6 +1347,10 @@ def _plan(view, stocks, params):
                 continue
             buys.append({"code": code, "need": per_stock, "last": last,
                          "ask": q.get("ask1") or last, "reason": "new-slot"})
+            if code not in buy_pool:
+                notes.append("slot fallback: %s (rank %d, outside the top %d) fills a slot that "
+                             "a better-ranked name could not fill"
+                             % (code, candidate.index(code) + 1, len(buy_pool)))
             slots -= 1
 
     # ---------- 4. cash budget (QMT: max_amount = min(target, available_cash) * 0.99) ----------
