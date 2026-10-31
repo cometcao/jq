@@ -593,6 +593,37 @@ def test_star_market_minimum_lot():
         S._cash, S._snap_one = saved_cash, saved_snap
 
 
+def test_disabled_target_is_ignored_completely():
+    """enabled=false must make the server ignore the strategy: no orders and NOT even the
+    stale-target liquidation (which would otherwise sell everything after MAX_TARGET_AGE_DAYS).
+    That is what lets a strategy be rehearsed or paused safely."""
+    print("test_disabled_target_is_ignored_completely")
+    saved = S._load_target
+    try:
+        old = (datetime.datetime.now() -
+               datetime.timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S")
+        S._load_target = lambda tf: ("stale", {"strategy": "ttc2", "generated_at": old,
+                                               "enabled": False, "_age_days": 30,
+                                               "_stocks": ["605189.XSHG"]})
+        ORDERS[:] = []
+        ORDER_MARKET_CALLS[:] = []
+        S.DRY_RUN = False
+        ctx = build_context()
+        S._run(ctx, "20261031@0935", "target_ttc2.json")
+        check("a disabled target sends no order at all", ORDERS == [], str(ORDERS))
+
+        now_hm = datetime.datetime.now().strftime("%H:%M")
+        S._load_target = lambda tf: ("ok", {"strategy": "ttc2",
+                                            "enabled": True, "_age_days": 0,
+                                            "trading_times": [now_hm],
+                                            "_stocks": ["605189.XSHG"]})
+        ORDERS[:] = []
+        S._run(ctx, "20261031@1000", "target_ttc2.json")
+        check("the same file with enabled=true trades again", len(ORDERS) > 0, str(ORDERS))
+    finally:
+        S._load_target = saved
+
+
 def test_dry_run_sends_nothing():
     print("test_dry_run_sends_nothing")
     ORDERS[:] = []
@@ -1266,6 +1297,7 @@ def main():
     tests = [test_initialize_and_selfcheck, test_plan_math,
              test_wait_for_proceeds_sees_fills,
              test_buys_scale_to_real_cash,
+             test_disabled_target_is_ignored_completely,
              test_buy_falls_back_to_limit_when_market_freeze_is_too_big,
              test_sell_retry_only_for_full_exits,
              test_rejected_or_skipped_buys_stay_out_of_the_tracker,

@@ -274,6 +274,10 @@ ptrade/ptrade_rebalance_executor.py   云端策略（粘进 PTrade 编辑器的�
   日志：`note: slot fallback: <code> (rank N, outside the top 8) fills a slot that a better-ranked name could not fill`。
   **边界：只在候选池（`candidate_pool_size`）内补位，绝不越到池外** —— 池外的票下一轮会被 out-of-pool 强卖
   （买了就卖，白交手续费+滑点）。代价：替补票会占住格子直到它自己掉出候选池（既有"满仓不重均"防 churn 的必然结果）。
+- **`enabled` 总开关（2026-10-31，两端同名）**：`ptrade_config.json` 里 `"enabled": false` 的策略**仍生成文件**
+  （当预演用），但 `capital_ratio` 可写 **0 且不计入 1.0 合计** → 不影响在用策略的份额；文件里因此带
+  `"enabled": false` → 云端 `initialize` **不注册** `run_daily`、`_run` 在**年龄/清仓判断之前**返回
+  （`target says enabled=false -> ... ignores it completely`）。详见 [ptrade/SECOND_STRATEGY_SETUP.md](ptrade/SECOND_STRATEGY_SETUP.md)
 - **只交易"当天"的名单（2026-10-19）**：目标文件 `generated_at` 不是今天 → 云端 **不交易 + 记 ERROR**
   （`target is NOT from today ... REFUSING to trade this round`，仓位原样不动）；`> MAX_TARGET_AGE_DAYS(7) 天`
   才**清该策略份额**。上传晚到/漏传的后果是"当天不交易"，不会再悄悄用昨天那份。

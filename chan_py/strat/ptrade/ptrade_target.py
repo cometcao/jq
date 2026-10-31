@@ -36,6 +36,9 @@ Usage (from this directory, or with an explicit --config):
   python ptrade_target.py --now          # generate once for all strategies immediately (no email check)
   python ptrade_target.py --email        # run the email check once immediately (test; no generation)
   python ptrade_target.py --config x.json
+  # Rehearse the LOCAL half of a strategy that is not registered yet (no config change, and
+  # the cloud never acts on the file because TARGET_FILES does not list it):
+  python ptrade_target.py --pipeline-test ttc2 [--list-file <path>]
 """
 
 import json
@@ -196,12 +199,33 @@ def load_config(context, config_file=None):
 
     # strategy validation (capital_ratio sum, trading_times format)
     strategies = new_cfg['strategies']
-    total_ratio = sum(s['capital_ratio'] for s in strategies)
+    for s in strategies:
+        if not isinstance(s.get('enabled', True), bool):
+            raise ValueError(f"enabled of strategy '{s['name']}' must be true/false")
+        # a disabled strategy may carry capital_ratio 0: it does not claim any slice, so the
+        # live strategies keep their ratios untouched and adding a "paused" strategy changes
+        # nothing for them (2026-10-31).
+        if not s.get('enabled', True):
+            s.setdefault('capital_ratio', 0.0)
+            if s['capital_ratio'] < 0:
+                raise ValueError(f"capital_ratio of disabled strategy '{s['name']}' must be >= 0")
+            continue
+        if 'capital_ratio' not in s:
+            raise ValueError(f"capital_ratio of strategy '{s['name']}' is required when enabled")
+        if s['capital_ratio'] <= 0:
+            raise ValueError(f"capital_ratio of strategy '{s['name']}' must be > 0")
+        if not isinstance(s.get('ai_filter', True), bool):
+            raise ValueError(f"ai_filter of strategy '{s['name']}' must be true/false")
+    total_ratio = sum(s['capital_ratio'] for s in strategies if s.get('enabled', True))
     if abs(total_ratio - 1.0) > 0.0001:
         raise ValueError(f"sum of capital_ratio ({total_ratio:.4f}) must equal 1.0 (tolerance +/-0.0001)")
     for s in strategies:
-        if s['capital_ratio'] <= 0:
-            raise ValueError(f"capital_ratio of strategy '{s['name']}' must be > 0")
+        if not s.get('enabled', True):
+            # still schedule it (so the pipeline keeps producing a file for rehearsal) but say
+            # loudly that the server will ignore it
+            logging.warning(f"[{s['name']}] enabled=false -> the file is still generated for "
+                            f"pipeline testing, but the PTrade side IGNORES it completely "
+                            f"(no orders, no liquidation)")
         if 'trading_times' not in s:
             s['trading_times'] = ["09:35"]
         if not isinstance(s['trading_times'], list):
@@ -302,14 +326,60 @@ def _sleep_until(target):
 
 
 # ==================== List loading (copied from old read_stock_lists, slicing removed) ====================
+# External senders (e.g. a partner strategy that emails its list) may hand us slightly
+# different spellings, so normalise before anything else touches the codes: our own files and
+# the cloud strategy only ever speak XSHG / XSHE.
+_MARKET_ALIASES = {".XSHG": "XSHG", ".SH": "XSHG", ".SS": "XSHG",
+                   ".XSHE": "XSHE", ".SZ": "XSHE"}
+# A list file that was not written TODAY is not a signal for today: the producer stamps
+# generated_at = now, so reusing yesterday's attachment would look like a fresh target and the
+# cloud's today-only guard would pass. Fail closed instead (no file written -> no trade).
+LIST_MUST_BE_TODAY = True
+
+
+def _normalize_codes(raw):
+    """-> (codes, invalid, is_explicit_empty).
+
+    Accepts a bare JSON array of codes or {"stocks": [...]}. Keeps the sender's ORDER (it is
+    the ranking), removes duplicates, and enforces the XSHG/XSHE dialect. Anything else is
+    reported instead of being written into the target file, because the cloud would happily
+    try to trade a junk string.
+    """
+    if isinstance(raw, dict):
+        raw = raw.get("stocks")
+        if raw is None:
+            return [], ["<object without a 'stocks' array>"], False
+    if not isinstance(raw, list):
+        return [], ["<payload is not a JSON array>"], False
+    if not raw:
+        return [], [], True          # explicit empty list -> liquidate (old semantics)
+    codes = []
+    invalid = []
+    seen = set()
+    for item in raw:
+        text = str(item).strip().upper()
+        if not text:
+            continue
+        plain, dot, market = text.partition(".")
+        market = _MARKET_ALIASES.get(dot + market) if dot else None
+        if not (len(plain) == 6 and plain.isdigit() and market):
+            invalid.append(str(item))
+            continue
+        code = plain + "." + market
+        if code in seen:
+            continue
+        seen.add(code)
+        codes.append(code)
+    return codes, invalid, False
+
+
 def _load_stock_list(strat):
     """Return (codes, note). note in ok/missing/expired/read_error; the latter three
     follow old semantics -> empty list = liquidate.
 
-    Codes are passed through EXACTLY as the email attachment spells them (JoinQuant
-    dialect: 600000.XSHG / 000001.XSHE) - the same spelling the cloud strategy uses
-    internally and towards the platform API. The conversion this used to do existed only
-    because QMT's passorder wanted the old suffix form, so it is gone along with QMT.
+    Codes are normalised to the JoinQuant dialect (600000.XSHG / 000001.XSHE) - the same
+    spelling the cloud strategy uses internally and towards the platform API. Legacy
+    .SS/.SH/.SZ spellings are accepted on input and folded onto XSHG/XSHE.
     """
     file_path = strat["stock_list_file"]
     if not os.path.exists(file_path):
@@ -317,6 +387,11 @@ def _load_stock_list(strat):
         return [], "missing"
     file_mtime = datetime.datetime.fromtimestamp(os.path.getmtime(file_path))
     days_old = (datetime.datetime.now() - file_mtime).days
+    if LIST_MUST_BE_TODAY and file_mtime.date() != datetime.date.today():
+        logging.error(f"[{strat['name']}] list file was last written on "
+                      f"{file_mtime.date()} (NOT today) -> no fresh signal, no file written "
+                      f"this round; the PTrade side keeps the previous target")
+        return [], "stale_list"
     if days_old > 14:
         logging.warning(f"[{strat['name']}] list file expired: {file_path} "
                         f"({days_old} days ago) -> liquidate")
@@ -324,11 +399,22 @@ def _load_stock_list(strat):
     try:
         with open(file_path, encoding='utf-8') as f:
             data = json.load(f)
-        codes = [str(item).strip() for item in data if str(item).strip()]
-        return codes, "ok"
     except Exception as e:
         logging.error(f"[{strat['name']}] failed to read list file: {e} -> liquidate")
         return [], "read_error"
+    codes, invalid, explicit_empty = _normalize_codes(data)
+    if invalid:
+        logging.error(f"[{strat['name']}] {len(invalid)} invalid entr(ies) dropped from the "
+                      f"list: {invalid[:10]}{' ...' if len(invalid) > 10 else ''}")
+    if explicit_empty:
+        return [], "ok"              # sender explicitly said "empty" -> liquidate
+    if not codes:
+        logging.error(f"[{strat['name']}] list has no usable code after validation "
+                      f"-> no file written this round")
+        return [], "read_error"
+    logging.info(f"[{strat['name']}] list loaded: {len(codes)} code(s), "
+                 f"{len(invalid)} dropped")
+    return codes, "ok"
 
 
 # ==================== AI filter (time budget + conservative on exceptions) ====================
@@ -392,22 +478,27 @@ EXEC_FIELDS = ("trading_times", "capital_ratio", "max_holdings", "candidate_pool
                "cash_reserve_ratio", "rebalance_threshold")
 
 
-def _payload(strat, stocks, generated_at):
+def _payload(strat, stocks, generated_at, extra=None):
     data = {
         "strategy": strat["name"],
         "generated_at": generated_at.strftime("%Y-%m-%dT%H:%M:%S"),
+        # the server reads this: enabled=false -> completely ignored (no orders, no
+        # liquidation, no age policy). Default true keeps old files working.
+        "enabled": bool(strat.get("enabled", True)),
     }
     for k in EXEC_FIELDS:
         if strat.get(k) is not None:
             data[k] = strat[k]
+    if extra:
+        data.update(extra)
     data["stocks"] = stocks
     return data
 
 
 def _write_rebalance_file(strat, stocks, exchange_path, generated_at,
-                          upload_path=None, upload_name_tpl=None):
+                          upload_path=None, upload_name_tpl=None, extra=None):
     """Writes the local archive and this strategy's upload file (target_<strategy>.json)."""
-    data = _payload(strat, stocks, generated_at)
+    data = _payload(strat, stocks, generated_at, extra)
     action = "liquidate" if not stocks else f"{len(stocks)} stocks"
     if WRITE_ARCHIVE and exchange_path:
         filename = f"rebalance_{strat['name']}_{generated_at.strftime('%Y%m%d_%H%M')}.json"
@@ -426,7 +517,7 @@ def _generate_pair(context, strat, trading_time_str, force=False):
     start = datetime.datetime.now()
     codes, note = _load_stock_list(strat)
     if note != "ok":
-        # List unavailable (no mail yet / attachment missing / too old to trust / unreadable):
+        # List unavailable (no mail yet / attachment missing / not from today / unreadable):
         # write NOTHING so the upload dir keeps the PREVIOUS trading day's target and the
         # PTrade side goes on using it. The endgame is decided on the cloud side by that
         # file's age (older than MAX_TARGET_AGE_DAYS -> liquidate).
@@ -436,6 +527,16 @@ def _generate_pair(context, strat, trading_time_str, force=False):
     if not codes:
         # The source explicitly handed us an empty list -> liquidate (old semantics).
         _write_rebalance_file(strat, [], context['exchange_path'], start,
+                              context.get('upload_path'), context.get('upload_name_tpl'))
+        return
+    # Per-strategy switch: a partner strategy that already does its own compliance work can
+    # turn our 12-rule AI filter off ("ai_filter": false in ptrade_config.json). Default = on,
+    # so behaviour without the key is unchanged.
+    if not strat.get("ai_filter", True):
+        logging.info(f"[{strat['name']}] AI filter disabled in config -> using the list as-is "
+                     f"({len(codes)} codes, order preserved)")
+        _write_rebalance_file(strat, codes, context['exchange_path'],
+                              datetime.datetime.now(),
                               context.get('upload_path'), context.get('upload_name_tpl'))
         return
     # AI budget: min(10 min, time remaining to trading_time); --now has no trading_time constraint
@@ -479,7 +580,68 @@ def _generate_due(context, generated_set, force=False):
 
 
 # ==================== Main flow ====================
-def main_loop(run_now=False, config_file=None, run_email=False):
+def run_pipeline_test(context, strategy_name, list_file=None, do_email_check=True):
+    """One-off pipeline rehearsal for a strategy that is NOT registered yet.
+
+    Proves the whole local half of the chain without touching ptrade_config.json:
+        email (TTC2) -> attachment -> validation -> upload_file/target_<name>.json
+    Nothing is scheduled and no capital is allocated. The cloud strategy ignores files that
+    are not listed in TARGET_FILES, so this file cannot trade; and it carries
+    "pipeline_test": true so nobody mistakes it for a live target.
+
+    -> 0 on success, 2 when the attachment is missing/unusable
+    """
+    name = strategy_name
+    cfg = context['config']
+    list_path = list_file or os.path.join(cfg["stock_list_dir"], name + "_stocks.json")
+    log_section(f"pipeline test: {name} (nothing is registered, nothing will trade)")
+    logging.info(f"[{name}] list file expected at: {list_path}")
+
+    if do_email_check:
+        if context['email_config'] is not None:
+            try:
+                logging.info("[email] pipeline-test check")
+                check_email_and_save_attachment(context['email_config'])
+            except Exception as e:
+                logging.error(f"[email] pipeline-test check failed (continuing): {e}")
+        else:
+            logging.warning("[email] skipped: email_reader_config.json missing or invalid")
+
+    if not os.path.exists(list_path):
+        logging.error(f"[{name}] FAIL: no attachment at {list_path}")
+        logging.error(f"[{name}] check: subject contains the configured keyword, attachment "
+                      f"file name is exactly '{name}_stocks.json', and save_directory == "
+                      f"stock_list_dir ({cfg['stock_list_dir']})")
+        return 2
+
+    strat = {"name": name, "stock_list_file": list_path, "ai_filter": False,
+             "enabled": False}      # rehearsal: the server must ignore the file
+    codes, note = _load_stock_list(strat)
+    if note != "ok":
+        logging.error(f"[{name}] FAIL: list unusable ({note}) - see the lines above")
+        return 2
+    logging.info(f"[{name}] OK: {len(codes)} usable code(s), order preserved")
+    for i, c in enumerate(codes, 1):
+        logging.info(f"[{name}]   {i:2d}. {c}")
+
+    upload_path = context.get('upload_path')
+    tpl = context.get('upload_name_tpl')
+    out = os.path.join(upload_path, tpl % name) if (upload_path and tpl) else None
+    _write_rebalance_file(strat, codes, None, datetime.datetime.now(),
+                          upload_path, tpl,
+                          extra={"pipeline_test": True,
+                                 "note": "pipeline rehearsal - this strategy is NOT "
+                                         "registered on the PTrade side yet"})
+    logging.info(f"[{name}] wrote {out} ({len(codes)} stocks, pipeline_test=true)")
+    logging.info(f"[{name}] next: let the PTrade client run its scheduled upload, then check "
+                 f"<research>/upload_file/{tpl % name if tpl else ''} on the server; the cloud "
+                 f"strategy will NOT act on it because TARGET_FILES does not list it")
+    log_section("pipeline test done")
+    return 0
+
+
+def main_loop(run_now=False, config_file=None, run_email=False, pipeline_test=None,
+              pipeline_list=None):
     if not run_email:
         check_single_instance()
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
@@ -509,6 +671,9 @@ def main_loop(run_now=False, config_file=None, run_email=False):
     generated = set()
     email_checked_date = None
     email_checked = set()
+
+    if pipeline_test:
+        return run_pipeline_test(context, pipeline_test, pipeline_list)
 
     if run_email:
         log_section("email test mode (--email, no generation)")
@@ -584,7 +749,13 @@ if __name__ == "__main__":
     run_now = "--now" in sys.argv
     run_email = "--email" in sys.argv
     cfg_file = None
+    pipeline_name = None
+    pipeline_list = None
     for i, arg in enumerate(sys.argv):
         if arg == "--config" and i + 1 < len(sys.argv):
             cfg_file = sys.argv[i + 1]
-    main_loop(run_now, cfg_file, run_email)
+        if arg == "--pipeline-test" and i + 1 < len(sys.argv):
+            pipeline_name = sys.argv[i + 1]
+        if arg == "--list-file" and i + 1 < len(sys.argv):
+            pipeline_list = sys.argv[i + 1]
+    main_loop(run_now, cfg_file, run_email, pipeline_name, pipeline_list)

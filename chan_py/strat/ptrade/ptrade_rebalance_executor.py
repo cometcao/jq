@@ -1645,6 +1645,18 @@ def _tracker_apply_results(t, strategy, results):
                 pos[code] = pos.get(code, 0) + vol
 
 
+def _disabled(target):
+    """True when the target file says enabled=false -> the server must ignore this strategy.
+
+    2026-10-31: the local pipeline writes "enabled" into the file, so a strategy can be
+    rehearsed (email -> upload) or paused without the server doing ANYTHING: no orders, no
+    liquidation, no age policy. Default (key absent) is enabled, so old files keep working.
+    """
+    if not isinstance(target, dict):
+        return False
+    return target.get("enabled") is False
+
+
 def _registry():
     """[(strategy, params, target_file)] for every configured target file."""
     out = []
@@ -1664,6 +1676,13 @@ def _run(context, tag, target_file):
     _LOG_TAG = strategy
     _log("INFO", "run start %s (strategy=%s tag=%s dry_run=%s file=%s)"
          % (_now_str(), strategy, tag, DRY_RUN, _basename(target_file)))
+    # enabled=false: ignore this strategy completely (no orders, no liquidation, no age
+    # policy). Must run BEFORE the age/stale-liquidation branch below.
+    if _disabled(target):
+        _log("INFO", "%s: target says enabled=false -> this strategy is DISABLED, the server "
+                     "ignores it completely (no orders, no liquidation, no age policy)"
+             % strategy)
+        return
     if _already_done(strategy, tag):
         _log("INFO", "tag %s already processed for %s, skip" % (tag, strategy))
         return
@@ -1997,6 +2016,11 @@ def initialize(context):
     for tf in TARGET_FILES:
         _LOG_TAG = _strategy_from_file(tf)
         data = _peek_target(tf)
+        if _disabled(data):
+            # enabled=false -> register nothing at all for this file (no wakeups, no orders)
+            _log("INFO", "%s -> DISABLED (enabled=false in the target file) -> no run_daily "
+                         "registered, this strategy is ignored by the server" % tf)
+            continue
         times = _order_times(data)
         if data is None:
             _log("WARN", "%s is not uploaded yet -> order times come from DEFAULT_ORDER_TIMES "

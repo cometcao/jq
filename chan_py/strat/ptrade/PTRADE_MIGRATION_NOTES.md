@@ -410,6 +410,12 @@ freeze_limit  = 股数 × 保护价 × 1.002
 
 #### 4.1.2 其他安全闸门（不在 QMT 语义内，实盘前加）
 
+- **`enabled` 总开关（2026-10-31）**：目标文件里 `"enabled": false` → 服务器**彻底无视该策略**：
+  `initialize` 不注册 `run_daily`，`_run` 在**年龄/清仓判断之前**返回，日志
+  `target says enabled=false -> this strategy is DISABLED, the server ignores it completely`。
+  本机侧同名开关写在 `ptrade_config.json`（停用策略的 `capital_ratio` 可写 **0** 且**不计入 1.0 合计**，
+  从而不影响在用策略的份额），文件照常生成 → 既是"预演"姿态，也是"暂停"开关。
+  详见 [SECOND_STRATEGY_SETUP.md](SECOND_STRATEGY_SETUP.md)
 - `DRY_RUN` 默认 **False**（直接实盘；改成 `True` 可做一次只记不下单的排练）
 - **账户读数保护**：`总资产 <= 0`（接口形状不对/读到空）→ 记 ERROR 并**整轮拒绝交易**，而不是拿 `现金/空槽数` 盲买
 - **名单去重**：目标名单里的重复代码只保留第一次出现（否则会被下两次单），并记 WARN + 审计里的 `dupes`
