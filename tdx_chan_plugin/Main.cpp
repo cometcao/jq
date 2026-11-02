@@ -1,4 +1,4 @@
-#include "ChanPlugin.h"
+﻿#include "ChanPlugin.h"
 #include <vector>
 #include <algorithm>
 #include <cstring>
@@ -32,7 +32,7 @@ typedef struct tagPluginTCalcFuncInfo
 //=============================================================================
 // 性能配置：只处理最近 N 根K线，防止历史K线过多导致卡死
 //=============================================================================
-static const int MAX_PROCESS_COUNT = 15000; // 最大处理K线数量，超过则截断
+static const int MAX_PROCESS_COUNT = 30000; // 最大处理K线数量，超过则截断
 
 //=============================================================================
 // 辅助结构体：数据窗口
@@ -103,13 +103,17 @@ static void convertXianDuanToOutputWithOffset(const std::vector<XianDuan>& xd_li
     for (const auto& xd : xd_list) {
         int origStart = startOffset + xd.start_index;
         int origEnd = startOffset + xd.end_index;
-        // 起点使用自己的类型
+        // 起点使用自己的类型; +-1 = 已确认, +-2 = 待确认(第二种情况未得到反向确认)
         if (origStart >= 0 && origStart < nCount) {
-            pOut[origStart] = (xd.type == TOP) ? 1.0f : -1.0f;
+            float v = (xd.type == TOP) ? 1.0f : -1.0f;
+            if (xd.start_pending) v *= 2.0f;
+            pOut[origStart] = v;
         }
         // 终点类型与起点相反（线段总是BOT→TOP或TOP→BOT交替）
         if (origEnd >= 0 && origEnd < nCount) {
-            pOut[origEnd] = (xd.type == TOP) ? -1.0f : 1.0f;
+            float v = (xd.type == TOP) ? -1.0f : 1.0f;
+            if (xd.end_pending) v *= 2.0f;
+            pOut[origEnd] = v;
         }
     }
 }

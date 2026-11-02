@@ -1,4 +1,4 @@
-// ChanAnalyzer.cpp - Chan Theory Analyzer Implementation
+﻿// ChanAnalyzer.cpp - Chan Theory Analyzer Implementation
 // Implementation of pen and line segment algorithm from kBar_Chan.py
 
 #include "ChanPlugin.h"
@@ -23,6 +23,20 @@
 #define CHAN_STANDARDIZE_XD 1
 #endif
 
+// 0.618 缺口成段: 工程补充 (原文无此规则)。0 = 关闭, 1 = 启用
+#ifndef CHAN_KBAR_GAP_XD
+#define CHAN_KBAR_GAP_XD 0
+#endif
+
+// 末端推断: 工程补充 (原文无"末端补一段"的规则)。0 = 关闭(默认), 1 = 启用
+#ifndef CHAN_TAIL_INFERENCE
+#define CHAN_TAIL_INFERENCE 1
+#endif
+// 末端推断出来的端点只是"假设": 1 = 输出为待确认(+-2 虚线), 0 = 输出为已确认(+-1)
+#ifndef CHAN_TAIL_PENDING
+#define CHAN_TAIL_PENDING 1
+#endif
+
 ChanAnalyzer::ChanAnalyzer(bool debug) 
     : is_debug(debug), previous_with_xd_gap(false) {
 }
@@ -38,6 +52,7 @@ void ChanAnalyzer::setData(const std::vector<KLine>& data) {
     gap_prefix_.clear();
     dates_monotonic_ = false;
     elem_after_date_.clear();
+    pending_xd_locs_.clear();
     seq_cache_.clear();
     seq_cache_tick_ = 0;
 }
@@ -1287,6 +1302,8 @@ XDFindResult ChanAnalyzer::findXDOnFeatureSeq(
     }
 
     int i = seq_pos_aligned;
+    int pending_idx = -1;              // 只差反向确认的候选 (取最靠后一个)
+    TopBotType pending_type = NO_TOPBOT;
     // Python 每轮 i += 1: 六个元素是滑动的窗口, 缺口检查在奇偶位置都会执行
     while (i + 5 < static_cast<int>(feature_seq.size())) {
         const FeatureSeqElement& e0 = feature_seq[i];
@@ -1301,6 +1318,7 @@ XDFindResult ChanAnalyzer::findXDOnFeatureSeq(
         bool kg2 = false;
 
         // ---- K线缺口成段 (Python 1225-1241) ----
+#if CHAN_KBAR_GAP_XD
         if (!previous_with_xd_gap) {
             kg2 = (e2.orig_market_idx + 1 == e3.orig_market_idx) &&
                   kbarGapAsXdFull(working_df, e2.orig_market_idx,
@@ -1324,6 +1342,7 @@ XDFindResult ChanAnalyzer::findXDOnFeatureSeq(
             }
             if (xd_type != NO_TOPBOT) with_gap = true;
         }
+#endif  // CHAN_KBAR_GAP_XD
 
         // ---- 标准特征序列分型 (Python 1243-1257) ----
         if (xd_type == NO_TOPBOT) {
@@ -1358,6 +1377,9 @@ XDFindResult ChanAnalyzer::findXDOnFeatureSeq(
             // 该候选不成立, 继续向后扫描。
             if (with_gap &&
                 !secondFeatureSeqConfirms(working_df, e2.orig_market_idx, xd_type)) {
+                // 记录"只差反向确认"的候选; 若扫描结束仍无确认候选, 就以"待确认"输出
+                pending_idx = e2.orig_market_idx;
+                pending_type = xd_type;
                 i += 1;
                 continue;
             }
@@ -1373,6 +1395,12 @@ XDFindResult ChanAnalyzer::findXDOnFeatureSeq(
         i += 1;
     }
 
+    if (pending_idx >= 0) {
+        // 原文第67课第二种情况进行中: 以"待确认"身份返回最后一个候选
+        TopBotType pending_dir = (pending_type == TOP) ? TOP2BOT : BOT2TOP;
+        return {true, pending_idx, pending_type, true, pending_idx + 1,
+                pending_dir, false, 0, false, true};
+    }
     return {false};
 }
 
@@ -1663,6 +1691,7 @@ void ChanAnalyzer::defineXD(int initial_state) {
     int tail_start = initial_loc;
     
     gap_XD.clear();
+    pending_xd_locs_.clear();
     previous_with_xd_gap = false;
     // A3: 每次 defineXD 都从干净缓存开始 (缓存只在本工作集内有效)
     seq_cache_.clear();
@@ -1711,6 +1740,13 @@ void ChanAnalyzer::defineXD(int initial_state) {
 
         XDFindResult result = findXDOnFeatureSeq(seq, working_df, 0,
                                                  direction, tail_start);
+
+        if (result.found && result.pending) {
+            // 待确认端点: 提交标记, 记录为 pending, 并结束线段划分
+            working_df[result.xd_market_idx].xd_tb = result.xd_type;
+            pending_xd_locs_.push_back(working_df[result.xd_market_idx].real_loc);
+            break;
+        }
 
         if (!result.found) {
             // 对照 Python defineXD(1406-1422): 还有待确认的缺口端点且剩余序列
@@ -1824,7 +1860,18 @@ void ChanAnalyzer::defineXD(int initial_state) {
     repairXdExtremes(working_df);
 #endif
 
-    // ========== TAIL INFERENCE ==========
+    // 记录末端推断之前的最后一个端点位置, 用于事后判断它是否改动过端点
+    int tail_mark_before = -1;
+    for (int j = static_cast<int>(working_df.size()) - 1; j >= 0; j--) {
+        if (working_df[j].xd_tb == TOP || working_df[j].xd_tb == BOT) {
+            tail_mark_before = j;
+            break;
+        }
+    }
+    bool tail_inferred = false;
+
+#if CHAN_TAIL_INFERENCE
+    // ========== TAIL INFERENCE (工程补充, 其结果标为待确认) ==========
     
     std::vector<int> prev_xd_locs;
     for (int j = static_cast<int>(working_df.size()) - 1; j >= 0; j--) {
@@ -1953,6 +2000,14 @@ void ChanAnalyzer::defineXD(int initial_state) {
         }
     }
     
+    for (int j = static_cast<int>(working_df.size()) - 1; j >= 0; j--) {
+        if (working_df[j].xd_tb == TOP || working_df[j].xd_tb == BOT) {
+            if (j != tail_mark_before) tail_inferred = true;
+            break;
+        }
+    }
+#endif  // CHAN_TAIL_INFERENCE
+
 cleanXdMarks(working_df);
 
 #if CHAN_STANDARDIZE_XD
@@ -1982,6 +2037,18 @@ cleanXdMarks(working_df);
         if (!changed) break;
     }
     cleanXdMarks(working_df);
+
+#if CHAN_TAIL_INFERENCE && CHAN_TAIL_PENDING
+    // 末端推断得到的端点只是假设 -> 标记为待确认 (输出 +-2)
+    if (tail_inferred) {
+        for (int j = static_cast<int>(working_df.size()) - 1; j >= 0; j--) {
+            if (working_df[j].xd_tb == TOP || working_df[j].xd_tb == BOT) {
+                pending_xd_locs_.push_back(working_df[j].real_loc);
+                break;
+            }
+        }
+    }
+#endif
 
     std::vector<StandardKLine> xd_result;
     for (const auto& kline : working_df) {
@@ -2429,6 +2496,11 @@ std::vector<Bi> ChanAnalyzer::getBi() const {
     return result;
 }
 
+bool ChanAnalyzer::isPendingXd(int real_loc) const {
+    return std::find(pending_xd_locs_.begin(), pending_xd_locs_.end(), real_loc)
+           != pending_xd_locs_.end();
+}
+
 std::vector<XianDuan> ChanAnalyzer::getXianDuan() const {
     std::vector<XianDuan> result;
     
@@ -2449,6 +2521,8 @@ std::vector<XianDuan> ChanAnalyzer::getXianDuan() const {
             xd.type = start.xd_tb;
             xd.start_index = start.real_loc;
             xd.end_index = end.real_loc;
+            xd.start_pending = isPendingXd(start.real_loc);
+            xd.end_pending = isPendingXd(end.real_loc);
             
             result.push_back(xd);
         }

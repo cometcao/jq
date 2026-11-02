@@ -1,4 +1,4 @@
-// ChanPlugin.h - Tongdaxin Chan Theory Plugin Header File
+﻿// ChanPlugin.h - Tongdaxin Chan Theory Plugin Header File
 // Plugin supports any period, real-time updates, draws pen and line segments on main K chart
 
 // Prevent conflicts between min/max macros in windows.h and std::min/std::max
@@ -106,6 +106,8 @@ struct XDFindResult {
     bool is_rollback;           // True for popGap / prev_xd invalidation
     int rollback_start;         // Market index to rollback tail_start to
     bool is_kg2_backstep;       // True when new_i == i+1 (gap-based XD overlapping)
+    // 原文第67课第二种情况: 候选端点已出现, 但反向特征序列尚未确认 -> "待确认"
+    bool pending = false;
 };
 
 // Pen structure
@@ -128,6 +130,9 @@ struct XianDuan {
     int type;           // Type: TOP=top pattern, BOT=bottom pattern
     int start_index;    // Start index
     int end_index;      // End index
+    // 待确认标记 (输出 +2/-2): 第二种情况尚未得到反向特征序列确认
+    bool start_pending = false;
+    bool end_pending = false;
 };
 
 // 浮点比较 (与 Python chan_common_include.float_* 保持一致)
@@ -267,6 +272,11 @@ private:
     };
     std::vector<SeqCacheEntry> seq_cache_;
     long long seq_cache_tick_ = 0;
+
+    // 待确认线段端点的 real_loc 列表 (由 findXDOnFeatureSeq 的 pending 结果写入)
+    std::vector<int> pending_xd_locs_;
+    bool isPendingXd(int real_loc) const;
+
     bool hasFeatureSeqInclusion(const FeatureSeqElement& e0, const FeatureSeqElement& e1,
                                 const FeatureSeqElement& e2, const FeatureSeqElement& e3);
     std::pair<FeatureSeqElement, FeatureSeqElement> mergeFeatureSeqPair(
