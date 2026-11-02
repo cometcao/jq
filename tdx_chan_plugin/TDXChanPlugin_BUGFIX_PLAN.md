@@ -267,9 +267,13 @@ MAX_PROCESS_COUNT 6000 -> 15000 (Main.cpp)。
 实现: `findXDOnFeatureSeq` 记录"只差反向确认"的最后一个候选, 扫描结束仍无确认候选时以 pending 返回;
       `defineXD` 提交该标记并记入 `pending_xd_locs_`; `getXianDuan` 置 `start_pending`/`end_pending`;
       `Main.cpp` 按 +-2 编码输出。
-现状 (方案 B): +-2 有两个来源
-      (a) `findXDOnFeatureSeq` 中"只差反向确认"的候选 (需剩余特征序列 >= 6 个元素, 较少见);
-      (b) 末端推断改动出来的最后一个端点 (`CHAN_TAIL_PENDING=1`)。
+现状 (方案 B): +-2 有三个来源
+      (a) `secondFeatureSeqConfirms` 返回"无法判定"(-1) 的候选 —— 反向特征序列元素不足 3 个,
+          或既没有反向分型、也没有创出超过候选端点的极值 (即"确认还没形成");
+      (b) 扫描结束仍无确认候选时, 由"只差反向确认"的候选兜底返回;
+      (c) 末端推断改动出来的最后一个端点 (`CHAN_TAIL_PENDING=1`)。
+      注意: "反向段创出超过候选端点的极值"仍按第78课判为候选不成立 (A/B/C 只能算一段),
+      继续向后扫描, 不会输出 +-2。
       三份真实 1m 实测: 512710 在 9644 处输出 +2; 999999 / 508010 无 +-2 (末端推断未改动端点)。
 公式:
   UP_DUAN_P  :DRAWLINE(DUAN_DUAN=-1,L,DUAN_DUAN=+2,H,0), DOTLINE,COLOR00FFFF;

@@ -1375,13 +1375,21 @@ XDFindResult ChanAnalyzer::findXDOnFeatureSeq(
             // 原文第67课第二种情况: 有缺口时必须由反向特征序列的反向分型确认;
             // 若一直没有该分型而直接创出更极端新高/新低, 则 A/B/C 只能算一段,
             // 该候选不成立, 继续向后扫描。
-            if (with_gap &&
-                !secondFeatureSeqConfirms(working_df, e2.orig_market_idx, xd_type)) {
-                // 记录"只差反向确认"的候选; 若扫描结束仍无确认候选, 就以"待确认"输出
-                pending_idx = e2.orig_market_idx;
-                pending_type = xd_type;
-                i += 1;
-                continue;
+            if (with_gap) {
+                const int confirm = secondFeatureSeqConfirms(working_df, e2.orig_market_idx, xd_type);
+                if (confirm == 0) {
+                    // 第78课: 反向段直接创新高/新低 -> 该候选不成立, 继续向后扫描
+                    pending_idx = e2.orig_market_idx;
+                    pending_type = xd_type;
+                    i += 1;
+                    continue;
+                }
+                if (confirm < 0) {
+                    // 原文第67课第二种情况尚未确认(含数据不足) -> 该端点就是"待确认"
+                    TopBotType pending_dir = (xd_type == TOP) ? TOP2BOT : BOT2TOP;
+                    return {true, e2.orig_market_idx, xd_type, true,
+                            e2.orig_market_idx + 1, pending_dir, false, 0, false, true};
+                }
             }
             int new_i = kg2 ? (i + 1) : (i + 3);
             int next_start = (new_i < static_cast<int>(feature_seq.size()))
@@ -1566,11 +1574,14 @@ void ChanAnalyzer::cleanXdMarks(std::vector<StandardKLine>& working_df) {
 // 线段A、B、C加起来只能算是一个线段。"
 //
 // 实现: 自 pivot(候选端点) 之后取反向笔构造第二特征序列(元素=笔的区间[低,高]),
-// 按"沿该反向线段方向"做严格包含处理(第78课: 第二特征序列必须严格按包含关系处理,
-// 且不区分假设分界点两侧), 再找反向分型。找不到 -> 该候选不成立, 继续向后扫描。
-// 元素不足(数据末尾, 无法判定) -> 不拦(返回 true), 交给尾部推断。
+// 再做包含处理(方向由"前一个元素与当前元素"的高点比较确定并保持 —— 线段方向在
+// 顶底假设成立后已固定, 不需要来回变), 最后找反向分型。
+// 返回三态:
+//   1  = 已确认 (出现反向分型)
+//   0  = 不成立 (无反向分型, 且反向段已创出超过候选端点的极值; 第78课 A/B/C 只能算一段)
+//  -1  = 无法判定 (元素不足, 或既无分型也未创新极值 —— 确认尚未形成, 应视为待确认)
 // ========================================================================
-bool ChanAnalyzer::secondFeatureSeqConfirms(
+int ChanAnalyzer::secondFeatureSeqConfirms(
         const std::vector<StandardKLine>& working_df,
         int pivot_idx, TopBotType pivot_type) {
 
@@ -1596,7 +1607,7 @@ bool ChanAnalyzer::secondFeatureSeqConfirms(
             }
         }
     }
-    if (elems.size() < 3) return true;   // 无法判定, 不阻拦
+    if (elems.size() < 3) return -1;     // 无法判定 -> 待确认
 
     // 包含处理: 与"笔"阶段完全同一套方法 —— 方向由"前一个元素"与"当前元素"的高点比较
     // 决定(isBullType: 前一个高点较低 => 向上 => 两端取 max; 否则向下 => 两端取 min),
@@ -1633,21 +1644,32 @@ bool ChanAnalyzer::secondFeatureSeqConfirms(
             tr.push_back(0);
         }
     }
-    if (m.size() < 3) return true;
+    if (m.size() < 3) return -1;         // 合并后仍无法判定 -> 待确认
 
     // 反向分型: TOP pivot -> 找底分型(中间元素低点最低); BOT pivot -> 找顶分型
     for (size_t k = 1; k + 1 < m.size(); k++) {
         if (pivot_type == TOP) {
             if (m[k].first < m[k - 1].first && m[k].first < m[k + 1].first) {
-                return true;
+                return 1;
             }
         } else {
             if (m[k].second > m[k - 1].second && m[k].second > m[k + 1].second) {
-                return true;
+                return 1;
             }
         }
     }
-    return false;
+    // 没有反向分型: 如果反向段已经创出超过候选端点的极值 -> 候选不成立(第78课: A/B/C 只能算一段);
+    // 否则说明"反向确认还没形成" -> 无法判定, 该端点应视为待确认。
+    const double pivot_price = working_df[pivot_idx].chan_price;
+    bool breached = false;
+    for (size_t k = 0; k < m.size(); k++) {
+        if (pivot_type == TOP ? float_more(m[k].second, pivot_price)
+                              : float_less(m[k].first, pivot_price)) {
+            breached = true;
+            break;
+        }
+    }
+    return breached ? 0 : -1;
 }
 
 // XD定义函数 (基于Python defineXD逻辑, 2026-04-28 迭代版)

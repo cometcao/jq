@@ -306,8 +306,9 @@ private:
     // Ported from Python check_previous_elem_to_avoid_xd_gap: narrows with_gap
     // when a previous same-type feature element already crosses element 4.
     // 原文第67课第二种情况: 反向特征序列出现反向分型才算确认
-    bool secondFeatureSeqConfirms(const std::vector<StandardKLine>& working_df,
-                                  int pivot_idx, TopBotType pivot_type);
+    // 三态返回: 1 = 已确认, 0 = 不成立(反向段创新高新低, 第78课), -1 = 无法判定(应为待确认)
+    int secondFeatureSeqConfirms(const std::vector<StandardKLine>& working_df,
+                                 int pivot_idx, TopBotType pivot_type);
     bool checkPreviousElemToAvoidXdGap(bool with_gap,
                                        const std::vector<FeatureSeqElement>& seq,
                                        int i,
