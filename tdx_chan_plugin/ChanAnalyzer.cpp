@@ -1715,6 +1715,7 @@ void ChanAnalyzer::defineXD(int initial_state) {
     gap_XD.clear();
     pending_xd_locs_.clear();
     previous_with_xd_gap = false;
+    bool scan_pending = false;   // 扫描是否已返回"待确认"端点
     // A3: 每次 defineXD 都从干净缓存开始 (缓存只在本工作集内有效)
     seq_cache_.clear();
     const size_t kSeqCacheCap = 96;
@@ -1765,6 +1766,9 @@ void ChanAnalyzer::defineXD(int initial_state) {
 
         if (result.found && result.pending) {
             // 待确认端点: 提交标记, 记录为 pending, 并结束线段划分
+            // 注意: 此时不能再做末端推断 —— 一个 pending 端点之后再造端点, 会出现
+            // 两个"待确认"端点, 而按原文只有最后一个端点才可能是待确认。
+            scan_pending = true;
             working_df[result.xd_market_idx].xd_tb = result.xd_type;
             pending_xd_locs_.push_back(working_df[result.xd_market_idx].real_loc);
             break;
@@ -1894,7 +1898,9 @@ void ChanAnalyzer::defineXD(int initial_state) {
 
 #if CHAN_TAIL_INFERENCE
     // ========== TAIL INFERENCE (工程补充, 其结果标为待确认) ==========
-    
+    // 若扫描已经给出"待确认"端点 (scan_pending), 则不再推断: 一个待确认端点之后
+    // 不允许再有端点, 否则会出现两个待确认端点, 与原文(只有末端点可能未确认)矛盾。
+    if (!scan_pending) {
     std::vector<int> prev_xd_locs;
     for (int j = static_cast<int>(working_df.size()) - 1; j >= 0; j--) {
         if (working_df[j].xd_tb == TOP || working_df[j].xd_tb == BOT) {
@@ -2022,6 +2028,7 @@ void ChanAnalyzer::defineXD(int initial_state) {
         }
     }
     
+    }
     for (int j = static_cast<int>(working_df.size()) - 1; j >= 0; j--) {
         if (working_df[j].xd_tb == TOP || working_df[j].xd_tb == BOT) {
             if (j != tail_mark_before) tail_inferred = true;
@@ -2067,6 +2074,39 @@ cleanXdMarks(working_df);
             if (working_df[j].xd_tb == TOP || working_df[j].xd_tb == BOT) {
                 pending_xd_locs_.push_back(working_df[j].real_loc);
                 break;
+            }
+        }
+    }
+#endif
+
+#if CHAN_TAIL_PENDING
+    // ===== 末端点重判 =====
+    // repairXdExtremes(标准化)可能把最后一个端点移动到该段的极值处, 而"是否已确认"
+    // 的判定发生在它之前。这里在所有清理/标准化之后重新判定一次:
+    //   反向特征序列不足 3 根 -> 分型/反向确认都无从建立 -> 待确认
+    //   否则交给 secondFeatureSeqConfirms: -1(无法判定) -> 待确认; 1 -> 保持确认
+    {
+        int last_mark = -1;
+        for (int j = static_cast<int>(working_df.size()) - 1; j >= 0; j--) {
+            if (working_df[j].xd_tb == TOP || working_df[j].xd_tb == BOT) {
+                last_mark = j;
+                break;
+            }
+        }
+        if (last_mark >= 0 && !isPendingXd(working_df[last_mark].real_loc)) {
+            int rev = 0;
+            for (int j = last_mark + 1; j < static_cast<int>(working_df.size()); j++) {
+                if (working_df[j].original_tb != NO_TOPBOT) ++rev;
+            }
+            bool need_pending = (rev < 3);
+            if (!need_pending) {
+                TopBotType tpx = static_cast<TopBotType>(working_df[last_mark].xd_tb);
+                if (secondFeatureSeqConfirms(working_df, last_mark, tpx) < 0) {
+                    need_pending = true;
+                }
+            }
+            if (need_pending) {
+                pending_xd_locs_.push_back(working_df[last_mark].real_loc);
             }
         }
     }
