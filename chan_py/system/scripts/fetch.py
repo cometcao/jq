@@ -59,6 +59,8 @@ _last_call = {}
 # ---------------------------------------------------------------- 工具
 def resolve(names):
     for n in names:
+        if n in LOCAL_FNS:
+            return n, LOCAL_FNS[n]
         fn = getattr(ak, n, None)
         if fn is not None:
             return n, fn
@@ -87,8 +89,11 @@ def write_json(path, obj):
 
 
 def norm_period(raw):
-    """把 '2026年10月份' / '202610' / '2026.10' / date 统一成 YYYY-MM-01 或 YYYY-MM-DD。"""
+    """把 '2026年10月份' / '202610' / '2026.10' / 8 位数字 / date 统一成 YYYY-MM-DD 或 YYYY-MM-01。"""
     s = str(raw)
+    m8 = re.fullmatch(r"(\d{4})(\d{2})(\d{2})", s.strip())
+    if m8:
+        return f"{m8.group(1)}-{m8.group(2)}-{m8.group(3)}"
     m = re.search(r"(\d{4})\D*(\d{1,2})", s)
     if not m:
         return s[:10]
@@ -122,6 +127,39 @@ def find_col(df, *kw):
             return c
     return None
 
+
+
+
+def _latest_trade_day():
+    """用指数日线的数据期作为最近交易日；没有就退回今天（避免周末把快照标成当天）。"""
+    c = read_json(os.path.join(CACHE_DIR, "IDX_DAILY.json"))
+    if c and c.get("data_period"):
+        return c["data_period"]
+    return dt.date.today().isoformat()
+
+# ---------------------------------------------------------------- 本地直取（官方站点）
+def csindex_direct_xls(symbol="000300"):
+    """直取中证指数官方估值 xls，按列名解析（不信位置）。"""
+    import requests
+    url = (f"https://oss-ch.csindex.com.cn/static/html/csindex/public/uploads/file/"
+           f"autofile/indicator/{symbol}indicator.xls")
+    r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+    df = pd.read_excel(io.BytesIO(r.content))
+    ren = {}
+    for c in df.columns:
+        s = str(c)
+        if s.startswith("日期"):
+            ren[c] = "日期"
+        elif "股息率1" in s:
+            ren[c] = "股息率1"
+        elif "股息率2" in s:
+            ren[c] = "股息率2"
+        elif "市盈率1" in s:
+            ren[c] = "市盈率1"
+    return df.rename(columns=ren)
+
+
+LOCAL_FNS = {"csindex_direct_xls": csindex_direct_xls}
 
 # ---------------------------------------------------------------- 解析器
 def p_lpr(df):
@@ -240,10 +278,16 @@ def p_lhb_inst(df):
     total = float(df[col].fillna(0).sum()) / 1e8
     n = int(len(df))
     return ({"指标": "龙虎榜机构净买额（区间汇总）", "值": f"{total:.2f} 亿元", "对比": f"上榜 {n} 只"},
-            {"data_period": norm_period(df.iloc[0].get("交易日期") or dt.date.today())})
+            {"data_period": norm_period(df.iloc[0].get("交易日期") or _latest_trade_day())})
 
 
 def p_block_amt(df):
+    if "大宗交易成交总额" in df.columns:      # sctj：全历史市场统计
+        d = pd.to_datetime(df["交易日期"], errors="coerce")
+        r = df.loc[d.idxmax()]
+        return ({"指标": "大宗交易成交额（当日）", "值": f'{float(r["大宗交易成交总额"]) / 1e8:.2f} 亿元',
+                 "对比": f'溢价占比 {float(r.get("溢价成交总额占比") or 0):.2f}%'},
+                {"data_period": norm_period(r["交易日期"])})
     if "成交额" in df.columns:
         amt = df["成交额"].fillna(0)
     else:                                   # 某些窗口返回的明细表列不同，退化用 量×价
@@ -291,7 +335,7 @@ def p_sector_conc(df):
     tot, top5 = float(vals.sum()), float(vals.sort_values(ascending=False).head(5).sum())
     return ({"指标": "板块成交额集中度", "值": f"{top5 / tot * 100:.1f}%",
              "对比": f"Top5 {top5:.0f} / 全部 {tot:.0f} 亿（N={len(vals)} 板块）"},
-            {"data_period": norm_period(dt.date.today())})
+            {"data_period": norm_period(_latest_trade_day())})
 
 # ---------------------------------------------------------------- 指标声明
 SPECS = [
@@ -330,7 +374,8 @@ SPECS = [
          official_source="中国外汇交易中心·人民币汇率中间价", official_url="https://www.chinamoney.com.cn/chinese/bkccpr/",
          proves="人民币对美元中间价", does_not_prove="不说明外资流向"),
     dict(id="MKT_DIV_YIELD", channel="C3", subject="公共池", freq="日", value_kind="level", layer="市场", tier_default="C",
-         providers=[("akshare/csindex", ["index_value_csindex"], p_div)],
+         providers=[("direct/csindex", ["csindex_direct_xls"], p_div),
+                    ("akshare/csindex", ["index_value_csindex"], p_div)],
          official_source="中证指数有限公司·指数估值", official_url="https://www.csindex.com.cn/",
          proves="权益的现金回报率", does_not_prove="不说明相对债券的吸引力结论"),
     dict(id="MKT_MARGIN_BAL", channel="C4", subject="散户", freq="日", value_kind="level", layer="市场", tier_default="C",
@@ -360,11 +405,11 @@ SPECS = [
          official_source="东方财富·龙虎榜机构买卖统计（原始披露为交易所）", official_url="https://data.eastmoney.com/stock/lhb.html",
          proves="机构席位在龙虎榜上的净买方向与规模", does_not_prove="仅覆盖上榜个股，不代表全市场机构行为"),
     dict(id="INST_BLOCK_AMT", channel="C5", subject="机构", freq="日", value_kind="level", layer="市场", tier_default="C",
-         providers=[("akshare/em", ["stock_dzjy_mrmx"], p_block_amt)],
+         providers=[("akshare/em", ["stock_dzjy_sctj", "stock_dzjy_mrmx"], p_block_amt)],
          official_source="东方财富·大宗交易每日明细（原始披露为交易所）", official_url="https://data.eastmoney.com/dzjy/mrmx.html",
          proves="大宗交易的规模", does_not_prove="不说明买卖双方意图"),
     dict(id="INST_BLOCK_PREM", channel="C5", subject="机构", freq="日", value_kind="ratio", layer="市场", tier_default="C",
-         providers=[("akshare/em", ["stock_dzjy_mrmx"], p_block_prem)],
+         providers=[("akshare/em", ["stock_dzjy_mrtj", "stock_dzjy_mrmx"], p_block_prem)],
          official_source="东方财富·大宗交易每日明细（原始披露为交易所）", official_url="https://data.eastmoney.com/dzjy/mrmx.html",
          proves="大宗成交相对收盘价的折溢价", does_not_prove="不说明接盘方性质"),
     dict(id="MKT_BREADTH", channel="C6", subject="公共池", freq="日", value_kind="count", layer="市场", tier_default="C",
@@ -398,7 +443,9 @@ def call_kwargs(spec, as_of):
         return {"start_date": "20260101"}
     if spec["id"] == "SECTOR_AMT":
         return {"symbol": "半导体", "start_date": "20260901", "end_date": _ymd(as_of)}
-    if spec["id"] in ("INST_LHB_NET", "INST_BLOCK_AMT", "INST_BLOCK_PREM"):
+    if spec["id"] == "INST_BLOCK_AMT":
+        return {}                     # 市场统计：返回全历史
+    if spec["id"] in ("INST_LHB_NET", "INST_BLOCK_PREM"):
         end = _ymd(as_of)
         start = str(int(end[:8]) - 7)
         return {"start_date": start, "end_date": end}

@@ -217,12 +217,17 @@ def build(policy):
         rings[5].add("结构不可读（—）", "板块集中度未取到", "该环无证据")
 
     # as-of：最慢环（月频优先）
-    periods = []
-    for iid in ("MKT_M2_YOY", "MKT_M1_YOY", "MKT_RMB_LOAN_YOY", "FISC_DEP"):
-        p_ = period(iid)
-        if p_:
-            periods.append((p_, "C2 月频"))
-    as_of = min(periods)[0] if periods else "不可用"
+    # as-of = 最新交易日（日频里最大的数据期）；非最新的行逐行标注
+    daily = [period(i) for i in ("IDX_DAILY", "MKT_CGB10Y", "MKT_DR007", "SECTOR_AMT",
+                                 "MKT_BREADTH", "SECTOR_AMT_CONC", "INST_LHB_NET",
+                                 "INST_BLOCK_AMT", "MKT_DIV_YIELD", "FX_CNY_MID")
+             if period(i)]
+    as_of = max(daily) if daily else "不可用"
+    for r_ in rings:
+        for k, ln in enumerate(r_.lines):
+            m = re.search(r"（(\d{4}-\d{2}-\d{2})）", ln)
+            if m and m.group(1) < as_of:
+                r_.lines[k] = ln + f"〔非最新：{m.group(1)}〕"
     body = "\n".join(r_.lines for r_ in rings) if False else "\n".join("\n".join(r_.lines) for r_ in rings)
     return as_of, body
 
@@ -234,7 +239,7 @@ def main():
     a = ap.parse_args()
 
     as_of, body = build(a.policy)
-    text = f"as-of {as_of}（最慢环 C2 月频；其余日频为区间内最新读数）\n{body}\n"
+    text = f"as-of {as_of}（最新交易日；数据期早于它的行已逐行标注「非最新」）\n{body}\n"
 
     missing = sorted({json.load(io.open(f, encoding="utf-8"))["indicator_id"]
                       for f in glob.glob(os.path.join(FACTS, "*", "*.json"))})
