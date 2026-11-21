@@ -62,7 +62,7 @@
   "FISC_DEP": {
     "name": "财政存款余额",
     "layer": "市场",
-    "channel": "C1",
+    "channel": "C2",
     "subject": "政策",
     "attribute": "A4",
     "transform": "T1",
@@ -129,6 +129,30 @@
     "value_kind": "ratio",
     "unit": "U2",
     "frequency": "月",
+    "comparable_from": null
+  },
+  "MKT_RMB_LOAN_YOY": {
+    "name": "人民币贷款余额同比",
+    "layer": "市场",
+    "channel": "C2",
+    "subject": "公共池",
+    "attribute": "A4",
+    "transform": "T2",
+    "value_kind": "ratio",
+    "unit": "U2",
+    "frequency": "月",
+    "comparable_from": null
+  },
+  "RTL_MARGIN_INVESTORS": {
+    "name": "两融个人投资者数量",
+    "layer": "市场",
+    "channel": "C5",
+    "subject": "散户",
+    "attribute": "A6",
+    "transform": "T1",
+    "value_kind": "count",
+    "unit": "U5",
+    "frequency": "日",
     "comparable_from": null
   },
   "MKT_HH_DEP": {
@@ -548,6 +572,18 @@
     "transform": "T1",
     "value_kind": "count",
     "unit": "U5",
+    "frequency": "日",
+    "comparable_from": null
+  },
+  "SECTOR_AMT": {
+    "name": "板块成交额",
+    "layer": "板块",
+    "channel": "C6",
+    "subject": "公共池",
+    "attribute": "A3",
+    "transform": "T1",
+    "value_kind": "level",
+    "unit": "U1",
     "frequency": "日",
     "comparable_from": null
   },
