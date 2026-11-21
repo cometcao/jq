@@ -37,6 +37,12 @@
 #define CHAN_TAIL_PENDING 1
 #endif
 
+// 回退上限: 只允许推翻"最后 1~2 段"里尚未确认的假设端点(原文第78课 A/B/C 只能算一段)。
+// 更早的端点已经确认, 不得因为后面的数据回溯改写, 否则历史会重绘。
+#ifndef CHAN_MAX_ROLLBACK_MARKS
+#define CHAN_MAX_ROLLBACK_MARKS 2
+#endif
+
 ChanAnalyzer::ChanAnalyzer(bool debug) 
     : is_debug(debug), previous_with_xd_gap(false) {
 }
@@ -1260,10 +1266,18 @@ void ChanAnalyzer::processInclusions(std::vector<FeatureSeqElement>& seq, TopBot
 void ChanAnalyzer::applyCleanSequence(
         const std::vector<FeatureSeqElement>& feature_seq,
         std::vector<StandardKLine>& working_df, int start_loc, int end_loc) {
-    // 注意: 线段阶段从不读取 working_df 的 tb (buildFeatureSeq / findXDOnFeatureSeq /
-    // checkPreviousElemToAvoidXdGap / getPreviousNElem 全部使用 original_tb 或特征序列
-    // 自身的 tb), 因此原来"从 start_loc 清零到末尾"的 O(n) 循环属于死代码, 已删除;
-    // 只保留真正影响结果的 chan_price 回写。
+    // ---- 把特征元素的 chan_price 还原为"合并之前的原始极值" ----
+    // 目的: 保证线段阶段的后续运算全部使用真实价格, 而不是包含合并产生的虚拟价格。
+    // 依据: mergeFeatureSeqPair 里 orig_price 与 orig_market_idx 是"成对"取自极值那一侧的,
+    //       所以这里写回的就是该笔自己的原始高低点(不是合并后的中间值)。
+    // 为什么必须还原: 之后读 working_df[].chan_price 的地方都假定它是原始值 ——
+    //   kbarGapAsXdFull(两端价差 / 缺口覆盖判定)、gap_XD 的弹出判定、
+    //   repairXdExtremes(端点是否为该段极值、以及移动落点)、
+    //   cleanXdMarks(同类相邻时取更极端者)、getXianDuan(输出到图上的端点价格)。
+    //   一旦这里写入合并值, 端点价格会变成虚拟价格, 标准化也会算错。
+    // 附注: 线段阶段从不读取 working_df 的 tb (buildFeatureSeq / findXDOnFeatureSeq /
+    //       checkPreviousElemToAvoidXdGap / getPreviousNElem 用的是 original_tb 或特征序列
+    //       自身的 tb), 因此原先"从 start_loc 清零到末尾"的 O(n) 循环属于死代码, 已删除。
     (void)start_loc;
     (void)end_loc;
     for (const auto& elem : feature_seq) {
@@ -1585,91 +1599,109 @@ int ChanAnalyzer::secondFeatureSeqConfirms(
         const std::vector<StandardKLine>& working_df,
         int pivot_idx, TopBotType pivot_type) {
 
-    std::vector<int> pts;
-    for (int j = pivot_idx + 1; j < static_cast<int>(working_df.size()); j++) {
-        if (working_df[j].original_tb != NO_TOPBOT) pts.push_back(j);
-    }
+    // ---- 按时间顺序、有界地判定第二种情况 ----
+    // 原文第67课: 有缺口的端点, 必须等"从该端点开始的反向段"的特征序列出现反向分型才确认。
+    // 第78课: 若反向段还没形成分型就直接创出超过候选端点的极值, 该候选作废(该段继续延伸)。
+    //
+    // 实现要点(关键修复): 一边往后走一边判, 两个条件"谁先出现谁定论", 一旦定论立即返回。
+    // 绝不能把候选点之后直到数据末尾的所有笔都收进来再找分型 —— 那样:
+    //   (1) 未来任意位置的分型都能让候选"被确认"(等于橡皮图章, 与原文的"局部反向段"不符);
+    //   (2) 数据延长会改变整串的包含合并结果, 使历史端点的结论翻转 -> 历史重绘。
+    //
+    // 返回值: 1 = 确认, 0 = 作废(反向创新高/新低), -1 = 无法判定(数据到头仍未定论 -> 待确认)
+    const int n = static_cast<int>(working_df.size());
+    if (pivot_idx + 1 >= n) return -1;
 
-    // 第二特征序列元素 = pivot 之后与"反向段"同向的笔, 用 (low, high) 区间表示
-    std::vector<std::pair<double, double>> elems;
-    for (size_t k = 0; k + 1 < pts.size(); k++) {
-        const StandardKLine& a = working_df[pts[k]];
-        const StandardKLine& b = working_df[pts[k + 1]];
-        if (pivot_type == TOP) {
-            // 上一段向上结束后是下跌段, 其特征序列为向上笔 (BOT -> TOP)
-            if (a.original_tb == BOT && b.original_tb == TOP) {
-                elems.push_back(std::make_pair(a.low, b.high));
-            }
-        } else {
-            // 上一段向下结束后是上涨段, 其特征序列为向下笔 (TOP -> BOT)
-            if (a.original_tb == TOP && b.original_tb == BOT) {
-                elems.push_back(std::make_pair(b.low, a.high));
-            }
-        }
-    }
-    if (elems.size() < 3) return -1;     // 无法判定 -> 待确认
-
-    // 包含处理: 与"笔"阶段完全同一套方法 —— 方向由"前一个元素"与"当前元素"的高点比较
-    // 决定(isBullType: 前一个高点较低 => 向上 => 两端取 max; 否则向下 => 两端取 min),
-    // 且方向一旦在某元素上确定就粘住(trend), 与 standardize 中 first.tb 的用法一致。
-    // 仅仅当被合并元素是序列首元素(没有前一个元素)时, 才回退到沿反向线段方向。
-    std::vector<std::pair<double, double>> m;
-    std::vector<int> tr;      // 0 = 未定, 1 = 向上(max), -1 = 向下(min)
-    for (const auto& e : elems) {
-        if (m.empty()) { m.push_back(e); tr.push_back(0); continue; }
-        std::pair<double, double>& p = m.back();
-        bool contains = (p.first <= e.first && p.second >= e.second);
-        bool contained = (p.first >= e.first && p.second <= e.second);
-        if (contains || contained) {
-            bool merge_max;
-            if (tr.back() != 0) {
-                merge_max = (tr.back() > 0);
-            } else if (m.size() >= 2) {
-                // 与笔阶段 isBullType(past, first) 一致
-                // 同 isBullType: 严格比较 (等号情形原文前提已排除)
-                merge_max = float_less(m[m.size() - 2].second, p.second);
-            } else {
-                merge_max = (pivot_type == BOT);
-            }
-            tr.back() = merge_max ? 1 : -1;
-            if (merge_max) {
-                p.first = std::max(p.first, e.first);
-                p.second = std::max(p.second, e.second);
-            } else {
-                p.first = std::min(p.first, e.first);
-                p.second = std::min(p.second, e.second);
-            }
-        } else {
-            m.push_back(e);
-            tr.push_back(0);
-        }
-    }
-    if (m.size() < 3) return -1;         // 合并后仍无法判定 -> 待确认
-
-    // 反向分型: TOP pivot -> 找底分型(中间元素低点最低); BOT pivot -> 找顶分型
-    for (size_t k = 1; k + 1 < m.size(); k++) {
-        if (pivot_type == TOP) {
-            if (m[k].first < m[k - 1].first && m[k].first < m[k + 1].first) {
-                return 1;
-            }
-        } else {
-            if (m[k].second > m[k - 1].second && m[k].second > m[k + 1].second) {
-                return 1;
-            }
-        }
-    }
-    // 没有反向分型: 如果反向段已经创出超过候选端点的极值 -> 候选不成立(第78课: A/B/C 只能算一段);
-    // 否则说明"反向确认还没形成" -> 无法判定, 该端点应视为待确认。
     const double pivot_price = working_df[pivot_idx].chan_price;
-    bool breached = false;
-    for (size_t k = 0; k < m.size(); k++) {
-        if (pivot_type == TOP ? float_more(m[k].second, pivot_price)
-                              : float_less(m[k].first, pivot_price)) {
-            breached = true;
-            break;
+    const TopBotType want_start = (pivot_type == TOP) ? BOT : TOP;   // 反向笔的起点类型
+    const TopBotType want_end   = (pivot_type == TOP) ? TOP : BOT;   // 反向笔的终点类型
+
+    std::vector<std::pair<double, double>> elems;   // 第二特征序列元素 (low, high)
+    int ep_start = -1;                              // 当前反向笔的起点端点
+
+    for (int j = pivot_idx + 1; j < n; j++) {
+        if (working_df[j].original_tb == NO_TOPBOT) continue;
+
+        // ① 反向段先创出超过候选端点的极值 -> 候选作废(第78课)
+        if (pivot_type == TOP) {
+            if (working_df[j].original_tb == TOP &&
+                float_more(working_df[j].chan_price, pivot_price)) {
+                return 0;
+            }
+        } else {
+            if (working_df[j].original_tb == BOT &&
+                float_less(working_df[j].chan_price, pivot_price)) {
+                return 0;
+            }
+        }
+
+        // ② 攒出一根反向笔, 作为第二特征序列的一个元素
+        if (working_df[j].original_tb == want_start) {
+            ep_start = j;
+            continue;
+        }
+        if (working_df[j].original_tb != want_end || ep_start < 0) continue;
+
+        if (pivot_type == TOP) {
+            elems.push_back(std::make_pair(working_df[ep_start].low, working_df[j].high));
+        } else {
+            elems.push_back(std::make_pair(working_df[j].low, working_df[ep_start].high));
+        }
+        ep_start = -1;
+
+        if (elems.size() < 3) continue;
+
+        // ③ 对"到目前为止"的元素做包含处理(与笔同一套: 方向由前一元素与当前元素高点比较,
+        //    确定后粘住), 然后只检查最后三个是否构成反向分型
+        std::vector<std::pair<double, double>> m;
+        std::vector<int> tr;
+        for (const auto& e : elems) {
+            if (m.empty()) { m.push_back(e); tr.push_back(0); continue; }
+            std::pair<double, double>& q = m.back();
+            bool contains = (q.first <= e.first && q.second >= e.second);
+            bool contained = (q.first >= e.first && q.second <= e.second);
+            if (contains || contained) {
+                bool merge_max;
+                if (tr.back() != 0) {
+                    merge_max = (tr.back() > 0);
+                } else if (m.size() >= 2) {
+                    merge_max = float_less(m[m.size() - 2].second, q.second);
+                } else {
+                    merge_max = (pivot_type == BOT);
+                }
+                tr.back() = merge_max ? 1 : -1;
+                if (merge_max) {
+                    q.first = std::max(q.first, e.first);
+                    q.second = std::max(q.second, e.second);
+                } else {
+                    q.first = std::min(q.first, e.first);
+                    q.second = std::min(q.second, e.second);
+                }
+            } else {
+                m.push_back(e);
+                tr.push_back(0);
+            }
+        }
+        if (m.size() < 3) continue;
+
+        const size_t mid = m.size() - 2;
+        bool fractal = false;
+        if (pivot_type == TOP) {
+            fractal = (m[mid].first < m[mid - 1].first && m[mid].first < m[mid + 1].first);
+        } else {
+            fractal = (m[mid].second > m[mid - 1].second && m[mid].second > m[mid + 1].second);
+        }
+        if (fractal) {
+            // 原文第67课: 用于确认的这个分型本身也必须是"第一种情况"(第一、二元素之间无缺口)。
+            // 若它也有缺口, 说明这一层同样没结束, 继续往后找 —— 递归不需要限制层数:
+            // 只要价格反向创出超过候选端点的极值(上面的①), 未确认的顶/底就被直接抹杀。
+            const bool gap_first_two = (m[mid].first > m[mid - 1].second) ||
+                                       (m[mid].second < m[mid - 1].first);
+            if (!gap_first_two) return 1;
         }
     }
-    return breached ? 0 : -1;
+
+    return -1;   // 数据到头, 两个条件都没发生 -> 未定(待确认)
 }
 
 // XD定义函数 (基于Python defineXD逻辑, 2026-04-28 迭代版)
@@ -1716,6 +1748,15 @@ void ChanAnalyzer::defineXD(int initial_state) {
     pending_xd_locs_.clear();
     previous_with_xd_gap = false;
     bool scan_pending = false;   // 扫描是否已返回"待确认"端点
+
+    // 统计某个端点之后已经提交了多少个端点 (用于限制回退距离)
+    auto marks_after = [&working_df](int idx) {
+        int c = 0;
+        for (int j = idx + 1; j < static_cast<int>(working_df.size()); j++) {
+            if (working_df[j].xd_tb == TOP || working_df[j].xd_tb == BOT) ++c;
+        }
+        return c;
+    };
     // A3: 每次 defineXD 都从干净缓存开始 (缓存只在本工作集内有效)
     seq_cache_.clear();
     const size_t kSeqCacheCap = 96;
@@ -1791,7 +1832,8 @@ void ChanAnalyzer::defineXD(int initial_state) {
                 } else if (direction == BOT2TOP && float_less(mn, pgp)) {
                     pop_it = true;
                 }
-                if (pop_it) {
+                if (pop_it &&
+                    marks_after(gap_XD.back()) <= CHAN_MAX_ROLLBACK_MARKS) {
                     int rollback_idx = gap_XD.back();
                     gap_XD.pop_back();
                     working_df[rollback_idx].xd_tb = NO_TOPBOT;
@@ -1827,7 +1869,8 @@ void ChanAnalyzer::defineXD(int initial_state) {
                                                         check_prices.end()), pgp)) {
                     hit = true;
                 }
-                if (hit) {
+                if (hit &&
+                    marks_after(gap_XD.back()) <= CHAN_MAX_ROLLBACK_MARKS) {
                     rollback_idx = gap_XD.back();
                     gap_XD.pop_back();
                     working_df[rollback_idx].xd_tb = NO_TOPBOT;
