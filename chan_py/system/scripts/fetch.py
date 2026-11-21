@@ -234,6 +234,65 @@ def _hosts_of(fn):
     return sorted(set(re.findall(r"https?://([a-zA-Z0-9.\-]+)", src)))
 
 
+
+def p_lhb_inst(df):
+    col = find_col(df, "机构买入净额")
+    total = float(df[col].fillna(0).sum()) / 1e8
+    n = int(len(df))
+    return ({"指标": "龙虎榜机构净买额（区间汇总）", "值": f"{total:.2f} 亿元", "对比": f"上榜 {n} 只"},
+            {"data_period": norm_period(df.iloc[0].get("交易日期") or dt.date.today())})
+
+
+def p_block_amt(df):
+    if "成交额" in df.columns:
+        amt = df["成交额"].fillna(0)
+    else:                                   # 某些窗口返回的明细表列不同，退化用 量×价
+        amt = df["成交量"].fillna(0) * df["成交价"].fillna(0)
+    total = float(amt.sum()) / 1e8
+    d = df["交易日期"].max()
+    return ({"指标": "大宗交易成交额（区间汇总）", "值": f"{total:.2f} 亿元", "对比": f"{len(df)} 笔"},
+            {"data_period": norm_period(d)})
+
+
+def p_block_prem(df):
+    col = find_col(df, "折溢")
+    if col is not None:
+        prem = float(df[col].dropna().mean())
+    elif "收盘价" in df.columns and "成交价" in df.columns:
+        prem = float(((df["成交价"] / df["收盘价"] - 1) * 100).dropna().mean())
+    else:
+        raise ValueError(f"该窗口返回的表缺折溢率/收盘价列：{list(df.columns)}")
+    d = df["交易日期"].max()
+    return ({"指标": "大宗交易平均折溢率", "值": f"{prem:.2f}%", "对比": "相对收盘价"},
+            {"data_period": norm_period(d)})
+
+
+def p_breadth(df):
+    items, stat_date = {}, None
+    for _, r in df.iterrows():
+        k, v = str(r["item"]).strip(), r["value"]
+        if k == "统计日期":
+            stat_date = str(v)
+            continue
+        try:
+            items[k] = float(str(v).replace("%", ""))
+        except Exception:
+            pass
+    up, down = items.get("上涨", 0.0), items.get("下跌", 0.0)
+    total = (up + down) or 1.0
+    return ({"指标": "上涨家数占比", "值": f"{up / total * 100:.1f}%", "对比": f"上涨 {int(up)} / 下跌 {int(down)}"},
+            {"data_period": norm_period(stat_date or dt.date.today())})
+
+
+def p_sector_conc(df):
+    """板块间成交额集中度：Top5 占全部行业板块成交额的比重（须声明 Top-N）。"""
+    col = find_col(df, "总成交额")
+    vals = pd.to_numeric(df[col], errors="coerce").dropna()
+    tot, top5 = float(vals.sum()), float(vals.sort_values(ascending=False).head(5).sum())
+    return ({"指标": "板块成交额集中度", "值": f"{top5 / tot * 100:.1f}%",
+             "对比": f"Top5 {top5:.0f} / 全部 {tot:.0f} 亿（N={len(vals)} 板块）"},
+            {"data_period": norm_period(dt.date.today())})
+
 # ---------------------------------------------------------------- 指标声明
 SPECS = [
     dict(id="POL_LPR", channel="C1", subject="政策", freq="不定期", value_kind="level", layer="市场", tier_default="C",
@@ -296,6 +355,26 @@ SPECS = [
          providers=[("akshare/exchange", ["stock_margin_account_info"], p_margin_inv)],
          official_source="沪深交易所·两融投资者统计", official_url="http://www.sse.com.cn/market/othersdata/margin/sum/",
          proves="杠杆散户的户数变化（窄口径）", does_not_prove="不等于新增开户数，仅覆盖两融投资者"),
+    dict(id="INST_LHB_NET", channel="C5", subject="机构", freq="日", value_kind="level", layer="市场", tier_default="C",
+         providers=[("akshare/em", ["stock_lhb_jgmmtj_em"], p_lhb_inst)],
+         official_source="东方财富·龙虎榜机构买卖统计（原始披露为交易所）", official_url="https://data.eastmoney.com/stock/lhb.html",
+         proves="机构席位在龙虎榜上的净买方向与规模", does_not_prove="仅覆盖上榜个股，不代表全市场机构行为"),
+    dict(id="INST_BLOCK_AMT", channel="C5", subject="机构", freq="日", value_kind="level", layer="市场", tier_default="C",
+         providers=[("akshare/em", ["stock_dzjy_mrmx"], p_block_amt)],
+         official_source="东方财富·大宗交易每日明细（原始披露为交易所）", official_url="https://data.eastmoney.com/dzjy/mrmx.html",
+         proves="大宗交易的规模", does_not_prove="不说明买卖双方意图"),
+    dict(id="INST_BLOCK_PREM", channel="C5", subject="机构", freq="日", value_kind="ratio", layer="市场", tier_default="C",
+         providers=[("akshare/em", ["stock_dzjy_mrmx"], p_block_prem)],
+         official_source="东方财富·大宗交易每日明细（原始披露为交易所）", official_url="https://data.eastmoney.com/dzjy/mrmx.html",
+         proves="大宗成交相对收盘价的折溢价", does_not_prove="不说明接盘方性质"),
+    dict(id="MKT_BREADTH", channel="C6", subject="公共池", freq="日", value_kind="count", layer="市场", tier_default="C",
+         providers=[("akshare/legu", ["stock_market_activity_legu"], p_breadth)],
+         official_source="乐咕乐股·市场活跃度（交易所涨跌家数口径）", official_url="https://legulegu.com/stockdata/market-activity",
+         proves="当日上涨家数占全部有交易家数的比例", does_not_prove="不说明上涨幅度与结构"),
+    dict(id="SECTOR_AMT_CONC", channel="C6", subject="公共池", freq="日", value_kind="ratio", layer="板块", tier_default="C",
+         providers=[("akshare/ths", ["stock_board_industry_summary_ths"], p_sector_conc)],
+         official_source="同花顺行业板块一览（交易所行情聚合，快照）", official_url="https://q.10jqka.com.cn/thshy/",
+         proves="成交额在各行业板块之间的集中程度（须声明 Top-N）", does_not_prove="不说明资金去向与轮动方向"),
 ]
 
 SPEC_MAP = {s["id"]: s for s in SPECS}
@@ -319,6 +398,10 @@ def call_kwargs(spec, as_of):
         return {"start_date": "20260101"}
     if spec["id"] == "SECTOR_AMT":
         return {"symbol": "半导体", "start_date": "20260901", "end_date": _ymd(as_of)}
+    if spec["id"] in ("INST_LHB_NET", "INST_BLOCK_AMT", "INST_BLOCK_PREM"):
+        end = _ymd(as_of)
+        start = str(int(end[:8]) - 7)
+        return {"start_date": start, "end_date": end}
     if spec["id"] == "MKT_DR007":
         return {"start_date": "20261001", "end_date": _ymd(as_of)}
     return {}

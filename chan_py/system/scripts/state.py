@@ -175,7 +175,17 @@ def build(policy):
         rings[4].add(f"散户{word}（{period('RTL_MARGIN_INVESTORS')}）", ev, "仅覆盖杠杆散户，不等于新增开户", tag + "〔替代：窄口径〕")
     else:
         rings[4].add("散户不可读（—）", "无开户或杠杆投资者记录", "该环无可用证据")
-    rings[4].add("机构不可读（—）", "龙虎榜、ETF 净申赎、大宗均未接入", "该环无证据")
+    ok, tag = allow("INST_LHB_NET")
+    v = val("INST_LHB_NET")
+    if ok and v is not None:
+        word = "机构增" if v > 0 else ("机构减" if v < 0 else "机构不变")
+        ev = f"龙虎榜机构净买额 {v:+.2f} 亿（区间汇总）"
+        v2 = val("INST_BLOCK_AMT")
+        if v2 is not None:
+            ev += f"；大宗成交 {v2:.2f} 亿"
+        rings[4].add(f"{word}（{period('INST_LHB_NET')}）", ev, "仅覆盖上榜与大宗，不代表全部机构行为", tag)
+    else:
+        rings[4].add("机构不可读（—）", "龙虎榜与大宗均未取到", "该环无证据")
     rings[4].add("外部不可读（—）", "北向日度已停披露，季度持股未接入", "该环无证据")
 
     # C6 参与度（板块成交额）+ 广度/结构空环
@@ -186,8 +196,25 @@ def build(policy):
         rings[5].add(f"参与度{word}（{period('SECTOR_AMT')}）", f"半导体板块成交额 {v:.2f} 亿 对比上一期 {p:.2f} 亿", "不说明资金来源", tag + "〔板块层口径〕")
     else:
         rings[5].add("参与度不可读（—）", "板块成交额缺失，或来源为 C 类（聚合口径）、无源可支撑状态词", "该环无可用证据")
-    rings[5].add("广度不可读（—）", "涨跌家数来自 MCP 实时端点，未落盘", "该环无证据")
-    rings[5].add("结构不可读（—）", "板块集中度未接入", "该环无证据")
+    ok, tag = allow("MKT_BREADTH")
+    v, p = val("MKT_BREADTH"), val("MKT_BREADTH", "prev_value")
+    if ok and v is not None:
+        word = "强" if v > 50 else ("弱" if v < 50 else "均衡")
+        ev = f"上涨家数占比 {v:.1f}% " + ("> 50%" if v > 50 else "< 50%")
+        if p is not None:
+            ev += f"（上一期 {p:.1f}%）"
+        rings[5].add(f"广度{word}（{period('MKT_BREADTH')}）", ev, "只说明广度，不说明幅度与结构", tag)
+    else:
+        rings[5].add("广度不可读（—）", "涨跌家数未取到", "该环无证据")
+    ok, tag = allow("SECTOR_AMT_CONC")
+    v = val("SECTOR_AMT_CONC")
+    if ok and v is not None:
+        word = "聚" if v >= 50 else "散"
+        rings[5].add(f"结构{word}（{period('SECTOR_AMT_CONC')}）",
+                     f"Top5 板块成交额占比 {v:.1f}%（阈值 50%；N=90 个行业板块）",
+                     "只说明成交在板块间的分散程度，不说明资金方向", tag + "〔Top-5 口径〕")
+    else:
+        rings[5].add("结构不可读（—）", "板块集中度未取到", "该环无证据")
 
     # as-of：最慢环（月频优先）
     periods = []
