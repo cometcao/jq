@@ -320,9 +320,50 @@ def build(policy):
     as_of = max(daily) if daily else "不可用"
     normalize_dates(rings, as_of)
     body = "\n".join(r_.lines for r_ in rings) if False else "\n".join("\n".join(r_.lines) for r_ in rings)
+    cmp_lines, cmp_records = market_compare_lines()
+    if cmp_lines:
+        body += "\n\n比价（七锚通过才出）：\n" + "\n".join(cmp_lines)
+        persist_compares(cmp_records)
     return as_of, body
 
 
+
+
+MARKET_COMPARES = [("MKT_M2_YOY", "MKT_M1_YOY", "difference"),
+                   ("MKT_DR007", "MKT_CGB10Y", "difference")]
+
+
+def market_compare_lines():
+    """市场层默认比价段：同层、同口径的两条差值，走 compare.py 的七锚与 schema。"""
+    import argparse
+    import importlib.util
+
+    spec_ = importlib.util.spec_from_file_location("cmp_mod", os.path.join(ROOT, "scripts", "compare.py"))
+    mod = importlib.util.module_from_spec(spec_)
+    spec_.loader.exec_module(mod)
+
+    out, records = [], []
+    for left, right, op in MARKET_COMPARES:
+        a = argparse.Namespace(left=left, right=right, op=op, window=None, universe=None, dry=True)
+        try:
+            payload = mod.build(a)
+            rec = mod.to_record(payload)
+        except Exception as e:
+            out.append(f"  {left} {op} {right}：不可比（{e}）")
+            continue
+        records.append(rec)
+        out.append(f"  {rec['current_state']['对比结果']} = {rec['current_state']['数值']}"
+                   f"（{rec['data_period']}）｜operand_order: {rec['operand_order']}")
+    return out, records
+
+
+def persist_compares(records):
+    d = os.path.join(ROOT, "data", "compares")
+    os.makedirs(d, exist_ok=True)
+    for rec in records:
+        fp = os.path.join(d, rec["compare_id"] + ".json")
+        with io.open(fp, "w", encoding="utf-8") as f:
+            json.dump(rec, f, ensure_ascii=False, indent=2)
 
 def build_sector(policy):
     """板块层六环（同名不同义）。v1 只做 C2 份额、C6 涨跌与广度；其余如实不可读。"""

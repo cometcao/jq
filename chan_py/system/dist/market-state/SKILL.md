@@ -5,7 +5,7 @@ description: Use when the user asks what the market or a sector looks like right
 
 # market-state · 市场状态
 
-> **规则版本 V2.51.0**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
+> **规则版本 V2.53.0**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
 
 把当前数据压缩成 **六环 + 证据行** 的客观状态描述。不做判断、不给建议、不预测、不解释涨跌原因。
 
@@ -82,6 +82,18 @@ description: Use when the user asks what the market or a sector looks like right
 | 位置 | 事件段附在状态页之后，**另标 horizon**，不参与 as-of |
 
 示例见 `data/events/scenario-cpi-20261209.json`（12-09 CPI，三支枚举，前值不可得所以排序不适用）。
+
+## 市场层默认比价段
+
+出市场层状态时，六环之后**默认附两行比价**（同层同口径，走 `scripts/compare.py` 的七锚与 schema）：
+
+```
+比价（七锚通过才出）：
+  MKT_M2_YOY 减 MKT_M1_YOY = +2.70pp（2026-10-01）｜operand_order: MKT_M2_YOY − MKT_M1_YOY
+  MKT_DR007 减 MKT_CGB10Y = -0.21pp（2026-11-20）｜operand_order: MKT_DR007 − MKT_CGB10Y
+```
+
+**跨层比值不进市场层**（板块 ÷ 市场会被层级锚拦下）；板块层相对估值归板块页。
 
 ## 输出格式
 
