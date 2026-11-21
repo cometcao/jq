@@ -253,9 +253,24 @@ def build(policy):
     if ok and north is not None:
         rings[4].add(f"外部（{period('MKT_NORTH_AMT')}）", f"北向盘后成交总额 {north:.2f} 亿", "无净额、无买卖拆分", tag)
     else:
-        rings[4].add("外部不可读（—）",
-                     "北向官方自 2024-08 起停止日度披露（净买额与持股均为空）；替代需海外中国 ETF 规模源，列入插件期",
-                     "该环无证据")
+        etf = val("EXT_CN_ETF_AUM")
+        if etf is not None:
+            pe, prev_e = val("EXT_CN_ETF_AUM", "prev_value"), None
+            p2, prev_period = prev_value_from_revisions("EXT_CN_ETF_AUM", period("EXT_CN_ETF_AUM"))
+            pe = pe if pe is not None else p2
+            if pe is not None:
+                word = "增" if etf > pe else ("减" if etf < pe else "不变")
+                rings[4].add(f"外部{word}（代理·{period('EXT_CN_ETF_AUM')}）",
+                             f"海外中国主题 ETF 规模 {etf:.2f} 十亿美元 对比上一期 {pe:.2f}（KWEB+KBA+KURE）",
+                             "北向已停发；ETF 规模不等于北向资金，也不等于外资净买入", allow("EXT_CN_ETF_AUM")[1])
+            else:
+                rings[4].add("外部不可读（—）",
+                             f"北向已停发；代理已有海外中国 ETF 规模 {etf:.2f} 十亿美元，但无证据可作前值（首次落盘）",
+                             "下次运行即可比较")
+        else:
+            rings[4].add("外部不可读（—）",
+                         "北向官方自 2024-08 起停止日度披露；海外中国 ETF 规模亦未取到",
+                         "该环无证据")
 
     # C6 参与度：全市场成交额（市场层口径，不得用单板块成交额代替）
     ok, tag = allow("MKT_TURNOVER")
@@ -347,12 +362,26 @@ def build_sector(policy):
                      "该环暂无法判方向")
     else:
         rings[1].add("不可读（—）", "板块成交额或全市场成交额缺失", "该环无证据")
-    # C3 相对贵贱：无板块估值源
-    rings[2].add("不可读（—）", "板块估值（PE/股息率）无免费源，需中证行业指数估值映射", "该环无证据")
+    # C3 相对贵贱：板块 PE ÷ 沪深300 PE
+    v3 = val("SECTOR_VAL")
+    if v3 is not None:
+        word = "偏贵" if v3 > 1 else ("偏便宜" if v3 < 1 else "不变")
+        rings[2].add(f"{word}（{period('SECTOR_VAL')}）",
+                     f"板块 PE ÷ 沪深300 PE = {v3:.2f}×（基准：沪深300）",
+                     "只说明相对倍数，不说明是否会回归；差值与分位归比价层", tag_of("SECTOR_VAL"))
+    else:
+        rings[2].add("不可读（—）", "板块估值未取到（可能在 data/sector_index_map.json 里没有该板块的指数代码）", "该环无证据")
     # C4 默认空环
     rings[3].add("不可读（—）", "板块层杠杆与资金池默认不读（ADR-025 口径）", "该环无证据")
-    # C5 主体行为：板块内龙虎榜/ETF 未加总
-    rings[4].add("不可读（—）", "板块内龙虎榜与 ETF 申赎未做成分映射加总", "该环无证据")
+    # C5 主体行为：按中证成分过滤的龙虎榜机构净买
+    v5 = val("SECTOR_INST_FLOW")
+    if v5 is not None:
+        word = "机构增" if v5 > 0 else ("机构减" if v5 < 0 else "机构不变")
+        rings[4].add(f"{word}（{period('SECTOR_INST_FLOW')}）",
+                     f"板块内龙虎榜机构净买额 {v5:+.2f} 亿（区间汇总，按中证成分过滤）",
+                     "仅覆盖上榜个股，不代表板块内全部机构行为", tag_of("SECTOR_INST_FLOW"))
+    else:
+        rings[4].add("不可读（—）", "板块内龙虎榜未取到（成分表或龙虎榜接口失败）", "该环无证据")
     # C6 结果：涨跌幅 + 板块内广度
     pct = val("SECTOR_PCT")
     if pct is not None:

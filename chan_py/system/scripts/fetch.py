@@ -179,6 +179,12 @@ def read_manual(iid):
         return None
     return c
 
+
+def _sector_index_code():
+    m = read_json(os.path.join(ROOT, "data", "sector_index_map.json"), {}) or {}
+    return (m.get("map") or {}).get(_sector_target())
+
+
 def _sector_target():
     """当前板块目标（默认半导体）；改 data/sector_target.json 即可换。"""
     c = read_json(os.path.join(ROOT, "data", "sector_target.json"), {}) or {}
@@ -215,6 +221,27 @@ def csindex_direct_xls(symbol="000300"):
 
 
 LOCAL_FNS = {"csindex_direct_xls": csindex_direct_xls}
+
+
+def cn_etf_aum_direct():
+    """抓 KraneShares 三只中国主题 ETF 的 Net Assets（官网静态页），合计为海外中国 ETF 规模代理。"""
+    import requests
+    UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"}
+    total, as_of, detail = 0.0, None, []
+    for tk in ("kweb", "kba", "kure"):
+        r = requests.get(f"https://kraneshares.com/etf/{tk}/", headers=UA, timeout=25)
+        txt = re.sub(r"<[^>]+>", " ", r.text)
+        m = re.search(r"Net Assets\s*\$([\d,]+)", txt)
+        d = re.search(r"Data as of (\d{1,2})/(\d{1,2})/(\d{4})", txt)
+        if not m:
+            raise ValueError(f"{tk} 未解析到 Net Assets")
+        v = float(m.group(1).replace(",", ""))
+        total += v
+        detail.append(f"{tk.upper()} ${v/1e9:.2f}B")
+        if d:
+            as_of = f"{d.group(3)}-{int(d.group(1)):02d}-{int(d.group(2)):02d}"
+    return total, as_of, "; ".join(detail)
+
 
 # ---------------------------------------------------------------- 解析器
 def p_lpr(df):
@@ -458,6 +485,54 @@ def p_mmf_scale(df):
     return ({"指标": "货币基金规模（代理现金池）", "值": f"{total:.2f} 万亿", "对比": f"{len(df.dropna(subset=[col]))} 家管理人合计"},
             {"data_period": norm_period(_latest_trade_day())})
 
+
+def p_cn_etf_aum(_df=None):
+    total, as_of, detail = cn_etf_aum_direct()
+    return ({"指标": "海外中国主题 ETF 规模（代理）", "值": f"{total/1e9:.2f} 十亿美元", "对比": detail},
+            {"data_period": as_of or _latest_trade_day()})
+
+
+def p_sector_val(_df=None):
+    """板块 PE ÷ 沪深300 PE（相对倍数）；板块指数代码来自 data/sector_index_map.json。"""
+    code = _sector_index_code()
+    if not code:
+        raise ValueError(f"板块「{_sector_target()}」未配置中证指数代码（data/sector_index_map.json）")
+    import requests
+    def pe_of(sym):
+        url = (f"https://oss-ch.csindex.com.cn/static/html/csindex/public/uploads/file/"
+               f"autofile/indicator/{sym}indicator.xls")
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+        df = pd.read_excel(io.BytesIO(r.content))
+        col = [c for c in df.columns if "市盈率1" in str(c)][0]
+        dcol = [c for c in df.columns if str(c).startswith("日期")][0]
+        df = df.dropna(subset=[col]).sort_values(dcol)
+        row = df.iloc[-1]
+        return float(row[col]), str(row[dcol])
+    sec_pe, period = pe_of(code)
+    mkt_pe, _ = pe_of("000300")
+    return ({"指标": f"{_sector_target()}板块估值倍数", "值": f"{sec_pe / mkt_pe:.2f}×",
+             "对比": f"板块 PE {sec_pe:.2f} / 沪深300 PE {mkt_pe:.2f}"},
+            {"data_period": norm_period(period)})
+
+
+def p_sector_inst(_df=None):
+    """板块层 C5：按中证成分股过滤龙虎榜机构净买额（区间汇总）。"""
+    code = _sector_index_code()
+    if not code:
+        raise ValueError(f"板块「{_sector_target()}」未配置中证指数代码")
+    cons = ak.index_stock_cons_csindex(symbol=code)
+    codes = set(str(x).zfill(6) for x in cons["成分券代码"].tolist())
+    cons_date = str(cons["日期"].iloc[0]) if "日期" in cons.columns else _latest_trade_day()
+    end = _ymd(None)
+    start = str(int(end) - 7)
+    lhb = ak.stock_lhb_jgmmtj_em(start_date=start, end_date=end)
+    col = find_col(lhb, "机构买入净额")
+    sub = lhb[lhb["代码"].astype(str).str.zfill(6).isin(codes)]
+    total = float(sub[col].fillna(0).sum()) / 1e8
+    return ({"指标": f"{_sector_target()}板块内龙虎榜机构净买额", "值": f"{total:+.2f} 亿元",
+             "对比": f"成分 {len(codes)} 只中上榜 {len(sub)} 只；成分表 {cons_date}"},
+            {"data_period": norm_period(_latest_trade_day())})
+
 # ---------------------------------------------------------------- 指标声明
 SPECS = [
     dict(id="POL_LPR", channel="C1", subject="政策", freq="不定期", value_kind="level", layer="市场", tier_default="C",
@@ -573,6 +648,18 @@ SPECS = [
          providers=[("akshare/em", ["fund_aum_hist_em"], p_mmf_scale)],
          official_source="中基协口径·货币基金规模（经东财汇总）", official_url="https://www.amac.org.cn/",
          proves="闲钱停放在货币基金的总规模（保证金停发后的代理）", does_not_prove="不等于客户保证金，也不等于场内现金"),
+    dict(id="EXT_CN_ETF_AUM", channel="C5", subject="外部", freq="日", value_kind="level", layer="市场", tier_default="C",
+         providers=[("direct/kraneshares", ["__cn_etf_aum__"], p_cn_etf_aum)],
+         official_source="KraneShares 官网·KWEB/KBA/KURE 的 Net Assets（基金披露）", official_url="https://kraneshares.com/etf/kweb/",
+         proves="海外上市中国主题 ETF 的资产规模（外资配置中国的存量代理）", does_not_prove="不等于北向资金，也不等于外资对 A 股的净买入"),
+    dict(id="SECTOR_VAL", channel="C3", subject="公共池", freq="日", value_kind="ratio", layer="板块", tier_default="C",
+         providers=[("calc", ["__sector_val__"], p_sector_val)],
+         official_source="中证指数·行业指数估值（板块 PE）与沪深300 PE", official_url="https://www.csindex.com.cn/",
+         proves="板块估值相对全市场的倍数（基准：沪深300）", does_not_prove="不说明估值会回归；差值与分位归比价层"),
+    dict(id="SECTOR_INST_FLOW", channel="C5", subject="机构", freq="日", value_kind="level", layer="板块", tier_default="C",
+         providers=[("calc", ["__sector_inst__"], p_sector_inst)],
+         official_source="中证指数成分 + 龙虎榜机构买卖统计（按成分过滤加总）", official_url="https://www.csindex.com.cn/",
+         proves="板块成分股在龙虎榜上的机构净买方向与规模", does_not_prove="仅覆盖上榜个股，不代表板块内全部机构行为"),
 ]
 
 SPEC_MAP = {s["id"]: s for s in SPECS}
@@ -634,7 +721,7 @@ def fetch_one(spec, args, as_of):
 
     errors = []
     for source, aliases, parser in spec["providers"]:
-        if source == "calc":                      # 纯计算指标：不发请求，直接算
+        if source in ("calc", "direct/kraneshares"):                      # 纯计算指标：不发请求，直接算
             try:
                 cur, meta = parser(None)
                 rec = {"indicator_id": spec["id"], "source": source, "function": None,

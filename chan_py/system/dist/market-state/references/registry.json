@@ -611,6 +611,30 @@
     "frequency": "日",
     "comparable_from": null
   },
+  "SECTOR_VAL": {
+    "name": "板块估值相对倍数",
+    "layer": "板块",
+    "channel": "C3",
+    "subject": "公共池",
+    "attribute": "A5",
+    "transform": "T1",
+    "value_kind": "ratio",
+    "unit": "U2",
+    "frequency": "日",
+    "comparable_from": null
+  },
+  "SECTOR_INST_FLOW": {
+    "name": "板块内龙虎榜机构净买额",
+    "layer": "板块",
+    "channel": "C5",
+    "subject": "机构",
+    "attribute": "A3",
+    "transform": "T1",
+    "value_kind": "level",
+    "unit": "U1",
+    "frequency": "日",
+    "comparable_from": null
+  },
   "SECTOR_BREADTH": {
     "name": "板块内上涨家数占比",
     "layer": "板块",

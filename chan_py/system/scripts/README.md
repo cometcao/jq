@@ -1,11 +1,11 @@
 # 取数层（akshare）
 
-> 版本 V2.38.0。定位：**C 类源**的免费取数层，服务于 `dist/market-state`。
+> 版本 V2.43.0。定位：**C 类源**的免费取数层，服务于 `dist/market-state`。
 > 规则依据：`docs/01_框架核心.md` 第十节（D03 分级、D04 缺失、第十节 2 的 stale 阈值）。
 
 ## 一句话
 
-`scripts/fetch.py` 用 akshare 抓 25 个指标（另 2 项人工录入），多源轮换 + 限速 + 缓存 + 新鲜度闸门 + 失败降级，产出符合 `schemas/fact.schema.json` 的事实记录。
+`scripts/fetch.py` 用 akshare/官网抓 28 个指标（另 2 项人工录入），多源轮换 + 限速 + 缓存 + 新鲜度闸门 + 失败降级，产出符合 `schemas/fact.schema.json` 的事实记录。
 
 ```bash
 python scripts/fetch.py                 # 抓全部
@@ -103,7 +103,7 @@ C6 参与度降（2026-11-20）｜依据：板块成交额 1985.20 亿 对比上
 
 末尾附**数据溯源表**（指标 → 官方源 → 官方页面 URL → 档位），可直接点开核对；对账通过后把值与链接写进 `data/official/<id>.json`，档位升 B，标注随之消失。
 
-## 存储与修订（D11，V2.38.0）
+## 存储与修订（D11，V2.43.0）
 
 | 路径 | 内容 | 规则 |
 |---|---|---|
@@ -119,11 +119,42 @@ C6 参与度降（2026-11-20）｜依据：板块成交额 1985.20 亿 对比上
 cat data/revisions/MKT_M2_YOY/2026-10-01.jsonl
 ```
 
-## as-of 规则（V2.38.0）
+## as-of 规则（V2.43.0）
 
 - 整页 `as-of` 取**最新交易日**（日频指标里最大的数据期），不再被月频环拖回一个月前；
 - **只标注不是最新数据的行**：数据期早于 as-of 的行尾追加 `〔非最新：YYYY-MM-DD〕`，其余行不标。
 - 无日期列的快照类接口（龙虎榜、板块集中度）用指数日线的数据期作"最近交易日"，避免周末被标成当天。
+
+## 板块估值映射（data/sector_index_map.json）
+
+板块层 C3 需要"板块 PE"，来源是中证指数的行业/主题指数估值。板块名与指数代码的映射写在这个文件里：
+
+```json
+{ "map": { "半导体": "H30184" } }
+```
+
+**未映射的板块，C3 如实写"不可读"**（不会拿别的板块顶替）。加一个新板块：找到它在官网的指数代码，加一行即可。
+
+## 多板块观察（sector.py）
+
+注册表里的 `SECTOR_*` 只能代表**一个**板块，而"医药=6 个行业加总"这类是**动态口径**，所以多板块观察走独立脚本：
+
+```bash
+python scripts/sector.py            # 表格
+python scripts/sector.py --json     # JSON
+python scripts/sector.py --write    # 另存 data/sector_groups/<期>.json 并追加修订链
+```
+
+分组写在 `data/sector_config.json`（首次运行自动生成）：
+
+```json
+{ "groups": [
+    { "name": "医药", "members": ["中药","医药商业","化学制药","医疗器械","医疗服务","生物制品"] },
+    { "name": "电力", "members": ["电力"] },
+    { "name": "基础化工", "members": ["化学原料","化学制品","化学纤维","橡胶制品","塑料制品","农化制品"] } ] }
+```
+
+口径固定三条：**同花顺行业分类**、**分组成员加总**、**涨跌幅按成交额加权**；成员名写错会打印 `⚠ 未找到`，不会静默跳过。
 
 ## 机器可读输出（--json）
 
@@ -132,7 +163,7 @@ python scripts/state.py --layer market --json --write   # 写 reports/state-mark
 python scripts/state.py --layer sector --json --write   # 写 reports/state-sector.json
 ```
 
-供插件/面板消费，不必解析 Markdown：
+供面板或其他程序消费，不必解析 Markdown：
 
 ```json
 { "layer": "market", "as_of": "2026-11-20", "generated_at": "...",
@@ -157,7 +188,7 @@ python scripts/state.py --layer sector --json --write   # 写 reports/state-sect
 
 实例：`MKT_TSF_YOY`（社融）免费源最新只到 2026-04，距 2026-11 约 7.8 倍 → 当前被正确拒绝。
 
-## 已注册的指标（25 自动 + 2 人工）
+## 已注册的指标（28 自动 + 2 人工）
 
 | id | 环 | 源 | 备注 |
 |---|---|---|---|
@@ -174,6 +205,7 @@ python scripts/state.py --layer sector --json --write   # 写 reports/state-sect
 | MKT_MARGIN_BAL | C4 | 交易所汇总 | 融资余额（全市场） |
 | MKT_MARGIN_COLLATERAL | C4 | 交易所汇总 | 两融担保物总价值（6.51 万亿，含证券） |
 | MKT_MMF_SCALE | C4 现金池 | 东财（中基协口径） | 货币基金规模 **15.80 万亿**（保证金停发后的同属性代理） |
+| EXT_CN_ETF_AUM | C5 外部 | **KraneShares 官网** | 海外中国 ETF 规模 **$4.38B**（KWEB+KBA+KURE，北向停发后的代理） |
 | MKT_MARGIN_DEP | C4 现金池 | **人工** | 客户保证金（官方 2017 停发，一般留空） |
 | MKT_NORTH_AMT | C5 外部 | **人工** | 北向盘后成交额（官方 2024-08 停披露，一般留空） |
 | SECTOR_AMT | C6（板块） | 同花顺 | 板块成交额，用于派生 C2 份额 |
@@ -187,6 +219,8 @@ python scripts/state.py --layer sector --json --write   # 写 reports/state-sect
 | SECTOR_SHARE | 板块 C2 份额 | 自算 | 板块成交额 ÷ 全市场（半导体 13.87%） |
 | SECTOR_PCT | 板块 C6 结果 | 同花顺 | 板块指数涨跌幅（−6.85%） |
 | SECTOR_BREADTH | 板块 C6 广度 | 同花顺 | 板块内上涨家数占比（3.7%） |
+| SECTOR_VAL | 板块 C3 相对贵贱 | **中证指数官网** | 板块 PE ÷ 沪深300 PE = **6.33×**（半导体 H30184） |
+| SECTOR_INST_FLOW | 板块 C5 主体 | 中证成分 + 龙虎榜 | 板块内机构净买 **−2.35 亿**（87 只成分中上榜若干） |
 
 ## 加一个指标
 
