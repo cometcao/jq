@@ -5,7 +5,7 @@ description: Use when the user asks what the market or a sector looks like right
 
 # market-state · 市场状态
 
-> **规则版本 V2.16.2**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
+> **规则版本 V2.16.3**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
 
 把当前数据压缩成 **六环 + 证据行** 的客观状态描述。不做判断、不给建议、不预测、不解释涨跌原因。
 
@@ -22,7 +22,7 @@ description: Use when the user asks what the market or a sector looks like right
 | `references/registry.json` | 校验指标 id、attribute / transform / 量纲时 |
 | `references/schema/*.json` | 落盘记录前 |
 | `references/render.md` | 要出图时（默认只出六环覆盖条；折线按需） |
-| `references/examples/` | 需要照格式写时（含真实数据样例） |
+| `references/examples/` | 需要照格式写时（含真实数据样例 `render-01.md`：带覆盖条的真实输出） |
 | `check.py` | 输出前自检（记录与页面两种模式） |
 
 ## 输入参数
