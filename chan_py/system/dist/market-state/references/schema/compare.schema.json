@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chanpy.local/schemas/compare.schema.json",
+  "title": "比价记录",
+  "description": "对应 docs/02_口径附件.md 附录 B。事实域封闭：inputs 只能是已落地事实记录或既有 compare_id；本 schema 不接受价格序列为结果（F03/V-b）。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "compare_id", "compare_type", "compare_operation", "result_form", "anchor",
+    "inputs", "current_state", "data_period", "window", "value_kind",
+    "observation_time", "release_date", "update_frequency",
+    "source_tier", "fallback_flag", "missing_type", "value_type", "rule_status"
+  ],
+  "properties": {
+    "compare_id": { "type": "string", "minLength": 1 },
+    "compare_type": { "enum": ["time_self", "cross_sectional"] },
+    "compare_operation": { "enum": ["ratio", "difference", "spread", "percent_change"] },
+    "operand_order": { "type": "string", "minLength": 1, "description": "差值/比值/价差必填：A−B 或 A/B" },
+    "result_form": { "enum": ["point_value", "percentile", "rank"] },
+    "universe": { "type": ["string", "null"], "description": "result_form=rank 时必填：对照全集与排序方向" },
+    "reference": { "type": ["string", "null"], "description": "偏离度必填：窗口均值/中位数/上期值/参考线" },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["同质锚", "属性锚", "口径锚", "窗口锚", "层级锚", "归属锚", "量纲锚"],
+      "properties": {
+        "同质锚": { "type": "string", "minLength": 1 },
+        "属性锚": { "type": "string", "minLength": 1 },
+        "口径锚": { "type": "string", "minLength": 1 },
+        "窗口锚": { "type": "string", "minLength": 1 },
+        "层级锚": { "type": "string", "minLength": 1 },
+        "归属锚": { "type": "string", "minLength": 1 },
+        "量纲锚": { "type": "string", "minLength": 1 }
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ref_type", "ref", "layer", "data_period"],
+        "properties": {
+          "ref_type": { "enum": ["indicator_id", "compare_id"] },
+          "ref": { "type": "string", "minLength": 1 },
+          "layer": { "enum": ["市场", "板块", "个股"] },
+          "data_period": { "type": "string" }
+        }
+      }
+    },
+    "current_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["对比结果", "数值", "数据所属期"],
+      "properties": {
+        "对比结果": { "type": "string" },
+        "数值": { "type": "string" },
+        "数据所属期": { "type": "string" }
+      }
+    },
+    "series": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["data_period", "compare_value", "value_kind"],
+        "properties": {
+          "data_period": { "type": "string" },
+          "compare_value": { "type": "string" },
+          "value_kind": { "enum": ["return", "level", "ratio", "count"] }
+        }
+      }
+    },
+    "data_period": { "type": "string" },
+    "window": { "type": "string" },
+    "value_kind": {
+      "enum": ["return", "level", "ratio", "count"],
+      "description": "结果序列类型；price 一律禁止（F03/V-b）"
+    },
+    "observation_time": { "type": "string" },
+    "release_date": { "type": "string" },
+    "update_frequency": { "enum": ["日", "周", "月", "季", "年", "不定期"] },
+    "source_tier": { "enum": ["A", "B", "C", "D"] },
+    "fallback_flag": { "type": "boolean" },
+    "missing_type": {
+      "enum": [
+        "none", "not_yet_released", "stale", "source_unavailable", "discontinued",
+        "paywalled", "not_crawlable", "out_of_scope", "pending_verification",
+        "not_applicable", "caliber_mismatch", "frequency_mismatch", "requires_manual_computation"
+      ]
+    },
+    "value_type": { "enum": ["初值", "修正值", "估算值"] },
+    "rule_status": { "enum": ["ratified", "draft"] }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "result_form": { "const": "rank" } }, "required": ["result_form"] },
+      "then": { "required": ["universe"], "properties": { "universe": { "type": "string", "minLength": 1 } } }
+    },
+    {
+      "if": {
+        "properties": { "compare_operation": { "enum": ["ratio", "difference", "spread"] } },
+        "required": ["compare_operation"]
+      },
+      "then": { "required": ["operand_order"] }
+    }
+  ]
+}

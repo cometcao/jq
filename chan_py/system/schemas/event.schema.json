@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chanpy.local/schemas/event.schema.json",
+  "title": "事件日历条目",
+  "description": "对应 docs/01_框架核心.md 8.1。只维护未来预定事件；不标受影响指标（F08）。manual 录入必须带官方链接。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id", "event_type", "layer", "event_date", "event_status",
+    "issuer", "entry_mode", "source_tier", "calendar_version",
+    "observation_time", "missing_type"
+  ],
+  "properties": {
+    "event_id": { "type": "string", "minLength": 1 },
+    "event_type": {
+      "enum": ["数据发布", "政策会议", "财报披露", "解禁", "指数调整", "其他"]
+    },
+    "layer": { "enum": ["市场", "板块", "个股"] },
+    "event_date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "event_time": { "type": ["string", "null"] },
+    "scope": { "type": ["string", "null"] },
+    "data_period": { "type": ["string", "null"], "description": "数据发布类必填" },
+    "event_status": { "enum": ["未来预定", "已发生", "已取消"] },
+    "status_changed_at": { "type": ["string", "null"] },
+    "issuer": { "type": "string", "minLength": 1 },
+    "entry_mode": { "enum": ["auto", "manual"] },
+    "source_tier": { "enum": ["A", "B", "C", "D"] },
+    "source_link": { "type": ["string", "null"], "description": "entry_mode=manual 时必填（官方 URL）" },
+    "calendar_version": { "type": "integer", "minimum": 1 },
+    "observation_time": { "type": "string" },
+    "missing_type": {
+      "enum": [
+        "none", "not_yet_released", "stale", "source_unavailable", "discontinued",
+        "paywalled", "not_crawlable", "out_of_scope", "pending_verification",
+        "not_applicable", "caliber_mismatch", "frequency_mismatch", "requires_manual_computation"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "event_type": { "const": "数据发布" } }, "required": ["event_type"] },
+      "then": { "required": ["data_period"] }
+    },
+    {
+      "if": { "properties": { "entry_mode": { "const": "manual" } }, "required": ["entry_mode"] },
+      "then": {
+        "required": ["source_link"],
+        "properties": { "source_link": { "type": "string", "minLength": 8 }, "source_tier": { "const": "A" } }
+      }
+    }
+  ]
+}

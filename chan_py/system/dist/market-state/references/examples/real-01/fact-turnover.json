@@ -1,0 +1,23 @@
+{
+  "record_id": "real-20261120-turnover",
+  "layer": "市场",
+  "subtype": "市场结果",
+  "indicator_id": "MKT_TURNOVER",
+  "channel": "C6",
+  "subject": "公共池",
+  "derived_type": "聚合值",
+  "value_kind": "level",
+  "observation_time": "2026-11-21T17:31+08:00",
+  "release_date": "2026-11-20",
+  "data_period": "2026-11-20",
+  "update_frequency": "日",
+  "source_tier": "C",
+  "fallback_flag": false,
+  "missing_type": "none",
+  "value_type": "初值",
+  "status": "active",
+  "proves": "两市成交额较上一交易日增加",
+  "does_not_prove": "不说明资金来源与主体",
+  "rule_status": "ratified",
+  "current_state": { "指标": "两市成交额", "数值": "14222.00 亿元", "数据所属期": "2026-11-20" }
+}

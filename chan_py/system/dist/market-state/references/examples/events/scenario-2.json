@@ -1,0 +1,35 @@
+{
+  "event_id": "EV-2026-12-10-UNLOCK",
+  "event_summary": "板块成分股解禁",
+  "observation_time": "2026-11-21T20:00+08:00",
+  "calendar_version": 7,
+  "possible_outcomes": [
+    {
+      "outcome_label": "按公告执行",
+      "observable_flag": "实际解禁数量 = 公告数量",
+      "observable_flag_source": "交易所公告",
+      "affected_indicators": [
+        "INST_INSIDER_NET"
+      ]
+    },
+    {
+      "outcome_label": "变更",
+      "observable_flag": "新增变更公告且数量 ≠ 原公告",
+      "observable_flag_source": "交易所公告",
+      "affected_indicators": [
+        "INST_INSIDER_NET"
+      ]
+    },
+    {
+      "outcome_label": "取消",
+      "observable_flag": "出现取消公告",
+      "observable_flag_source": "交易所公告",
+      "affected_indicators": [
+        "INST_INSIDER_NET"
+      ]
+    }
+  ],
+  "branch_ordering": "不适用：前值不可得",
+  "branch_ordering_applicable": false,
+  "no_prediction_statement": "以上为可能结果分支的枚举与可观测标志，不预测哪个分支会发生；影响指标为客观标注；价格印证由用户在外部平台完成。"
+}

@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chanpy.local/schemas/scenario.schema.json",
+  "title": "事件分支枚举",
+  "description": "对应 docs/01_框架核心.md 8.2。对已知未来事件枚举可能结果；不预测、不给概率、不排序可能性、不判断方向。分支条件不生成比价（ADR-022）。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id", "event_summary", "observation_time", "calendar_version",
+    "possible_outcomes", "branch_ordering", "branch_ordering_applicable",
+    "no_prediction_statement"
+  ],
+  "properties": {
+    "event_id": { "type": "string", "minLength": 1 },
+    "event_summary": { "type": "string", "minLength": 1 },
+    "observation_time": { "type": "string" },
+    "calendar_version": { "type": "integer", "minimum": 1 },
+    "prev_value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["indicator_id", "value", "data_period", "source_link"],
+      "properties": {
+        "indicator_id": { "type": "string", "pattern": "^[A-Z]{2,6}_[A-Z0-9_]+$" },
+        "value": { "type": "string" },
+        "data_period": { "type": "string" },
+        "source_link": { "type": "string", "minLength": 8 },
+        "observation_time": { "type": "string" }
+      },
+      "description": "前值快照；只作分支定义参照，不得作为比价输入"
+    },
+    "possible_outcomes": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome_label", "observable_flag", "observable_flag_source", "affected_indicators"],
+        "properties": {
+          "outcome_label": { "type": "string", "minLength": 1 },
+          "observable_flag": {
+            "type": "string",
+            "minLength": 1,
+            "description": "可机械比对形式，如 公布值 > 前值；不得含好于/差于/积极/消极"
+          },
+          "observable_flag_source": { "type": "string", "minLength": 1 },
+          "affected_indicators": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "pattern": "^[A-Z]{2,6}_[A-Z0-9_]+$" },
+            "description": "只能取注册表 indicator_id；只标受影响，不写方向"
+          }
+        }
+      }
+    },
+    "branch_ordering": { "type": "string", "minLength": 1 },
+    "branch_ordering_applicable": { "type": "boolean" },
+    "no_prediction_statement": {
+      "type": "string",
+      "minLength": 20,
+      "description": "固定声明：不预测哪个分支会发生；影响指标为客观标注；价格印证由用户在外部平台完成"
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "branch_ordering_applicable": { "const": false } }, "required": ["branch_ordering_applicable"] },
+      "then": {
+        "properties": {
+          "branch_ordering": { "type": "string", "pattern": "不适用" }
+        }
+      }
+    }
+  ]
+}

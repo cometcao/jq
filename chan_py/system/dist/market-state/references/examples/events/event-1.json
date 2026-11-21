@@ -1,0 +1,18 @@
+{
+  "event_id": "EV-2026-11-25-INDUSTRY",
+  "event_type": "数据发布",
+  "layer": "市场",
+  "event_date": "2026-11-25",
+  "event_time": "10:00",
+  "scope": "全市场",
+  "data_period": "2026-10",
+  "event_status": "未来预定",
+  "status_changed_at": "2026-11-21T20:00+08:00",
+  "issuer": "国家统计局",
+  "entry_mode": "manual",
+  "source_tier": "A",
+  "source_link": "https://www.stats.gov.cn/sj/zxfb/",
+  "calendar_version": 7,
+  "observation_time": "2026-11-21T20:00+08:00",
+  "missing_type": "none"
+}

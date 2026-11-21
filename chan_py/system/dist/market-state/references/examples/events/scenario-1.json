@@ -1,0 +1,42 @@
+{
+  "event_id": "EV-2026-12-05-CPI",
+  "event_summary": "CPI 同比（2026-11）",
+  "observation_time": "2026-11-21T20:00+08:00",
+  "calendar_version": 7,
+  "prev_value": {
+    "indicator_id": "MKT_CPI_YOY",
+    "value": "0.4%",
+    "data_period": "2026-10",
+    "source_link": "https://www.stats.gov.cn/sj/zxfb/",
+    "observation_time": "2026-11-21T20:00+08:00"
+  },
+  "possible_outcomes": [
+    {
+      "outcome_label": "高于前值",
+      "observable_flag": "公布值 > 前值（0.4%）",
+      "observable_flag_source": "国家统计局 CPI 发布页",
+      "affected_indicators": [
+        "MKT_CPI_YOY"
+      ]
+    },
+    {
+      "outcome_label": "低于前值",
+      "observable_flag": "公布值 < 前值（0.4%）",
+      "observable_flag_source": "国家统计局 CPI 发布页",
+      "affected_indicators": [
+        "MKT_CPI_YOY"
+      ]
+    },
+    {
+      "outcome_label": "持平",
+      "observable_flag": "公布值 = 前值（0.4%，按 0.1pp 精度）",
+      "observable_flag_source": "国家统计局 CPI 发布页",
+      "affected_indicators": [
+        "MKT_CPI_YOY"
+      ]
+    }
+  ],
+  "branch_ordering": "按公布值相对前值由高到低",
+  "branch_ordering_applicable": true,
+  "no_prediction_statement": "以上为可能结果分支的枚举与可观测标志，不预测哪个分支会发生；影响指标为客观标注；价格印证由用户在外部平台完成。"
+}

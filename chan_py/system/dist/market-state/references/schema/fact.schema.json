@@ -1,0 +1,306 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chanpy.local/schemas/fact.schema.json",
+  "title": "事实记录",
+  "description": "对应 docs/01_框架核心.md 第四节（统一字段）与第五节（事实 schema）。事实域封闭：本记录只描述已发生的观测，不含假设值。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "record_id",
+    "layer",
+    "indicator_id",
+    "channel",
+    "subject",
+    "derived_type",
+    "value_kind",
+    "observation_time",
+    "release_date",
+    "data_period",
+    "update_frequency",
+    "source_tier",
+    "fallback_flag",
+    "missing_type",
+    "value_type",
+    "proves",
+    "does_not_prove",
+    "rule_status",
+    "status"
+  ],
+  "properties": {
+    "record_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "layer": {
+      "enum": [
+        "市场",
+        "板块",
+        "个股"
+      ]
+    },
+    "subtype": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "indicator_id": {
+      "type": "string",
+      "pattern": "^[A-Z]{2,6}_[A-Z0-9_]+$"
+    },
+    "channel": {
+      "enum": [
+        "C1",
+        "C2",
+        "C3",
+        "C4",
+        "C5",
+        "C6",
+        "背景"
+      ]
+    },
+    "subject": {
+      "enum": [
+        "政策",
+        "公共池",
+        "外部",
+        "机构",
+        "散户",
+        "产业资本"
+      ]
+    },
+    "derived_type": {
+      "enum": [
+        "原始观测",
+        "聚合值",
+        "原始序列",
+        "派生指标（占比/合成指标）",
+        "派生统计量（相关系数）"
+      ]
+    },
+    "derived_from": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "D 类必填：输入记录的 indicator_id 或 record_id"
+    },
+    "current_state": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "指标": {
+          "type": "string"
+        },
+        "数值": {
+          "type": "string"
+        },
+        "数据所属期": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "指标",
+        "数值",
+        "数据所属期"
+      ],
+      "description": "missing_type=none 时必填；缺失时可为 null"
+    },
+    "capital_path_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "enum": [
+        "active",
+        "superseded",
+        "retired"
+      ]
+    },
+    "supersedes": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revision_seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "comparable_from": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "可比期起点 YYYY-MM-DD；口径有断点时必填"
+    },
+    "value_kind": {
+      "enum": [
+        "price",
+        "return",
+        "level",
+        "ratio",
+        "count",
+        "qualitative"
+      ]
+    },
+    "observation_time": {
+      "type": "string"
+    },
+    "release_date": {
+      "type": "string"
+    },
+    "data_period": {
+      "type": "string"
+    },
+    "update_frequency": {
+      "enum": [
+        "日",
+        "周",
+        "月",
+        "季",
+        "年",
+        "不定期"
+      ]
+    },
+    "window": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_tier": {
+      "enum": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ]
+    },
+    "fallback_flag": {
+      "type": "boolean"
+    },
+    "fallback_path": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "fallback_flag=true 时必填"
+    },
+    "missing_type": {
+      "enum": [
+        "none",
+        "not_yet_released",
+        "stale",
+        "source_unavailable",
+        "discontinued",
+        "paywalled",
+        "not_crawlable",
+        "out_of_scope",
+        "pending_verification",
+        "not_applicable",
+        "caliber_mismatch",
+        "frequency_mismatch",
+        "requires_manual_computation"
+      ]
+    },
+    "value_type": {
+      "enum": [
+        "初值",
+        "修正值",
+        "估算值"
+      ]
+    },
+    "source_timestamp": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "series_frequency": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "proves": {
+      "type": "string",
+      "minLength": 1,
+      "description": "能支撑到哪一步"
+    },
+    "does_not_prove": {
+      "type": "string",
+      "minLength": 1,
+      "description": "不能支撑什么"
+    },
+    "rule_status": {
+      "enum": [
+        "ratified",
+        "draft"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "missing_type": {
+            "const": "none"
+          }
+        },
+        "required": [
+          "missing_type"
+        ]
+      },
+      "then": {
+        "required": [
+          "current_state"
+        ],
+        "properties": {
+          "current_state": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "fallback_flag": {
+            "const": true
+          }
+        },
+        "required": [
+          "fallback_flag"
+        ]
+      },
+      "then": {
+        "required": [
+          "fallback_path"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "derived_type": {
+            "const": "派生指标（占比/合成指标）"
+          }
+        },
+        "required": [
+          "derived_type"
+        ]
+      },
+      "then": {
+        "required": [
+          "derived_from"
+        ]
+      }
+    }
+  ]
+}

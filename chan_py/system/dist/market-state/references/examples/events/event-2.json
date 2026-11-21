@@ -1,0 +1,13 @@
+{
+  "event_id": "EV-2026-12-20-LPR",
+  "event_type": "政策会议",
+  "layer": "市场",
+  "event_date": "2026-12-20",
+  "event_status": "未来预定",
+  "issuer": "全国银行间同业拆借中心",
+  "entry_mode": "auto",
+  "source_tier": "A",
+  "calendar_version": 7,
+  "observation_time": "2026-11-21T20:00+08:00",
+  "missing_type": "none"
+}

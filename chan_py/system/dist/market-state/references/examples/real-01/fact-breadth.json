@@ -1,0 +1,23 @@
+{
+  "record_id": "real-20261120-breadth",
+  "layer": "市场",
+  "subtype": "市场结果",
+  "indicator_id": "MKT_BREADTH",
+  "channel": "C6",
+  "subject": "公共池",
+  "derived_type": "原始观测",
+  "value_kind": "count",
+  "observation_time": "2026-11-21T17:31+08:00",
+  "release_date": "2026-11-20",
+  "data_period": "2026-11-20",
+  "update_frequency": "日",
+  "source_tier": "C",
+  "fallback_flag": false,
+  "missing_type": "none",
+  "value_type": "初值",
+  "status": "active",
+  "proves": "上涨家数与下跌家数分布",
+  "does_not_prove": "不说明个股涨跌的原因与资金去向",
+  "rule_status": "ratified",
+  "current_state": { "指标": "涨跌家数（上涨/下跌/停牌/平盘）", "数值": "313 / 5236 / 8 / 31", "数据所属期": "2026-11-20" }
+}

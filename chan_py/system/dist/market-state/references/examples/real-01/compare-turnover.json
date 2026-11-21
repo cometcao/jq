@@ -1,0 +1,32 @@
+{
+  "compare_id": "CMP-REAL-01-TURNOVER",
+  "compare_type": "time_self",
+  "compare_operation": "percent_change",
+  "operand_order": "本期(2026-11-20) / 基期(2026-11-19) − 1",
+  "result_form": "point_value",
+  "anchor": {
+    "同质锚": "同指标 MKT_TURNOVER（A3 期间流量）不同时间",
+    "属性锚": "两市成交额，口径一致",
+    "口径锚": "同源同口径；基期 2026-11-19",
+    "窗口锚": "2026-11-19..2026-11-20",
+    "层级锚": "市场层",
+    "归属锚": "不适用（同层）",
+    "量纲锚": "亿元，比值无量纲（%）"
+  },
+  "inputs": [
+    { "ref_type": "indicator_id", "ref": "MKT_TURNOVER", "layer": "市场", "data_period": "2026-11-20" },
+    { "ref_type": "indicator_id", "ref": "MKT_TURNOVER", "layer": "市场", "data_period": "2026-11-19" }
+  ],
+  "data_period": "2026-11-20",
+  "window": "2026-11-19..2026-11-20",
+  "value_kind": "return",
+  "current_state": { "对比结果": "成交额环比", "数值": "+8.97%", "数据所属期": "2026-11-20" },
+  "observation_time": "2026-11-21T17:31+08:00",
+  "release_date": "2026-11-20",
+  "update_frequency": "日",
+  "source_tier": "C",
+  "fallback_flag": false,
+  "missing_type": "none",
+  "value_type": "初值",
+  "rule_status": "ratified"
+}
