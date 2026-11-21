@@ -138,6 +138,11 @@ def norm_period(raw):
     return f"{y}-{mo:02d}-{day:02d}"
 
 
+def num_of(s):
+    m = re.search(r"[-+]?\d+(?:\.\d+)?", str(s or "").replace(",", ""))
+    return float(m.group(0)) if m else None
+
+
 def period_lag_days(period):
     try:
         d = dt.date.fromisoformat(str(period)[:10])
@@ -410,6 +415,49 @@ def p_margin_collateral(df):
              "对比": f'平均维持担保比例 {float(r.get("平均维持担保比例") or 0):.1f}%'},
             {"data_period": norm_period(r["日期"])})
 
+
+def p_sector_pct(df):
+    d = df.sort_values("日期")
+    r, prev = d.iloc[-1], d.iloc[-2]
+    pct = (float(r["收盘价"]) / float(prev["收盘价"]) - 1) * 100
+    return ({"指标": f"{_sector_target()}板块涨跌幅", "值": f"{pct:+.2f}%", "对比": f'前收 {float(prev["收盘价"]):.2f}'},
+            {"data_period": norm_period(r["日期"])})
+
+
+def p_sector_breadth(df):
+    name = _sector_target()
+    row = df[df["板块"].astype(str) == name]
+    if row.empty:
+        raise ValueError(f"行业一览里没有板块：{name}")
+    r = row.iloc[0]
+    up, down = float(r.get("上涨家数") or 0), float(r.get("下跌家数") or 0)
+    tot = (up + down) or 1.0
+    return ({"指标": f"{name}板块上涨家数占比", "值": f"{up / tot * 100:.1f}%", "对比": f"涨跌幅 {float(r.get('涨跌幅') or 0):+.2f}%"},
+            {"data_period": norm_period(_latest_trade_day())})
+
+
+def p_sector_share(_df=None):
+    """板块成交额 ÷ 全市场成交额（读缓存里的两个值，不重新请求）。"""
+    a = read_json(os.path.join(CACHE_DIR, "SECTOR_AMT.json"), {}) or {}
+    b = read_json(os.path.join(CACHE_DIR, "MKT_TURNOVER.json"), {}) or {}
+    av = num_of(a.get("current_state", {}).get("数值"))
+    bv = num_of(b.get("current_state", {}).get("数值"))
+    if not av or not bv:
+        raise ValueError("缺少板块成交额或全市场成交额缓存")
+    return ({"指标": f"{_sector_target()}板块成交额占比", "值": f"{av / bv * 100:.2f}%",
+             "对比": f"{av:.2f} / {bv:.2f} 亿"},
+            {"data_period": a.get("data_period") or _latest_trade_day()})
+
+
+
+def p_mmf_scale(df):
+    col = "货币型"
+    if col not in df.columns:
+        raise ValueError(f"缺列 货币型：{list(df.columns)}")
+    total = float(pd.to_numeric(df[col], errors="coerce").fillna(0).sum()) / 1e4   # 亿元 → 万亿
+    return ({"指标": "货币基金规模（代理现金池）", "值": f"{total:.2f} 万亿", "对比": f"{len(df.dropna(subset=[col]))} 家管理人合计"},
+            {"data_period": norm_period(_latest_trade_day())})
+
 # ---------------------------------------------------------------- 指标声明
 SPECS = [
     dict(id="POL_LPR", channel="C1", subject="政策", freq="不定期", value_kind="level", layer="市场", tier_default="C",
@@ -509,6 +557,22 @@ SPECS = [
          manual=True, providers=[],
          official_source="北向盘后成交总额（官方 2024-08 起停止日度披露）", official_url="http://www.sse.com.cn/",
          proves="外部资金成交规模", does_not_prove="无净额、无买卖拆分"),
+    dict(id="SECTOR_SHARE", channel="C2", subject="公共池", freq="日", value_kind="ratio", layer="板块", tier_default="C",
+         providers=[("calc", ["__share__"], p_sector_share)],
+         official_source="自算：板块成交额 ÷ 全市场成交额", official_url="",
+         proves="该板块在全市场成交中的份额", does_not_prove="不说明资金流向量"),
+    dict(id="SECTOR_PCT", channel="C6", subject="公共池", freq="日", value_kind="return", layer="板块", tier_default="C",
+         providers=[("akshare/ths", ["stock_board_industry_index_ths"], p_sector_pct)],
+         official_source="同花顺板块指数（交易所行情）", official_url="https://q.10jqka.com.cn/thshy/",
+         proves="板块当日涨跌幅", does_not_prove="不说明板块内个股结构"),
+    dict(id="SECTOR_BREADTH", channel="C6", subject="公共池", freq="日", value_kind="ratio", layer="板块", tier_default="C",
+         providers=[("akshare/ths", ["stock_board_industry_summary_ths"], p_sector_breadth)],
+         official_source="同花顺行业板块一览（交易所行情）", official_url="https://q.10jqka.com.cn/thshy/",
+         proves="板块内上涨家数占比", does_not_prove="不说明上涨幅度"),
+    dict(id="MKT_MMF_SCALE", channel="C4", subject="公共池", freq="月", value_kind="level", layer="市场", tier_default="C",
+         providers=[("akshare/em", ["fund_aum_hist_em"], p_mmf_scale)],
+         official_source="中基协口径·货币基金规模（经东财汇总）", official_url="https://www.amac.org.cn/",
+         proves="闲钱停放在货币基金的总规模（保证金停发后的代理）", does_not_prove="不等于客户保证金，也不等于场内现金"),
 ]
 
 SPEC_MAP = {s["id"]: s for s in SPECS}
@@ -528,8 +592,12 @@ def call_kwargs(spec, as_of):
     if spec["id"] == "IDX_DAILY":
         # 腾讯源默认 symbol 是 sz980017，必须显式指定
         return {"symbol": "sh000001"}
+    if spec["id"] == "MKT_MMF_SCALE":
+        return {"year": str(dt.date.today().year)}
     if spec["id"] == "MKT_CGB10Y":
         return {"start_date": "20260101"}
+    if spec["id"] in ("SECTOR_PCT",):
+        return {"symbol": _sector_target(), "start_date": "20260901", "end_date": _ymd(as_of)}
     if spec["id"] == "SECTOR_AMT":
         return {"symbol": _sector_target(), "start_date": "20260901", "end_date": _ymd(as_of)}
     if spec["id"] == "INST_BLOCK_AMT":
@@ -566,6 +634,21 @@ def fetch_one(spec, args, as_of):
 
     errors = []
     for source, aliases, parser in spec["providers"]:
+        if source == "calc":                      # 纯计算指标：不发请求，直接算
+            try:
+                cur, meta = parser(None)
+                rec = {"indicator_id": spec["id"], "source": source, "function": None,
+                       "current_state": {"指标": cur["指标"], "数值": cur["值"], "数据所属期": meta["data_period"]},
+                       "data_period": meta["data_period"], "release_date": meta["data_period"],
+                       "fetched_at": dt.datetime.now().isoformat(timespec="seconds"),
+                       "fallback_flag": bool(errors), "fallback_path": "; ".join(errors) if errors else None,
+                       "rows": 0, "official_source": spec.get("official_source"),
+                       "official_url": spec.get("official_url")}
+                write_json(os.path.join(CACHE_DIR, spec["id"] + ".json"), rec)
+                return rec
+            except Exception as e:
+                errors.append(f"calc: {type(e).__name__}: {str(e)[:60]}")
+                continue
         name, fn = resolve(aliases)
         if fn is None:
             errors.append(f"{source}: 无可用函数")

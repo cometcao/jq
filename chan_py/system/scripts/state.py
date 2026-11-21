@@ -189,6 +189,7 @@ def build(policy):
         rings[3].add("不可读（—）", "两融记录缺失，或来源为 C 类、无源可支撑状态词", "该环无可用证据")
     col = val("MKT_MARGIN_COLLATERAL")
     ok, tag = allow("MKT_MARGIN_DEP")
+    ok2, tag2 = allow("MKT_MMF_SCALE")
     dep = val("MKT_MARGIN_DEP")
     if ok and dep is not None:
         ev = f"客户保证金（交易结算资金余额）{dep:.2f} 亿"
@@ -196,10 +197,23 @@ def build(policy):
             ev += f"；两融担保物总价值 {col:.2f} 万亿"
         rings[3].add(f"现金池（{period('MKT_MARGIN_DEP')}）", ev, "月频人工录入；不等于杠杆，也不等于成交额", tag)
     else:
-        ev = "客户保证金需人工录入投保基金月度表（data/manual/MKT_MARGIN_DEP.json），当前未填"
-        if col is not None:
-            ev += f"；已有两融担保物总价值 {col:.2f} 万亿（含证券，不等于现金池）"
-        rings[3].add("现金池不可读（—）", ev, "该环无证据")
+        mmf = val("MKT_MMF_SCALE")
+        if mmf is not None:
+            pmmf, prev_period = prev_value_from_revisions("MKT_MMF_SCALE", period("MKT_MMF_SCALE"))
+            if pmmf is not None:
+                word = "增" if mmf > pmmf else ("减" if mmf < pmmf else "不变")
+                ev = f"货币基金规模 {mmf:.2f} 万亿 对比上一期 {pmmf:.2f} 万亿（{prev_period}）"
+                rings[3].add(f"现金池{word}（{period('MKT_MMF_SCALE')}）", ev + "；保证金官方停发，此为同属性代理",
+                             "货币基金规模不等于客户保证金，也不等于场内现金", tag2)
+            else:
+                rings[3].add("现金池不可读（—）",
+                             f"保证金官方自 2017 年起停发；代理指标已有货币基金规模 {mmf:.2f} 万亿，但无证据可作前值（首次落盘）",
+                             "下次运行即可比较")
+        else:
+            ev = "交易结算资金余额官方自 2017 年起停止公开发布（投保基金官网历史数据止于 2017-06）"
+            if col is not None:
+                ev += f"；已有两融担保物总价值 {col:.2f} 万亿（含证券，不等于现金池）"
+            rings[3].add("现金池不可读（—）", ev, "该环无证据")
 
     # C5 窄口径替代 + 机构/外部空环
     ok, tag = allow("RTL_MARGIN_INVESTORS")
@@ -285,14 +299,87 @@ def build(policy):
     return as_of, body
 
 
+
+def build_sector(policy):
+    """板块层六环（同名不同义）。v1 只做 C2 份额、C6 涨跌与广度；其余如实不可读。"""
+    try:
+        with io.open(os.path.join(ROOT, "data", "sector_target.json"), encoding="utf-8") as fh:
+            sector = json.load(fh).get("name", "半导体")
+    except Exception:
+        sector = "半导体"
+    rings = [Ring("C1", "行业政策"), Ring("C2", "供给份额"), Ring("C3", "相对贵贱"),
+             Ring("C4", "杠杆与资金池"), Ring("C5", "主体行为"), Ring("C6", "结果")]
+
+    try:
+        with io.open(os.path.join(ROOT, "data", "c_reasons.json"), encoding="utf-8") as fh:
+            C_REASONS = json.load(fh)
+    except Exception:
+        C_REASONS = {}
+
+    def tag_of(iid):
+        t = tier_of(iid)
+        if t == "B":
+            return ""
+        reason = C_REASONS.get(iid) or "唯一可得来源，未对账"
+        return f"〔C 类·{reason[:16]}…〕"
+
+    # C1 行业政策：人工，v1 不做
+    rings[0].add("不可读（—）", "行业政策状态需人工录入官方文件链接", "该环无证据")
+    # C2 供给份额
+    v = val("SECTOR_SHARE")
+    p, prev_period = prev_value_from_revisions("SECTOR_SHARE", period("SECTOR_SHARE"))
+    if v is not None and p is not None:
+        word = "份额升" if v > p else ("份额降" if v < p else "不变")
+        rings[1].add(f"{word}（{period('SECTOR_SHARE')}）",
+                     f"{sector}板块成交额占比 {v:.2f}% 对比上一期 {p:.2f}%（{prev_period}）",
+                     "只说明成交份额，不说明资金流向量", tag_of("SECTOR_SHARE"))
+    elif v is not None:
+        rings[1].add("不可读（—）", f"份额已有 {v:.2f}%，但修订链无更早数据期、无证据可作前值（首次落盘）",
+                     "该环暂无法判方向")
+    else:
+        rings[1].add("不可读（—）", "板块成交额或全市场成交额缺失", "该环无证据")
+    # C3 相对贵贱：无板块估值源
+    rings[2].add("不可读（—）", "板块估值（PE/股息率）无免费源，需中证行业指数估值映射", "该环无证据")
+    # C4 默认空环
+    rings[3].add("不可读（—）", "板块层杠杆与资金池默认不读（ADR-025 口径）", "该环无证据")
+    # C5 主体行为：板块内龙虎榜/ETF 未加总
+    rings[4].add("不可读（—）", "板块内龙虎榜与 ETF 申赎未做成分映射加总", "该环无证据")
+    # C6 结果：涨跌幅 + 板块内广度
+    pct = val("SECTOR_PCT")
+    if pct is not None:
+        word = "升" if pct > 0 else ("降" if pct < 0 else "不变")
+        rings[5].add(f"{word}（{period('SECTOR_PCT')}）", f"{sector}板块指数涨跌幅 {pct:+.2f}%", "不说明板块内个股结构", tag_of("SECTOR_PCT"))
+    else:
+        rings[5].add("不可读（—）", "板块指数日线缺失", "该环无证据")
+    b = val("SECTOR_BREADTH")
+    if b is not None:
+        word = "强" if b > 50 else ("弱" if b < 50 else "不变")
+        rings[5].add(f"广度{word}（{period('SECTOR_BREADTH')}）", f"{sector}板块上涨家数占比 {b:.1f}%（阈值 50%）", "只说明广度，不说明幅度", tag_of("SECTOR_BREADTH"))
+
+    daily = [period(i) for i in ("SECTOR_PCT", "SECTOR_BREADTH", "SECTOR_AMT") if period(i)]
+    as_of = max(daily) if daily else "不可用"
+    for r_ in rings:
+        for k, ln in enumerate(r_.lines):
+            m = re.search(r"（(\d{4}-\d{2}-\d{2})）", ln)
+            if m and m.group(1) < as_of:
+                r_.lines[k] = ln + f"〔非最新：{m.group(1)}〕"
+    body = "\n".join("\n".join(r_.lines) for r_ in rings)
+    return as_of, body, sector
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--policy", choices=["traceable", "strict", "demo"], default="traceable")
+    ap.add_argument("--layer", choices=["market", "sector"], default="market")
     ap.add_argument("--write", action="store_true")
     a = ap.parse_args()
 
-    as_of, body = build(a.policy)
-    text = f"as-of {as_of}（最新交易日；数据期早于它的行已逐行标注「非最新」）\n{body}\n"
+    if a.layer == "sector":
+        as_of, body, sector = build_sector(a.policy)
+        head = f"as-of {as_of}（最新交易日；板块层 · 目标板块：{sector}）"
+    else:
+        as_of, body = build(a.policy)
+        head = f"as-of {as_of}（最新交易日；数据期早于它的行已逐行标注「非最新」）"
+    text = f"{head}\n{body}\n"
 
     missing = sorted({json.load(io.open(f, encoding="utf-8"))["indicator_id"]
                       for f in glob.glob(os.path.join(FACTS, "*", "*.json"))})
@@ -312,7 +399,8 @@ def main():
 
     if a.write:
         os.makedirs(REPORTS, exist_ok=True)
-        p = os.path.join(REPORTS, f"{as_of}-state.md")
+        suffix = "market" if a.layer == "market" else f"sector-{sector}"
+        p = os.path.join(REPORTS, f"{as_of}-{suffix}-state.md")
         with io.open(p, "w", encoding="utf-8") as f:
             f.write("```\n" + text + "```\n" + meta)
         print("已写入:", os.path.relpath(p, ROOT))

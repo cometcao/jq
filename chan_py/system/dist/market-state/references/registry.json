@@ -335,6 +335,18 @@
     "frequency": "日",
     "comparable_from": null
   },
+  "MKT_MMF_SCALE": {
+    "name": "货币基金规模",
+    "layer": "市场",
+    "channel": "C4",
+    "subject": "公共池",
+    "attribute": "A4",
+    "transform": "T1",
+    "value_kind": "level",
+    "unit": "U1",
+    "frequency": "月",
+    "comparable_from": null
+  },
   "MKT_MARGIN_DEP": {
     "name": "证券客户保证金",
     "layer": "市场",
@@ -596,6 +608,42 @@
     "transform": "T1",
     "value_kind": "level",
     "unit": "U1",
+    "frequency": "日",
+    "comparable_from": null
+  },
+  "SECTOR_BREADTH": {
+    "name": "板块内上涨家数占比",
+    "layer": "板块",
+    "channel": "C6",
+    "subject": "公共池",
+    "attribute": "A5",
+    "transform": "T1",
+    "value_kind": "ratio",
+    "unit": "U2",
+    "frequency": "日",
+    "comparable_from": null
+  },
+  "SECTOR_PCT": {
+    "name": "板块涨跌幅",
+    "layer": "板块",
+    "channel": "C6",
+    "subject": "公共池",
+    "attribute": "A1",
+    "transform": "T2",
+    "value_kind": "return",
+    "unit": "U2",
+    "frequency": "日",
+    "comparable_from": null
+  },
+  "SECTOR_SHARE": {
+    "name": "板块成交额占全市场",
+    "layer": "板块",
+    "channel": "C2",
+    "subject": "公共池",
+    "attribute": "A5",
+    "transform": "T1",
+    "value_kind": "ratio",
+    "unit": "U2",
     "frequency": "日",
     "comparable_from": null
   },
