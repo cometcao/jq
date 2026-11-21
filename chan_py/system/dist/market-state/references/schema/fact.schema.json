@@ -243,6 +243,13 @@
         "ratified",
         "draft"
       ]
+    },
+    "verified_by": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "source_tier=B 时填官方核对链接（data/official/<id>.jsonl 里的 source_url）"
     }
   },
   "allOf": [

@@ -1,6 +1,6 @@
 # 取数层（akshare）
 
-> 版本 V2.43.0。定位：**C 类源**的免费取数层，服务于 `dist/market-state`。
+> 版本 V2.45.1。定位：**C 类源**的免费取数层，服务于 `dist/market-state`。
 > 规则依据：`docs/01_框架核心.md` 第十节（D03 分级、D04 缺失、第十节 2 的 stale 阈值）。
 
 ## 一句话
@@ -103,7 +103,7 @@ C6 参与度降（2026-11-20）｜依据：板块成交额 1985.20 亿 对比上
 
 末尾附**数据溯源表**（指标 → 官方源 → 官方页面 URL → 档位），可直接点开核对；对账通过后把值与链接写进 `data/official/<id>.json`，档位升 B，标注随之消失。
 
-## 存储与修订（D11，V2.43.0）
+## 存储与修订（D11，V2.45.1）
 
 | 路径 | 内容 | 规则 |
 |---|---|---|
@@ -119,7 +119,7 @@ C6 参与度降（2026-11-20）｜依据：板块成交额 1985.20 亿 对比上
 cat data/revisions/MKT_M2_YOY/2026-10-01.jsonl
 ```
 
-## as-of 规则（V2.43.0）
+## as-of 规则（V2.45.1）
 
 - 整页 `as-of` 取**最新交易日**（日频指标里最大的数据期），不再被月频环拖回一个月前；
 - **只标注不是最新数据的行**：数据期早于 as-of 的行尾追加 `〔非最新：YYYY-MM-DD〕`，其余行不标。
@@ -134,6 +134,38 @@ cat data/revisions/MKT_M2_YOY/2026-10-01.jsonl
 ```
 
 **未映射的板块，C3 如实写"不可读"**（不会拿别的板块顶替）。加一个新板块：找到它在官网的指数代码，加一行即可。
+
+## 比价记录（compare.py）
+
+```bash
+python scripts/compare.py --list                                  # 列出可比指标
+python scripts/compare.py --left MKT_M2_YOY --right MKT_M1_YOY --op difference
+python scripts/compare.py --left MKT_DR007 --right MKT_CGB10Y --op difference
+python scripts/compare.py --left MKT_TURNOVER --op percent_change  # 时间自比
+```
+
+**七锚不通过就不产出记录**（规则：不给"勉强可比"）。实测拦下三类：
+
+| 请求 | 拦在 | 提示 |
+|---|---|---|
+| 板块 ÷ 市场 | 层级锚 | 跨层不可比 |
+| 价格 ÷ 价格 | 属性锚 | price 不得做比值（ADR-001） |
+| 单一数据期做变化率 | 窗口锚 | 修订链只有 1 期，无法自比 |
+
+通过后写入 `data/compares/<compare_id>.json`（符合 `compare.schema.json`），记录里带**七锚逐条说明**与 `operand_order`。
+
+## 事件日历（events.py）
+
+```bash
+python scripts/events.py --days 30           # 表格
+python scripts/events.py --days 30 --json --write   # 写 data/events/calendar-<asof>.json
+```
+
+抓 **国家统计局「最新统计信息发布日程」**（官方表格，12 个月 × 发布内容），用"日/周几"反推年份后过滤未来 N 天。
+
+- 覆盖：CPI、PPI、PMI、工业效益、国民经济运行、投资、消费、房地产等 **11 项/30 天**（实测 2026-11-20）；
+- **不在本表**：央行 OMO/MLF、交易所公告、部委政策 → 标 `不可读`，不拿第三方日历补；
+- 反推年份匹配不上就跳过，**不猜日期**。
 
 ## 多板块观察（sector.py）
 

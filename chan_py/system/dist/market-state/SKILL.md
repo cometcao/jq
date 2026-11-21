@@ -5,7 +5,7 @@ description: Use when the user asks what the market or a sector looks like right
 
 # market-state · 市场状态
 
-> **规则版本 V2.43.0**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
+> **规则版本 V2.45.1**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
 
 把当前数据压缩成 **六环 + 证据行** 的客观状态描述。不做判断、不给建议、不预测、不解释涨跌原因。
 
@@ -35,6 +35,8 @@ description: Use when the user asks what the market or a sector looks like right
    **以落盘记录为准**；其 `data_period`、`source_tier`、`fallback_flag` 必须原样带进输出。
 2. **实时端点（次选）**：落盘里没有该指标时，才调用 MCP 实时端点取一次，并在元信息注明「未落盘」。
 3. **不可读（兜底）**：两者都取不到 → 该环写 `不可读`，注明缺什么；**不得用别的指标顶替**。
+
+**事件（`include_events=true` 时）**：优先运行 `python scripts/events.py --days 30` —— 它抓的是**国家统计局·最新统计信息发布日程**（官方、结构化，含日期与时间）。该源覆盖 CPI/PPI/GDP/PMI/工业/投资/消费等；**央行 OMO、交易所公告不在其中 → 标不可读**，不要用第三方日历补位。
 
 **必须遵守的三条标注规则**（详见 `references/data-layer.md`）：
 
