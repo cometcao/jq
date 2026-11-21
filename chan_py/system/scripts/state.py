@@ -113,6 +113,19 @@ def prev_value_from_revisions(iid, current_period):
     m = re.search(r"[-+]?\d+(?:\.\d+)?", str(best[1]))
     return (float(m.group(0)) if m else None), best[0]
 
+
+def normalize_dates(rings, as_of):
+    """与 as_of 相同的数据期不显示；不同的显示一次并标「非最新」。"""
+    for r_ in rings:
+        for k, ln in enumerate(r_.lines):
+            m = re.search(r"（(\d{4}-\d{2}-\d{2})）", ln)
+            if not m:
+                continue
+            d = m.group(1)
+            rep = "" if d == as_of else f"（{d}*）"
+            r_.lines[k] = ln[:m.start()] + rep + ln[m.end():]
+
+
 class Ring:
     def __init__(self, code, label):
         self.code, self.label, self.lines = code, label, []
@@ -290,11 +303,7 @@ def build(policy):
                                  "INST_BLOCK_AMT", "MKT_DIV_YIELD", "FX_CNY_MID")
              if period(i)]
     as_of = max(daily) if daily else "不可用"
-    for r_ in rings:
-        for k, ln in enumerate(r_.lines):
-            m = re.search(r"（(\d{4}-\d{2}-\d{2})）", ln)
-            if m and m.group(1) < as_of:
-                r_.lines[k] = ln + f"〔非最新：{m.group(1)}〕"
+    normalize_dates(rings, as_of)
     body = "\n".join(r_.lines for r_ in rings) if False else "\n".join("\n".join(r_.lines) for r_ in rings)
     return as_of, body
 
@@ -358,11 +367,7 @@ def build_sector(policy):
 
     daily = [period(i) for i in ("SECTOR_PCT", "SECTOR_BREADTH", "SECTOR_AMT") if period(i)]
     as_of = max(daily) if daily else "不可用"
-    for r_ in rings:
-        for k, ln in enumerate(r_.lines):
-            m = re.search(r"（(\d{4}-\d{2}-\d{2})）", ln)
-            if m and m.group(1) < as_of:
-                r_.lines[k] = ln + f"〔非最新：{m.group(1)}〕"
+    normalize_dates(rings, as_of)
     body = "\n".join("\n".join(r_.lines) for r_ in rings)
     return as_of, body, sector
 
@@ -375,14 +380,22 @@ def main():
 
     if a.layer == "sector":
         as_of, body, sector = build_sector(a.policy)
-        head = f"as-of {as_of}（最新交易日；板块层 · 目标板块：{sector}）"
+        head = f"as-of {as_of}（最新交易日；板块层 · 目标板块：{sector}；行内 * 表示数据期早于 as-of）"
     else:
         as_of, body = build(a.policy)
-        head = f"as-of {as_of}（最新交易日；数据期早于它的行已逐行标注「非最新」）"
+        head = f"as-of {as_of}（最新交易日；行内 * 表示该行数据期早于 as-of）"
     text = f"{head}\n{body}\n"
 
+    reg = {}
+    try:
+        with io.open(os.path.join(ROOT, "dist", "market-state", "references", "registry.json"), encoding="utf-8") as fh:
+            reg = json.load(fh)
+    except Exception:
+        pass
+    want = "板块" if a.layer == "sector" else "市场"
     missing = sorted({json.load(io.open(f, encoding="utf-8"))["indicator_id"]
-                      for f in glob.glob(os.path.join(FACTS, "*", "*.json"))})
+                      for f in glob.glob(os.path.join(FACTS, "*", "*.json"))
+                      if (reg.get(json.load(io.open(f, encoding="utf-8"))["indicator_id"], {}) or {}).get("layer", "市场") == want})
     meta = (f"\n元信息：\n- 证据条数：{len(missing)} 项事实记录\n"
             f"- 分级政策：{ {'strict':'strict（仅 B 类）','traceable':'traceable（B 可用；C 仅在该指标无 A/B 时使用并标注）','demo':'demo（C 类亦可，逐行标注）'}[a.policy] }\n"
             f"- B 类（已对账）指标：{[i for i in missing if tier_of(i)=='B'] or '无'}\n"
