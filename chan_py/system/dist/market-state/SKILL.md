@@ -5,7 +5,7 @@ description: Use when the user asks what the market or a sector looks like right
 
 # market-state · 市场状态
 
-> **规则版本 V2.27.0**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
+> **规则版本 V2.28.0**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
 
 把当前数据压缩成 **六环 + 证据行** 的客观状态描述。不做判断、不给建议、不预测、不解释涨跌原因。
 
@@ -15,6 +15,7 @@ description: Use when the user asks what the market or a sector looks like right
 
 | 文件 | 什么时候读 |
 |---|---|
+| `references/data-layer.md` | **每次都要**：落盘数据的目录、指标、档位、as-of 与标注规则 |
 | `references/framework.md` | 不确定某环放什么、为什么排这个位置时 |
 | `references/reading-rules.md` | **几乎每次都要**：生成状态词、判断能不能说、怎么写"边界" |
 | `references/anchors.md` | 涉及比价（比值 / 差值 / 排名 / 分位）时 |
@@ -25,6 +26,22 @@ description: Use when the user asks what the market or a sector looks like right
 | `references/examples/` | 需要照格式写时（含真实数据样例 `render-01.md`：带覆盖条的真实输出） |
 | `check.py` | 输出前自检（记录与页面两种模式） |
 
+
+## 数据来源（严格按此顺序，不得跳级）
+
+1. **落盘事实（首选）**：工作区若有 `data/facts/`，先取其记录——
+   - 最省事：`python scripts/state.py --policy traceable`（会直接产出六环证据行 + 溯源表）；
+   - 或直接读 `data/facts/<数据期>/<indicator_id>.json`（字段见 `references/schema/fact.schema.json`）。
+   **以落盘记录为准**；其 `data_period`、`source_tier`、`fallback_flag` 必须原样带进输出。
+2. **实时端点（次选）**：落盘里没有该指标时，才调用 MCP 实时端点取一次，并在元信息注明「未落盘」。
+3. **不可读（兜底）**：两者都取不到 → 该环写 `不可读`，注明缺什么；**不得用别的指标顶替**。
+
+**必须遵守的三条标注规则**（详见 `references/data-layer.md`）：
+
+- **档位**：`B` 行不标注；`C` 行必须带 `〔C 类·<理由>…〕`（理由取 `data/c_reasons.json`，未登记用"唯一可得来源，未对账"）；同一指标已有 A/B 时不得用 C。
+- **as-of**：取**最新交易日**（日频里最大的数据期），只给数据期更早的行加 `〔非最新：YYYY-MM-DD〕`。
+- **修订**：同一（指标, 数据期）改过值时，`data/revisions/<指标>/<数据期>.jsonl` 里能查到历史；报告不必展示，但被问"这个数改过吗"必须能回答。
+
 ## 输入参数
 
 | 参数 | 必填 | 默认 | 说明 |
@@ -32,7 +49,7 @@ description: Use when the user asks what the market or a sector looks like right
 | layer | 是 | — | `market`（市场层）/ `sector`（板块层） |
 | scope | 否 | 该层全部 | 板块 id 或标的范围 |
 | rings | 否 | C1–C6 | 六环子集，仍按 C1→C6 输出 |
-| as_of | 否 | 最新可得 | 最终页首 as-of 仍取最慢环 |
+| as_of | 否 | 最新交易日 | 页首 as-of = 最新交易日；更早的行逐行标「非最新」 |
 | window | 否 | 见 anchors.md | 只影响比价环节 |
 | include_events | 否 | false | `true` 时附事件段（日历 + 可选分支）；需官方日历或用户给日期 |
 
@@ -41,7 +58,7 @@ description: Use when the user asks what the market or a sector looks like right
 ## 八步流程（不得跳步）
 
 1. **判层与标的**：确定 market / sector 与具体范围；板块须有成分表版本（R1）。
-2. **六环取数**：按 C1→C6（→ 背景）逐环落证据；每环要么至少一条已落地事实，要么标 `不可读`。
+2. **六环取数**：按上节「数据来源」优先级取数（落盘 → 实时端点 → 不可读），C1→C6 逐环落证据；每环要么至少一条已落地事实，要么标 `不可读`。
 3. **生成状态词**：只判方向，不设幅度阈值（唯一例外：广度用上涨家数占比 50%）；词表见 `reading-rules.md`。
 4. **需要时做比价**：比值 / 差值 / 排名 / 分位必须先过七锚（`anchors.md`）；不通过就不出该比价。
 5. **需要时做事件**（`include_events=true`）：按 `events.md` 出日历 + 可选分支；确定性不满足的只列"未确认线索"；**事件层不参与 as-of**，另标 `horizon=30d`。
@@ -52,7 +69,7 @@ description: Use when the user asks what the market or a sector looks like right
 ## 输出格式
 
 ```
-as-of <最慢环的数据期>（<哪个环>）
+as-of <最新交易日>（数据期早于它的行已标注「非最新」）
 C1 <状态词>（<数据期>）｜依据：<字段 = 数值 + 比较>｜边界：<不说明…>
 C2 …
 C6 <状态词>（<数据期>）｜依据：…｜边界：…
