@@ -1,0 +1,3 @@
+- insert:
+    - id: market-state
+      name: '@local/dsh-market-state'

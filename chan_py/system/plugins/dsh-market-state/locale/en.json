@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Market state",
+    "description": "Shows the six rings (C1–C6) of the newest market-state report below the composer, switches between the market and sector layers, and rebuilds the reports with scripts/state.py on Refresh.",
+    "detail": "docs/DETAIL.md"
+  }
+}

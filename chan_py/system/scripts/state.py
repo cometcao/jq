@@ -375,6 +375,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--policy", choices=["traceable", "strict", "demo"], default="traceable")
     ap.add_argument("--layer", choices=["market", "sector"], default="market")
+    ap.add_argument("--json", action="store_true", help="输出机器可读 JSON")
     ap.add_argument("--write", action="store_true")
     a = ap.parse_args()
 
@@ -408,6 +409,32 @@ def main():
         lines.append(f"| {iid} | {pr.get('official_source') or '—'} | {hosts} | "
                      f"{'是' if pr.get('direct_official') else '否'} | {tier_of(iid)} |")
     out = text + meta + "\n".join(lines) + "\n"
+
+    if a.json:
+        recs = []
+        for ln in body.splitlines():
+            m = re.match(r"^(C[1-6]) (\S+?)(（(\d{4}-\d{2}-\d{2})\*?）)?｜依据：(.+?)｜边界：(.+)$", ln)
+            if not m:
+                continue
+            ring, state, _, period_, evidence, boundary = m.groups()
+            tags = re.findall(r"〔([^〕]+)〕", boundary)
+            boundary = re.sub(r"〔[^〕]+〕", "", boundary).strip()
+            recs.append({"ring": ring, "state": state, "period": period_,
+                         "evidence": evidence, "boundary": boundary, "tags": tags,
+                         "raw": ln})
+        payload = {"layer": a.layer, "as_of": as_of, "lines": recs,
+                   "b_indicators": [i for i in missing if tier_of(i) == "B"],
+                   "policy": a.policy,
+                   "generated_at": dt.datetime.now().isoformat(timespec="seconds")}
+        if a.write:
+            os.makedirs(REPORTS, exist_ok=True)
+            fp = os.path.join(REPORTS, f"state-{a.layer}.json")
+            with io.open(fp, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh, ensure_ascii=False, indent=2)
+            print("已写入:", os.path.relpath(fp, ROOT))
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+
     print(out)
 
     if a.write:

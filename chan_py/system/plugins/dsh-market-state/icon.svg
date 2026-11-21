@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36" role="img" aria-label="Market state: six rings">
+  <rect x="1" y="1" width="34" height="34" rx="8" fill="#0f2a3d"/>
+  <circle cx="18" cy="7.6" r="2.7" fill="#3f9ae0"/>
+  <circle cx="25.8" cy="12.1" r="2.7" fill="#54b48c"/>
+  <circle cx="25.8" cy="23.9" r="2.7" fill="#c9a227"/>
+  <circle cx="18" cy="28.4" r="2.7" fill="#d9773f"/>
+  <circle cx="10.2" cy="23.9" r="2.7" fill="#a463c4"/>
+  <circle cx="10.2" cy="12.1" r="2.7" fill="#7d8794"/>
+  <circle cx="18" cy="18" r="2.2" fill="#e8eef5"/>
+</svg>

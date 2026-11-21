@@ -1,0 +1,29 @@
+{
+  "name": "@local/dsh-market-state",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shows the six-ring market state parsed from reports/*-state.md below the composer, with a one-click rebuild.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "docs",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": ["@deepseek-ai/dsh-client-ui-conversation"]
+    }
+  }
+}

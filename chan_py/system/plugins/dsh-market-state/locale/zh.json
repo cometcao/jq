@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "市场状态",
+    "description": "在输入框下方显示最新市场状态报告的六环（C1–C6），可在市场层与板块层之间切换，点「刷新」会用 scripts/state.py 重建报告。",
+    "detail": "docs/DETAIL.md"
+  }
+}

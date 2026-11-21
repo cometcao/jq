@@ -2,6 +2,35 @@
 
 本文件是唯一的变更记录来源。正文各文件版头只留一行指向本文件，不再内嵌变更日志。
 
+## V2.38.0（2026-11-21）· 插件残留彻底清除（含 junction 陷阱）
+
+用户："先看看 plugin 能不能安全的全部清除。"
+
+1. **先判性质，再动手**：在 profile 侧 `node_modules/@local/dsh-market-state` 建探针文件，结果它**出现在工作区**——证明那是 **junction（目录链接）**，不是独立副本。**若直接 `rmtree` 会把工作区 7 个源码文件全删掉。**
+2. **正确删法**：`os.lstat` 看到重解析点（attrs `0x410`）→ `os.rmdir(junction)` **只移除链接**，不进入目标；随后清掉空的 `node_modules/@local`。
+3. **清除后核验**（全部通过）：`dsh.profile.bundles` 无该包；`package.json` 依赖无；`pnpm-lock.yaml` 无；`node_modules/@local` 不存在；`GET /dsh-market-state/state` → **404**；工作区源码 **7 个文件完好**。
+4. 工作区 `plugins/dsh-market-state/` 保留为实验参考（未安装、不加载）。
+5. 交付形态维持：**Skill + scripts + data**，无插件。
+
+## V2.37.0（2026-11-21）· 卸载插件实验，关闭 HTTP 路由
+
+用户判断：Skill 已够用；插件把"集成过程"做成了"另开数据通道"，且绕过了 GUI 鉴权，所以撤掉。
+
+1. **卸载 bundle**：`plugin_manager remove_bundle` → `application: applied`，profile 的 `dsh.profile.bundles` 中已移除。
+2. **HTTP 路由已关闭**：`GET /dsh-market-state/state` → **404**（实测）。
+3. **源码保留**：`plugins/dsh-market-state/` 冻结为实验参考（未安装、不加载），README 已标注。
+4. **残留**：profile `node_modules/@local/dsh-market-state` 目录仍在（pnpm 链接残留），不在 bundles 列表、不会被加载；因疑似与工作区硬链接同源，未强行删除以免误删工作区文件。
+5. **结论**：当前交付形态 = **Skill（规则）+ scripts/（抓数与状态生成）+ data/（事实与修订）**，无需插件。
+
+## V2.36.0（2026-11-21）· DSH 插件 v1（市场状态面板）
+
+1. **新增 bundle `plugins/dsh-market-state/`**（8 个文件，按 dsh-doc 规范）：Host 侧解析 `reports/*-state.md` 并注册路由 `/dsh-market-state/state`；Client 侧向 slot `conversation.composer.dock` 注册面板（市场/板块切换、六环标签、点环展开依据与边界、刷新按钮）。
+2. **安装结果**：`plugin_manager install_bundle` → `application: applied`，`warnings: []`，已写入 profile 的 `dsh.profile.bundles` 与 node_modules。
+3. **实测**：GET 路由返回 13 条市场 + 7 条板块证据行（HTTP 200）；POST 触发重建，两层 `ok:true / code:0`，报告字节级不变。
+4. **附带能力**：`scripts/state.py --json --write` 导出 `reports/state-market.json` / `state-sector.json`，供面板与后续工具消费（不必解析 Markdown）。
+5. **已知问题（待修）**：`/dsh-market-state/state` **未鉴权**——本机任何进程都能读状态、触发重建；建议加同源校验或一次性令牌。
+6. **未验证**：浏览器中面板的实际渲染（GUI 需登录 cookie，且客户端插件包可能需重启 `dsh web` 后才会重新打包）。
+
 ## V2.35.0（2026-11-21）· 「非最新」标记简化为 `*`
 
 用户：标记 `*` 就好了。

@@ -1,6 +1,6 @@
 # 取数层（akshare）
 
-> 版本 V2.35.0。定位：**C 类源**的免费取数层，服务于 `dist/market-state`。
+> 版本 V2.38.0。定位：**C 类源**的免费取数层，服务于 `dist/market-state`。
 > 规则依据：`docs/01_框架核心.md` 第十节（D03 分级、D04 缺失、第十节 2 的 stale 阈值）。
 
 ## 一句话
@@ -103,7 +103,7 @@ C6 参与度降（2026-11-20）｜依据：板块成交额 1985.20 亿 对比上
 
 末尾附**数据溯源表**（指标 → 官方源 → 官方页面 URL → 档位），可直接点开核对；对账通过后把值与链接写进 `data/official/<id>.json`，档位升 B，标注随之消失。
 
-## 存储与修订（D11，V2.35.0）
+## 存储与修订（D11，V2.38.0）
 
 | 路径 | 内容 | 规则 |
 |---|---|---|
@@ -119,11 +119,28 @@ C6 参与度降（2026-11-20）｜依据：板块成交额 1985.20 亿 对比上
 cat data/revisions/MKT_M2_YOY/2026-10-01.jsonl
 ```
 
-## as-of 规则（V2.35.0）
+## as-of 规则（V2.38.0）
 
 - 整页 `as-of` 取**最新交易日**（日频指标里最大的数据期），不再被月频环拖回一个月前；
 - **只标注不是最新数据的行**：数据期早于 as-of 的行尾追加 `〔非最新：YYYY-MM-DD〕`，其余行不标。
 - 无日期列的快照类接口（龙虎榜、板块集中度）用指数日线的数据期作"最近交易日"，避免周末被标成当天。
+
+## 机器可读输出（--json）
+
+```bash
+python scripts/state.py --layer market --json --write   # 写 reports/state-market.json
+python scripts/state.py --layer sector --json --write   # 写 reports/state-sector.json
+```
+
+供插件/面板消费，不必解析 Markdown：
+
+```json
+{ "layer": "market", "as_of": "2026-11-20", "generated_at": "...",
+  "policy": "traceable", "b_indicators": ["MKT_DR007", "FX_CNY_MID", "MKT_DIV_YIELD"],
+  "lines": [ { "ring": "C4", "state": "去杠杆", "period": null,
+               "evidence": "融资余额 21927.30 亿 对比上一期 22082.48 亿",
+               "boundary": "不说明是新资金", "tags": ["C 类·…"], "raw": "整行原文" } ] }
+```
 
 ## 三道保护
 
