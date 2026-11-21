@@ -1,6 +1,6 @@
 # 取数层（akshare）
 
-> 版本 V2.53.0。定位：**C 类源**的免费取数层，服务于 `dist/market-state`。
+> 版本 V2.57.1。定位：**C 类源**的免费取数层，服务于 `dist/market-state`。
 > 规则依据：`docs/01_框架核心.md` 第十节（D03 分级、D04 缺失、第十节 2 的 stale 阈值）。
 
 ## 一句话
@@ -103,7 +103,7 @@ C6 参与度降（2026-11-20）｜依据：板块成交额 1985.20 亿 对比上
 
 末尾附**数据溯源表**（指标 → 官方源 → 官方页面 URL → 档位），可直接点开核对；对账通过后把值与链接写进 `data/official/<id>.json`，档位升 B，标注随之消失。
 
-## 存储与修订（D11，V2.53.0）
+## 存储与修订（D11，V2.57.1）
 
 | 路径 | 内容 | 规则 |
 |---|---|---|
@@ -119,7 +119,7 @@ C6 参与度降（2026-11-20）｜依据：板块成交额 1985.20 亿 对比上
 cat data/revisions/MKT_M2_YOY/2026-10-01.jsonl
 ```
 
-## as-of 规则（V2.53.0）
+## as-of 规则（V2.57.1）
 
 - 整页 `as-of` 取**最新交易日**（日频指标里最大的数据期），不再被月频环拖回一个月前；
 - **只标注不是最新数据的行**：数据期早于 as-of 的行尾追加 `〔非最新：YYYY-MM-DD〕`，其余行不标。
@@ -135,7 +135,7 @@ cat data/revisions/MKT_M2_YOY/2026-10-01.jsonl
 
 **未映射的板块，C3 如实写"不可读"**（不会拿别的板块顶替）。加一个新板块：找到它在官网的指数代码，加一行即可。
 
-## 市场层默认比价段（V2.53.0）
+## 市场层默认比价段（V2.57.1）
 
 `state.py --layer market` 在六环之后**默认追加两行比价**（走 `compare.py` 的七锚 + schema，并落 `data/compares/`）：
 
@@ -174,7 +174,7 @@ python scripts/sync.py --days 14
 **每次运行自动补最近缺少的数据**：`fetch.py`（快照，6h 缓存内不重复请求）→ `history.py`（**增量合并**，只补缺的期，不重写）→ `events.py` → `state.py` 两层。
 某一步失败不阻断后续（落盘数据仍可用），末尾打印 `完成 N/M 步`。
 
-**stale 按交易日计**（V2.53.0）：`fetch.py` 与 `check.py` 统一用"交易日差 ÷ 频率天数"，周末与节假日不再把 stale 惩罚放大（此前周一会把周五数据误判为 stale）。
+**stale 按交易日计**（V2.57.1）：`fetch.py` 与 `check.py` 统一用"交易日差 ÷ 频率天数"，周末与节假日不再把 stale 惩罚放大（此前周一会把周五数据误判为 stale）。
 
 ## 历史序列（history.py）
 
@@ -195,31 +195,37 @@ python scripts/history.py --rings C1,C2,C3,C4,C5,C6
 
 C6 用的是**沪指+深成指成交额合计**（比全市场窄），实测与官方两市成交额 14222 亿吻合，但口径仍需声明。
 
+## 事件段默认附在状态页（V2.57.1）
+
+`sync.py` 跑完事件抓取后，`state.py --layer market` **默认把事件段拼进状态页**（`--no-events` 可关）：
+
+```
+—— 事件（horizon=30d，不参与 as-of）——
+未来预定 11 项：…
+已发生 12 项（近 30 天）：…
+```
+
+数据来自 `data/events/calendar-<as_of>.json`，**不重复抓取**。
+
 ## 事件日历（events.py）
 
 ```bash
-python scripts/events.py --days 30           # 表格
+python scripts/events.py --days 30              # 表格
 python scripts/events.py --days 30 --json --write   # 写 data/events/calendar-<asof>.json
 ```
 
-抓 **国家统计局「最新统计信息发布日程」**（官方表格，12 个月 × 发布内容），用"日/周几"反推年份后过滤未来 N 天。
+**多源，按"事件状态"分两类**：
 
-- 覆盖：CPI、PPI、PMI、工业效益、国民经济运行、投资、消费、房地产等 **11 项/30 天**（实测 2026-11-20）；
-- **不在本表**：央行 OMO/MLF、交易所公告、部委政策 → 标 `不可读`，不拿第三方日历补；
-- 反推年份匹配不上就跳过，**不猜日期**。
+| 源 | 状态 | 内容 | 实测 |
+|---|---|---|---|
+| 国家统计局·发布日程 | **未来预定** | CPI/PPI/PMI/GDP/工业/投资/消费等 | 11 项/30 天 |
+| 中国人民银行·新闻发布 | **已发生** | 政策公告、会议、例会、数据报告 | 12 项/30 天 |
+| 中国证监会·要闻 | 已发生 | — | **不可抓**：列表页由 JS 渲染，静态 HTML 只到 2021 年（标 `not_crawlable`） |
 
-## 事件分支（scenario）
-
-分支**不写进事实记录**（事实域封闭），而是独立记录，走 `scenario.schema.json`：
-
-```bash
-# 分支记录落在 data/events/scenario-<event>.json，用 check.py 校验
-python dist/market-state/check.py --as-of 2026-11-22 data/events/scenario-cpi-20261209.json
-```
-
-必填：`possible_outcomes`（≥2 支，每支可机械比对的 `observable_flag` + 只列 id 的 `affected_indicators`）、`branch_ordering_applicable`、`no_prediction_statement`。
-
-**前值不可得时**：`branch_ordering_applicable=false`，写"排序不适用：前值不可得"——不猜。
+- **未来预定只认官方日程**（新闻不能倒推成未来）；已发生用 `event_status=已发生` 标注；
+- 新闻按标题关键词归类：含"会议/例会/座谈/峰会"→ `政策会议`；含"数据/统计/运行情况"→ `数据发布`；其余 `其他`；
+- **无官方链接的一律不入**；
+- 反推年份匹配不上就跳过，不猜。
 
 ## 多板块观察（sector.py）
 

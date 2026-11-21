@@ -5,7 +5,7 @@ description: Use when the user asks what the market or a sector looks like right
 
 # market-state · 市场状态
 
-> **规则版本 V2.53.0**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
+> **规则版本 V2.57.1**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
 
 把当前数据压缩成 **六环 + 证据行** 的客观状态描述。不做判断、不给建议、不预测、不解释涨跌原因。
 
@@ -94,6 +94,19 @@ description: Use when the user asks what the market or a sector looks like right
 ```
 
 **跨层比值不进市场层**（板块 ÷ 市场会被层级锚拦下）；板块层相对估值归板块页。
+
+## 事件段默认拼进状态页
+
+`scripts/sync.py` 已抓事件；`state.py --layer market` **默认附事件段**（`--no-events` 关闭），来源 `data/events/calendar-<as_of>.json`：
+未来预定（官方日程）+ 已发生（官方新闻），标 `horizon`，不参与 as-of。
+
+## 事件影响环图（`include_events=true` 时默认出）
+
+**一行环 + 分支圆点**：`C1 C2 [C3 价格 ●○] C4 C5 C6 [背景 ●○◌]`
+
+- 环格蓝底 = 受影响；灰字 = 不受影响；
+- **●红点=升支影响、○白点=降支影响、◌虚线=不变支影响**（圆点表示"哪支分支触及"，**不表示环会涨跌**）；
+- 必须绑 `scenario` 记录与日历来源，写明"排序不适用"或依据，标 `horizon`；矩阵形态只在用户要"查组合"时出。
 
 ## 输出格式
 
