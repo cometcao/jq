@@ -5,7 +5,7 @@ description: Use when the user asks what the market or a sector looks like right
 
 # market-state · 市场状态
 
-> **规则版本 V2.47.0**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
+> **规则版本 V2.51.0**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
 
 把当前数据压缩成 **六环 + 证据行** 的客观状态描述。不做判断、不给建议、不预测、不解释涨跌原因。
 
@@ -29,6 +29,7 @@ description: Use when the user asks what the market or a sector looks like right
 
 ## 数据来源（严格按此顺序，不得跳级）
 
+0. **先同步一次（默认动作）**：`python scripts/sync.py` —— 抓最新快照 → 历史序列增量 → 官方事件日程 → 两层状态。它幂等、约 30 秒、失败不阻断；**数据新鲜时也应跑**（缓存会命中，通常几秒）。
 1. **落盘事实（首选）**：工作区若有 `data/facts/`，先取其记录——
    - 最省事：`python scripts/state.py --policy traceable`（会直接产出六环证据行 + 溯源表）；
    - 或直接读 `data/facts/<数据期>/<indicator_id>.json`（字段见 `references/schema/fact.schema.json`）。
@@ -67,6 +68,20 @@ description: Use when the user asks what the market or a sector looks like right
 6. **标注空环与时效**：空环保留环名 + 缺什么；`stale` 按 2×/3× 阈值判。
 7. **输出**：证据行 + 事件段（如启用）+ 元信息 + 固定尾句（格式见下）。
 8. **自检**：`python check.py --page <你的输出.md>`；有错就改，不"先输出再提醒"。
+
+## 事件分支（scenario）怎么呈现
+
+**分支不进事实记录**：事实域封闭（ADR-022），未来事件不是数值。分支是独立记录 `scenario.schema.json`，与状态页**分开呈现**：
+
+| 字段 | 呈现要求 |
+|---|---|
+| `event_summary` | 事件名 + 官方发布日（来自 `scripts/events.py` 的日程） |
+| `possible_outcomes` | **≥2 支**，每支给 `outcome_label` + `observable_flag`（必须**可机械比对**，如"公布值 > 前值"）+ 标志来源 + `affected_indicators`（**只列 id，不写方向**） |
+| `branch_ordering` | 有前值才排序；前值不可得 → `branch_ordering_applicable=false`，写"排序不适用：前值不可得" |
+| `no_prediction_statement` | 固定声明：不预测哪支会发生、不给概率、不排序可能性、不判断方向 |
+| 位置 | 事件段附在状态页之后，**另标 horizon**，不参与 as-of |
+
+示例见 `data/events/scenario-cpi-20261209.json`（12-09 CPI，三支枚举，前值不可得所以排序不适用）。
 
 ## 输出格式
 
