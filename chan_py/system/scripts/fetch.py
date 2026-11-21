@@ -163,6 +163,23 @@ def find_col(df, *kw):
 
 
 
+
+MANUAL_DIR = os.path.join(ROOT, "data", "manual")
+
+
+def read_manual(iid):
+    """读 data/manual/<id>.json（人工录入）；未填 value 视为没录入。"""
+    c = read_json(os.path.join(MANUAL_DIR, iid + ".json"))
+    if not c or not str(c.get("value") or "").strip():
+        return None
+    return c
+
+def _sector_target():
+    """当前板块目标（默认半导体）；改 data/sector_target.json 即可换。"""
+    c = read_json(os.path.join(ROOT, "data", "sector_target.json"), {}) or {}
+    return c.get("name", "半导体")
+
+
 def _latest_trade_day():
     """用指数日线的数据期作为最近交易日；没有就退回今天（避免周末把快照标成当天）。"""
     c = read_json(os.path.join(CACHE_DIR, "IDX_DAILY.json"))
@@ -265,7 +282,7 @@ def p_margin(df):
            {"data_period": norm_period(r["日期"])}
 
 
-def p_sector_amt(df):
+def p_sector_amt_old(df):
     r = df.sort_values("日期").iloc[-1]
     return {"指标": "半导体板块成交额", "值": f"{float(r['成交额']) / 1e8:.2f} 亿元", "对比": ""}, \
            {"data_period": norm_period(r["日期"])}
@@ -370,6 +387,29 @@ def p_sector_conc(df):
              "对比": f"Top5 {top5:.0f} / 全部 {tot:.0f} 亿（N={len(vals)} 板块）"},
             {"data_period": norm_period(_latest_trade_day())})
 
+
+def p_turnover(df):
+    col = find_col(df, "总成交额")
+    total = float(pd.to_numeric(df[col], errors="coerce").dropna().sum())
+    return ({"指标": "全市场成交额（板块汇总）", "值": f"{total:.2f} 亿元", "对比": f"{len(df)} 个行业板块加总"},
+            {"data_period": norm_period(_latest_trade_day())})
+
+
+def p_sector_amt(df, sector=None):
+    """单板块成交额；板块名由 data/sector_target.json 决定，不写死。"""
+    name = sector or _sector_target()
+    r = df.sort_values("日期").iloc[-1]
+    return ({"指标": f"{name}板块成交额", "值": f"{float(r['成交额']) / 1e8:.2f} 亿元", "对比": ""},
+            {"data_period": norm_period(r["日期"])})
+
+
+def p_margin_collateral(df):
+    d = df.dropna(subset=["担保物总价值"]).sort_values("日期")
+    r = d.iloc[-1]
+    return ({"指标": "两融担保物总价值", "值": f'{float(r["担保物总价值"]) / 1e4:.2f} 万亿',
+             "对比": f'平均维持担保比例 {float(r.get("平均维持担保比例") or 0):.1f}%'},
+            {"data_period": norm_period(r["日期"])})
+
 # ---------------------------------------------------------------- 指标声明
 SPECS = [
     dict(id="POL_LPR", channel="C1", subject="政策", freq="不定期", value_kind="level", layer="市场", tier_default="C",
@@ -453,6 +493,22 @@ SPECS = [
          providers=[("akshare/ths", ["stock_board_industry_summary_ths"], p_sector_conc)],
          official_source="同花顺行业板块一览（交易所行情聚合，快照）", official_url="https://q.10jqka.com.cn/thshy/",
          proves="成交额在各行业板块之间的集中程度（须声明 Top-N）", does_not_prove="不说明资金去向与轮动方向"),
+    dict(id="MKT_TURNOVER", channel="C6", subject="公共池", freq="日", value_kind="level", layer="市场", tier_default="C",
+         providers=[("akshare/ths", ["stock_board_industry_summary_ths"], p_turnover)],
+         official_source="同花顺行业板块一览加总（交易所行情）", official_url="https://q.10jqka.com.cn/thshy/",
+         proves="全市场当日成交额（板块加总口径）", does_not_prove="不说明资金方向"),
+    dict(id="MKT_MARGIN_COLLATERAL", channel="C4", subject="散户", freq="日", value_kind="level", layer="市场", tier_default="C",
+         providers=[("akshare/exchange", ["stock_margin_account_info"], p_margin_collateral)],
+         official_source="交易所两融汇总·担保物总价值", official_url="http://www.sse.com.cn/market/othersdata/margin/sum/",
+         proves="两融账户抵押品（现金+证券）总量", does_not_prove="不等于场内现金池"),
+    dict(id="MKT_MARGIN_DEP", channel="C4", subject="公共池", freq="月", value_kind="level", layer="市场", tier_default="C",
+         manual=True, providers=[],
+         official_source="投保基金·证券市场交易结算资金余额（人工月度）", official_url="http://www.sipf.com.cn/",
+         proves="场内现金池（客户结算资金）", does_not_prove="不等于杠杆，也不等于成交额"),
+    dict(id="MKT_NORTH_AMT", channel="C5", subject="外部", freq="日", value_kind="level", layer="市场", tier_default="C",
+         manual=True, providers=[],
+         official_source="北向盘后成交总额（官方 2024-08 起停止日度披露）", official_url="http://www.sse.com.cn/",
+         proves="外部资金成交规模", does_not_prove="无净额、无买卖拆分"),
 ]
 
 SPEC_MAP = {s["id"]: s for s in SPECS}
@@ -475,7 +531,7 @@ def call_kwargs(spec, as_of):
     if spec["id"] == "MKT_CGB10Y":
         return {"start_date": "20260101"}
     if spec["id"] == "SECTOR_AMT":
-        return {"symbol": "半导体", "start_date": "20260901", "end_date": _ymd(as_of)}
+        return {"symbol": _sector_target(), "start_date": "20260901", "end_date": _ymd(as_of)}
     if spec["id"] == "INST_BLOCK_AMT":
         return {}                     # 市场统计：返回全历史
     if spec["id"] in ("INST_LHB_NET", "INST_BLOCK_PREM"):
@@ -488,6 +544,19 @@ def call_kwargs(spec, as_of):
 
 
 def fetch_one(spec, args, as_of):
+    if spec.get("manual"):
+        m = read_manual(spec["id"])
+        if not m:
+            return {"indicator_id": spec["id"], "source": None,
+                    "errors": ["人工录入未填（data/manual/）"], "missing_type": "not_available",
+                    "fetched_at": dt.datetime.now().isoformat(timespec="seconds")}
+        return {"indicator_id": spec["id"], "source": "manual", "function": None,
+                "current_state": {"指标": spec["official_source"].split("·")[0], "数值": f"{m['value']}",
+                                  "数据所属期": m.get("data_period", "")},
+                "data_period": m.get("data_period", ""), "release_date": m.get("data_period", ""),
+                "fetched_at": dt.datetime.now().isoformat(timespec="seconds"),
+                "fallback_flag": False, "fallback_path": None, "rows": 1,
+                "official_source": spec.get("official_source"), "official_url": spec.get("official_url")}
     if not args.no_cache:
         cached = read_json(os.path.join(CACHE_DIR, spec["id"] + ".json"))
         if cached and cached.get("fetched_at"):

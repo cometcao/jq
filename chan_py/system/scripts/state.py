@@ -90,6 +90,29 @@ RING_IDS = {
     "C6": ["SECTOR_AMT"],
 }
 
+
+def prev_value_from_revisions(iid, current_period):
+    """从 data/revisions/<iid>/*.jsonl 里找数据期早于 current_period 的最近一条值。"""
+    d = os.path.join(ROOT, "data", "revisions", iid)
+    if not os.path.isdir(d):
+        return None, None
+    best = None
+    for fp in glob.glob(os.path.join(d, "*.jsonl")):
+        per = os.path.basename(fp)[:-6]
+        if per >= current_period:
+            continue
+        if best is None or per > best[0]:
+            rows = [l for l in io.open(fp, encoding="utf-8").read().splitlines() if l.strip()]
+            if rows:
+                try:
+                    best = (per, json.loads(rows[-1]).get("value"))
+                except Exception:
+                    pass
+    if best is None:
+        return None, None
+    m = re.search(r"[-+]?\d+(?:\.\d+)?", str(best[1]))
+    return (float(m.group(0)) if m else None), best[0]
+
 class Ring:
     def __init__(self, code, label):
         self.code, self.label, self.lines = code, label, []
@@ -164,7 +187,19 @@ def build(policy):
         rings[3].add(f"{word}（{period('MKT_MARGIN_BAL')}）", f"融资余额 {v:.2f} 亿 对比上一期 {p:.2f} 亿", "不说明是新资金", tag)
     else:
         rings[3].add("不可读（—）", "两融记录缺失，或来源为 C 类、无源可支撑状态词", "该环无可用证据")
-    rings[3].add("现金池不可读（—）", "客户保证金无公开日度来源", "该环无证据")
+    col = val("MKT_MARGIN_COLLATERAL")
+    ok, tag = allow("MKT_MARGIN_DEP")
+    dep = val("MKT_MARGIN_DEP")
+    if ok and dep is not None:
+        ev = f"客户保证金（交易结算资金余额）{dep:.2f} 亿"
+        if col is not None:
+            ev += f"；两融担保物总价值 {col:.2f} 万亿"
+        rings[3].add(f"现金池（{period('MKT_MARGIN_DEP')}）", ev, "月频人工录入；不等于杠杆，也不等于成交额", tag)
+    else:
+        ev = "客户保证金需人工录入投保基金月度表（data/manual/MKT_MARGIN_DEP.json），当前未填"
+        if col is not None:
+            ev += f"；已有两融担保物总价值 {col:.2f} 万亿（含证券，不等于现金池）"
+        rings[3].add("现金池不可读（—）", ev, "该环无证据")
 
     # C5 窄口径替代 + 机构/外部空环
     ok, tag = allow("RTL_MARGIN_INVESTORS")
@@ -186,16 +221,34 @@ def build(policy):
         rings[4].add(f"{word}（{period('INST_LHB_NET')}）", ev, "仅覆盖上榜与大宗，不代表全部机构行为", tag)
     else:
         rings[4].add("机构不可读（—）", "龙虎榜与大宗均未取到", "该环无证据")
-    rings[4].add("外部不可读（—）", "北向日度已停披露，季度持股未接入", "该环无证据")
+    ok, tag = allow("MKT_NORTH_AMT")
+    north = val("MKT_NORTH_AMT")
+    if ok and north is not None:
+        rings[4].add(f"外部（{period('MKT_NORTH_AMT')}）", f"北向盘后成交总额 {north:.2f} 亿", "无净额、无买卖拆分", tag)
+    else:
+        rings[4].add("外部不可读（—）",
+                     "北向官方自 2024-08 起停止日度披露（净买额与持股均为空）；替代需海外中国 ETF 规模源，列入插件期",
+                     "该环无证据")
 
-    # C6 参与度（板块成交额）+ 广度/结构空环
-    ok, tag = allow("SECTOR_AMT")
-    v, p = val("SECTOR_AMT"), val("SECTOR_AMT", "prev_value")
+    # C6 参与度：全市场成交额（市场层口径，不得用单板块成交额代替）
+    ok, tag = allow("MKT_TURNOVER")
+    v = val("MKT_TURNOVER")
+    p = val("MKT_TURNOVER", "prev_value")
+    prev_period = None
+    if p is None and ok and v is not None:
+        p, prev_period = prev_value_from_revisions("MKT_TURNOVER", period("MKT_TURNOVER"))
     if ok and v is not None and p is not None:
         word = "不变" if v == p else ("升" if v > p else "降")
-        rings[5].add(f"参与度{word}（{period('SECTOR_AMT')}）", f"半导体板块成交额 {v:.2f} 亿 对比上一期 {p:.2f} 亿", "不说明资金来源", tag + "〔板块层口径〕")
+        ev = f"全市场成交额 {v:.2f} 亿 对比上一期 {p:.2f} 亿（行业板块加总口径）"
+        if prev_period:
+            ev += f"，前一可比期 {prev_period}"
+        rings[5].add(f"参与度{word}（{period('MKT_TURNOVER')}）", ev, "不说明资金来源", tag)
+    elif ok and v is not None:
+        rings[5].add("参与度不可读（—）",
+                     f"全市场成交额已有 {v:.2f} 亿，但修订链无更早数据期、无证据可作前值（首次落盘）",
+                     "该环暂无法判方向；下次运行即可比较")
     else:
-        rings[5].add("参与度不可读（—）", "板块成交额缺失，或来源为 C 类（聚合口径）、无源可支撑状态词", "该环无可用证据")
+        rings[5].add("参与度不可读（—）", "全市场成交额缺失，或来源为 C 类、无源可支撑状态词", "该环无可用证据")
     ok, tag = allow("MKT_BREADTH")
     v, p = val("MKT_BREADTH"), val("MKT_BREADTH", "prev_value")
     if ok and v is not None:

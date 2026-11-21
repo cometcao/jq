@@ -323,6 +323,18 @@
     "frequency": "日",
     "comparable_from": null
   },
+  "MKT_MARGIN_COLLATERAL": {
+    "name": "两融担保物总价值",
+    "layer": "市场",
+    "channel": "C4",
+    "subject": "散户",
+    "attribute": "A4",
+    "transform": "T1",
+    "value_kind": "level",
+    "unit": "U1",
+    "frequency": "日",
+    "comparable_from": null
+  },
   "MKT_MARGIN_DEP": {
     "name": "证券客户保证金",
     "layer": "市场",
