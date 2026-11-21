@@ -33,6 +33,24 @@ BANNED = ["建议", "应当", "看多", "看空", "偏强", "偏弱", "低吸", 
           "预期", "或将", "评分", "打分", "综合得分", "背离强度", "资金整体", "宽松", "充裕", "活跃"]
 CAUSAL = ["因此", "所以", "导致", "意味着"]
 COUNTERPARTY = ["接盘", "出货", "资金从", "流向", "外资撤离"]
+def _biz_days(period, as_of):
+    """按交易日计相差天数（周末不放大 stale）。"""
+    try:
+        import datetime as _dt
+        a = _dt.date.fromisoformat(str(period)[:10])
+        b = _dt.date.fromisoformat(str(as_of)[:10])
+    except Exception:
+        return None
+    if b <= a:
+        return 0
+    n, cur = 0, a
+    while cur < b:
+        cur += _dt.timedelta(days=1)
+        if cur.weekday() < 5:
+            n += 1
+    return n
+
+
 FREQ_DAYS = {"日": 1, "周": 7, "月": 30, "季": 90, "年": 365}
 
 
@@ -114,7 +132,7 @@ def check_fact(rec, schema, reg, as_of):
                 errs.append(f"[注册表] {k}={rec[k]!r} 与注册表 {meta[k]!r} 不一致")
     if as_of and rec.get("data_period") and rec.get("update_frequency") in FREQ_DAYS:
         try:
-            gap = _days(rec["data_period"], as_of) / FREQ_DAYS[rec["update_frequency"]]
+            gap = (_biz_days(rec["data_period"], as_of) or 0) / FREQ_DAYS[rec["update_frequency"]]
             mt = rec.get("missing_type")
             if gap > 3:
                 errs.append(f"[stale] 距更新 {gap:.1f} 倍 > 3，应视为不可读")

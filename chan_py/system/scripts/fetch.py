@@ -143,6 +143,24 @@ def num_of(s):
     return float(m.group(0)) if m else None
 
 
+
+def biz_days_between(period, as_of):
+    """按交易日（周一至周五）计相差天数；周末/节假日不把 stale 惩罚放大。"""
+    try:
+        a = dt.date.fromisoformat(str(period)[:10])
+        b = dt.date.fromisoformat(str(as_of)[:10])
+    except Exception:
+        return None
+    if b <= a:
+        return 0
+    n, cur = 0, a
+    while cur < b:
+        cur += dt.timedelta(days=1)
+        if cur.weekday() < 5:
+            n += 1
+    return n
+
+
 def period_lag_days(period):
     try:
         d = dt.date.fromisoformat(str(period)[:10])
@@ -869,8 +887,8 @@ def main():
         res = fetch_one(spec, args, args.as_of)
         rec = to_record(spec, res, args.as_of)
         # stale 闸门（第十节 2）：>3 倍 → 不可读、不落盘；>2 倍 → 标 stale
-        FREQ_DAYS = {"日": 1, "周": 7, "月": 30, "季": 90}
-        lag = period_lag_days(rec.get("data_period"))
+        FREQ_DAYS = {"日": 1, "周": 5, "月": 21, "季": 63}
+        lag = biz_days_between(rec.get("data_period"), args.as_of or dt.date.today().isoformat())
         ratio = (lag / FREQ_DAYS[spec["freq"]]) if (lag is not None and spec["freq"] in FREQ_DAYS) else None
         if ratio is not None and ratio > 3:
             print(f"{spec['id']:<16}{'—':<16}{rec['data_period']:<12}{'不可读（超 3 倍时效）':<26}未落盘")
@@ -885,7 +903,9 @@ def main():
                             rec["source_tier"], res.get("source"))
         val = (rec.get("current_state") or {}).get("数值", "—")
         note = "缓存" if res.get("cache_hit") else ("降级" if rec.get("fallback_flag") else "")
-        if rec["missing_type"] != "none":
+        if rec["missing_type"] == "stale":
+            note = (note + " " if note else "") + "stale（超 2 倍时效）"
+        elif rec["missing_type"] != "none":
             note = (note + " " if note else "") + "失败：" + str(res.get("errors"))[:36]
         print(f"{spec['id']:<16}{str(res.get('source') or '—'):<16}{rec['data_period']:<12}{str(val):<26}{note}")
         ok += rec["missing_type"] == "none"

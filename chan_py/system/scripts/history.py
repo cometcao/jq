@@ -28,11 +28,24 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "data", "history")
 
 
-def write_series(iid, rows, unit, note=""):
-    """rows: [(period, value)]，按时间升序。"""
+FULL = False
+
+
+def write_series(iid, rows, unit, note="", full=None):
+    """增量合并：已有数据期保留，新抓到的期补进去（full=True 才重写）。"""
     os.makedirs(OUT, exist_ok=True)
     fp = os.path.join(OUT, iid + ".jsonl")
     seen = {}
+    if not (FULL if full is None else full) and os.path.exists(fp):
+        for line in io.open(fp, encoding="utf-8").read().splitlines():
+            if not line.strip():
+                continue
+            try:
+                obj = json.loads(line)
+            except Exception:
+                continue
+            if "data_period" in obj and obj.get("value") is not None:
+                seen[obj["data_period"]] = obj["value"]
     for p, v in rows:
         if p and v is not None:
             seen[p] = v
@@ -127,6 +140,8 @@ TASKS = {
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--rings", default="C1,C2,C3,C4,C5,C6")
+    ap.add_argument("--full", action="store_true", help="重写而非增量合并")
+    global FULL
     a = ap.parse_args()
     for ring in a.rings.split(","):
         ring = ring.strip()
@@ -135,7 +150,7 @@ def main():
         iid, fn, n = TASKS[ring]
         try:
             cnt = fn(n) if n else fn()
-            print(f"{ring} {iid:<22} 回补 {cnt} 期")
+            print(f"{ring} {iid:<22} 现有 {cnt} 期")
         except Exception as e:
             print(f"{ring} {iid:<22} 失败：{type(e).__name__}: {str(e)[:70]}")
     print("产物:", os.path.relpath(OUT, ROOT))
