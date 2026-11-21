@@ -126,10 +126,10 @@ def main():
         if same and not a.dry:
             os.makedirs(OFFICIAL, exist_ok=True)
             payload = {"value": f"{official}", "unit": "as-recorded", "data_period": used_period,
-                       "source_url": url, "checked_at": dt.date.today().isoformat(),
-                       "method": "官方接口直取后与缓存值逐项比对（scripts/verify_official.py）"}
-            with io.open(os.path.join(OFFICIAL, iid + ".json"), "w", encoding="utf-8") as f:
-                json.dump(payload, f, ensure_ascii=False, indent=2)
+                       "source_url": url, "checked_at": dt.date.today().isoformat(), "matched": True,
+                       "our_value": f"{mine}", "method": "官方接口直取后与缓存值逐项比对（scripts/verify_official.py）"}
+            with io.open(os.path.join(OFFICIAL, iid + ".jsonl"), "a", encoding="utf-8") as f:
+                f.write(json.dumps(payload, ensure_ascii=False) + "\n")
         ok += same
     print("-" * 62)
     print(f"核对一致 {ok} 项" + ("（已写入 data/official/，下次 fetch 时升 B）" if not a.dry and ok else ""))

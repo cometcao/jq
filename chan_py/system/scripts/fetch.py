@@ -74,6 +74,41 @@ def throttled(source):
     _last_call[source] = time.time()
 
 
+
+REVIS_DIR = os.path.join(ROOT, "data", "revisions")
+
+
+def atomic_write_json(path, obj):
+    """先写 .tmp 再 os.replace，避免半截文件（截断事故的教训）。"""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with io.open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(obj, fh, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
+
+
+def append_revision(iid, data_period, value, tier, source):
+    """把每次写入追加到 data/revisions/<id>/<period>.jsonl（永不覆盖）。"""
+    d = os.path.join(REVIS_DIR, iid)
+    os.makedirs(d, exist_ok=True)
+    fp = os.path.join(d, f"{data_period}.jsonl")
+    seq, prev = 0, None
+    if os.path.exists(fp):
+        rows = [l for l in io.open(fp, encoding="utf-8").read().splitlines() if l.strip()]
+        seq = len(rows)
+        if rows:
+            try:
+                prev = json.loads(rows[-1]).get("value")
+            except Exception:
+                pass
+    entry = {"revision_seq": seq, "indicator_id": iid, "data_period": data_period,
+             "value": value, "changed_from": prev, "changed": prev is not None and prev != value,
+             "source": source, "source_tier": tier,
+             "observed_at": dt.datetime.now().isoformat(timespec="seconds")}
+    with io.open(fp, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    return entry
+
 def read_json(path, default=None):
     try:
         with io.open(path, encoding="utf-8") as f:
@@ -83,9 +118,7 @@ def read_json(path, default=None):
 
 
 def write_json(path, obj):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with io.open(path, "w", encoding="utf-8") as f:
-        json.dump(obj, f, ensure_ascii=False, indent=2)
+    atomic_write_json(path, obj)
 
 
 def norm_period(raw):
@@ -516,8 +549,21 @@ def fetch_one(spec, args, as_of):
 
 
 def official_tier(indicator_id, spec=None):
-    """已人工对账 → B；否则记 C（akshare 一律 C，能否使用看 c_reasons 白名单）。"""
-    off = read_json(os.path.join(OFFICIAL_DIR, indicator_id + ".json"))
+    """已人工对账 → B；否则记 C。核对历史以 jsonl 追加为准，兼容旧 json。"""
+    off = None
+    jl = os.path.join(OFFICIAL_DIR, indicator_id + ".jsonl")
+    if os.path.exists(jl):
+        rows = [l for l in io.open(jl, encoding="utf-8").read().splitlines() if l.strip()]
+        for line in reversed(rows):
+            try:
+                cand = json.loads(line)
+                if cand.get("value") and cand.get("source_url") and cand.get("matched", True):
+                    off = cand
+                    break
+            except Exception:
+                continue
+    if off is None:
+        off = read_json(os.path.join(OFFICIAL_DIR, indicator_id + ".json"))
     if off and off.get("value") and off.get("source_url"):
         return "B", off
     return "C", None
@@ -595,6 +641,9 @@ def main():
             rec["missing_type"] = "stale"
         if rec["data_period"]:
             write_json(os.path.join(FACT_DIR, rec["data_period"], f"{spec['id']}.json"), rec)
+            append_revision(spec["id"], rec["data_period"],
+                            (rec.get("current_state") or {}).get("数值"),
+                            rec["source_tier"], res.get("source"))
         val = (rec.get("current_state") or {}).get("数值", "—")
         note = "缓存" if res.get("cache_hit") else ("降级" if rec.get("fallback_flag") else "")
         if rec["missing_type"] != "none":

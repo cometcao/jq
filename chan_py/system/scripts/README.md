@@ -1,6 +1,6 @@
 # 取数层（akshare）
 
-> 版本 V2.26.0。定位：**C 类源**的免费取数层，服务于 `dist/market-state`。
+> 版本 V2.27.0。定位：**C 类源**的免费取数层，服务于 `dist/market-state`。
 > 规则依据：`docs/01_框架核心.md` 第十节（D03 分级、D04 缺失、第十节 2 的 stale 阈值）。
 
 ## 一句话
@@ -103,7 +103,23 @@ C6 参与度降（2026-11-20）｜依据：板块成交额 1985.20 亿 对比上
 
 末尾附**数据溯源表**（指标 → 官方源 → 官方页面 URL → 档位），可直接点开核对；对账通过后把值与链接写进 `data/official/<id>.json`，档位升 B，标注随之消失。
 
-## as-of 规则（V2.26.0）
+## 存储与修订（D11，V2.27.0）
+
+| 路径 | 内容 | 规则 |
+|---|---|---|
+| `data/facts/<期>/<id>.json` | 当前值 | 幂等覆盖，原子写（`.tmp` + `os.replace`） |
+| `data/revisions/<id>/<期>.jsonl` | 修订链 | 只追加；`revision_seq` 0=初值，`changed/changed_from` 标出改动 |
+| `data/official/<id>.jsonl` | 核对历史 | 只追加；`matched=true` 才升 B |
+| `data/cache/<id>.json` | 工作缓存 | 按 TTL 过期，不算事实 |
+| `reports/<as-of>-state.md` | 输出 | 保留 30 份 |
+
+查某个数改过没有：
+
+```bash
+cat data/revisions/MKT_M2_YOY/2026-10-01.jsonl
+```
+
+## as-of 规则（V2.27.0）
 
 - 整页 `as-of` 取**最新交易日**（日频指标里最大的数据期），不再被月频环拖回一个月前；
 - **只标注不是最新数据的行**：数据期早于 as-of 的行尾追加 `〔非最新：YYYY-MM-DD〕`，其余行不标。
