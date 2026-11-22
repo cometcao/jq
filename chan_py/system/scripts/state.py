@@ -322,6 +322,11 @@ def build(policy, include_events=False):
     body = "\n".join(r_.lines for r_ in rings) if False else "\n".join("\n".join(r_.lines) for r_ in rings)
     if include_events:
         body += "\n".join(events_section(as_of))
+    chain_line, broken = chain_summary([ln for ln in body.splitlines() if ln.startswith("C")])
+    body += f"\n\n链条完整性：{chain_line}"
+    n_lines = len([ln for ln in body.splitlines() if ln.startswith("C")])
+    body += f"\n本次 {n_lines} 条证据，覆盖 6 环，" + (f"{len(broken)} 处断点：{'、'.join(broken)}" if broken else "无断点")
+    body += "；断点处请勿跨环推断。"
     cmp_lines, cmp_records = market_compare_lines()
     if cmp_lines:
         body += "\n\n比价（七锚通过才出）：\n" + "\n".join(cmp_lines)
@@ -367,6 +372,61 @@ def persist_compares(records):
         with io.open(fp, "w", encoding="utf-8") as f:
             json.dump(rec, f, ensure_ascii=False, indent=2)
 
+
+
+HIST_DIR = os.path.join(ROOT, "reports", "state-history")
+
+
+def chain_summary(lines):
+    """链条完整性：每环是有值 / 部分 / 全断，并给出断点。"""
+    by_ring = {}
+    for ln in lines:
+        m = re.match(r"^(C[1-6]) (\S+?)(（|｜)", ln)
+        if not m:
+            continue
+        ring, state = m.group(1), m.group(2)
+        unread = "不可读" in state
+        by_ring.setdefault(ring, {"ok": 0, "bad": 0, "bad_parts": []})
+        if unread:
+            by_ring[ring]["bad"] += 1
+            cleaned = re.sub(r"不可读|[（(]—[）)]", "", state).strip("（）()— ·")
+            by_ring[ring]["bad_parts"].append(cleaned or "该环")
+        else:
+            by_ring[ring]["ok"] += 1
+
+    parts, broken = [], []
+    for ring in ("C1", "C2", "C3", "C4", "C5", "C6"):
+        c = by_ring.get(ring)
+        if not c:
+            parts.append(f"{ring} 无行")
+            broken.append(ring)
+        elif c["bad"] == 0:
+            parts.append(f"{ring} ✓")
+        elif c["ok"] == 0:
+            parts.append(f"{ring} ✗全断")
+            broken.append(ring)
+        else:
+            names = "/".join([x for x in c["bad_parts"] if x]) or "部分"
+            parts.append(f"{ring} 部分（{names}断）")
+            broken.append(f"{ring}({names})")
+    return " | ".join(parts), broken
+
+
+def archive_snapshot(as_of, layer, payload, force=False):
+    """按日归档：reports/state-history/<as_of>-<layer>.json，默认不覆盖。"""
+    os.makedirs(HIST_DIR, exist_ok=True)
+    fp = os.path.join(HIST_DIR, f"{as_of}-{layer}.json")
+    if os.path.exists(fp) and not force:
+        return fp, False
+    with io.open(fp, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    return fp, True
+
+
+def list_history():
+    if not os.path.isdir(HIST_DIR):
+        return []
+    return sorted(os.path.basename(p) for p in glob.glob(os.path.join(HIST_DIR, "*.json")))
 
 def events_section(as_of):
     """从 data/events/calendar-<as_of>.json 读事件段（sync.py 已自动抓取）。"""
@@ -474,9 +534,18 @@ def main():
     ap.add_argument("--layer", choices=["market", "sector"], default="market")
     ap.add_argument("--json", action="store_true", help="输出机器可读 JSON")
     ap.add_argument("--no-events", action="store_true", help="不附事件段")
+    ap.add_argument("--show-history", action="store_true", help="列出已归档的状态快照")
+    ap.add_argument("--archive", action="store_true", help="强制覆盖当日快照")
     ap.add_argument("--write", action="store_true")
     args = ap.parse_args()
     args.include_events = not args.no_events
+
+    if args.show_history:
+        rows = list_history()
+        print(f"已归档快照 {len(rows)} 份（reports/state-history/）：")
+        for r in rows:
+            print("  ", r)
+        return 0
 
     if args.layer == "sector":
         as_of, body, sector = build_sector(args.policy)
@@ -496,7 +565,8 @@ def main():
     missing = sorted({json.load(io.open(f, encoding="utf-8"))["indicator_id"]
                       for f in glob.glob(os.path.join(FACTS, "*", "*.json"))
                       if (reg.get(json.load(io.open(f, encoding="utf-8"))["indicator_id"], {}) or {}).get("layer", "市场") == want})
-    meta = (f"\n元信息：\n- 证据条数：{len(missing)} 项事实记录\n"
+    n_ev = len([ln for ln in body.splitlines() if re.match(r"^C[1-6] ", ln)])
+    meta = (f"\n元信息：\n- 证据行 {n_ev} 条（覆盖 {len(missing)} 项事实记录）\n"
             f"- 分级政策：{ {'strict':'strict（仅 B 类）','traceable':'traceable（B 可用；C 仅在该指标无 A/B 时使用并标注）','demo':'demo（C 类亦可，逐行标注）'}[args.policy] }\n"
             f"- B 类（已对账）指标：{[i for i in missing if tier_of(i)=='B'] or '无'}\n"
             f"- stale：按第十节 2 判定，超 3 倍不落盘\n")
@@ -539,6 +609,12 @@ def main():
     if args.write:
         os.makedirs(REPORTS, exist_ok=True)
         suffix = "market" if args.layer == "market" else f"sector-{sector}"
+        fp_hist, wrote = archive_snapshot(as_of, args.layer, {
+            "layer": args.layer, "as_of": as_of, "policy": args.policy,
+            "body": body, "corrections": None,
+            "archived_at": dt.datetime.now().isoformat(timespec="seconds"),
+        }, force=getattr(args, "archive", False))
+        print(("已归档: " if wrote else "已存在（未覆盖）: ") + os.path.relpath(fp_hist, ROOT))
         p = os.path.join(REPORTS, f"{as_of}-{suffix}-state.md")
         with io.open(p, "w", encoding="utf-8") as f:
             f.write("```\n" + text + "```\n" + meta)

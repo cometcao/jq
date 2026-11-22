@@ -5,7 +5,7 @@ description: Use when the user asks what the market or a sector looks like right
 
 # market-state · 市场状态
 
-> **规则版本 V2.57.1**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
+> **规则版本 V2.58.0**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
 
 把当前数据压缩成 **六环 + 证据行** 的客观状态描述。不做判断、不给建议、不预测、不解释涨跌原因。
 
@@ -107,6 +107,17 @@ description: Use when the user asks what the market or a sector looks like right
 - 环格蓝底 = 受影响；灰字 = 不受影响；
 - **●红点=升支影响、○白点=降支影响、◌虚线=不变支影响**（圆点表示"哪支分支触及"，**不表示环会涨跌**）；
 - 必须绑 `scenario` 记录与日历来源，写明"排序不适用"或依据，标 `horizon`；矩阵形态只在用户要"查组合"时出。
+
+## 链条完整性 + 快照归档（默认）
+
+页面末尾**必须**带两行链条归纳（复盘用）：
+
+```
+链条完整性：C1 ✓ | C2 ✓ | … | C6 部分（参与度断）
+本次 N 条证据，覆盖 6 环，K 处断点：…；断点处请勿跨环推断。
+```
+
+同时状态按日归档到 `reports/state-history/<as_of>-<layer>.json`（**默认不覆盖**），`--show-history` 可列出——复盘时用来对照"当时怎么判断的"。
 
 ## 输出格式
 
