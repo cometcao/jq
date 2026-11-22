@@ -323,23 +323,6 @@ def build(policy, include_events=False):
     if include_events:
         body += "\n".join(events_section(as_of))
     _rd = ring_readings(as_of)
-    if _rd:
-        _lines = body.splitlines()
-        _out, _cur = [], None
-        for _ln in _lines:
-            if _ln.startswith("C"):
-                _cur = _ln[:2]
-            _out.append(_ln)
-            # 在该环最后一条证据行之后插入读法
-            _is_last = True
-            _idx = _lines.index(_ln)
-            for _nxt in _lines[_idx + 1:]:
-                if _nxt.startswith("C"):
-                    _is_last = (_nxt[:2] != _ln[:2])
-                    break
-            if _ln.startswith("C") and _is_last and _cur in _rd:
-                _out.append(f"· {_cur} 读法：{_rd[_cur]}")
-        body = "\n".join(_out)
     chain_line, broken = chain_summary([ln for ln in body.splitlines() if ln.startswith("C")])
     body += f"\n\n链条完整性：{chain_line}"
     n_lines = len([ln for ln in body.splitlines() if ln.startswith("C")])
@@ -815,9 +798,13 @@ def main():
             "archived_at": dt.datetime.now().isoformat(timespec="seconds"),
         }, force=getattr(args, "archive", False))
         print(("已归档: " if wrote else "已存在（未覆盖）: ") + os.path.relpath(fp_hist, ROOT))
+        _rd = ring_readings(as_of) if args.layer == "market" else {}
+        rd_block = ""
+        if _rd:
+            rd_block = "\n\n**读法（资金视角）**\n\n" + "\n".join(f"- {k}：{v}" for k, v in sorted(_rd.items())) + "\n"
         p = os.path.join(REPORTS, f"{as_of}-{suffix}-state.md")
         with io.open(p, "w", encoding="utf-8") as f:
-            f.write("```\n" + text + "```\n" + meta)
+            f.write("```\n" + text + "```\n" + rd_block + meta)
         print("已写入:", os.path.relpath(p, ROOT))
     return 0
 

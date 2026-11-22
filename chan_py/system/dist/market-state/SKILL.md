@@ -5,7 +5,7 @@ description: Use when the user asks what the market or a sector looks like right
 
 # market-state · 市场状态
 
-> **规则版本 V2.69.1**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
+> **规则版本 V2.70.0**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
 
 把当前数据压缩成 **六环 + 证据行** 的客观状态描述。不做判断、不给建议、不预测、不解释涨跌原因。
 
@@ -108,7 +108,7 @@ description: Use when the user asks what the market or a sector looks like right
 - **●红点=升支影响、○白点=降支影响、◌虚线=不变支影响**（圆点表示"哪支分支触及"，**不表示环会涨跌**）；
 - 必须绑 `scenario` 记录与日历来源，写明"排序不适用"或依据，标 `horizon`；矩阵形态只在用户要"查组合"时出。
 
-## 每环「读法」（默认，V2.69.1 · 资金视角）
+## 每环「读法」（默认，V2.70.0 · 资金视角）
 
 每条环的证据行之后，追加一行 `· C<n> 读法：…`——**用资金结构解释这组数字**，只描述口径含义与位置，不做方向判断。
 
