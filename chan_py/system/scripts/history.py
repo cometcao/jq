@@ -127,6 +127,36 @@ def backfill_turnover(n):
     return write_series("MKT_TURNOVER", rows[-n:], "亿元", "沪指+深成指成交额合计（口径窄于全市场）")
 
 
+
+def backfill_loan_yoy(n=24):
+    """人民币贷款余额同比：取「累计人民币贷款-同比」列（与指标口径一致，值形如 4.70%）。"""
+    import akshare as ak
+    df = ak.macro_china_rmb_loan_ths()
+    col = "累计人民币贷款-同比"
+    if col not in df.columns:
+        raise ValueError(f"缺列：{col}")
+    rows = []
+    for _, r in df.iterrows():
+        mm = "".join(ch for ch in str(r["月份"]) if ch.isdigit())
+        v = str(r[col]).replace("%", "").strip()
+        if len(mm) >= 6 and v not in ("", "nan"):
+            rows.append((f"{mm[:4]}-{mm[4:6]}-01", float(v)))
+    return write_series("MKT_RMB_LOAN_YOY", sorted(rows)[-n:], "%", "人民币贷款余额同比（月频）")
+
+
+def backfill_collateral(n=60):
+    import akshare as ak
+    df = ak.stock_margin_account_info().copy()
+    col = [c for c in df.columns if "担保" in str(c)]
+    if not col:
+        raise ValueError(f"列不符：{list(df.columns)}")
+    df = df.dropna(subset=[col[0]]).sort_values("日期").tail(n)
+    rows = [(str(r["日期"])[:10], float(r[col[0]])) for _, r in df.iterrows()]
+    return write_series("MKT_MARGIN_COLLATERAL", rows, "亿元", "两融担保物总价值（日频）")
+
+
+EXTRA_TASKS = [("MKT_RMB_LOAN_YOY", backfill_loan_yoy), ("MKT_MARGIN_COLLATERAL", backfill_collateral)]
+
 TASKS = {
     "C1": ("POL_LPR", backfill_lpr, 24),
     "C2": ("MKT_M2_YOY", backfill_m2, 24),
@@ -153,6 +183,12 @@ def main():
             print(f"{ring} {iid:<22} 现有 {cnt} 期")
         except Exception as e:
             print(f"{ring} {iid:<22} 失败：{type(e).__name__}: {str(e)[:70]}")
+    for iid, fn in EXTRA_TASKS:
+        try:
+            cnt = fn()
+            print(f"   {iid:<24} 现有 {cnt} 期")
+        except Exception as e:
+            print(f"   {iid:<24} 失败：{type(e).__name__}: {str(e)[:60]}")
     print("产物:", os.path.relpath(OUT, ROOT))
     return 0
 

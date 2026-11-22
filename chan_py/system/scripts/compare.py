@@ -58,6 +58,28 @@ def num(s):
     return float(m.group(0)) if m else None
 
 
+
+SCALE_HINT = {"万亿": 10000.0, "亿": 1.0, "万": 1.0}
+
+
+def num_scaled(s):
+    """解析数值并统一到「亿」为基准单位（万亿→亿 ×10000）。
+
+    返回 (数值_亿基准, 原始单位标签)。标签用于量纲锚声明是否发生换算。
+    """
+    if s is None:
+        return None, ""
+    txt = str(s)
+    v = num(txt)
+    if v is None:
+        return None, ""
+    if "万亿" in txt:
+        return v * 10000.0, "万亿→亿"
+    if "亿" in txt:
+        return v, "亿"
+    return v, ""
+
+
 def latest(facts, iid):
     rows = facts.get(iid) or []
     return rows[-1] if rows else None
@@ -97,7 +119,16 @@ def anchored(facts, reg, left, right, op, args):
     if op == "ratio" and (lmeta.get("value_kind") == "price" or rmeta.get("value_kind") == "price"):
         raise ValueError("属性锚：价格水平（price）不得做比值——与价格走势同构（ADR-001）")
 
-    lp, rp = num(lrec["current_state"]["数值"]), num(rrec["current_state"]["数值"]) if rrec else None
+    lp, lu = num_scaled(lrec["current_state"]["数值"])
+    rp, ru = num_scaled(rrec["current_state"]["数值"]) if rrec else (None, "")
+    scale_note = ""
+    if rrec and lu != ru:
+        if {lu, ru} <= {"亿", "万亿→亿"}:
+            lu = ru = "亿"
+            scale_note = "；已按「万亿→亿」换算后比较"
+        else:
+            raise ValueError(f"量纲锚：单位量级不一致（{left}={lu or '基准'}，{right}={ru or '基准'}）；"
+                             f"请先统一单位再比，否则比值/差值会错量级")
     if lp is None or (rrec and rp is None):
         raise ValueError("同质锚：操作数数值无法解析")
 
@@ -111,7 +142,8 @@ def anchored(facts, reg, left, right, op, args):
         "层级锚": f"{lmeta.get('layer')}" + (f" / {rmeta.get('layer')}（一致）" if rrec else ""),
         "归属锚": f"subject={lmeta.get('subject')}"
                   + (f" / {rmeta.get('subject')}" if rrec else "") + (f"；universe={args.universe}" if args.universe else ""),
-        "量纲锚": f"{lmeta.get('unit')}（{UNIT_NAME.get(lmeta.get('unit'),'?')}）一致",
+        "量纲锚": f"{lmeta.get('unit')}（{UNIT_NAME.get(lmeta.get('unit'),'?')}）一致"
+                  + scale_note,
     }
     return lrec, rrec, lp, rp, anchors
 
@@ -167,7 +199,7 @@ def build(args):
         if rp == 0:
             raise ValueError("量纲锚：分母为 0，比值不可计算")
         val, kind, label = lp / rp, "ratio", f"{lp} ÷ {rp}"
-        text = f"{val:.2f}×"
+        text = f"{val:.2f}×" if val >= 1 else f"{val*100:.2f}%"
     payload = {
         "compare_type": "cross_sectional", "compare_operation": op,
         "result_form": "point_value", "operand_order": f"{left} {'−' if op != 'ratio' else '÷'} {right}",

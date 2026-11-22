@@ -322,12 +322,46 @@ def build(policy, include_events=False):
     body = "\n".join(r_.lines for r_ in rings) if False else "\n".join("\n".join(r_.lines) for r_ in rings)
     if include_events:
         body += "\n".join(events_section(as_of))
+    _rd = ring_readings(as_of)
+    if _rd:
+        _lines = body.splitlines()
+        _out, _cur = [], None
+        for _ln in _lines:
+            if _ln.startswith("C"):
+                _cur = _ln[:2]
+            _out.append(_ln)
+            # 在该环最后一条证据行之后插入读法
+            _is_last = True
+            _idx = _lines.index(_ln)
+            for _nxt in _lines[_idx + 1:]:
+                if _nxt.startswith("C"):
+                    _is_last = (_nxt[:2] != _ln[:2])
+                    break
+            if _ln.startswith("C") and _is_last and _cur in _rd:
+                _out.append(f"· {_cur} 读法：{_rd[_cur]}")
+        body = "\n".join(_out)
     chain_line, broken = chain_summary([ln for ln in body.splitlines() if ln.startswith("C")])
     body += f"\n\n链条完整性：{chain_line}"
     n_lines = len([ln for ln in body.splitlines() if ln.startswith("C")])
     body += f"\n本次 {n_lines} 条证据，覆盖 6 环，" + (f"{len(broken)} 处断点：{'、'.join(broken)}" if broken else "无断点")
     body += "；断点处请勿跨环推断。"
     cmp_lines, cmp_records = market_compare_lines()
+    relations_by_ring = {}
+    _reg = {}
+    try:
+        with io.open(os.path.join(ROOT, "dist", "market-state", "references", "registry.json"), encoding="utf-8") as f:
+            _reg = json.load(f)
+    except Exception:
+        _reg = {}
+    for rec in cmp_records:
+        left = rec["inputs"][0]["ref"]
+        ring = (_reg.get(left) or {}).get("channel") or "C?"
+        relations_by_ring.setdefault(ring, []).append({
+            "compare_id": rec["compare_id"],
+            "value": rec["current_state"]["数值"],
+            "period": rec["data_period"],
+            "operand_order": rec["operand_order"],
+        })
     if cmp_lines:
         body += "\n\n比价（七锚通过才出）：\n" + "\n".join(cmp_lines)
         persist_compares(cmp_records)
@@ -337,7 +371,9 @@ def build(policy, include_events=False):
 
 
 MARKET_COMPARES = [("MKT_M2_YOY", "MKT_M1_YOY", "difference"),
-                   ("MKT_DR007", "MKT_CGB10Y", "difference")]
+                   ("MKT_M2_YOY", "MKT_RMB_LOAN_YOY", "difference"),
+                   ("MKT_DR007", "MKT_CGB10Y", "difference"),
+                   ("MKT_MARGIN_BAL", "MKT_MARGIN_COLLATERAL", "ratio")]
 
 
 def market_compare_lines():
@@ -457,6 +493,113 @@ def sector_policy_clues(as_of, horizon=30):
             if any(d in str(e.get("issuer", "")) for d in depts)]
     bad = [d for d in depts if d in ((json.load(io.open(mp, encoding="utf-8")).get("uncrawlable")) or {})]
     return {"depts": depts, "count": len(hits), "items": hits[:3], "uncrawlable": bad}
+
+
+def _num_scaled(iid):
+    """读缓存值并把「万亿」换算成「亿」。"""
+    fp = os.path.join(ROOT, "data", "cache", iid + ".json")
+    if not os.path.exists(fp):
+        return None
+    try:
+        with io.open(fp, encoding="utf-8") as f:
+            cur = (json.load(f).get("current_state") or {}).get("数值")
+    except Exception:
+        return None
+    if cur is None:
+        return None
+    txt = str(cur)
+    m = re.search(r"[-+]?\d+(?:\.\d+)?", txt.replace(",", ""))
+    if not m:
+        return None
+    v = float(m.group(0))
+    if "万亿" in txt:
+        v *= 10000.0
+    return v
+
+
+def _pos_of(values, tail=60):
+    vs = values[-tail:]
+    if len(vs) < 2:
+        return None
+    lo, hi = min(vs), max(vs)
+    return None if hi == lo else (vs[-1] - lo) / (hi - lo) * 100
+
+
+def _hist(iid, tail=60):
+    fp = os.path.join(ROOT, "data", "history", iid + ".jsonl")
+    if not os.path.exists(fp):
+        return []
+    rows = [json.loads(x) for x in io.open(fp, encoding="utf-8").read().splitlines() if x.strip()][1:]
+    return [(r["data_period"], r["value"]) for r in rows][-tail:]
+
+
+def ring_readings(as_of):
+    """每环一句「读法」：从资金角度看这组数字把钱放在哪、以什么形态存在。
+
+    约束：只用已落盘数字；不用因果词；不做方向判断（不写宽松/充裕/活跃/流入流出）。
+    """
+    def g(iid):
+        return val(iid)
+
+    def pos(iid, tail=60):
+        vs = [v for _, v in _hist(iid, tail)]
+        return _pos_of(vs)
+
+    out = {}
+    lpr = g("POL_LPR")
+    if lpr is not None:
+        p = pos("POL_LPR", 24)
+        out["C1"] = (f"基准利率 {lpr:.2f}%" + (f"（24 期 {p:.0f}% 位）" if p is not None else "")
+                     + "没有新的调整；资金的价格基准不动，成本变化只能来自市场端（C3）。")
+
+    m2, loan, m1 = g("MKT_M2_YOY"), g("MKT_RMB_LOAN_YOY"), g("MKT_M1_YOY")
+    if m2 is not None and loan is not None:
+        h2 = dict(_hist("MKT_M2_YOY")); hl = dict(_hist("MKT_RMB_LOAN_YOY")); h1 = dict(_hist("MKT_M1_YOY"))
+        diffs = [h2[p] - hl[p] for p in sorted(h2) if p in hl]
+        p = _pos_of(diffs)
+        s1 = f"，M2−M1 为 {m2-m1:+.2f}pp" if (m1 is not None) else ""
+        out["C2"] = (f"货币总量同比 {m2:.2f}%，信贷投放同比 {loan:.2f}%，两者差 {m2-loan:+.2f}pp"
+                     + (f"（24 期 {p:.0f}% 位）" if p is not None else "") + s1
+                     + "。钱在增加，但增量主要停在存款与准货币形态，没有按同等幅度转成贷款。")
+
+    dr, ty = g("MKT_DR007"), g("MKT_CGB10Y")
+    if dr is not None and ty is not None:
+        hd = dict(_hist("MKT_DR007")); ht = dict(_hist("MKT_CGB10Y"))
+        sp_ = [hd[p] - ht[p] for p in sorted(hd) if p in ht]
+        p = _pos_of(sp_)
+        out["C3"] = (f"银行间隔夜到 7 天资金 {dr:.4f}%，10 年期国债 {ty:.4f}%，差 {dr-ty:+.2f}pp"
+                     + (f"（51 期 {p:.0f}% 位）" if p is not None else "")
+                     + "。借钱的两端价格几乎相同，把钱锁长期没有额外补偿。")
+
+    mb, co = g("MKT_MARGIN_BAL"), _num_scaled("MKT_MARGIN_COLLATERAL")
+    if mb is not None and co:
+        pm = pos("MKT_MARGIN_BAL")
+        hb = dict(_hist("MKT_MARGIN_BAL")); hc = dict(_hist("MKT_MARGIN_COLLATERAL"))
+        rs = [hb[p] / hc[p] * 100 for p in sorted(hb) if p in hc and hc[p]]
+        pr = _pos_of(rs)
+        out["C4"] = (f"借来的钱（融资余额）{mb:.0f} 亿" + (f"（60 期 {pm:.0f}% 位）" if pm is not None else "")
+                     + f"，对应抵押品 {co/10000:.2f} 万亿，占 {mb/co*100:.2f}%"
+                     + (f"（60 期 {pr:.0f}% 位）" if pr is not None else "")
+                     + "。借的钱在减少，抵押品减少更快；账户里自有资金的比例在往下走。")
+
+    inv, lhb = g("RTL_MARGIN_INVESTORS"), g("INST_LHB_NET")
+    if inv is not None:
+        pi = pos("RTL_MARGIN_INVESTORS")
+        part = f"两融开户数 {inv:.2f} 万户" + (f"（60 期 {pi:.0f}% 位）" if pi is not None else "")
+        if lhb is not None:
+            part += f"，同期机构席位区间净卖 {abs(lhb):.2f} 亿"
+        out["C5"] = part + "。用杠杆的个人账户在增加，机构席位在减；两者口径不同，只能并列看。"
+
+    bd, cc, tn = g("MKT_BREADTH"), g("SECTOR_AMT_CONC"), g("MKT_TURNOVER")
+    if bd is not None:
+        tail = f"上涨家数占比 {bd:.1f}%"
+        if cc is not None:
+            tail += f"、Top5 板块成交占比 {cc:.1f}%"
+        if tn is not None:
+            tail += f"、全市场成交额 {tn:.0f} 亿"
+        out["C6"] = tail + "。钱在盘面上既没有铺开到多数标的，也没有集中到少数板块。"
+    return out
+
 
 def events_section(as_of):
     """从 data/events/calendar-<as_of>.json 读事件段（sync.py 已自动抓取）。"""
@@ -634,7 +777,21 @@ def main():
             recs.append({"ring": ring, "state": state, "period": period_,
                          "evidence": evidence, "boundary": boundary, "tags": tags,
                          "raw": ln})
+        cl, cr = market_compare_lines() if args.layer == "market" else ([], [])
+        rel = {}
+        try:
+            with io.open(os.path.join(ROOT, "dist", "market-state", "references", "registry.json"), encoding="utf-8") as fh:
+                _reg = json.load(fh)
+        except Exception:
+            _reg = {}
+        for r_ in cr:
+            ring_ = (_reg.get(r_["inputs"][0]["ref"]) or {}).get("channel") or "C?"
+            rel.setdefault(ring_, []).append({"compare_id": r_["compare_id"],
+                                              "value": r_["current_state"]["数值"],
+                                              "period": r_["data_period"],
+                                              "operand_order": r_["operand_order"]})
         payload = {"layer": args.layer, "as_of": as_of, "lines": recs,
+                   "relations_by_ring": rel,
                    "b_indicators": [i for i in missing if tier_of(i) == "B"],
                    "policy": args.policy,
                    "generated_at": dt.datetime.now().isoformat(timespec="seconds")}
