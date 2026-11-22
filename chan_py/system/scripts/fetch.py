@@ -551,6 +551,100 @@ def p_sector_inst(_df=None):
              "对比": f"成分 {len(codes)} 只中上榜 {len(sub)} 只；成分表 {cons_date}"},
             {"data_period": norm_period(_latest_trade_day())})
 
+
+def _macro_month(df, month_col, val_col, n=1, period_shift=0):
+    """取最近 n 期月度值：月份列形如 2026年10月份 → 2026-10-01。"""
+    out = []
+    for _, r in df.head(n).iterrows():
+        mm = "".join(ch for ch in str(r[month_col]) if ch.isdigit())
+        v = str(r[val_col]).replace("%", "").strip()
+        if len(mm) >= 6 and v not in ("", "nan"):
+            out.append((f"{mm[:4]}-{mm[4:6]}-01", float(v)))
+    return sorted(out)
+
+
+def p_cpi_yoy(_df=None):
+    df = ak.macro_china_cpi()
+    rows = _macro_month(df, "月份", "全国-同比增长", 1)
+    return ({"指标": "CPI 同比", "值": f"{rows[-1][1]:.2f}%", "对比": "国家统计局月度发布"},
+            {"data_period": rows[-1][0]})
+
+
+def p_ppi_yoy(_df=None):
+    df = ak.macro_china_ppi()
+    rows = _macro_month(df, "月份", "当月同比增长", 1)
+    return ({"指标": "PPI 同比", "值": f"{rows[-1][1]:.2f}%", "对比": "国家统计局月度发布"},
+            {"data_period": rows[-1][0]})
+
+
+def p_pmi(_df=None):
+    df = ak.macro_china_pmi()
+    rows = _macro_month(df, "月份", "制造业-指数", 1)
+    return ({"指标": "制造业 PMI", "值": f"{rows[-1][1]:.2f}", "对比": "国家统计局月度发布；50 为荣枯线"},
+            {"data_period": rows[-1][0]})
+
+
+def p_gdp_yoy(_df=None):
+    df = ak.macro_china_gdp()
+    r = df.iloc[0]
+    q = str(r["季度"])
+    mm = re.findall(r"\d+", q)
+    per = f"{mm[0]}-12-31" if "1-4" in q or "全年" in q else (f"{mm[0]}-09-30" if "1-3" in q else (f"{mm[0]}-06-30" if "1-2" in q else f"{mm[0]}-03-31"))
+    return ({"指标": "GDP 同比", "值": f"{float(r['国内生产总值-同比增长']):.2f}%", "对比": q},
+            {"data_period": per})
+
+
+def p_ip_yoy(_df=None):
+    df = ak.macro_china_industrial_value_added()
+    r = df.iloc[-1]
+    mm = "".join(ch for ch in str(r["月份"]) if ch.isdigit())
+    return ({"指标": "规模以上工业增加值同比", "值": f"{float(r['同比增长']):.2f}%", "对比": str(r["月份"])},
+            {"data_period": f"{mm[:4]}-{mm[4:6]}-01"})
+
+
+def p_retail_yoy(_df=None):
+    df = ak.macro_china_consumer_goods_retail()
+    r = df.iloc[0]
+    mm = "".join(ch for ch in str(r["月份"]) if ch.isdigit())
+    return ({"指标": "社会消费品零售总额同比", "值": f"{float(r['同比增长']):.2f}%", "对比": str(r["月份"])},
+            {"data_period": f"{mm[:4]}-{mm[4:6]}-01"})
+
+
+def p_fai_yoy(_df=None):
+    df = ak.macro_china_fixed_asset_investment()
+    r = df.iloc[0]
+    mm = "".join(ch for ch in str(r["月份"]) if ch.isdigit())
+    return ({"指标": "固定资产投资同比", "值": f"{float(r['同比增长']):.2f}%", "对比": str(r["月份"])},
+            {"data_period": f"{mm[:4]}-{mm[4:6]}-01"})
+
+
+def p_house_price_yoy(_df=None):
+    df = ak.macro_china_new_house_price()
+    last = df["日期"].max()
+    d = df[df["日期"] == last]
+    v = float(d["新建商品住宅价格指数-同比"].astype(float).mean())
+    v = v - 100 if v > 50 else v          # 指数形态 101.8 → +1.8%
+    return ({"指标": "新建商品住宅价格指数同比（70 城均值）", "值": f"{v:.2f}%",
+             "对比": f"{last} · {len(d)} 城"}, {"data_period": str(last)[:10]})
+
+
+def p_realestate(_df=None):
+    df = ak.macro_china_real_estate()
+    df = df.dropna(subset=["最新值"]).sort_values("日期")
+    r = df.iloc[-1]
+    return ({"指标": "国房景气指数", "值": f"{float(r['最新值']):.2f}", "对比": str(r["日期"])[:10]},
+            {"data_period": str(r["日期"])[:7] + "-01"})
+
+
+def p_elec_yoy(_df=None):
+    df = ak.macro_china_society_electricity()
+    df = df.copy()
+    df["t"] = df["统计时间"].astype(str).str.replace(".", "-", regex=False)
+    r = df.sort_values("t").iloc[-1]
+    mm = "".join(ch for ch in str(r["统计时间"]) if ch.isdigit())
+    return ({"指标": "全社会用电量同比（能源生产代理）", "值": f"{float(r['全社会用电量同比']):.2f}%",
+             "对比": str(r["统计时间"])}, {"data_period": f"{mm[:4]}-{int(mm[4:6]):02d}-01"})
+
 # ---------------------------------------------------------------- 指标声明
 SPECS = [
     dict(id="POL_LPR", channel="C1", subject="政策", freq="不定期", value_kind="level", layer="市场", tier_default="C",
@@ -678,6 +772,46 @@ SPECS = [
          providers=[("calc", ["__sector_inst__"], p_sector_inst)],
          official_source="中证指数成分 + 龙虎榜机构买卖统计（按成分过滤加总）", official_url="https://www.csindex.com.cn/",
          proves="板块成分股在龙虎榜上的机构净买方向与规模", does_not_prove="仅覆盖上榜个股，不代表板块内全部机构行为"),
+    dict(id="MKT_CPI_YOY", channel="背景", subject="公共池", freq="月", value_kind="ratio", layer="市场", tier_default="C",
+         providers=[("calc", ["__cpi__"], p_cpi_yoy)],
+         official_source="国家统计局·居民消费价格指数", official_url="https://www.stats.gov.cn/sj/zxfb/",
+         proves="CPI 同比水平", does_not_prove="不说明通胀预期或政策取向"),
+    dict(id="MKT_PPI_YOY", channel="背景", subject="公共池", freq="月", value_kind="ratio", layer="市场", tier_default="C",
+         providers=[("calc", ["__ppi__"], p_ppi_yoy)],
+         official_source="国家统计局·工业生产者出厂价格指数", official_url="https://www.stats.gov.cn/sj/zxfb/",
+         proves="PPI 同比水平", does_not_prove="不说明企业盈利或政策取向"),
+    dict(id="MKT_PMI", channel="背景", subject="公共池", freq="月", value_kind="level", layer="市场", tier_default="C",
+         providers=[("calc", ["__pmi__"], p_pmi)],
+         official_source="国家统计局·采购经理指数", official_url="https://www.stats.gov.cn/sj/zxfb/",
+         proves="制造业 PMI 水平（50 为荣枯线）", does_not_prove="不说明景气变化方向"),
+    dict(id="MKT_GDP_YOY", channel="背景", subject="公共池", freq="季", value_kind="ratio", layer="市场", tier_default="C",
+         providers=[("calc", ["__gdp__"], p_gdp_yoy)],
+         official_source="国家统计局·国内生产总值", official_url="https://www.stats.gov.cn/sj/zxfb/",
+         proves="GDP 同比水平", does_not_prove="不说明增长质量"),
+    dict(id="MKT_IP_YOY", channel="背景", subject="公共池", freq="月", value_kind="ratio", layer="市场", tier_default="C",
+         providers=[("calc", ["__ip__"], p_ip_yoy)],
+         official_source="国家统计局·规模以上工业增加值", official_url="https://www.stats.gov.cn/sj/zxfb/",
+         proves="工业生产同比", does_not_prove="不说明企业利润"),
+    dict(id="MKT_RETAIL_YOY", channel="背景", subject="公共池", freq="月", value_kind="ratio", layer="市场", tier_default="C",
+         providers=[("calc", ["__retail__"], p_retail_yoy)],
+         official_source="国家统计局·社会消费品零售总额", official_url="https://www.stats.gov.cn/sj/zxfb/",
+         proves="消费同比", does_not_prove="不说明消费结构"),
+    dict(id="MKT_FAI_YOY", channel="背景", subject="公共池", freq="月", value_kind="ratio", layer="市场", tier_default="C",
+         providers=[("calc", ["__fai__"], p_fai_yoy)],
+         official_source="国家统计局·固定资产投资", official_url="https://www.stats.gov.cn/sj/zxfb/",
+         proves="投资同比", does_not_prove="不说明投资效率"),
+    dict(id="MKT_HOUSE_PRICE_YOY", channel="背景", subject="公共池", freq="月", value_kind="ratio", layer="市场", tier_default="C",
+         providers=[("calc", ["__house__"], p_house_price_yoy)],
+         official_source="国家统计局·70 个大中城市新建商品住宅销售价格指数", official_url="https://www.stats.gov.cn/sj/zxfb/",
+         proves="房价同比（70 城均值）", does_not_prove="不说明成交量"),
+    dict(id="MKT_REALESTATE", channel="背景", subject="公共池", freq="月", value_kind="level", layer="市场", tier_default="C",
+         providers=[("calc", ["__re__"], p_realestate)],
+         official_source="国家统计局·国房景气指数", official_url="https://www.stats.gov.cn/sj/zxfb/",
+         proves="房地产景气水平（国房景气指数，官方最后披露 2025-12）", does_not_prove="不说明房价；该指数已停止更新"),
+    dict(id="MKT_ELEC_YOY", channel="背景", subject="公共池", freq="月", value_kind="ratio", layer="市场", tier_default="C",
+         providers=[("calc", ["__elec__"], p_elec_yoy)],
+         official_source="国家能源局·全社会用电量", official_url="https://www.nea.gov.cn/",
+         proves="用电量同比（能源生产同属性代理）", does_not_prove="不等于能源生产总量"),
 ]
 
 SPEC_MAP = {s["id"]: s for s in SPECS}

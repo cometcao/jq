@@ -584,6 +584,48 @@ def ring_readings(as_of):
     return out
 
 
+
+def id_label(iid):
+    """指标 id → 人读名称 + 所属环（展示层用，记录里仍存 id）。"""
+    try:
+        with io.open(os.path.join(ROOT, "dist", "market-state", "references", "registry.json"), encoding="utf-8") as f:
+            reg = json.load(f)
+    except Exception:
+        return iid
+    r = reg.get(iid) or {}
+    name = r.get("name") or iid
+    ch = r.get("channel")
+    return f"{name}（{ch}）" if ch else name
+
+
+IMPACT_PATH = [
+    ("消费价格", "CPI 同比（背景）直接更新；中国 10Y 国债收益率（C3）对该读数重新定价"),
+    ("生产者价格", "PPI 同比（背景）直接更新；中国 10Y 国债收益率（C3）对该读数重新定价"),
+    ("采购经理", "制造业 PMI（背景）直接更新；中国 10Y 国债收益率（C3）对该读数重新定价"),
+    ("国民经济运行", "GDP 同比（背景）更新；中国 10Y 国债收益率（C3）与人民币贷款余额同比（C2）随该读数调整"),
+    ("工业经济效益", "人民币贷款余额同比（C2）与工业增加值（背景）同报告期一并更新"),
+    ("规模以上工业", "工业增加值（背景）直接更新；人民币贷款余额同比（C2）同报告期更新"),
+    ("社会消费品零售", "社零同比（背景）直接更新；人民币贷款余额同比（C2）同报告期更新"),
+    ("固定资产投资", "固投同比（背景）直接更新；人民币贷款余额同比（C2）同报告期更新"),
+    ("商品住宅销售", "70 城房价同比（背景）直接更新；人民币贷款余额同比（C2）同报告期更新"),
+    ("房地产开发", "房地产开发投资相关读数更新；人民币贷款余额同比（C2）同报告期更新"),
+    ("能源生产", "全社会用电量同比（背景，能源生产同属性代理）更新"),
+]
+
+
+def impact_path(title):
+    for k, v in IMPACT_PATH:
+        if k in title:
+            return v
+    return "该事件对应的背景指标更新，相关链条逐环体现"
+
+
+def branch_text(outcomes, prev=None):
+    """用具体阈值表述分支；无前值时退回符号表述。"""
+    if prev:
+        return f"公布值 > {prev} ／ = {prev} ／ < {prev}"
+    return "公布值 > 前值 ／ = 前值 ／ < 前值"
+
 def events_section(as_of):
     """从 data/events/calendar-<as_of>.json 读事件段（sync.py 已自动抓取）。"""
     fp = os.path.join(ROOT, "data", "events", f"calendar-{as_of}.json")
@@ -599,9 +641,29 @@ def events_section(as_of):
     hap = [e for e in evs if e.get("event_status") == "已发生"]
     lines = ["", f"—— 事件（horizon={d.get('horizon_days', 30)}d，不参与 as-of）——"]
     if fut:
-        lines.append(f"未来预定 {len(fut)} 项：")
+        lines.append(f"未来预定 {len(fut)} 项（含结果分支）：")
+        # 分支记录：按日期+标题匹配
+        scn = {}
+        for fp in glob.glob(os.path.join(ROOT, "data", "events", "scenario-scn-*.json")):
+            try:
+                with io.open(fp, encoding="utf-8") as f:
+                    r = json.load(f)
+            except Exception:
+                continue
+            key = (r.get("event_summary", "") or "")[:10]
+            scn.setdefault(key, []).append(r)
         for e in fut:
             lines.append(f"  {e['event_date']} {(e.get('event_time') or '—'):<5} {e.get('event_type',''):<5} {e.get('scope','')}")
+            cand = [r for r in scn.get(e["event_date"], [])
+                    if (r.get("event_summary", "").split(" ", 2)[-1][:6] in e.get("scope", ""))]
+            if cand:
+                o = cand[0]["possible_outcomes"]
+                pv = (cand[0].get("prev_value") or {}).get("value")
+                ids = "、".join(id_label(i) for i in sorted({i for x in o for i in x["affected_indicators"]}))
+                lines.append(f"    受影响：{ids}")
+                prev_txt = f"（前值 {pv}）" if pv else ""
+                for x in o:
+                    lines.append(f"    · {x['observable_flag']}{prev_txt} → {x.get('impact_note','')}")
     if hap:
         lines.append(f"已发生 {len(hap)} 项（近 {d.get('horizon_days', 30)} 天）：")
         for e in hap[:8]:

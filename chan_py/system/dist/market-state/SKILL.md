@@ -5,7 +5,7 @@ description: Use when the user asks what the market or a sector looks like right
 
 # market-state · 市场状态
 
-> **规则版本 V2.70.0**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
+> **规则版本 V2.72.0**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
 
 把当前数据压缩成 **六环 + 证据行** 的客观状态描述。不做判断、不给建议、不预测、不解释涨跌原因。
 
@@ -100,6 +100,21 @@ description: Use when the user asks what the market or a sector looks like right
 `scripts/sync.py` 已抓事件；`state.py --layer market` **默认附事件段**（`--no-events` 关闭），来源 `data/events/calendar-<as_of>.json`：
 未来预定（官方日程）+ 已发生（官方新闻），标 `horizon`，不参与 as-of。
 
+## 事件必须带结果分支（V2.72.0）
+
+「未来预定」事件**每一个都要有分支枚举**（`scripts/scenarios.py` 自动生成，已纳入 `sync.py`）：
+
+```
+2026-12-09 09:30 数据发布  居民消费价格指数月度报告
+  分支：公布值 > 前值 ／ 公布值 = 前值 ／ 公布值 < 前值｜受影响：MKT_CGB10Y、MKT_CPI_YOY｜排序不适用：前值不可得
+```
+
+- 分支必须**可机械比对**（`公布值 > 前值`），不用"好于/差于"；
+- **每支可写 `impact_note`（条件性影响）**：若该支发生，对应指标与哪一环会怎样——**条件句，不是预测**；仍不得给概率、不得排序可能性（ADR-042）；
+- 展示层用**指标名 + 所属环**（如"中国 10Y 国债收益率（C3）"），不显示 `MKT_*` 代码；
+- `affected_indicators` **只列 id，不写方向**；
+- 前值不可得就写「排序不适用」，**不猜**。
+
 ## 事件影响环图（`include_events=true` 时默认出）
 
 **一行环 + 分支圆点**：`C1 C2 [C3 价格 ●○] C4 C5 C6 [背景 ●○◌]`
@@ -108,7 +123,7 @@ description: Use when the user asks what the market or a sector looks like right
 - **●红点=升支影响、○白点=降支影响、◌虚线=不变支影响**（圆点表示"哪支分支触及"，**不表示环会涨跌**）；
 - 必须绑 `scenario` 记录与日历来源，写明"排序不适用"或依据，标 `horizon`；矩阵形态只在用户要"查组合"时出。
 
-## 每环「读法」（默认，V2.70.0 · 资金视角）
+## 每环「读法」（默认，V2.72.0 · 资金视角）
 
 每条环的证据行之后，追加一行 `· C<n> 读法：…`——**用资金结构解释这组数字**，只描述口径含义与位置，不做方向判断。
 

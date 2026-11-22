@@ -51,7 +51,7 @@ def _biz_days(period, as_of):
     return n
 
 
-FREQ_DAYS = {"日": 1, "周": 7, "月": 30, "季": 90, "年": 365}
+FREQ_DAYS = {"日": 1, "周": 5, "月": 21, "季": 63, "年": 252}
 
 
 def load(name):

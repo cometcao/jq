@@ -6,25 +6,58 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "event_id", "event_summary", "observation_time", "calendar_version",
-    "possible_outcomes", "branch_ordering", "branch_ordering_applicable",
+    "event_id",
+    "event_summary",
+    "observation_time",
+    "calendar_version",
+    "possible_outcomes",
+    "branch_ordering",
+    "branch_ordering_applicable",
     "no_prediction_statement"
   ],
   "properties": {
-    "event_id": { "type": "string", "minLength": 1 },
-    "event_summary": { "type": "string", "minLength": 1 },
-    "observation_time": { "type": "string" },
-    "calendar_version": { "type": "integer", "minimum": 1 },
+    "event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "observation_time": {
+      "type": "string"
+    },
+    "calendar_version": {
+      "type": "integer",
+      "minimum": 1
+    },
     "prev_value": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["indicator_id", "value", "data_period", "source_link"],
+      "required": [
+        "indicator_id",
+        "value",
+        "data_period",
+        "source_link"
+      ],
       "properties": {
-        "indicator_id": { "type": "string", "pattern": "^[A-Z]{2,6}_[A-Z0-9_]+$" },
-        "value": { "type": "string" },
-        "data_period": { "type": "string" },
-        "source_link": { "type": "string", "minLength": 8 },
-        "observation_time": { "type": "string" }
+        "indicator_id": {
+          "type": "string",
+          "pattern": "^[A-Z]{2,6}_[A-Z0-9_]+$"
+        },
+        "value": {
+          "type": "string"
+        },
+        "data_period": {
+          "type": "string"
+        },
+        "source_link": {
+          "type": "string",
+          "minLength": 8
+        },
+        "observation_time": {
+          "type": "string"
+        }
       },
       "description": "前值快照；只作分支定义参照，不得作为比价输入"
     },
@@ -34,26 +67,50 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["outcome_label", "observable_flag", "observable_flag_source", "affected_indicators"],
+        "required": [
+          "outcome_label",
+          "observable_flag",
+          "observable_flag_source",
+          "affected_indicators"
+        ],
         "properties": {
-          "outcome_label": { "type": "string", "minLength": 1 },
+          "outcome_label": {
+            "type": "string",
+            "minLength": 1
+          },
           "observable_flag": {
             "type": "string",
             "minLength": 1,
             "description": "可机械比对形式，如 公布值 > 前值；不得含好于/差于/积极/消极"
           },
-          "observable_flag_source": { "type": "string", "minLength": 1 },
+          "observable_flag_source": {
+            "type": "string",
+            "minLength": 1
+          },
           "affected_indicators": {
             "type": "array",
             "minItems": 1,
-            "items": { "type": "string", "pattern": "^[A-Z]{2,6}_[A-Z0-9_]+$" },
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z]{2,6}_[A-Z0-9_]+$"
+            },
             "description": "只能取注册表 indicator_id；只标受影响，不写方向"
+          },
+          "impact_note": {
+            "type": "string",
+            "minLength": 4,
+            "description": "该分支发生时的条件性影响（若X则Y）；不得预测哪支会发生、不得给概率"
           }
         }
       }
     },
-    "branch_ordering": { "type": "string", "minLength": 1 },
-    "branch_ordering_applicable": { "type": "boolean" },
+    "branch_ordering": {
+      "type": "string",
+      "minLength": 1
+    },
+    "branch_ordering_applicable": {
+      "type": "boolean"
+    },
     "no_prediction_statement": {
       "type": "string",
       "minLength": 20,
@@ -62,10 +119,22 @@
   },
   "allOf": [
     {
-      "if": { "properties": { "branch_ordering_applicable": { "const": false } }, "required": ["branch_ordering_applicable"] },
+      "if": {
+        "properties": {
+          "branch_ordering_applicable": {
+            "const": false
+          }
+        },
+        "required": [
+          "branch_ordering_applicable"
+        ]
+      },
       "then": {
         "properties": {
-          "branch_ordering": { "type": "string", "pattern": "不适用" }
+          "branch_ordering": {
+            "type": "string",
+            "pattern": "不适用"
+          }
         }
       }
     }

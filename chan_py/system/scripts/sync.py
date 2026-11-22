@@ -49,6 +49,7 @@ def main():
         results.append(run("history.py", (), "历史序列"))
     if not a.no_events:
         results.append(run("events.py", ["--days", str(a.days), "--write"], "事件日历"))
+        results.append(run("scenarios.py", [], "事件分支"))
     results.append(run("state.py", ["--layer", "market", "--json", "--write"], "市场层"))
     results.append(run("state.py", ["--layer", "sector", "--json", "--write"], "板块层"))
 

@@ -18,6 +18,7 @@ import datetime as dt
 import io
 import json
 import os
+import re
 import sys
 import time
 import warnings
@@ -155,7 +156,105 @@ def backfill_collateral(n=60):
     return write_series("MKT_MARGIN_COLLATERAL", rows, "亿元", "两融担保物总价值（日频）")
 
 
-EXTRA_TASKS = [("MKT_RMB_LOAN_YOY", backfill_loan_yoy), ("MKT_MARGIN_COLLATERAL", backfill_collateral)]
+
+def _macro_series(iid, fn, month_col, val_col, n=24, unit="%"):
+    import akshare as ak
+    df = fn()
+    rows = []
+    for _, r in df.head(n * 2).iterrows():
+        mm = "".join(ch for ch in str(r[month_col]) if ch.isdigit())
+        v = str(r[val_col]).replace("%", "").strip()
+        if len(mm) >= 6 and v not in ("", "nan"):
+            rows.append((f"{mm[:4]}-{mm[4:6]}-01", float(v)))
+    return write_series(iid, sorted(rows)[-n:], unit, "")
+
+
+def backfill_cpi(n=24):
+    import akshare as ak
+    return _macro_series("MKT_CPI_YOY", ak.macro_china_cpi, "月份", "全国-同比增长", n)
+
+
+def backfill_ppi(n=24):
+    import akshare as ak
+    return _macro_series("MKT_PPI_YOY", ak.macro_china_ppi, "月份", "当月同比增长", n)
+
+
+def backfill_pmi(n=24):
+    import akshare as ak
+    return _macro_series("MKT_PMI", ak.macro_china_pmi, "月份", "制造业-指数", n, unit="")
+
+
+def backfill_gdp(n=12):
+    import akshare as ak
+    df = ak.macro_china_gdp()
+    rows = []
+    for _, r in df.head(n * 2).iterrows():
+        q = str(r["季度"]); ys = re.findall(r"\d+", q)
+        if not ys:
+            continue
+        y = ys[0]
+        per = (f"{y}-12-31" if ("1-4" in q or "全年" in q) else
+               f"{y}-09-30" if "1-3" in q else
+               f"{y}-06-30" if "1-2" in q else f"{y}-03-31")
+        rows.append((per, float(r["国内生产总值-同比增长"])))
+    return write_series("MKT_GDP_YOY", sorted(rows)[-n:], "%", "GDP 同比（季频）")
+
+
+def _bf(iid, fn, month_col, val_col, n=24, unit="%"):
+    import akshare as ak
+    df = fn()
+    rows = []
+    for _, r in df.iterrows():
+        mm = "".join(ch for ch in str(r[month_col]) if ch.isdigit())
+        v = str(r[val_col]).replace("%", "").strip()
+        if len(mm) >= 6 and v not in ("", "nan"):
+            rows.append((f"{mm[:4]}-{int(mm[4:6]):02d}-01", float(v)))
+    rows = sorted(rows)[-n:]
+    return write_series(iid, rows, unit, "")
+
+
+def backfill_ip(n=24):
+    import akshare as ak; return _bf("MKT_IP_YOY", ak.macro_china_industrial_value_added, "月份", "同比增长", n)
+
+
+def backfill_retail(n=24):
+    import akshare as ak; return _bf("MKT_RETAIL_YOY", ak.macro_china_consumer_goods_retail, "月份", "同比增长", n)
+
+
+def backfill_fai(n=24):
+    import akshare as ak; return _bf("MKT_FAI_YOY", ak.macro_china_fixed_asset_investment, "月份", "同比增长", n)
+
+
+def backfill_elec(n=24):
+    import akshare as ak
+    df = ak.macro_china_society_electricity()
+    rows = []
+    for _, r in df.iterrows():
+        mm = "".join(ch for ch in str(r["统计时间"]) if ch.isdigit())
+        v = str(r["全社会用电量同比"]).strip()
+        if len(mm) >= 6 and v not in ("", "nan"):
+            rows.append((f"{mm[:4]}-{int(mm[4:6]):02d}-01", float(v)))
+    return write_series("MKT_ELEC_YOY", sorted(rows)[-n:], "%", "全社会用电量同比（月频）")
+
+
+def backfill_house(n=24):
+    import akshare as ak
+    df = ak.macro_china_new_house_price()
+    rows = []
+    for d, g in df.groupby("日期"):
+        try:
+            v = float(g["新建商品住宅价格指数-同比"].astype(float).mean())
+        except Exception:
+            continue
+        rows.append((str(d)[:7] + "-01", v - 100 if v > 50 else v))
+    return write_series("MKT_HOUSE_PRICE_YOY", sorted(rows)[-n:], "%", "70 城新建商品住宅价格指数同比均值")
+
+EXTRA_TASKS = [("MKT_RMB_LOAN_YOY", backfill_loan_yoy), ("MKT_MARGIN_COLLATERAL", backfill_collateral),
+               ("MKT_CPI_YOY", backfill_cpi), ("MKT_PPI_YOY", backfill_ppi),
+               ("MKT_PMI", backfill_pmi), ("MKT_GDP_YOY", backfill_gdp),
+               ("MKT_IP_YOY", backfill_ip), ("MKT_RETAIL_YOY", backfill_retail),
+               ("MKT_FAI_YOY", backfill_fai), ("MKT_ELEC_YOY", backfill_elec),
+               ("MKT_HOUSE_PRICE_YOY", backfill_house)]
 
 TASKS = {
     "C1": ("POL_LPR", backfill_lpr, 24),
