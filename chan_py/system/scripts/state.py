@@ -428,6 +428,36 @@ def list_history():
         return []
     return sorted(os.path.basename(p) for p in glob.glob(os.path.join(HIST_DIR, "*.json")))
 
+
+def _sector_name():
+    fp = os.path.join(ROOT, "data", "sector_target.json")
+    try:
+        with io.open(fp, encoding="utf-8") as f:
+            return (json.load(f) or {}).get("name") or "半导体"
+    except Exception:
+        return "半导体"
+
+
+def sector_policy_clues(as_of, horizon=30):
+    """板块层 C1 的政策线索：数对口部委近 N 天发布条数（只作线索，不给状态词）。"""
+    fp = os.path.join(ROOT, "data", "events", f"calendar-{as_of}.json")
+    mp = os.path.join(ROOT, "data", "sector_dept_map.json")
+    if not (os.path.exists(fp) and os.path.exists(mp)):
+        return None
+    try:
+        with io.open(fp, encoding="utf-8") as f:
+            cal = json.load(f)
+        with io.open(mp, encoding="utf-8") as f:
+            depts = (json.load(f).get("map") or {}).get(_sector_name(), [])
+    except Exception:
+        return None
+    if not depts:
+        return None
+    hits = [e for e in (cal.get("events") or [])
+            if any(d in str(e.get("issuer", "")) for d in depts)]
+    bad = [d for d in depts if d in ((json.load(io.open(mp, encoding="utf-8")).get("uncrawlable")) or {})]
+    return {"depts": depts, "count": len(hits), "items": hits[:3], "uncrawlable": bad}
+
 def events_section(as_of):
     """从 data/events/calendar-<as_of>.json 读事件段（sync.py 已自动抓取）。"""
     fp = os.path.join(ROOT, "data", "events", f"calendar-{as_of}.json")
@@ -445,11 +475,11 @@ def events_section(as_of):
     if fut:
         lines.append(f"未来预定 {len(fut)} 项：")
         for e in fut:
-            lines.append(f"  {e['date']} {e.get('time') or '—':<5} {e.get('event_type',''):<5} {e['title']}")
+            lines.append(f"  {e['event_date']} {(e.get('event_time') or '—'):<5} {e.get('event_type',''):<5} {e.get('scope','')}")
     if hap:
         lines.append(f"已发生 {len(hap)} 项（近 {d.get('horizon_days', 30)} 天）：")
         for e in hap[:8]:
-            lines.append(f"  {e['date']} {'':<5} {e.get('event_type',''):<5} {e['title'][:38]}")
+            lines.append(f"  {e['event_date']} {'':<5} {e.get('event_type',''):<5} {e.get('scope','')[:38]}  · {e.get('issuer','')}")
     return lines
 
 def build_sector(policy):
@@ -459,6 +489,7 @@ def build_sector(policy):
             sector = json.load(fh).get("name", "半导体")
     except Exception:
         sector = "半导体"
+    as_of = period("SECTOR_PCT") or period("SECTOR_AMT") or _latest_trade_day()
     rings = [Ring("C1", "行业政策"), Ring("C2", "供给份额"), Ring("C3", "相对贵贱"),
              Ring("C4", "杠杆与资金池"), Ring("C5", "主体行为"), Ring("C6", "结果")]
 
@@ -475,8 +506,20 @@ def build_sector(policy):
         reason = C_REASONS.get(iid) or "唯一可得来源，未对账"
         return f"〔C 类·{reason[:16]}…〕"
 
-    # C1 行业政策：人工，v1 不做
-    rings[0].add("不可读（—）", "行业政策状态需人工录入官方文件链接", "该环无证据")
+    # C1 行业政策：线索自动统计，状态词仍需人工判定
+    clue = sector_policy_clues(as_of)
+    if clue:
+        if clue["count"]:
+            tail = "；".join(f"{e['event_date']} {e.get('scope','')[:18]}" for e in clue["items"])
+            ev = f"近 30 天发布 {clue['count']} 条，仅作线索：{tail}"
+        else:
+            ev = ("该部委源不可抓（JS 渲染），无法自动取证" if clue.get("uncrawlable")
+                  else "近 30 天该部委源无条目（源可抓但无发布）")
+        rings[0].add("不可读（—）",
+                     f"政策状态无源（需人工判定）；对口部委（{'、'.join(clue['depts'])}）{ev}",
+                     "线索不等于政策方向，需人工判定")
+    else:
+        rings[0].add("不可读（—）", "行业政策状态需人工录入官方文件链接；该板块未配置对口部委", "该环无证据")
     # C2 供给份额
     v = val("SECTOR_SHARE")
     p, prev_period = prev_value_from_revisions("SECTOR_SHARE", period("SECTOR_SHARE"))

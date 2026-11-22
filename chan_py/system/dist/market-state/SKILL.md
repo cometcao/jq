@@ -5,7 +5,7 @@ description: Use when the user asks what the market or a sector looks like right
 
 # market-state · 市场状态
 
-> **规则版本 V2.58.0**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
+> **规则版本 V2.60.1**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
 
 把当前数据压缩成 **六环 + 证据行** 的客观状态描述。不做判断、不给建议、不预测、不解释涨跌原因。
 

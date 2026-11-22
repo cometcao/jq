@@ -7,7 +7,7 @@
   2. 已发生   —— 官方**新闻列表**（央行新闻发布、证监会要闻）。政策、会议、公告一发布就能进来。
 
 为什么分开：规则只允许"官方日历明确列出"的入未来预定；新闻是已发生，不能倒推成未来。
-**没有官方链接的一律不入**（media/传闻只列未确认线索）。
+**没有官方链接的一律不入**（传闻/媒体日期不进日历，也不另行保留）。
 
 用法：
     python scripts/events.py --days 30            # 表格
@@ -32,6 +32,78 @@ WD = {"一": 0, "二": 1, "三": 2, "四": 3, "五": 4, "六": 5, "日": 6, "天
 STATS_URL = "https://www.stats.gov.cn/sj/fbrc/bnxxfb/"
 PBC_URL = "http://www.pbc.gov.cn/goutongjiaoliu/113456/113469/index.html"
 CSRC_URL = "http://www.csrc.gov.cn/csrc/c100028/common_list.shtml"
+
+# 部委新闻/政策发布（已发生；实测可抓）
+DEPT_SOURCES = [
+    ("国家发展改革委", "https://www.ndrc.gov.cn/xwdt/xwfb/"),
+    ("财政部", "https://www.mof.gov.cn/zhengwuxinxi/caizhengxinwen/"),
+    ("国家药监局", "https://www.nmpa.gov.cn/yaowen/ypjgyw/index.html"),
+    ("国家能源局", "https://www.nea.gov.cn/xwzx/"),
+]
+
+
+
+SCHEMA_PATH = os.path.join(ROOT, "schemas", "event.schema.json")
+
+
+def _schema():
+    with io.open(SCHEMA_PATH, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def to_event_record(raw, calendar_version=1):
+    """把抓到的原始行转成 event.schema.json 的记录（字段名与枚举严格对齐）。"""
+    import hashlib
+
+    date = raw["date"]
+    title = (raw.get("title") or "")[:80]
+    issuer = raw.get("issuer") or ""
+    h = hashlib.md5(f"{date}|{issuer}|{title}".encode("utf-8")).hexdigest()[:6]
+    return {
+        "event_id": f"EVT-{date.replace('-', '')}-{h}",
+        "event_type": raw.get("event_type") or "其他",
+        "layer": "市场",
+        "event_date": date,
+        "event_time": (raw.get("time") or None),
+        "scope": title,                      # schema 无 title 字段，标题落 scope
+        "data_period": None,
+        "event_status": raw.get("event_status") or "已发生",
+        "status_changed_at": None,
+        "issuer": issuer,
+        "entry_mode": raw.get("entry_mode") or "auto",
+        "source_tier": "A",                  # 全部抓自官方站点
+        "source_link": raw.get("source_link") or None,
+        "calendar_version": calendar_version,
+        "observation_time": dt.datetime.now().isoformat(timespec="seconds"),
+        "missing_type": "none",
+    }
+
+
+def validate_events(records):
+    """按 event.schema.json 校验（无 jsonschema 依赖，手写最小校验：必填 + 枚举 + 类型）。"""
+    sch = _schema()
+    req = sch["required"]
+    props = sch["properties"]
+    errs = []
+    for i, rec in enumerate(records):
+        for k in req:
+            if k not in rec:
+                errs.append(f"#{i} 缺必填 {k}")
+        extra = set(rec) - set(props)
+        if extra:
+            errs.append(f"#{i} 多余字段 {sorted(extra)}")
+        for k, v in rec.items():
+            spec = props.get(k)
+            if not spec:
+                continue
+            if "enum" in spec and v is not None and v not in spec["enum"]:
+                errs.append(f"#{i} {k}={v!r} 不在枚举")
+            t = spec.get("type")
+            if t == "integer" and not isinstance(v, int):
+                errs.append(f"#{i} {k} 应为整数")
+            if t == "string" and not isinstance(v, str):
+                errs.append(f"#{i} {k} 应为字符串")
+    return errs
 
 
 def latest_trade_day():
@@ -130,11 +202,48 @@ def _csrc_guard(fn, url, issuer, today, horizon):
     return got
 
 
+
+def _norm_date(s):
+    s = s.strip()
+    m = re.match(r"^(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})", s)
+    if not m:
+        return None
+    return dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+
+
+def fetch_dept_news(issuer, url, today, horizon):
+    """部委新闻列表：标题 + 近 N 天日期。事件类型按标题归类，部委政策文件归“其他”（附 category）。"""
+    import requests
+    from urllib.parse import urljoin
+
+    r = requests.get(url, headers=UA, timeout=25)
+    r.encoding = r.apparent_encoding or "utf-8"
+    h = r.text
+    pairs = re.findall(r'<a[^>]+href="([^"]+)"[^>]*>(.{4,90}?)</a>(.{0,400}?)(20\d{2}[-/年]\d{1,2}[-/月]\d{1,2})', h, flags=re.S)
+    seen, out = set(), []
+    for href, title, _, dstr in pairs:
+        t = re.sub(r"<[^>]+>", "", title).strip()
+        if not t or len(t) < 6 or t in seen or t.startswith("首页"):
+            continue
+        d = _norm_date(dstr)
+        if not d or not (today - dt.timedelta(days=horizon) <= d <= today):
+            continue
+        seen.add(t)
+        cat = "政策文件" if any(k in t for k in ("通知", "公告", "意见", "办法", "规划", "方案", "细则", "规定")) else "新闻"
+        out.append({"date": d.isoformat(), "time": "", "title": t,
+                    "event_type": classify(t) if cat == "新闻" else "其他",
+                    "category": cat, "event_status": "已发生",
+                    "issuer": issuer, "entry_mode": "auto", "source_link": urljoin(url, href)})
+    return out[:10]
+
+
 def collect(today, horizon):
     events, errors = [], []
-    for name, fn in (("统计局日程", lambda: fetch_stats_schedule(today, horizon)),
-                     ("央行新闻", lambda: fetch_news_list(PBC_URL, "中国人民银行", today, horizon)),
-                     ("证监会要闻", lambda: _csrc_guard(fetch_news_list, CSRC_URL, "中国证监会", today, horizon))):
+    tasks = [("统计局日程", lambda: fetch_stats_schedule(today, horizon)),
+             ("央行新闻", lambda: fetch_news_list(PBC_URL, "中国人民银行", today, horizon)),
+             ("证监会要闻", lambda: _csrc_guard(fetch_news_list, CSRC_URL, "中国证监会", today, horizon))]
+    tasks += [(issuer, (lambda i=issuer, u=url: fetch_dept_news(i, u, today, horizon))) for issuer, url in DEPT_SOURCES]
+    for name, fn in tasks:
         try:
             got = fn()
             events += got
@@ -142,7 +251,8 @@ def collect(today, horizon):
         except Exception as e:
             errors.append(f"{name}: {type(e).__name__}: {str(e)[:60]}")
             print(f"  ✗ {name:<10} 失败：{type(e).__name__}")
-    events.sort(key=lambda e: (e["event_status"] != "未来预定", e["date"], e["time"]))
+    order = {"未来预定": 0, "已发生": 1}
+    events.sort(key=lambda e: (order.get(e["event_status"], 3), e["date"], e.get("time") or ""))
     return events, errors
 
 
@@ -157,9 +267,18 @@ def main():
     today = dt.date.fromisoformat(as_of)
     events, errors = collect(today, a.days)
 
-    payload = {"as_of": as_of, "horizon_days": a.days, "event_count": len(events),
-               "sources": {"stats_schedule": STATS_URL, "pbc_news": PBC_URL, "csrc_news": CSRC_URL},
-               "errors": errors, "events": events}
+    records = [to_event_record(e) for e in events]
+    verrs = validate_events(records)
+    if verrs:
+        print(f"✗ 事件记录不符合 event.schema.json（{len(verrs)} 处），未写入：")
+        for e in verrs[:6]:
+            print("   -", e)
+        return 3
+    payload = {"as_of": as_of, "horizon_days": a.days, "event_count": len(records),
+               "calendar_version": 1,
+               "sources": {"stats_schedule": STATS_URL, "pbc_news": PBC_URL,
+                           "depts": [u for _, u in DEPT_SOURCES]},
+               "errors": errors, "events": records}
     if a.write:
         os.makedirs(OUT, exist_ok=True)
         with io.open(os.path.join(OUT, f"calendar-{as_of}.json"), "w", encoding="utf-8") as f:
@@ -168,16 +287,16 @@ def main():
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
 
-    fut = [e for e in events if e["event_status"] == "未来预定"]
-    hap = [e for e in events if e["event_status"] == "已发生"]
+    fut = [e for e in records if e["event_status"] == "未来预定"]
+    hap = [e for e in records if e["event_status"] == "已发生"]
     print(f"与 C1 指针一致：未来 {a.days} 天预定 {len(fut)} 项 · 近 {a.days} 天已发生 {len(hap)} 项（as-of {as_of}）")
     print(f"\n【未来预定】")
     for e in fut:
-        print(f"  {e['date']} {e['time'] or '—':<5} {e['event_type']:<5} {e['title']}")
+        print(f"  {e['event_date']} {(e['event_time'] or '—'):<5} {e['event_type']:<5} {e['scope']}")
     print(f"\n【已发生（近 {a.days} 天）】")
     for e in hap:
-        print(f"  {e['date']} {'':<5} {e['event_type']:<5} {e['title'][:40]}")
-    print("\n来源：统计局发布日程（未来预定）· 央行/证监会新闻发布（已发生）；无官方链接者不入")
+        print(f"  {e['event_date']} {'':<5} {e['event_type']:<5} {e['scope'][:40]}  · {e['issuer']}")
+    print("\n来源：统计局日程（未来预定）· 央行/部委新闻（已发生）；无官方链接者不入日历")
     return 0
 
 
