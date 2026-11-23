@@ -562,26 +562,51 @@ def p_cn_etf_aum(_df=None):
 
 
 def p_sector_val(_df=None):
-    """板块 PE ÷ 沪深300 PE（相对倍数）；板块指数代码来自 data/sector_index_map.json。"""
-    code = _sector_index_code()
-    if not code:
-        raise ValueError(f"板块「{_sector_target()}」未配置中证指数代码（data/sector_index_map.json）")
+    """板块 PE ÷ 沪深300 PE：按 data/sector_index_map.json 里的**所有**映射批量计算，
+    结果写 data/cache/sector_val_by_sector.json（按板块名索引），同时返回目标板块那一条。"""
     import requests
-    def pe_of(sym):
+    target = _sector_target()
+    try:
+        with io.open(os.path.join(ROOT, "data", "sector_index_map.json"), encoding="utf-8") as f:
+            mapping = (json.load(f).get("map") or {})
+    except Exception:
+        mapping = {}
+    if not mapping:
+        raise ValueError("sector_index_map.json 为空")
+
+    def pe_of(sym, cache={}):
+        if sym in cache:
+            return cache[sym]
         url = (f"https://oss-ch.csindex.com.cn/static/html/csindex/public/uploads/file/"
                f"autofile/indicator/{sym}indicator.xls")
         r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
         df = pd.read_excel(io.BytesIO(r.content))
         col = [c for c in df.columns if "市盈率1" in str(c)][0]
         dcol = [c for c in df.columns if str(c).startswith("日期")][0]
-        df = df.dropna(subset=[col]).sort_values(dcol)
-        row = df.iloc[-1]
-        return float(row[col]), str(row[dcol])
-    sec_pe, period = pe_of(code)
-    mkt_pe, _ = pe_of("000300")
-    return ({"指标": f"{_sector_target()}板块估值倍数", "值": f"{sec_pe / mkt_pe:.2f}×",
-             "对比": f"板块 PE {sec_pe:.2f} / 沪深300 PE {mkt_pe:.2f}"},
-            {"data_period": norm_period(period)})
+        df = df.dropna(subset=[col]).copy()
+        df["_d"] = df[dcol].astype(str)
+        row = df.sort_values("_d").iloc[-1]
+        cache[sym] = (float(row[col]), str(row["_d"]))
+        return cache[sym]
+
+    mkt_pe, mkt_d = pe_of("000300")
+    by = {}
+    for name, code in mapping.items():
+        try:
+            sec_pe, period = pe_of(code)
+        except Exception:
+            continue
+        by[name] = {"ratio": round(sec_pe / mkt_pe, 2), "sec_pe": round(sec_pe, 2),
+                    "mkt_pe": round(mkt_pe, 2), "period": norm_period(period)}
+    with io.open(os.path.join(CACHE_DIR, "sector_val_by_sector.json"), "w", encoding="utf-8") as f:
+        json.dump({"generated_at": dt.datetime.now().isoformat(timespec="seconds"), "by_sector": by},
+                  f, ensure_ascii=False, indent=2)
+    if target not in by:
+        raise ValueError(f"板块「{target}」未配置中证指数代码")
+    b = by[target]
+    return ({"指标": f"{target}板块估值倍数", "值": f"{b['ratio']:.2f}×",
+             "对比": f"板块 PE {b['sec_pe']:.2f} / 沪深300 PE {b['mkt_pe']:.2f}"},
+            {"data_period": b["period"]})
 
 
 def p_sector_inst(_df=None):
@@ -805,6 +830,60 @@ def p_margin_sz_official(_df=None):
     raise ValueError(f"深交所两融报表近 8 天无数据{'' if last_err is None else '：' + type(last_err).__name__}")
 
 
+
+def _sw_codes_of_target():
+    """目标板块 → 申万二级代码列表（支持一级行业按 parent 展开）。"""
+    try:
+        with io.open(os.path.join(ROOT, "data", "sector_target.json"), encoding="utf-8-sig") as f:
+            name = json.load(f).get("name", "半导体")
+        with io.open(os.path.join(ROOT, "data", "sw", "sectors.json"), encoding="utf-8") as f:
+            secs = (json.load(f).get("sectors") or [])
+    except Exception:
+        return []
+    alias = {"医药": "医药生物", "化工": "基础化工", "电力": "公用事业", "券商": "非银金融", "保险": "非银金融"}
+    n = alias.get(name, name)
+    exact = [x["code"] for x in secs if x.get("name") == n]
+    return exact or [x["code"] for x in secs if x.get("parent") == n]
+
+
+def p_sector_lhb_sw(_df=None):
+    """板块内龙虎榜净买额：全市场龙虎榜明细 × 申万二级成分（多板块批量）。"""
+    import akshare as ak
+    import datetime as _dt
+    end = _dt.date.fromisoformat(_trade_day_of())
+    start = end - _dt.timedelta(days=7)
+    try:
+        df = ak.stock_lhb_detail_em(start_date=start.strftime("%Y%m%d"), end_date=end.strftime("%Y%m%d"))
+    except Exception as e:
+        raise RuntimeError(f"龙虎榜明细失败：{type(e).__name__}")
+    net = {}
+    for _, r in df.iterrows():
+        code = str(r.get("代码") or "").zfill(6)
+        try:
+            amt = float(r.get("龙虎榜净买额") or 0)
+        except Exception:
+            continue
+        net[code] = net.get(code, 0.0) + amt
+    with io.open(os.path.join(ROOT, "data", "sw", "constituents.json"), encoding="utf-8") as f:
+        cons = (json.load(f).get("sectors") or {})
+    by = {}
+    for cid, meta in cons.items():
+        codes = meta.get("codes") or []
+        vals = [net[c] for c in codes if c in net]
+        if vals:
+            by[cid] = {"name": meta.get("name"), "net": round(sum(vals) / 1e8, 2), "n": len(vals)}
+    with io.open(os.path.join(CACHE_DIR, "sector_lhb_by_sector.json"), "w", encoding="utf-8") as f:
+        json.dump({"generated_at": dt.datetime.now().isoformat(timespec="seconds"),
+                   "data_period": _trade_day_of(), "by_sector": by}, f, ensure_ascii=False, indent=2)
+    target = _sw_codes_of_target()
+    if not target:
+        raise ValueError("目标板块没有申万成分")
+    tot = sum(by.get(c, {}).get("net", 0) for c in target)
+    n = sum(by.get(c, {}).get("n", 0) for c in target)
+    return ({"指标": "板块内龙虎榜净买额（申万成分口径）", "值": f"{tot:+.2f} 亿元",
+             "对比": f"{n} 只上榜（近 7 日累计）"}, {"data_period": _trade_day_of()})
+
+
 # ---------------------------------------------------------------- 指标声明
 SPECS = [
     dict(id="POL_LPR", channel="C1", subject="政策", freq="不定期", value_kind="level", layer="市场", tier_default="C",
@@ -985,6 +1064,11 @@ SPECS = [
          official_url="http://www.szse.cn/disclosure/margin/margin/index.html",
          official_hosts=["www.szse.cn"],
          proves="深市当日融资余额（官方汇总）", does_not_prove="不含沪市；不等于全市场两融余额"),
+    dict(id="SECTOR_LHB_SW", channel="C5", subject="公共池", freq="日", value_kind="level", layer="板块", tier_default="C",
+         providers=[("calc", ["__lhb_sw__"], p_sector_lhb_sw)],
+         official_source="交易所·龙虎榜明细 × 申万二级成分（自算汇总）",
+         official_url="https://data.eastmoney.com/stock/lhb.html",
+         proves="板块内上榜个股的龙虎榜净买额（申万成分口径）", does_not_prove="只覆盖上榜个股"),
 ]
 
 SPEC_MAP = {s["id"]: s for s in SPECS}

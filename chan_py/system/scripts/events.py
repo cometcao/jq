@@ -360,6 +360,37 @@ def fetch_ipo(today, horizon):
     return out[:30]
 
 
+# ---------------------------------------------------------------- 信息含量分级
+# 高信息量：有决定/结果/数字（政策文件、批复、数据、实质公告）
+INFO_HIGH = ("印发", "发布", "决定", "通过", "批准", "批复", "签署", "达成", "公布",
+             "征求意见", "公告", "通知", "意见", "办法", "规划", "方案", "规定", "细则",
+             "标准", "名单", "修订", "实施", "启用", "调整", "处罚", "立案", "问询",
+             "回购", "增持", "减持", "解禁", "定向增发", "业绩预告", "分红", "中标", "合同",
+             "审评", "审批", "注册", "监管", "整治", "改革", "试点", "补贴", "税收", "招标", "签订")
+# 纯行程/活动（无对象、无结果）
+INFO_NOISE = ("会见", "调研", "考察", "座谈", "培训班", "举办", "出席", "致辞", "慰问",
+              "走访", "庆祝", "参观", "宣讲", "学习", "交流", "亮相")
+# 只有动作、没有落点（若同时不含 INFO_HIGH，则判低）
+INFO_VERB_ONLY = ("召开", "参加", "率队", "赴", "推进", "开展", "部署", "传达", "巡视",
+                  "督导", "启动", "动员")
+
+
+def info_level(title):
+    """判断事件信息含量：有决定/结果 → high；纯行程活动 → low。"""
+    t = title or ""
+    # 行程词优先：标题是"会见/出席/率队/座谈"这类，无论正文含什么政策词都是低信息
+    if any(k in t for k in INFO_NOISE):
+        return "low"
+    if any(k in t for k in INFO_HIGH):
+        return "high"
+    if any(k in t for k in INFO_VERB_ONLY):
+        return "low"          # 只有"召开/部署/推进"这类动作，没有落点
+    return "mid"
+
+
+COLLECT_STATS = {}
+
+
 def collect(today, horizon):
     events, errors = [], []
     tasks = [("统计局日程", lambda: fetch_stats_schedule(today, horizon)),
@@ -378,6 +409,23 @@ def collect(today, horizon):
         except Exception as e:
             errors.append(f"{name}: {type(e).__name__}: {str(e)[:60]}")
             print(f"  ✗ {name:<10} 失败：{type(e).__name__}")
+    # 事件层面统一过滤：已发生事件里，纯行程/活动（无决定无结果）不入日历
+    before = len(events)
+    kept, dropped = [], 0
+    for e in events:
+        if e.get("event_status") == "未来预定":
+            kept.append(e)
+            continue
+        if e.get("event_type") in ("数据发布", "解禁") or e.get("category") in ("新股发行", "公开市场操作"):
+            kept.append(e)
+            continue
+        if info_level(e.get("title") or "") == "low":
+            dropped += 1
+            continue
+        kept.append(e)
+    events = kept
+    print(f"  · 信息含量过滤：丢弃 {dropped} 条纯行程/活动（原 {before} 条 → {len(events)} 条）")
+    COLLECT_STATS.clear(); COLLECT_STATS.update({"before": before, "dropped": dropped, "after": len(events)})
     order = {"未来预定": 0, "已发生": 1}
     events.sort(key=lambda e: (order.get(e["event_status"], 3), e["date"], e.get("time") or ""))
     return events, errors
@@ -401,7 +449,7 @@ def main():
         for e in verrs[:6]:
             print("   -", e)
         return 3
-    payload = {"as_of": as_of, "horizon_days": a.days, "event_count": len(records),
+    payload = {"filter_stats": COLLECT_STATS, "as_of": as_of, "horizon_days": a.days, "event_count": len(records),
                "calendar_version": 1,
                "sources": {"stats_schedule": STATS_URL, "pbc_news": PBC_URL,
                            "depts": [u for _, u in DEPT_SOURCES]},

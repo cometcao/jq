@@ -496,7 +496,7 @@ def _sector_name():
         return "半导体"
 
 
-def sector_policy_clues(as_of, horizon=30):
+def sector_policy_clues(as_of, horizon=30, sector=None):
     """板块层 C1 的政策线索：数对口部委近 N 天发布条数（只作线索，不给状态词）。"""
     mp = os.path.join(ROOT, "data", "sector_dept_map.json")
     if not os.path.exists(mp):
@@ -508,7 +508,7 @@ def sector_policy_clues(as_of, horizon=30):
         return None
     try:
         with io.open(mp, encoding="utf-8") as f:
-            depts = (json.load(f).get("map") or {}).get(_sector_name(), [])
+            depts = (json.load(f).get("map") or {}).get(sector or _sector_name(), [])
     except Exception:
         return None
     if not depts:
@@ -786,6 +786,25 @@ def events_section(as_of):
 SW_DIR = os.path.join(ROOT, "data", "sw")
 
 
+
+SW_ALIAS = {"医药": "医药生物", "化工": "基础化工", "电力": "公用事业",
+            "银行": "银行", "券商": "非银金融", "保险": "非银金融"}
+
+
+def _sw_sectors_of(name):
+    """板块名 → 申万二级列表：先按二级名精确匹配，退回按一级行业(parent)匹配多只。"""
+    name = SW_ALIAS.get(name, name)
+    try:
+        with io.open(os.path.join(SW_DIR, "sectors.json"), encoding="utf-8") as f:
+            secs = (json.load(f) or {}).get("sectors") or []
+    except Exception:
+        return []
+    exact = [x for x in secs if x.get("name") == name]
+    if exact:
+        return exact
+    return [x for x in secs if x.get("parent") == name]
+
+
 def _sw_sector_of(name):
     """板块名 → 申万二级代码（按名称精确/包含匹配）。"""
     try:
@@ -886,13 +905,47 @@ def _sw_margin_of(code):
     return sum(hit), len(hit), m.get("date")
 
 
-def build_sector(policy):
-    """板块层六环（同名不同义）。v1 只做 C2 份额、C6 涨跌与广度；其余如实不可读。"""
+
+def _sector_val_of(sector):
+    """板块估值倍数：从 data/cache/sector_val_by_sector.json 按板块名取。"""
+    fp = os.path.join(ROOT, "data", "cache", "sector_val_by_sector.json")
+    if not os.path.exists(fp):
+        return None
     try:
-        with io.open(os.path.join(ROOT, "data", "sector_target.json"), encoding="utf-8") as fh:
-            sector = json.load(fh).get("name", "半导体")
+        with io.open(fp, encoding="utf-8") as f:
+            by = (json.load(f) or {}).get("by_sector") or {}
     except Exception:
-        sector = "半导体"
+        return None
+    return by.get(sector)
+
+
+
+def _sector_lhb_sw(sector):
+    """板块内龙虎榜净买（申万成分口径）：按板块（支持一级行业展开）汇总。"""
+    fp = os.path.join(ROOT, "data", "cache", "sector_lhb_by_sector.json")
+    if not os.path.exists(fp):
+        return None, None, 0
+    try:
+        with io.open(fp, encoding="utf-8") as f:
+            obj = json.load(f)
+        by = obj.get("by_sector") or {}
+    except Exception:
+        return None, None, 0
+    codes = [x["code"] for x in _sw_sectors_of(sector)]
+    vals = [by[c] for c in codes if c in by]
+    if not vals:
+        return None, obj.get("data_period"), 0
+    return sum(v["net"] for v in vals), obj.get("data_period"), sum(v["n"] for v in vals)
+
+
+def build_sector(policy, sector=None):
+    """板块层六环（同名不同义）。sector 为空时读 data/sector_target.json。"""
+    if not sector:
+        try:
+            with io.open(os.path.join(ROOT, "data", "sector_target.json"), encoding="utf-8-sig") as fh:
+                sector = json.load(fh).get("name", "半导体")
+        except Exception:
+            sector = "半导体"
     as_of = period("SECTOR_PCT") or period("SECTOR_AMT") or _latest_trade_day()
     rings = [Ring("C1", "行业政策"), Ring("C2", "供给份额"), Ring("C3", "相对贵贱"),
              Ring("C4", "杠杆与资金池"), Ring("C5", "主体行为"), Ring("C6", "结果")]
@@ -911,13 +964,25 @@ def build_sector(policy):
         return f"〔C 类·{reason[:16]}…〕"
 
     # C1 行业政策：线索自动统计，状态词仍需人工判定
-    clue = sector_policy_clues(as_of)
+    clue = sector_policy_clues(as_of, sector=sector)
     if clue:
         if clue["count"]:
-            tail = "；".join(f"{e['event_date']} {e.get('scope','')[:20]}" for e in clue["items"])
-            pol = sum(1 for e in clue["items"] if e.get("event_type") in ("其他",) or
-                      any(k in (e.get("scope") or "") for k in ("通知", "意见", "办法", "规划", "方案", "规定")))
-            ev = f"近 30 天对口部委发布 {clue['count']} 条（含政策类约 {pol} 条），最近：{tail}"
+            # 政策类优先展示全称，最多 3 条；其余折叠为条数
+            _items = sorted([e for e in clue["items"]], key=lambda e: (
+                0 if any(k in (e.get("scope") or "") for k in ("通知", "意见", "办法", "规划", "方案", "规定", "公告"))
+                else 1, e.get("event_date") or ""))
+            try:
+                import importlib.util as _ilu
+                _sp = _ilu.spec_from_file_location("ev_mod", os.path.join(ROOT, "scripts", "events.py"))
+                _ev = _ilu.module_from_spec(_sp); _sp.loader.exec_module(_ev)
+                _info = _ev.info_level
+            except Exception:
+                _info = lambda t: "mid"
+            _pol = [e for e in _items if _info(e.get("scope") or "") == "high"]
+            _show = (_pol or _items)[:3]
+            tail = "；".join(f"{e['event_date']} {e.get('scope','')[:46]}" for e in _show)
+            ev = (f"近 30 天对口部委**高信息量**事件 {clue['count']} 条（行程/活动类已滤除）；"
+                  f"最近：{tail}" + (f"；另 {max(0, clue['count']-len(_show))} 条" if clue["count"] > len(_show) else ""))
         else:
             ev = ("该部委源不可抓（JS 渲染），无法自动取证" if clue.get("uncrawlable")
                   else "近 30 天该部委源无条目（源可抓但无发布）")
@@ -927,10 +992,16 @@ def build_sector(policy):
     else:
         rings[0].add("不可读（—）", "行业政策状态需人工录入官方文件链接；该板块未配置对口部委", "该环无证据")
     # C2 供给份额：优先申万口径（有历史，可出前值与分位）；没有就退回同花顺快照
-    sw = _sw_sector_of(sector)
+    sw_list = _sw_sectors_of(sector)
+    sw = sw_list[0] if sw_list else None
     sw_share_done = False
-    if sw:
-        amt = _sw_hist_amount(sw["code"])
+    if sw_list:
+        # 一级行业：把各二级板块同一天的成交额相加
+        merged = {}
+        for _x in sw_list:
+            for d_, a_ in _sw_hist_amount(_x["code"]):
+                merged[d_] = merged.get(d_, 0) + a_
+        amt = sorted(merged.items())
         mkt = [(p_, v_) for p_, v_ in _hist("MKT_TURNOVER", 400)]
         mkt_d = dict(mkt)
         shares = [(d_, a_ / mkt_d[d_] * 100) for d_, a_ in amt if mkt_d.get(d_)]
@@ -958,14 +1029,25 @@ def build_sector(policy):
     elif not sw_share_done:
         rings[1].add("不可读（—）", "板块成交额或全市场成交额缺失", "该环无证据")
     # C3 相对贵贱：板块 PE ÷ 沪深300 PE
-    v3 = val("SECTOR_VAL")
+    _idx_map = {}
+    try:
+        with io.open(os.path.join(ROOT, "data", "sector_index_map.json"), encoding="utf-8") as f:
+            _idx_map = (json.load(f).get("map") or {})
+    except Exception:
+        _idx_map = {}
+    _has_own_index = bool(_idx_map.get(sector))
+    _sv = _sector_val_of(sector) if _has_own_index else None
+    v3 = _sv["ratio"] if _sv else None
     if v3 is not None:
         word = "偏贵" if v3 > 1 else ("偏便宜" if v3 < 1 else "不变")
-        rings[2].add(f"{word}（{period('SECTOR_VAL')}）",
-                     f"板块 PE ÷ 沪深300 PE = {v3:.2f}×（基准：沪深300）",
+        rings[2].add(f"{word}（{_sv.get('period')}）",
+                     f"板块 PE {_sv['sec_pe']:.2f} ÷ 沪深300 PE {_sv['mkt_pe']:.2f} = {v3:.2f}×（基准：沪深300）",
                      "只说明相对倍数，不说明是否会回归；差值与分位归比价层", tag_of("SECTOR_VAL"))
     else:
-        rings[2].add("不可读（—）", "板块估值未取到（可能在 data/sector_index_map.json 里没有该板块的指数代码）", "该环无证据")
+        rings[2].add("不可读（—）",
+                     f"无源：{sector} 未在 data/sector_index_map.json 映射到中证行业指数，板块 PE 无法计算"
+                     + ("（一级行业需选具体二级板块）" if len(sw_list) > 1 else ""),
+                     "该环无证据")
     # C4 杠杆与资金池：用深市个股两融 × 申万成分 汇总（仅深市部分）
     mbal, mn, mday = (_sw_margin_of(sw["code"]) if sw else (None, 0, None))
     if mbal is not None:
@@ -977,18 +1059,37 @@ def build_sector(policy):
     else:
         rings[3].add("不可读（—）", "板块层杠杆无可用口径（沪市两融无公开接口；深市明细未拉到）", "该环无证据")
     # C5 主体行为：按中证成分过滤的龙虎榜机构净买
-    v5 = val("SECTOR_INST_FLOW")
+    _lhb, _lhb_d, _lhb_n = _sector_lhb_sw(sector)
+    v5 = _lhb if _lhb is not None else (val("SECTOR_INST_FLOW") if _has_own_index else None)
     if v5 is not None:
         word = "机构增" if v5 > 0 else ("机构减" if v5 < 0 else "机构不变")
-        rings[4].add(f"{word}（{period('SECTOR_INST_FLOW')}）",
-                     f"板块内龙虎榜机构净买额 {v5:+.2f} 亿（区间汇总，按中证成分过滤）",
+        rings[4].add(f"{word}（{_lhb_d or period('SECTOR_INST_FLOW')}）",
+                     f"板块内上榜个股龙虎榜净买额 {v5:+.2f} 亿（近 7 日累计，{_lhb_n} 只；申万成分口径）",
                      "仅覆盖上榜个股，不代表板块内全部机构行为", tag_of("SECTOR_INST_FLOW"))
     else:
-        rings[4].add("不可读（—）", "板块内龙虎榜未取到（成分表或龙虎榜接口失败）", "该环无证据")
+        rings[4].add("不可读（—）",
+                     "无证据：板块内近 7 日无个股上榜，或成分表缺失", "该环暂无可用证据")
     # C6 结果：涨跌幅（优先申万当日面板，与份额、广度和广度同日）+ 板块内广度
     sw_panel = _sw_panel()
     sw_pct_done = False
-    if sw and sw_panel:
+    if sw_list and sw_panel and len(sw_list) > 1:
+        _rows = {x.get("code"): x for x in (sw_panel.get("sectors") or [])}
+        _num = _den = 0.0
+        for _x in sw_list:
+            _r = _rows.get(_x["code"])
+            if _r and _r.get("pct") is not None and _r.get("amount"):
+                _num += _r["pct"] * _r["amount"]
+                _den += _r["amount"]
+        if _den:
+            pct_agg = _num / _den
+            _tot = sum((_rows.get(_x["code"]) or {}).get("amount") or 0 for _x in sw_list)
+            word = "升" if pct_agg > 0 else ("降" if pct_agg < 0 else "不变")
+            rings[5].add(f"{word}（{sw_panel.get('date')}）",
+                         f"{sector}（{len(sw_list)} 个二级行业）成交额加权涨跌幅 {pct_agg:+.2f}%，合计成交 {_tot:.0f} 亿",
+                         "一级行业无单一指数，此处为二级加权",
+                         "〔C 类·申万二级实时行情加权，未对账…〕")
+            sw_pct_done = True
+    if sw and sw_panel and not sw_pct_done:
         row = next((x for x in (sw_panel.get("sectors") or []) if x.get("code") == sw["code"]), None)
         if row and row.get("pct") is not None:
             pct_sw = float(row["pct"])
@@ -1038,6 +1139,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--policy", choices=["traceable", "strict", "demo"], default="traceable")
     ap.add_argument("--layer", choices=["market", "sector"], default="market")
+    ap.add_argument("--sector", default="", help="板块名（板块层用）：半导体 / 医药 / 电力 / 基础化工")
     ap.add_argument("--json", action="store_true", help="输出机器可读 JSON")
     ap.add_argument("--no-events", action="store_true", help="不附事件段")
     ap.add_argument("--show-history", action="store_true", help="列出已归档的状态快照")
@@ -1054,7 +1156,7 @@ def main():
         return 0
 
     if args.layer == "sector":
-        as_of, body, sector = build_sector(args.policy)
+        as_of, body, sector = build_sector(args.policy, args.sector or None)
         head = f"as-of {as_of}（最新交易日；板块层 · 目标板块：{sector}；行内 * 表示数据期早于 as-of）"
     else:
         as_of, body = build(args.policy, args.include_events)
