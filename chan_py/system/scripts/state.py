@@ -272,6 +272,15 @@ def build(policy, include_events=False):
                          "北向官方自 2024-08 起停止日度披露；海外中国 ETF 规模亦未取到",
                          "该环无证据")
 
+    # C5 产业资本（巨潮公告条数口径）
+    ok, tag = allow("INST_INSIDER_NET")
+    v = val("INST_INSIDER_NET")
+    if ok and v is not None:
+        word = "净减持" if v > 0 else ("净增持" if v < 0 else "持平")
+        rings[4].add(f"产业资本{word}（{period('INST_INSIDER_NET')}）",
+                     f"近 30 天减持公告与增持公告条数之差 {v:+.0f} 条（巨潮全文检索）",
+                     "只说明公告条数，不代表金额与规模", tag)
+
     # C6 参与度：全市场成交额（市场层口径，不得用单板块成交额代替）
     ok, tag = allow("MKT_TURNOVER")
     v = val("MKT_TURNOVER")
@@ -475,13 +484,15 @@ def _sector_name():
 
 def sector_policy_clues(as_of, horizon=30):
     """板块层 C1 的政策线索：数对口部委近 N 天发布条数（只作线索，不给状态词）。"""
-    fp = os.path.join(ROOT, "data", "events", f"calendar-{as_of}.json")
     mp = os.path.join(ROOT, "data", "sector_dept_map.json")
-    if not (os.path.exists(fp) and os.path.exists(mp)):
+    if not os.path.exists(mp):
+        return None
+    # 政策线索是"近 30 天"，与板块 as_of 无关 → 一律用最新一份日历
+    cals = sorted(glob.glob(os.path.join(ROOT, "data", "events", "calendar-*.json")))
+    cal = json.load(io.open(cals[-1], encoding="utf-8")) if cals else None
+    if not cal:
         return None
     try:
-        with io.open(fp, encoding="utf-8") as f:
-            cal = json.load(f)
         with io.open(mp, encoding="utf-8") as f:
             depts = (json.load(f).get("map") or {}).get(_sector_name(), [])
     except Exception:
@@ -833,8 +844,10 @@ def build_sector(policy):
     clue = sector_policy_clues(as_of)
     if clue:
         if clue["count"]:
-            tail = "；".join(f"{e['event_date']} {e.get('scope','')[:18]}" for e in clue["items"])
-            ev = f"近 30 天发布 {clue['count']} 条，仅作线索：{tail}"
+            tail = "；".join(f"{e['event_date']} {e.get('scope','')[:20]}" for e in clue["items"])
+            pol = sum(1 for e in clue["items"] if e.get("event_type") in ("其他",) or
+                      any(k in (e.get("scope") or "") for k in ("通知", "意见", "办法", "规划", "方案", "规定")))
+            ev = f"近 30 天对口部委发布 {clue['count']} 条（含政策类约 {pol} 条），最近：{tail}"
         else:
             ev = ("该部委源不可抓（JS 渲染），无法自动取证" if clue.get("uncrawlable")
                   else "近 30 天该部委源无条目（源可抓但无发布）")

@@ -712,6 +712,36 @@ def p_turnover_tx(_df=None):
     return ({"指标": "两市成交额（沪指+深成指合计）", "值": f"{total:.2f} 亿元", "对比": day},
             {"data_period": day})
 
+
+def _cninfo_search(keyword, start, end, page_size=1):
+    """巨潮全文检索：返回 (总条数, 前几条标题)。法定披露平台，可作官方源候选。"""
+    import requests
+    url = "http://www.cninfo.com.cn/new/hisAnnouncement/query"
+    payload = {"pageNum": 1, "pageSize": page_size, "column": "szse", "tabName": "fulltext",
+               "searchkey": keyword, "seDate": f"{start}~{end}", "sortName": "", "sortType": "",
+               "isHLtitle": "true"}
+    r = requests.post(url, data=payload, timeout=25,
+                      headers={"User-Agent": "Mozilla/5.0", "Referer": "http://www.cninfo.com.cn/"})
+    j = r.json() or {}
+    total = int(j.get("totalRecordNum") or 0)
+    titles = [(a.get("announcementTitle") or "").replace("<em>", "").replace("</em>", "")[:40]
+              for a in (j.get("announcements") or [])]
+    return total, titles
+
+
+def p_insider_net(_df=None):
+    """产业资本增减持：近 30 天「减持」与「增持」公告条数之差（正=减持公告更多）。"""
+    import datetime as _dt
+    end = _dt.date.today()
+    start = end - _dt.timedelta(days=30)
+    cut, ctitles = _cninfo_search("减持", start.isoformat(), end.isoformat())
+    bct, btitles = _cninfo_search("增持", start.isoformat(), end.isoformat())
+    net = cut - bct
+    return ({"指标": "产业资本增减持（公告条数口径）",
+             "值": f"{net:+d} 条",
+             "对比": f"近 30 天 减持公告 {cut} 条 / 增持公告 {bct} 条（巨潮全文检索）"},
+            {"data_period": _trade_day_of()})
+
 # ---------------------------------------------------------------- 指标声明
 SPECS = [
     dict(id="POL_LPR", channel="C1", subject="政策", freq="不定期", value_kind="level", layer="市场", tier_default="C",
@@ -880,6 +910,10 @@ SPECS = [
          providers=[("calc", ["__elec__"], p_elec_yoy)],
          official_source="国家能源局·全社会用电量", official_url="https://www.nea.gov.cn/",
          proves="用电量同比（能源生产同属性代理）", does_not_prove="不等于能源生产总量"),
+    dict(id="INST_INSIDER_NET", channel="C5", subject="公共池", freq="日", value_kind="count", layer="市场", tier_default="C",
+         providers=[("calc", ["__insider__"], p_insider_net)],
+         official_source="巨潮资讯·上市公司公告全文检索（证监会指定披露平台）", official_url="http://www.cninfo.com.cn/",
+         proves="近 30 天产业资本增减持公告条数之差", does_not_prove="不说明增减持金额与方向强度；条数口径"),
 ]
 
 SPEC_MAP = {s["id"]: s for s in SPECS}

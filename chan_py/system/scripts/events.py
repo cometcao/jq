@@ -39,6 +39,10 @@ DEPT_SOURCES = [
     ("财政部", "https://www.mof.gov.cn/zhengwuxinxi/caizhengxinwen/"),
     ("国家药监局", "https://www.nmpa.gov.cn/yaowen/ypjgyw/index.html"),
     ("国家能源局", "https://www.nea.gov.cn/xwzx/"),
+    # 工信部：首页与电子信息司为 JS 渲染/404，但下列司局子栏目是静态 HTML，可解析
+    ("工业和信息化部", "https://www.miit.gov.cn/jgsj/ghs/index.html"),   # 规划司
+    ("工业和信息化部", "https://www.miit.gov.cn/jgsj/kjs/index.html"),   # 科技司
+    ("工业和信息化部", "https://www.miit.gov.cn/jgsj/ycls/index.html"),  # 原材料司
 ]
 
 
@@ -245,12 +249,42 @@ def fetch_dept_news(issuer, url, today, horizon):
     return out[:10]
 
 
+# ---------------------------------------------------------------- 源：巨潮资讯（证监会指定披露平台）
+CNINFO_KEYWORDS = [("解禁", "解禁"), ("回购", "其他")]
+
+
+def fetch_cninfo(keyword, event_type, today, horizon, limit=6):
+    """巨潮公告全文检索：按关键词取近 N 天公告，作为公司层事件（官方披露平台）。"""
+    import requests
+    from urllib.parse import urljoin
+    start = today - dt.timedelta(days=horizon)
+    payload = {"pageNum": 1, "pageSize": limit, "column": "szse", "tabName": "fulltext",
+               "searchkey": keyword, "seDate": f"{start.isoformat()}~{today.isoformat()}",
+               "sortName": "", "sortType": "", "isHLtitle": "true"}
+    r = requests.post("http://www.cninfo.com.cn/new/hisAnnouncement/query", data=payload, timeout=25,
+                      headers={**UA, "Referer": "http://www.cninfo.com.cn/"})
+    j = r.json() or {}
+    out = []
+    for a in (j.get("announcements") or []):
+        title = re.sub(r"</?em>", "", a.get("announcementTitle") or "")[:80]
+        d = (a.get("announcementTime") or 0) / 1000
+        day = dt.datetime.fromtimestamp(d).date() if d else None
+        if not day or not (start <= day <= today):
+            continue
+        out.append({"date": day.isoformat(), "time": "", "title": title,
+                    "event_type": event_type, "category": "公告", "event_status": "已发生",
+                    "issuer": "巨潮资讯", "entry_mode": "auto",
+                    "source_link": urljoin("http://static.cninfo.com.cn/", a.get("adjunctUrl") or "")})
+    return out
+
+
 def collect(today, horizon):
     events, errors = [], []
     tasks = [("统计局日程", lambda: fetch_stats_schedule(today, horizon)),
              ("央行新闻", lambda: fetch_news_list(PBC_URL, "中国人民银行", today, horizon)),
              ("证监会要闻", lambda: _csrc_guard(fetch_news_list, CSRC_URL, "中国证监会", today, horizon))]
     tasks += [(issuer, (lambda i=issuer, u=url: fetch_dept_news(i, u, today, horizon))) for issuer, url in DEPT_SOURCES]
+    tasks += [(f"巨潮·{kw}", (lambda k=kw, t=et: fetch_cninfo(k, t, today, horizon))) for kw, et in CNINFO_KEYWORDS]
     for name, fn in tasks:
         try:
             got = fn()
