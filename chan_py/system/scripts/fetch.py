@@ -26,6 +26,7 @@ import io
 import json
 import os
 import re
+import statistics as st
 import sys
 import time
 import warnings
@@ -441,6 +442,17 @@ def p_sector_conc(df):
 def p_turnover(df):
     col = find_col(df, "总成交额")
     total = float(pd.to_numeric(df[col], errors="coerce").dropna().sum())
+    # 合理性检查：与近 60 期历史中位数比，低于 50% 视为源异常（如今日同花顺只回了部分板块）
+    med = None
+    try:
+        rows = [json.loads(x) for x in io.open(os.path.join(ROOT, "data", "history", "MKT_TURNOVER.jsonl"),
+                                               encoding="utf-8").read().splitlines() if x.strip()][1:]
+        vals = [r["value"] for r in rows][-60:]
+        med = st.median(vals) if vals else None
+    except Exception:
+        med = None
+    if total <= 0 or (med and total < med * 0.5):
+        raise ValueError(f"板块成交额加总 {total:.0f} 亿异常（历史中位 {med:.0f} 亿），改走备源")
     return ({"指标": "全市场成交额（板块汇总）", "值": f"{total:.2f} 亿元", "对比": f"{len(df)} 个行业板块加总"},
             {"data_period": norm_period(_latest_trade_day())})
 
@@ -645,6 +657,22 @@ def p_elec_yoy(_df=None):
     return ({"指标": "全社会用电量同比（能源生产代理）", "值": f"{float(r['全社会用电量同比']):.2f}%",
              "对比": str(r["统计时间"])}, {"data_period": f"{mm[:4]}-{int(mm[4:6]):02d}-01"})
 
+
+def p_turnover_tx(_df=None):
+    """全市场成交额备源：沪指 + 深成指成交额合计（与 history.py 同口径，实测与两市成交额吻合）。"""
+    import datetime as _dt
+    total, day = 0.0, None
+    end = _ymd(None)
+    start = (dt.date.today() - dt.timedelta(days=120)).strftime("%Y%m%d")
+    for sym in ("sh000001", "sz399001"):
+        df = ak.index_zh_daily_tx(symbol=sym, start_date=start, end_date=end)
+        df = df.dropna(subset=["amount"])
+        r = df.iloc[-1]
+        total += float(r["amount"]) / 1e8
+        day = str(r["date"])[:10]
+    return ({"指标": "两市成交额（沪指+深成指合计）", "值": f"{total:.2f} 亿元", "对比": day},
+            {"data_period": day})
+
 # ---------------------------------------------------------------- 指标声明
 SPECS = [
     dict(id="POL_LPR", channel="C1", subject="政策", freq="不定期", value_kind="level", layer="市场", tier_default="C",
@@ -729,9 +757,10 @@ SPECS = [
          official_source="同花顺行业板块一览（交易所行情聚合，快照）", official_url="https://q.10jqka.com.cn/thshy/",
          proves="成交额在各行业板块之间的集中程度（须声明 Top-N）", does_not_prove="不说明资金去向与轮动方向"),
     dict(id="MKT_TURNOVER", channel="C6", subject="公共池", freq="日", value_kind="level", layer="市场", tier_default="C",
-         providers=[("akshare/ths", ["stock_board_industry_summary_ths"], p_turnover)],
-         official_source="同花顺行业板块一览加总（交易所行情）", official_url="https://q.10jqka.com.cn/thshy/",
-         proves="全市场当日成交额（板块加总口径）", does_not_prove="不说明资金方向"),
+         providers=[("akshare/ths", ["stock_board_industry_summary_ths"], p_turnover),
+                    ("calc", ["__turnover_tx__"], p_turnover_tx)],
+         official_source="同花顺行业板块一览加总（交易所行情）；备源为沪深指数成交额合计", official_url="https://q.10jqka.com.cn/thshy/",
+         proves="全市场当日成交额（板块加总口径；备源为沪深指数成交额合计）", does_not_prove="不说明资金方向"),
     dict(id="MKT_MARGIN_COLLATERAL", channel="C4", subject="散户", freq="日", value_kind="level", layer="市场", tier_default="C",
          providers=[("akshare/exchange", ["stock_margin_account_info"], p_margin_collateral)],
          official_source="交易所两融汇总·担保物总价值", official_url="http://www.sse.com.cn/market/othersdata/margin/sum/",
