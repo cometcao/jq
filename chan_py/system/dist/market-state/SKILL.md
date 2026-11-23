@@ -5,9 +5,29 @@ description: Use when the user asks what the market or a sector looks like right
 
 # market-state · 市场状态
 
-> **规则版本 V2.78.0**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
+> **规则版本 V2.79.0**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
 
-把当前数据压缩成 **六环 + 证据行** 的客观状态描述。不做判断、不给建议、不预测、不解释涨跌原因。
+把当前数据压缩成 **六环 + 证据行** 的客观状态描述。
+
+## 第 0 步：触发即刷新（每次调用第一条命令）
+
+```bash
+python scripts/refresh.py
+```
+
+- **幂等**：同一交易日内、距上次刷新 < 20 分钟 → 打印"跳过"，不重复打网络；
+- **目标交易日**判定：工作日且已过 15:00 → 当天，否则上一工作日；快照落后就刷；
+- **失败不断**：任一步失败只打一行，继续跑（宁可给降级状态并标断点，不给空手）；
+- 输出两行：`[刷新判断] …`、`[刷新完成] n/6 步成功`，据此决定是否声明降级。
+
+`--force` 强制全刷，`--check` 只看判断。**跳过与否由脚本判断，不由记忆判断。**
+
+## 输出前自检（两条，缺一不可）
+
+1. ☐ **六环状态卡**已渲染（R1.1 / R1.9 单一网格）
+2. ☐ **事件日历卡**已渲染（未来一个月，悬停看分支 + 条件性影响）
+
+两张卡**在同一轮回答里出现**，不得以"上一轮出过""内容没变""只问状态"为由省略。文字段是补充，不替代卡片。不做判断、不给建议、不预测、不解释涨跌原因。
 
 规则与样例全部在本目录内（`references/`），自包含，不依赖任何外部仓库。
 
@@ -29,7 +49,7 @@ description: Use when the user asks what the market or a sector looks like right
 
 ## 数据来源（严格按此顺序，不得跳级）
 
-0. **先同步一次（默认动作）**：`python scripts/sync.py` —— 抓最新快照 → 历史序列增量 → 官方事件日程 → 两层状态。它幂等、约 30 秒、失败不阻断；**数据新鲜时也应跑**（缓存会命中，通常几秒）。
+0. **先刷新一次（默认动作，每次触发都跑）**：`python scripts/refresh.py`（幂等：20 分钟内不重复；判断要不要刷由脚本决定） —— 抓最新快照 → 历史序列增量 → 官方事件日程 → 两层状态。它幂等、约 30 秒、失败不阻断；**数据新鲜时也应跑**（缓存会命中，通常几秒）。
 1. **落盘事实（首选）**：工作区若有 `data/facts/`，先取其记录——
    - 最省事：`python scripts/state.py --policy traceable`（会直接产出六环证据行 + 溯源表）；
    - 或直接读 `data/facts/<数据期>/<indicator_id>.json`（字段见 `references/schema/fact.schema.json`）。
@@ -59,6 +79,8 @@ description: Use when the user asks what the market or a sector looks like right
 **任何一层级、标的、窗口的歧义，先问一句再执行**，不自行选定后附带说明。
 
 ## 八步流程（不得跳步）
+
+**流程从第 0 步开始**：先 `python scripts/refresh.py` 把数据推到最新交易日，再进入下面的八步。
 
 1. **判层与标的**：确定 market / sector 与具体范围；板块须有成分表版本（R1）。
 2. **六环取数**：按上节「数据来源」优先级取数（落盘 → 实时端点 → 不可读），C1→C6 逐环落证据；每环要么至少一条已落地事实，要么标 `不可读`。
@@ -100,7 +122,7 @@ description: Use when the user asks what the market or a sector looks like right
 `scripts/sync.py` 已抓事件；`state.py --layer market` **默认附事件段**（`--no-events` 关闭），来源 `data/events/calendar-<as_of>.json`：
 未来预定（官方日程）+ 已发生（官方新闻），标 `horizon`，不参与 as-of。
 
-## 事件必须带结果分支（V2.78.0）
+## 事件必须带结果分支（V2.79.0）
 
 「未来预定」事件**每一个都要有分支枚举**（`scripts/scenarios.py` 自动生成，已纳入 `sync.py`）：
 
@@ -123,7 +145,7 @@ description: Use when the user asks what the market or a sector looks like right
 - **●红点=升支影响、○白点=降支影响、◌虚线=不变支影响**（圆点表示"哪支分支触及"，**不表示环会涨跌**）；
 - 必须绑 `scenario` 记录与日历来源，写明"排序不适用"或依据，标 `horizon`；矩阵形态只在用户要"查组合"时出。
 
-## 每环「读法」（默认，V2.78.0 · 资金视角）
+## 每环「读法」（默认，V2.79.0 · 资金视角）
 
 每条环的证据行之后，追加一行 `· C<n> 读法：…`——**用资金结构解释这组数字**，只描述口径含义与位置，不做方向判断。
 
