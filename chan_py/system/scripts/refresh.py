@@ -93,14 +93,27 @@ def main():
 
     steps = [
         (["scripts/fetch.py"], "抓数"),
+        (["scripts/verify_official.py"], "官方对账"),
         (["scripts/history.py"], "历史"),
         (["scripts/events.py", "--days", "30", "--write"], "事件"),
         (["scripts/scenarios.py"], "分支"),
+        (["scripts/audit.py", "--daily"], "日检(巡检+台账)"),
         (["scripts/sw_sectors.py", "--meta", "--daily"], "申万板块"),
         (["scripts/sw_sectors.py", "--breadth"], "板块广度"),
         (["scripts/state.py", "--layer", "market", "--write", "--archive", "--json"], "市场层"),
         (["scripts/state.py", "--layer", "sector", "--write", "--archive"], "板块层"),
     ]
+    # 申万历史回补：官方日线滞后约 6 个交易日，6 天内跑一次就够（全量约 100 秒）
+    _stamp = os.path.join(ROOT, "data", "sw", ".last_backfill")
+    _need = True
+    if os.path.exists(_stamp):
+        _age = (dt.datetime.now() - dt.datetime.fromtimestamp(os.path.getmtime(_stamp))).total_seconds() / 86400
+        _need = _age >= 6
+    if _need:
+        steps.append((["scripts/sw_sectors.py", "--backfill", "--limit", "200", "--depth", "250"], "申万历史(6日)"))
+        with io.open(_stamp, "w", encoding="utf-8") as _f:
+            _f.write(dt.datetime.now().isoformat(timespec="seconds"))
+
     ok_n = sum(1 for args, label in steps if run(args, label))
     print(f"[刷新完成] {ok_n}/{len(steps)} 步成功（失败步跳过后仍可出声，断点会在状态里标出）")
     return 0

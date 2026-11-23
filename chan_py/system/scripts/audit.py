@@ -368,7 +368,14 @@ def main():
     ap.add_argument("--ring", default="")
     ap.add_argument("--no-net", action="store_true")
     ap.add_argument("--ledger", action="store_true")
+    ap.add_argument("--daily", action="store_true", help="每日一次：当天已跑过就跳过")
     a = ap.parse_args()
+
+    if a.daily:
+        _today_fp = os.path.join(REPORTS, f"audit-{dt.date.today().isoformat()}.md")
+        if os.path.exists(_today_fp):
+            print(f"[日检] 今天已跑过（{os.path.basename(_today_fp)}），跳过；需要重跑用 python scripts/audit.py")
+            return 0
 
     reg = registry()
     prov = provenance()
