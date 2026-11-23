@@ -519,7 +519,7 @@ def _hist(iid, tail=60):
 def ring_readings(as_of):
     """每环一句「读法」：从资金角度看这组数字把钱放在哪、以什么形态存在。
 
-    约束：只用已落盘数字；不用因果词；不做方向判断（不写宽松/充裕/活跃/流入流出）。
+    约束：只用已落盘数字；不用因果词；不做方向判断；**每个从句都由数据决定**（不得写死结论）。
     """
     def g(iid):
         return val(iid)
@@ -528,31 +528,50 @@ def ring_readings(as_of):
         vs = [v for _, v in _hist(iid, tail)]
         return _pos_of(vs)
 
+    def prev(iid):
+        h = _hist(iid, 400)
+        return h[-2][1] if len(h) >= 2 else None
+
     out = {}
     lpr = g("POL_LPR")
     if lpr is not None:
         p = pos("POL_LPR", 24)
+        chg = (lpr - prev("POL_LPR")) if prev("POL_LPR") is not None else None
+        verb = "没有新的调整" if (chg is None or abs(chg) < 1e-9) else f"较上一期 {chg:+.2f}pp"
         out["C1"] = (f"基准利率 {lpr:.2f}%" + (f"（24 期 {p:.0f}% 位）" if p is not None else "")
-                     + "没有新的调整；资金的价格基准不动，成本变化只能来自市场端（C3）。")
+                     + f"{verb}；资金的价格基准" + ("不动" if not chg else "已变")
+                     + "，成本变化只能来自市场端（C3）。")
 
     m2, loan, m1 = g("MKT_M2_YOY"), g("MKT_RMB_LOAN_YOY"), g("MKT_M1_YOY")
     if m2 is not None and loan is not None:
-        h2 = dict(_hist("MKT_M2_YOY")); hl = dict(_hist("MKT_RMB_LOAN_YOY")); h1 = dict(_hist("MKT_M1_YOY"))
+        h2 = dict(_hist("MKT_M2_YOY")); hl = dict(_hist("MKT_RMB_LOAN_YOY"))
         diffs = [h2[p] - hl[p] for p in sorted(h2) if p in hl]
         p = _pos_of(diffs)
+        d = m2 - loan
         s1 = f"，M2−M1 为 {m2-m1:+.2f}pp" if (m1 is not None) else ""
-        out["C2"] = (f"货币总量同比 {m2:.2f}%，信贷投放同比 {loan:.2f}%，两者差 {m2-loan:+.2f}pp"
-                     + (f"（24 期 {p:.0f}% 位）" if p is not None else "") + s1
-                     + "。钱在增加，但增量主要停在存款与准货币形态，没有按同等幅度转成贷款。")
+        if d > 0:
+            tail = "钱在增加，但增量主要停在存款与准货币形态，没有按同等幅度转成贷款。"
+        elif d < 0:
+            tail = "信贷增速快于货币总量，钱更多以贷款形式投放出去。"
+        else:
+            tail = "货币与信贷同速增长，两条口径没有拉开差。"
+        out["C2"] = (f"货币总量同比 {m2:.2f}%，信贷投放同比 {loan:.2f}%，两者差 {d:+.2f}pp"
+                     + (f"（24 期 {p:.0f}% 位）" if p is not None else "") + s1 + "。" + tail)
 
     dr, ty = g("MKT_DR007"), g("MKT_CGB10Y")
     if dr is not None and ty is not None:
         hd = dict(_hist("MKT_DR007")); ht = dict(_hist("MKT_CGB10Y"))
         sp_ = [hd[p] - ht[p] for p in sorted(hd) if p in ht]
         p = _pos_of(sp_)
-        out["C3"] = (f"银行间隔夜到 7 天资金 {dr:.4f}%，10 年期国债 {ty:.4f}%，差 {dr-ty:+.2f}pp"
-                     + (f"（51 期 {p:.0f}% 位）" if p is not None else "")
-                     + "。借钱的两端价格几乎相同，把钱锁长期没有额外补偿。")
+        sp = dr - ty
+        if abs(sp) < 0.05:
+            tail = "借钱的两端价格几乎相同，把钱锁长期没有得到额外补偿。"
+        elif sp > 0:
+            tail = "短端比长端还贵，借短钱反而成本更高，期限上出现倒挂。"
+        else:
+            tail = "长端高于短端，把钱锁长期能拿到补偿。"
+        out["C3"] = (f"银行间隔夜到 7 天资金 {dr:.4f}%，10 年期国债 {ty:.4f}%，差 {sp:+.2f}pp"
+                     + (f"（51 期 {p:.0f}% 位）" if p is not None else "") + "。" + tail)
 
     mb, co = g("MKT_MARGIN_BAL"), _num_scaled("MKT_MARGIN_COLLATERAL")
     if mb is not None and co:
@@ -560,18 +579,24 @@ def ring_readings(as_of):
         hb = dict(_hist("MKT_MARGIN_BAL")); hc = dict(_hist("MKT_MARGIN_COLLATERAL"))
         rs = [hb[p] / hc[p] * 100 for p in sorted(hb) if p in hc and hc[p]]
         pr = _pos_of(rs)
+        pv = prev("MKT_MARGIN_BAL")
+        dirn = ("借的钱在减少" if (pv is not None and mb < pv) else
+                ("借的钱在增加" if (pv is not None and mb > pv) else "借的钱与上期持平"))
         out["C4"] = (f"借来的钱（融资余额）{mb:.0f} 亿" + (f"（60 期 {pm:.0f}% 位）" if pm is not None else "")
                      + f"，对应抵押品 {co/10000:.2f} 万亿，占 {mb/co*100:.2f}%"
                      + (f"（60 期 {pr:.0f}% 位）" if pr is not None else "")
-                     + "。借的钱在减少，抵押品减少更快；账户里自有资金的比例在往下走。")
+                     + f"。{dirn}；占比的高低说明自有资金垫子的厚薄，不等于风险大小。")
 
     inv, lhb = g("RTL_MARGIN_INVESTORS"), g("INST_LHB_NET")
     if inv is not None:
         pi = pos("RTL_MARGIN_INVESTORS")
-        part = f"两融开户数 {inv:.2f} 万户" + (f"（60 期 {pi:.0f}% 位）" if pi is not None else "")
+        pvi = prev("RTL_MARGIN_INVESTORS")
+        inv_txt = ("在增加" if (pvi is not None and inv > pvi) else
+                   ("在减少" if (pvi is not None and inv < pvi) else "持平"))
+        parts = [f"两融开户数 {inv:.2f} 万户" + (f"（60 期 {pi:.0f}% 位）" if pi is not None else f"，较上期{inv_txt}")]
         if lhb is not None:
-            part += f"，同期机构席位区间净卖 {abs(lhb):.2f} 亿"
-        out["C5"] = part + "。用杠杆的个人账户在增加，机构席位在减；两者口径不同，只能并列看。"
+            parts.append(f"机构席位区间净卖 {abs(lhb):.2f} 亿" if lhb < 0 else f"机构席位区间净买 {abs(lhb):.2f} 亿")
+        out["C5"] = "；".join(parts) + "。个人杠杆账户" + inv_txt + "，机构方向另计；两者口径不同，只能并列看。"
 
     bd, cc, tn = g("MKT_BREADTH"), g("SECTOR_AMT_CONC"), g("MKT_TURNOVER")
     if bd is not None:
@@ -580,9 +605,11 @@ def ring_readings(as_of):
             tail += f"、Top5 板块成交占比 {cc:.1f}%"
         if tn is not None:
             tail += f"、全市场成交额 {tn:.0f} 亿"
-        out["C6"] = tail + "。钱在盘面上既没有铺开到多数标的，也没有集中到少数板块。"
+        breadth_txt = "钱铺到了多数标的" if bd >= 50 else "钱没有铺开到多数标的"
+        conc_txt = ("但没有集中到少数板块" if cc is not None and cc < 50 else
+                    ("并且集中在少数板块" if cc is not None else ""))
+        out["C6"] = tail + "。" + breadth_txt + conc_txt + "。"
     return out
-
 
 
 def id_label(iid):
@@ -811,6 +838,8 @@ def main():
     out = text + meta + "\n".join(lines) + "\n"
 
     if args.json:
+        _ok = sum(1 for ln in body.splitlines() if ln.startswith("C") and "不可读" not in ln)
+        _tot = sum(1 for ln in body.splitlines() if ln.startswith("C"))
         recs = []
         for ln in body.splitlines():
             m = re.match(r"^(C[1-6]) (\S+?)(（(\d{4}-\d{2}-\d{2})\*?）)?｜依据：(.+?)｜边界：(.+)$", ln)
@@ -836,6 +865,7 @@ def main():
                                               "period": r_["data_period"],
                                               "operand_order": r_["operand_order"]})
         payload = {"layer": args.layer, "as_of": as_of, "lines": recs,
+                   "chain_coverage": {"ok": _ok, "total": _tot, "text": f"{_ok}/{_tot}"},
                    "relations_by_ring": rel,
                    "b_indicators": [i for i in missing if tier_of(i) == "B"],
                    "policy": args.policy,

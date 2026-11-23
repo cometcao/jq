@@ -210,6 +210,20 @@ def _sector_target():
     return c.get("name", "半导体")
 
 
+
+def _trade_day_of(now=None):
+    """当前时点能拿到的最新年线交易日：工作日且已过 15:00 → 当天，否则回退上一工作日。"""
+    now = now or dt.datetime.now()
+    d = now.date()
+    while d.weekday() >= 5:
+        d -= dt.timedelta(days=1)
+    if d == now.date() and now.hour < 15:
+        d -= dt.timedelta(days=1)
+        while d.weekday() >= 5:
+            d -= dt.timedelta(days=1)
+    return d.isoformat()
+
+
 def _latest_trade_day():
     """用指数日线的数据期作为最近交易日；没有就退回今天（避免周末把快照标成当天）。"""
     c = read_json(os.path.join(CACHE_DIR, "IDX_DAILY.json"))
@@ -386,9 +400,14 @@ def p_block_amt(df):
     if "大宗交易成交总额" in df.columns:      # sctj：全历史市场统计
         d = pd.to_datetime(df["交易日期"], errors="coerce")
         r = df.loc[d.idxmax()]
-        return ({"指标": "大宗交易成交额（当日）", "值": f'{float(r["大宗交易成交总额"]) / 1e8:.2f} 亿元',
+        period = norm_period(r["交易日期"])
+        val = float(r["大宗交易成交总额"]) / 1e8
+        # 大宗交易盘后汇总（约 18:00 后齐备）：当日未汇总完的残值不落盘，避免低报
+        if period == dt.date.today().isoformat() and dt.datetime.now().hour < 18:
+            raise ValueError(f"大宗交易当日盘后汇总未完成（当前 {dt.datetime.now():%H:%M}，{val:.2f} 亿），暂不落盘")
+        return ({"指标": "大宗交易成交额（当日）", "值": f'{val:.2f} 亿元',
                  "对比": f'溢价占比 {float(r.get("溢价成交总额占比") or 0):.2f}%'},
-                {"data_period": norm_period(r["交易日期"])})
+                {"data_period": period})
     if "成交额" in df.columns:
         amt = df["成交额"].fillna(0)
     else:                                   # 某些窗口返回的明细表列不同，退化用 量×价
@@ -436,7 +455,7 @@ def p_sector_conc(df):
     tot, top5 = float(vals.sum()), float(vals.sort_values(ascending=False).head(5).sum())
     return ({"指标": "板块成交额集中度", "值": f"{top5 / tot * 100:.1f}%",
              "对比": f"Top5 {top5:.0f} / 全部 {tot:.0f} 亿（N={len(vals)} 板块）"},
-            {"data_period": norm_period(_latest_trade_day())})
+            {"data_period": norm_period(_trade_day_of())})
 
 
 def p_turnover(df):
@@ -454,7 +473,7 @@ def p_turnover(df):
     if total <= 0 or (med and total < med * 0.5):
         raise ValueError(f"板块成交额加总 {total:.0f} 亿异常（历史中位 {med:.0f} 亿），改走备源")
     return ({"指标": "全市场成交额（板块汇总）", "值": f"{total:.2f} 亿元", "对比": f"{len(df)} 个行业板块加总"},
-            {"data_period": norm_period(_latest_trade_day())})
+            {"data_period": _trade_day_of()})
 
 
 def p_sector_amt(df, sector=None):
@@ -490,7 +509,7 @@ def p_sector_breadth(df):
     up, down = float(r.get("上涨家数") or 0), float(r.get("下跌家数") or 0)
     tot = (up + down) or 1.0
     return ({"指标": f"{name}板块上涨家数占比", "值": f"{up / tot * 100:.1f}%", "对比": f"涨跌幅 {float(r.get('涨跌幅') or 0):+.2f}%"},
-            {"data_period": norm_period(_latest_trade_day())})
+            {"data_period": norm_period(_trade_day_of())})
 
 
 def p_sector_share(_df=None):
@@ -513,7 +532,7 @@ def p_mmf_scale(df):
         raise ValueError(f"缺列 货币型：{list(df.columns)}")
     total = float(pd.to_numeric(df[col], errors="coerce").fillna(0).sum()) / 1e4   # 亿元 → 万亿
     return ({"指标": "货币基金规模（代理现金池）", "值": f"{total:.2f} 万亿", "对比": f"{len(df.dropna(subset=[col]))} 家管理人合计"},
-            {"data_period": norm_period(_latest_trade_day())})
+            {"data_period": norm_period(_trade_day_of())})
 
 
 def p_cn_etf_aum(_df=None):
@@ -561,7 +580,7 @@ def p_sector_inst(_df=None):
     total = float(sub[col].fillna(0).sum()) / 1e8
     return ({"指标": f"{_sector_target()}板块内龙虎榜机构净买额", "值": f"{total:+.2f} 亿元",
              "对比": f"成分 {len(codes)} 只中上榜 {len(sub)} 只；成分表 {cons_date}"},
-            {"data_period": norm_period(_latest_trade_day())})
+            {"data_period": norm_period(_trade_day_of())})
 
 
 def _macro_month(df, month_col, val_col, n=1, period_shift=0):
