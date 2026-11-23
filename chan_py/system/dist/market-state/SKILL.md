@@ -1,11 +1,11 @@
 ---
 name: market-state
-description: Use when the user asks what the market or a sector looks like right now, or asks for a comparison or an event calendar under the 全景客观金融分析 framework — e.g. "现在市场什么状态", "把六环拉一遍", "半导体板块怎么样", "M2 减 M1 的剪刀差", "未来 30 天有什么数据发布". Produces evidence-line state descriptions with empty rings marked 不可读, and never turns them into judgments. Loading it grants no permission to modify files outside its own directory and the user's chosen output directory.
+description: Use when the user asks what the market or a sector looks like right now, or asks for a comparison or an event calendar under the 全景客观金融分析 framework — e.g. "现在市场什么状态", "把六环拉一遍", "半导体板块怎么样", "M2 减 M1 的剪刀差", "未来 30 天有什么数据发布", "优化数据源", "复评一下六环指标". Produces evidence-line state descriptions with empty rings marked 不可读, and never turns them into judgments. Loading it grants no permission to modify files outside its own directory and the user's chosen output directory.
 ---
 
 # market-state · 市场状态
 
-> **规则版本 V2.86.0**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
+> **规则版本 V2.89.0**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
 
 把当前数据压缩成 **六环 + 证据行** 的客观状态描述。
 
@@ -59,6 +59,12 @@ python scripts/refresh.py
 
 **事件（`include_events=true` 时）**：优先运行 `python scripts/events.py --days 30` —— 它抓的是**国家统计局·最新统计信息发布日程**（官方、结构化，含日期与时间）。该源覆盖 CPI/PPI/GDP/PMI/工业/投资/消费等；**央行 OMO、交易所公告不在其中 → 标不可读**，不要用第三方日历补位。
 
+**取数宗旨（V2.89.0）**：尽可能找到**最新、最有说服力**的数据。
+
+- 频率慢本身不是缺陷——如果这是当下唯一同口径的数据源，就照用，并在状态里标出滞后（例如 C4 的货基规模是月频，日频环用它只能给滞后结论，但不因此就不用）；
+- **只有存在更高频、同口径的替代时**，才提出替换；
+- 替代候选不能由函数名推断频率，必须人工确认后再接。
+
 **必须遵守的三条标注规则**（详见 `references/data-layer.md`）：
 
 - **档位**：`B` 行不标注；`C` 行必须带 `〔C 类·<理由>…〕`（理由取 `data/c_reasons.json`，未登记用"唯一可得来源，未对账"）；同一指标已有 A/B 时不得用 C。
@@ -77,6 +83,39 @@ python scripts/refresh.py
 | include_events | 否 | false | `true` 时附事件段（日历 + 可选分支）；需官方日历或用户给日期 |
 
 **任何一层级、标的、窗口的歧义，先问一句再执行**，不自行选定后附带说明。
+
+## 指标复评（用户触发，默认不做）
+
+用户说 **"优化数据源"**、**"复评一下六环指标"**、"哪些指标失效了"、"该换数据源了" 时，跑：
+
+```bash
+python scripts/audit.py            # 全量（含官方入口可达性检查）
+python scripts/audit.py --ring C4  # 只看某一环
+python scripts/audit.py --no-net   # 跳过联网检查，快
+```
+
+回答**四个问题**，**只诊断、不改数据与规则**：
+
+| # | 问什么 | 怎么判 |
+|---|---|---|
+| 1 | 还在更新吗 | 数据期落后几期（>2 建议替换、>3 已失效） |
+| 2 | 还能取吗 | 官方入口可达性、最近抓取是否降级 |
+| 3 | 有更合适的吗 | 来源数量 + akshare 同主题候选函数 |
+| 4 | **还合适放在这一环吗** | 口径适配：环需要的频率/口径 vs 指标实际给的（频率偏低 / 口径偏移 / 代理回答 / 直接回答） |
+
+第四问是"数据意思"层面的——比如 C4 要回答"池子里当天有多少钱"，用月频货基规模就只能给滞后结论；C5 的外部资金用 ETF 规模是代理，状态里必须标出替代关系。
+
+
+| 结论 | 含义 | 处理 |
+|---|---|---|
+| **已失效** | 落后 >3 个周期，按规则已不落盘 | 该环现在就是断的，需换源 |
+| **建议替换** | 落后 >2 个周期，可能已停更 | 优先找新源 |
+| **观察** | 落后 >1.2 个周期，接近阈值 | 下个周期盯一下 |
+| **留意替代** | 只有 1 个来源且非官方直连 | 报告里给了 akshare 同主题候选 |
+| **保留** | 更新正常 | — |
+| **未接入** | 注册了但没有取数器 | 状态里不会出现，需要时再接 |
+
+输出写 `reports/audit-<date>.md`（含候选数据源）。**不自动替换任何指标**——换源要人确认。
 
 ## 八步流程（不得跳步）
 
@@ -122,7 +161,7 @@ python scripts/refresh.py
 `scripts/sync.py` 已抓事件；`state.py --layer market` **默认附事件段**（`--no-events` 关闭），来源 `data/events/calendar-<as_of>.json`：
 未来预定（官方日程）+ 已发生（官方新闻），标 `horizon`，不参与 as-of。
 
-## 事件必须带结果分支（V2.86.0）
+## 事件必须带结果分支（V2.89.0）
 
 「未来预定」事件**每一个都要有分支枚举**（`scripts/scenarios.py` 自动生成，已纳入 `sync.py`）：
 
@@ -145,7 +184,7 @@ python scripts/refresh.py
 - **●红点=升支影响、○白点=降支影响、◌虚线=不变支影响**（圆点表示"哪支分支触及"，**不表示环会涨跌**）；
 - 必须绑 `scenario` 记录与日历来源，写明"排序不适用"或依据，标 `horizon`；矩阵形态只在用户要"查组合"时出。
 
-## 每环「读法」（默认，V2.86.0 · 资金视角）
+## 每环「读法」（默认，V2.89.0 · 资金视角）
 
 每条环的证据行之后，追加一行 `· C<n> 读法：…`——**用资金结构解释这组数字**，只描述口径含义与位置，不做方向判断。
 
