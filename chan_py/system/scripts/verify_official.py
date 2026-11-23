@@ -96,6 +96,37 @@ CHECKS = {
 }
 
 
+
+def official_sector_val(date, sector_index="H30184"):
+    """独立重算板块估值倍数：直取中证指数 xls（独立请求，不复用取数层结果）。"""
+    import requests, pandas as pd
+    def pe(sym):
+        url = (f"https://oss-ch.csindex.com.cn/static/html/csindex/public/uploads/file/"
+               f"autofile/indicator/{sym}indicator.xls")
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+        df = pd.read_excel(io.BytesIO(r.content))
+        col = [c for c in df.columns if "市盈率1" in str(c)][0]
+        dcol = [c for c in df.columns if str(c).startswith("日期")][0]
+        df = df.dropna(subset=[col]).copy()
+        df["_d"] = df[dcol].astype(str)          # 中证 xls 为倒序，必须按日期取最新行
+        return float(df.sort_values("_d").iloc[-1][col])
+    try:
+        sec, mkt = pe(sector_index), pe("000300")
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:60]}"}
+    return {"ok": True, "value": round(sec / mkt, 2), "sec_pe": sec, "mkt_pe": mkt,
+            "source_url": "https://www.csindex.com.cn/"}
+
+def check_sector_val(period):
+    r = official_sector_val(period)
+    if not r.get("ok"):
+        return (None, "")
+    return (r["value"], r["source_url"], period)
+
+
+CHECKS["SECTOR_VAL"] = check_sector_val
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry", action="store_true")

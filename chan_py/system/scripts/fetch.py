@@ -1028,6 +1028,9 @@ def main():
     for s in SPECS:
         hosts = []
         for _src, aliases, _p in s["providers"]:
+            if _src == "calc":
+                hosts += _hosts_of(_p)          # 自算指标：探测解析器源码里的官方域名
+                continue
             _n, _fn = resolve(aliases)
             if _fn is not None:
                 hosts += _hosts_of(_fn)
