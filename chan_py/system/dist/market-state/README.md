@@ -1,6 +1,6 @@
 # market-state · 独立 Skill 包
 
-> 规则版本：**V2.99.0**（源自 `docs/`；升级主文档时须同步本包的 `references/data-layer.md   数据层：优先级、档位、as-of、修订
+> 规则版本：**V2.101.0**（源自 `docs/`；升级主文档时须同步本包的 `references/data-layer.md   数据层：优先级、档位、as-of、修订
 references/`）
 
 一个自包含的 DSH Skill：把当前数据压缩成"六环 + 证据行"的客观状态描述，不做判断、不给建议、不预测。
@@ -47,7 +47,7 @@ python check.py --as-of 2026-11-21 references/examples/real-01/*.json
 
 ## 唯一校验实现
 
-仓库里**只有这一份校验实现**（原 `validator/validate.py` 已于 V2.99.0 合并进来）。它同时承担两件事：
+仓库里**只有这一份校验实现**（原 `validator/validate.py` 已于 V2.101.0 合并进来）。它同时承担两件事：
 
 - **仓库测试**：对本仓 `examples/` 下的记录与页面做回归；
 - **Skill 自检**：Skill 输出前自查（`--page` 与记录模式）。

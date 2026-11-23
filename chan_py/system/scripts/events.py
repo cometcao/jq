@@ -66,7 +66,7 @@ def to_event_record(raw, calendar_version=1):
     return {
         "event_id": f"EVT-{date.replace('-', '')}-{h}",
         "event_type": raw.get("event_type") or "其他",
-        "layer": "市场",
+        "layer": raw.get("layer") or "市场",
         "event_date": date,
         "event_time": (raw.get("time") or None),
         "scope": title,                      # schema 无 title 字段，标题落 scope
@@ -246,14 +246,15 @@ def fetch_dept_news(issuer, url, today, horizon):
                     "event_type": classify(t) if cat == "新闻" else "其他",
                     "category": cat, "event_status": "已发生",
                     "issuer": issuer, "entry_mode": "auto", "source_link": urljoin(url, href)})
-    return out[:10]
+    return out[:20]
 
 
 # ---------------------------------------------------------------- 源：巨潮资讯（证监会指定披露平台）
-CNINFO_KEYWORDS = [("解禁", "解禁"), ("回购", "其他")]
+CNINFO_KEYWORDS = [("解禁", "解禁"), ("回购", "其他"), ("增持", "其他"),
+                   ("减持", "其他"), ("定向增发", "其他"), ("业绩预告", "其他")]
 
 
-def fetch_cninfo(keyword, event_type, today, horizon, limit=6):
+def fetch_cninfo(keyword, event_type, today, horizon, limit=8):
     """巨潮公告全文检索：按关键词取近 N 天公告，作为公司层事件（官方披露平台）。"""
     import requests
     from urllib.parse import urljoin
@@ -278,13 +279,97 @@ def fetch_cninfo(keyword, event_type, today, horizon, limit=6):
     return out
 
 
+# 板块层事件关键词：板块名 + 行业同义词（巨潮全文检索）
+SECTOR_KEYWORDS = {
+    "半导体": ["半导体", "集成电路", "芯片"],
+    "医药": ["医药", "药品", "创新药"],
+    "电力": ["电力", "电网", "发电"],
+    "基础化工": ["化工", "化学品"],
+}
+
+
+def fetch_cninfo_sector(today, horizon, limit=6):
+    """板块层事件：按行业关键词检索巨潮公告（layer=板块，与市场层事件分开）。"""
+    out = []
+    start = today - dt.timedelta(days=horizon)
+    for sector, kws in SECTOR_KEYWORDS.items():
+        got = []
+        for kw in kws:
+            for e in fetch_cninfo(kw, "其他", today, horizon, limit=3):
+                e["layer"] = "板块"
+                e["scope"] = f"[{sector}] {e.get('title') or e.get('scope','')}"
+                got.append(e)
+        # 同名去重
+        seen, uniq = set(), []
+        for e in got:
+            k = (e.get("scope") or "")[:40]
+            if k in seen:
+                continue
+            seen.add(k)
+            uniq.append(e)
+        out += uniq[:limit]
+    return out
+
+
+# ---------------------------------------------------------------- 源：央行公开市场操作公告
+PBC_OMO_URL = "http://www.pbc.gov.cn/zhengcehuobisi/125207/125213/125431/125475/index.html"
+
+
+def fetch_pbc_omo(today, horizon):
+    """央行公开市场业务交易公告（已发生）：入日历，作为政策操作事件。"""
+    import requests
+    from urllib.parse import urljoin
+    r = requests.get(PBC_OMO_URL, headers=UA, timeout=25)
+    r.encoding = r.apparent_encoding or "utf-8"
+    pairs = re.findall(r'<a[^>]+href="([^"]+)"[^>]*>(.{6,90}?)</a>(.{0,200}?)(20\d{2}-\d{2}-\d{2})', r.text, flags=re.S)
+    out, seen = [], set()
+    for href, t, _, dstr in pairs:
+        t = re.sub(r"<[^>]+>", "", t).strip()
+        d = _norm_date(dstr)
+        if not t or not d or not (today - dt.timedelta(days=horizon) <= d <= today):
+            continue
+        if t in seen:
+            continue
+        seen.add(t)
+        out.append({"date": d.isoformat(), "time": "", "title": t, "event_type": "政策会议",
+                    "category": "公开市场操作", "event_status": "已发生", "issuer": "中国人民银行",
+                    "entry_mode": "auto", "source_link": urljoin(PBC_OMO_URL, href), "layer": "市场"})
+    return out[:20]
+
+
+# ---------------------------------------------------------------- 源：新股发行（含未来申购/上市）
+def fetch_ipo(today, horizon):
+    """新股日历：从全量新股表取未来 N 天的申购日/上市日（东方财富，C 类）。"""
+    import akshare as ak
+    df = ak.stock_xgsglb_em(symbol="全部股票")
+    out = []
+    for _, r in df.iterrows():
+        code = str(r.get("股票代码") or "").zfill(6)
+        name = str(r.get("股票简称") or "")
+        exch = str(r.get("交易所") or "")
+        for col, kind in (("申购日期", "申购"), ("上市日期", "上市")):
+            v = str(r.get(col) or "")
+            d = _norm_date(v)
+            if not d or not (today - dt.timedelta(days=3) <= d <= today + dt.timedelta(days=horizon)):
+                continue
+            out.append({"date": d.isoformat(), "time": "", "title": f"新股{kind}：{name}（{code}·{exch[:2]}）",
+                        "event_type": "其他", "category": "新股发行",
+                        "event_status": "未来预定" if d > today else "已发生",
+                        "issuer": "交易所·新股发行", "entry_mode": "auto", "source_link": "", "layer": "市场"})
+    out.sort(key=lambda x: x["date"])
+    return out[:30]
+
+
 def collect(today, horizon):
     events, errors = [], []
     tasks = [("统计局日程", lambda: fetch_stats_schedule(today, horizon)),
              ("央行新闻", lambda: fetch_news_list(PBC_URL, "中国人民银行", today, horizon)),
-             ("证监会要闻", lambda: _csrc_guard(fetch_news_list, CSRC_URL, "中国证监会", today, horizon))]
+             ("证监会要闻", lambda: _csrc_guard(fetch_news_list, CSRC_URL, "中国证监会", today, horizon)),
+             ("央行公开市场操作", lambda: fetch_pbc_omo(today, horizon)),
+             ("新股发行", lambda: fetch_ipo(today, horizon))]
     tasks += [(issuer, (lambda i=issuer, u=url: fetch_dept_news(i, u, today, horizon))) for issuer, url in DEPT_SOURCES]
     tasks += [(f"巨潮·{kw}", (lambda k=kw, t=et: fetch_cninfo(k, t, today, horizon))) for kw, et in CNINFO_KEYWORDS]
+    tasks += [("巨潮·板块", lambda: fetch_cninfo_sector(today, horizon))]
     for name, fn in tasks:
         try:
             got = fn()

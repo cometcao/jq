@@ -195,10 +195,16 @@ def build(policy, include_events=False):
     # C4 深市融资余额（交易所官方，T+1 披露）
     ok, tag = allow("MKT_MARGIN_BAL_SZ")
     v = val("MKT_MARGIN_BAL_SZ")
-    if ok and v is not None:
-        rings[3].add(f"深市两融（{period('MKT_MARGIN_BAL_SZ')}）",
-                     f"深市融资余额 {v:,.2f} 亿元（深交所官方汇总，T+1 披露）",
+    _pv = val("MKT_MARGIN_BAL_SZ", "prev_value")
+    if ok and v is not None and _pv is not None:
+        word = "不变" if v == _pv else ("加杠杆" if v > _pv else "去杠杆")
+        rings[3].add(f"深市{word}（{period('MKT_MARGIN_BAL_SZ')}）",
+                     f"深市融资余额 {v:,.2f} 亿元 对比上一期 {_pv:,.2f} 亿元（深交所官方，T+1）",
                      "只覆盖深市，不含沪市；不与全市场口径相加", tag)
+    elif ok and v is not None:
+        rings[3].add("不可读（—）",
+                     f"无证据可判方向：深市融资余额 {v:,.2f} 亿元（深交所官方，T+1），仅单日数据",
+                     "只覆盖深市，不含沪市；次日累积后即可判方向", tag)
 
     # C4 杠杆 + 现金池
     ok, tag = allow("MKT_MARGIN_BAL")
@@ -708,12 +714,40 @@ def _calendar_for(as_of):
     return cal, (cal.get("as_of") or os.path.basename(fp)[9:-5])
 
 
+def sector_events_section(as_of, sector):
+    """板块层事件段：只出与本板块相关的事件（关键词命中的板块公告 + 对口部委）。"""
+    d, cal_as_of = _calendar_for(as_of)
+    if not d:
+        return []
+    evs = d.get("events") or []
+    kw = [sector]
+    try:
+        with io.open(os.path.join(ROOT, "data", "sector_dept_map.json"), encoding="utf-8") as f:
+            depts = (json.load(f).get("map") or {}).get(sector, [])
+    except Exception:
+        depts = []
+    hits = [e for e in evs
+            if (e.get("layer") == "板块" and sector in (e.get("scope") or ""))
+            or any(x in (e.get("issuer") or "") for x in depts)]
+    if not hits:
+        return []
+    fut = [e for e in hits if e.get("event_status") == "未来预定"]
+    past = [e for e in hits if e.get("event_status") == "已发生"]
+    out = ["", f"—— 板块事件（{sector}；horizon={d.get('horizon_days', 30)}d；日历 {cal_as_of}）——",
+           f"共 {len(hits)} 条：未来预定 {len(fut)} · 已发生 {len(past)}"]
+    for e in (fut + past)[:12]:
+        out.append(f"  {e.get('event_date')} {(e.get('event_time') or '—'):<5} {e.get('issuer','')[:10]:<10} {e.get('scope','')[:52]}")
+    if len(hits) > 12:
+        out.append(f"  … 另 {len(hits)-12} 条")
+    return out
+
+
 def events_section(as_of):
     """读事件段：优先当天日历；没有就用最新一份，并在段首标出日历日期。"""
     d, cal_as_of = _calendar_for(as_of)
     if not d:
         return []
-    evs = d.get("events") or []
+    evs = [e for e in (d.get("events") or []) if (e.get("layer") or "市场") == "市场"]
     fut = [e for e in evs if e.get("event_status") == "未来预定"]
     hap = [e for e in evs if e.get("event_status") == "已发生"]
     lines = ["", f"—— 事件（horizon={d.get('horizon_days', 30)}d，不参与 as-of）——"]
@@ -992,6 +1026,9 @@ def build_sector(policy):
     _cl, _broken = chain_summary([ln for ln in body.splitlines() if ln.startswith("C")])
     _ok = sum(1 for ln in body.splitlines() if ln.startswith("C") and "不可读" not in ln)
     _tot = sum(1 for ln in body.splitlines() if ln.startswith("C"))
+    _ev = sector_events_section(as_of, sector)
+    if _ev:
+        body += "\n" + "\n".join(_ev)
     body += f"\n\n链条完整性：{_cl}"
     body += f"\n本次 {_tot} 条证据，{_ok} 条有值，{len(_broken)} 处断点" + (
         f"：{'、'.join(_broken)}；断点处请勿跨环推断。" if _broken else "；六环齐全。")
