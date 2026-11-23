@@ -728,6 +728,83 @@ def events_section(as_of):
             lines.append(f"  {e['event_date']} {'':<5} {e.get('event_type',''):<5} {e.get('scope','')[:38]}  · {e.get('issuer','')}")
     return lines
 
+
+# ---------------------------------------------------------------- 申万二级板块（SW）
+SW_DIR = os.path.join(ROOT, "data", "sw")
+
+
+def _sw_sector_of(name):
+    """板块名 → 申万二级代码（按名称精确/包含匹配）。"""
+    try:
+        with io.open(os.path.join(SW_DIR, "sectors.json"), encoding="utf-8") as f:
+            secs = (json.load(f) or {}).get("sectors") or []
+    except Exception:
+        return None
+    for x in secs:
+        if x.get("name") == name:
+            return x
+    for x in secs:
+        if name and (name in (x.get("name") or "") or (x.get("name") or "") in name):
+            return x
+    return None
+
+
+def _sw_panel(latest=True):
+    """最近一份申万二级当日面板（价/量/成交额/PE）。"""
+    d = os.path.join(SW_DIR, "daily")
+    if not os.path.isdir(d):
+        return None
+    fs = sorted(glob.glob(os.path.join(d, "*.json")))
+    if not fs:
+        return None
+    try:
+        with io.open(fs[-1], encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def _sw_hist_amount(code):
+    """板块成交额历史（亿元）：返回 [(date, amount)]。"""
+    fp = os.path.join(SW_DIR, "history", f"{code}.jsonl")
+    if not os.path.exists(fp):
+        return []
+    out = []
+    with io.open(fp, encoding="utf-8") as f:
+        next(f, None)
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+                if r.get("amount") is not None:
+                    out.append((r["date"], r["amount"]))   # index_hist_sw 的成交额已是亿元
+            except Exception:
+                continue
+    return out
+
+
+
+def _sw_breadth(code):
+    """申万板块内上涨家数占比（当日），来自 data/sw/breadth/<date>.json。"""
+    d = os.path.join(SW_DIR, "breadth")
+    if not os.path.isdir(d):
+        return None, None
+    fs = sorted(glob.glob(os.path.join(d, "*.json")))
+    if not fs:
+        return None, None
+    try:
+        with io.open(fs[-1], encoding="utf-8") as f:
+            obj = json.load(f)
+    except Exception:
+        return None, None
+    for r in obj.get("sectors") or []:
+        if r.get("code") == code:
+            return r.get("breadth"), obj.get("date")
+    return None, obj.get("date")
+
+
 def build_sector(policy):
     """板块层六环（同名不同义）。v1 只做 C2 份额、C6 涨跌与广度；其余如实不可读。"""
     try:
@@ -766,18 +843,36 @@ def build_sector(policy):
                      "线索不等于政策方向，需人工判定")
     else:
         rings[0].add("不可读（—）", "行业政策状态需人工录入官方文件链接；该板块未配置对口部委", "该环无证据")
-    # C2 供给份额
-    v = val("SECTOR_SHARE")
+    # C2 供给份额：优先申万口径（有历史，可出前值与分位）；没有就退回同花顺快照
+    sw = _sw_sector_of(sector)
+    sw_share_done = False
+    if sw:
+        amt = _sw_hist_amount(sw["code"])
+        mkt = [(p_, v_) for p_, v_ in _hist("MKT_TURNOVER", 400)]
+        mkt_d = dict(mkt)
+        shares = [(d_, a_ / mkt_d[d_] * 100) for d_, a_ in amt if mkt_d.get(d_)]
+        if len(shares) >= 3:
+            cur_d, cur_s = shares[-1]
+            prev_s = shares[-2][1]
+            pos = _pos_of([x[1] for x in shares])
+            word = "份额升" if cur_s > prev_s + 0.05 else ("份额降" if cur_s < prev_s - 0.05 else "不变")
+            rings[1].add(f"{word}（{cur_d}）",
+                         f"{sector}板块成交额占全市场 {cur_s:.2f}%，上一交易日 {prev_s:.2f}%"
+                         + (f"（{len(shares)} 期 {pos:.0f}% 位）" if pos is not None else ""),
+                         "只说明成交份额，不说明资金流向量",
+                         "〔C 类·申万二级指数成交额 ÷ 全市场成交额，未对账…〕")
+            sw_share_done = True
+    v = val("SECTOR_SHARE") if not sw_share_done else None
     p, prev_period = prev_value_from_revisions("SECTOR_SHARE", period("SECTOR_SHARE"))
-    if v is not None and p is not None:
+    if (not sw_share_done) and v is not None and p is not None:
         word = "份额升" if v > p else ("份额降" if v < p else "不变")
         rings[1].add(f"{word}（{period('SECTOR_SHARE')}）",
                      f"{sector}板块成交额占比 {v:.2f}% 对比上一期 {p:.2f}%（{prev_period}）",
                      "只说明成交份额，不说明资金流向量", tag_of("SECTOR_SHARE"))
-    elif v is not None:
+    elif (not sw_share_done) and v is not None:
         rings[1].add("不可读（—）", f"份额已有 {v:.2f}%，但修订链无更早数据期、无证据可作前值（首次落盘）",
                      "该环暂无法判方向")
-    else:
+    elif not sw_share_done:
         rings[1].add("不可读（—）", "板块成交额或全市场成交额缺失", "该环无证据")
     # C3 相对贵贱：板块 PE ÷ 沪深300 PE
     v3 = val("SECTOR_VAL")
@@ -799,19 +894,40 @@ def build_sector(policy):
                      "仅覆盖上榜个股，不代表板块内全部机构行为", tag_of("SECTOR_INST_FLOW"))
     else:
         rings[4].add("不可读（—）", "板块内龙虎榜未取到（成分表或龙虎榜接口失败）", "该环无证据")
-    # C6 结果：涨跌幅 + 板块内广度
-    pct = val("SECTOR_PCT")
-    if pct is not None:
+    # C6 结果：涨跌幅（优先申万当日面板，与份额、广度和广度同日）+ 板块内广度
+    sw_panel = _sw_panel()
+    sw_pct_done = False
+    if sw and sw_panel:
+        row = next((x for x in (sw_panel.get("sectors") or []) if x.get("code") == sw["code"]), None)
+        if row and row.get("pct") is not None:
+            pct_sw = float(row["pct"])
+            word = "升" if pct_sw > 0 else ("降" if pct_sw < 0 else "不变")
+            rings[5].add(f"{word}（{sw_panel.get('date')}）",
+                         f"{sector}板块指数涨跌幅 {pct_sw:+.2f}%（收 {row.get('close')}，成交 {row.get('amount')} 亿）",
+                         "不说明板块内个股结构",
+                         "〔C 类·申万二级指数实时行情，未对账…〕")
+            sw_pct_done = True
+    pct = None if sw_pct_done else val("SECTOR_PCT")
+    if sw_pct_done:
+        pass
+    elif pct is not None:
         word = "升" if pct > 0 else ("降" if pct < 0 else "不变")
         rings[5].add(f"{word}（{period('SECTOR_PCT')}）", f"{sector}板块指数涨跌幅 {pct:+.2f}%", "不说明板块内个股结构", tag_of("SECTOR_PCT"))
     else:
         rings[5].add("不可读（—）", "板块指数日线缺失", "该环无证据")
-    b = val("SECTOR_BREADTH")
+    sw_b, sw_b_day = (_sw_breadth(sw["code"]) if sw else (None, None))
+    b = sw_b if sw_b is not None else val("SECTOR_BREADTH")
+    b_period = sw_b_day if sw_b is not None else period("SECTOR_BREADTH")
     if b is not None:
         word = "强" if b > 50 else ("弱" if b < 50 else "不变")
-        rings[5].add(f"广度{word}（{period('SECTOR_BREADTH')}）", f"{sector}板块上涨家数占比 {b:.1f}%（阈值 50%）", "只说明广度，不说明幅度", tag_of("SECTOR_BREADTH"))
+        src_tag = ("〔C 类·申万二级成分 + 全市场个股涨跌幅，未对账…〕" if sw_b is not None
+                   else tag_of("SECTOR_BREADTH"))
+        rings[5].add(f"广度{word}（{b_period}）", f"{sector}板块上涨家数占比 {b:.1f}%（阈值 50%）",
+                     "只说明广度，不说明幅度", src_tag)
 
     daily = [period(i) for i in ("SECTOR_PCT", "SECTOR_BREADTH", "SECTOR_AMT") if period(i)]
+    if sw_panel and sw_panel.get("date"):
+        daily.append(sw_panel["date"])
     as_of = max(daily) if daily else "不可用"
     normalize_dates(rings, as_of)
     body = "\n".join("\n".join(r_.lines) for r_ in rings)

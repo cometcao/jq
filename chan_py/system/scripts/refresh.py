@@ -96,6 +96,8 @@ def main():
         (["scripts/history.py"], "历史"),
         (["scripts/events.py", "--days", "30", "--write"], "事件"),
         (["scripts/scenarios.py"], "分支"),
+        (["scripts/sw_sectors.py", "--meta", "--daily"], "申万板块"),
+        (["scripts/sw_sectors.py", "--breadth"], "板块广度"),
         (["scripts/state.py", "--layer", "market", "--write", "--archive", "--json"], "市场层"),
         (["scripts/state.py", "--layer", "sector", "--write", "--archive"], "板块层"),
     ]

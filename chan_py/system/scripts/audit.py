@@ -200,6 +200,26 @@ def meaning_fit(iid, meta, spec, used_in_state):
     return verdict, "；".join(notes)
 
 
+def sw_coverage():
+    """申万二级板块数据层的完备度：多少板块有历史、历史滞后几天、当日面板是否就绪。"""
+    sw = os.path.join(ROOT, "data", "sw")
+    meta = load_json(os.path.join(sw, "sectors.json"), {}) or {}
+    secs = meta.get("sectors") or []
+    hist = glob.glob(os.path.join(sw, "history", "*.jsonl"))
+    days = sorted(glob.glob(os.path.join(sw, "daily", "*.json")))
+    latest = None
+    for fp in hist[:]:
+        try:
+            rows = io.open(fp, encoding="utf-8").read().splitlines()
+            if len(rows) > 1:
+                latest = max(latest or "", json.loads(rows[-1]).get("date", ""))
+        except Exception:
+            continue
+    return {"sectors": len(secs), "with_history": len(hist),
+            "history_latest": latest or "—",
+            "panel_days": len(days), "panel_latest": (os.path.basename(days[-1])[:10] if days else "—")}
+
+
 def verdict(lag, alive, degraded, has_alt_provider, cands, direct_official=False):
     """给结论：保留 / 观察 / 建议替换 / 已失效。只描述判断依据，不自动改。"""
     if lag is None:
@@ -274,6 +294,9 @@ def main():
             "fit": fit, "fit_reason": fit_reason,
         })
 
+    sw = sw_coverage()
+    print(f"\n[申万二级板块] {sw['sectors']} 个 · 有历史 {sw['with_history']} 个 · "
+          f"历史最新 {sw['history_latest']} · 当日面板 {sw['panel_latest']}（{sw['panel_days']} 天）")
     order = {"已失效": 0, "建议替换": 1, "观察": 2, "留意替代": 3, "保留": 4, "未接入": 5, "无法判断": 6}
     rows.sort(key=lambda r: (order.get(r["verdict"], 9), r["ring"], r["id"]))
 
@@ -302,6 +325,10 @@ def main():
             f.write(f"| {r['ring']} | {r['verdict']} | {r['fit']} | {r['name']} | {r['period']} | "
                     f"{r['lag'] if r['lag'] is not None else '—'} | {r['alive']} | {r['reason']} | "
                     f"{'、'.join(r['cands']) or '—'} |\n")
+        f.write(f"\n## 申万二级板块数据层\n\n"
+                f"- 板块数：**{sw['sectors']}**\n- 已回补历史：**{sw['with_history']}**\n"
+                f"- 历史最新交易日：**{sw['history_latest']}**\n"
+                f"- 当日面板：**{sw['panel_latest']}**（共 {sw['panel_days']} 天）\n")
         f.write("\n## 口径适配（从数据意思看还能不能回答本环的资金问题）\n\n")
         f.write("| 环 | 指标 | 适配结论 | 说明 |\n|---|---|---|---|\n")
         for r in rows:
