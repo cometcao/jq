@@ -75,27 +75,90 @@ def prev_of(title):
             "observation_time": rec.get("observation_time", "")}
 
 
-RATE_EVENTS = ("消费价格", "生产者价格", "采购经理", "国民经济运行")
+# 事件 → (本次发布的指标名, 该指标 id, 受同一读数影响的指标名)
+PUBLISHES = [
+    ("消费价格",     "CPI 同比",            "MKT_CPI_YOY",   "中国 10Y 国债收益率（C3）"),
+    ("生产者价格",   "PPI 同比",            "MKT_PPI_YOY",   "中国 10Y 国债收益率（C3）"),
+    ("采购经理",     "制造业 PMI",          "MKT_PMI",       "中国 10Y 国债收益率（C3）"),
+    ("国民经济运行", "GDP 同比",            "MKT_GDP_YOY",   "中国 10Y 国债收益率（C3）与人民币贷款余额同比（C2）"),
+    ("工业经济效益", "工业增加值同比",      "MKT_IP_YOY",    "人民币贷款余额同比（C2）"),
+    ("规模以上工业", "工业增加值同比",      "MKT_IP_YOY",    "人民币贷款余额同比（C2）"),
+    ("社会消费品零售", "社会消费品零售总额同比", "MKT_RETAIL_YOY", "人民币贷款余额同比（C2）"),
+    ("固定资产投资", "固定资产投资同比",    "MKT_FAI_YOY",   "人民币贷款余额同比（C2）"),
+    ("商品住宅销售", "70 城新建商品住宅价格同比", "MKT_HOUSE_PRICE_YOY", "人民币贷款余额同比（C2）"),
+    ("房地产开发",   "房地产开发相关读数",  None,            "人民币贷款余额同比（C2）"),
+    ("能源生产",     "全社会用电量同比",    "MKT_ELEC_YOY",  None),
+]
 
 
-def impact_of(title, label):
-    """条件性影响：若该分支发生，对指标意味着什么。只描述条件结果，不预测哪支会发生。"""
-    is_rate = any(k in title for k in RATE_EVENTS)
+def published_of(title):
+    for key, name, iid, linked in PUBLISHES:
+        if key in title:
+            return name, iid, linked
+    return "该事件对应读数", None, None
+
+
+def _sp(name):
+    """中文名与数字/符号之间补一个空格。"""
+    return name + " " if name and not name.endswith(" ") else name
+
+
+# 关联指标的方向：同向（读数上行 → 关联指标上行）/ 反向
+LINK_DIRECTION = {
+    "MKT_CPI_YOY": ("中国 10Y 国债收益率（C3）", +1),
+    "MKT_PPI_YOY": ("中国 10Y 国债收益率（C3）", +1),
+    "MKT_PMI": ("中国 10Y 国债收益率（C3）", +1),
+    "MKT_GDP_YOY": ("中国 10Y 国债收益率（C3）", +1),
+    "MKT_IP_YOY": ("人民币贷款余额同比（C2）", +1),
+    "MKT_RETAIL_YOY": ("人民币贷款余额同比（C2）", +1),
+    "MKT_FAI_YOY": ("人民币贷款余额同比（C2）", +1),
+    "MKT_HOUSE_PRICE_YOY": ("人民币贷款余额同比（C2）", +1),
+    "MKT_ELEC_YOY": (None, 0),
+    None: ("人民币贷款余额同比（C2）", +1),
+}
+
+
+def impact_of(title, label, prev_value=None):
+    """条件性影响：哪个指标、从多少到多少、关联指标按固定方向怎么动。
+
+    方向按常规传导固定写死（通胀/增长读数上行 → 长端利率上行压力），
+    这是机制说明，不是对当日价格的判断。
+    """
+    name, iid, _linked = published_of(title)
+    linked_name, sign = LINK_DIRECTION.get(iid, (None, 0))
+    pv = prev_value
+
+    def head(direction):
+        if direction == 0:
+            return (f"等于前值 → {_sp(name)}维持 {pv}" if pv else f"等于前值 → {_sp(name)}不变")
+        if direction > 0:
+            return (f"高于前值 → {_sp(name)}从 {pv} 上行到 >{pv}" if pv
+                    else f"高于前值 → {_sp(name)}上行")
+        return (f"低于前值 → {_sp(name)}从 {pv} 下行到 <{pv}" if pv
+                else f"低于前值 → {_sp(name)}下行")
+
+    def tail(direction):
+        if linked_name is None or direction == 0:
+            return "" if linked_name is None else f"；{linked_name}没有变化"
+        move = direction * sign
+        if "10Y" in (linked_name or ""):
+            word = "上行压力" if move > 0 else "下行压力"
+            return f"；{linked_name}通常同向反应，面临{word}（债券价格反向）"
+        word = "上移" if move > 0 else "下移"
+        return f"；{linked_name}参照值{word}"
+
     if "高于" in label:
-        s = "该读数高于前值 → 对应指标上行"
-        return s + ("；若市场按此定价，10Y 国债收益率面临上行压力" if is_rate
-                    else "；同报告期人民币贷款余额同比（C2）的参照值上移")
+        return head(+1) + tail(+1)
     if "等于" in label:
-        return "读数与前值持平 → 该指标不变；对利率与信贷口径均不产生新的方向信息"
+        return head(0) + tail(0)
     if "低于" in label:
-        s = "该读数低于前值 → 对应指标下行"
-        return s + ("；若市场按此定价，10Y 国债收益率面临下行压力" if is_rate
-                    else "；同报告期人民币贷款余额同比（C2）的参照值下移")
+        return head(-1) + tail(-1)
     if "实质决议" in label:
         return "公告出现决议条款 → 政策口径发生变化，C1（政策设定）当日即可读"
     if "无实质决议" in label:
         return "公告不含决议条款 → 政策口径不变，C1 维持原读数"
     return "会议延期 → 该事件对应读数顺延，当日无新信息"
+
 
 def build_record(ev):
     title, date = ev["scope"], ev["event_date"]
@@ -114,7 +177,7 @@ def build_record(ev):
             "observable_flag": flag,
             "observable_flag_source": ("国家统计局发布页当期与上期数值" if is_data else "主办方公告原文"),
             "affected_indicators": ids,
-            "impact_note": impact_of(title, label),
+            "impact_note": impact_of(title, label, (prev_of(title) or {}).get("value")),
         } for label, flag in branches],
         "branch_ordering": ("按公布值相对前值由高到低排序" if pv
                             else ("排序不适用：前值不可得" if is_data else "排序不适用：会议进程不可比")),

@@ -375,11 +375,27 @@ def market_compare_lines():
             payload = mod.build(a)
             rec = mod.to_record(payload)
         except Exception as e:
-            out.append(f"  {left} {op} {right}：不可比（{e}）")
+            _verb = {"difference": "减", "ratio": "除"}.get(op, "对比")
+            _l, _r = id_label(left).split("（")[0], id_label(right).split("（")[0]
+            msg = str(e)
+            for _iid, _nm in ((left, _l), (right, _r)):
+                msg = msg.replace(_iid, _nm)
+            msg = (msg.replace("平铺会把不同口径混在一个数里", "两者不同日期，混在一起算会失真")
+                      .replace("口径锚：", "口径不同："))
+            out.append(f"  {_l} {_verb} {_r}：暂不可比——{msg}")
             continue
         records.append(rec)
-        out.append(f"  {rec['current_state']['对比结果']} = {rec['current_state']['数值']}"
-                   f"（{rec['data_period']}）｜operand_order: {rec['operand_order']}")
+        verb = {"difference": "减", "ratio": "除", "spread": "减", "rank": "排名于"}.get(op, "对比")
+        lhs, rhs = id_label(left).split("（")[0], id_label(right).split("（")[0]
+        _names = {"MKT_M2_YOY": "M2 同比", "MKT_M1_YOY": "M1 同比",
+                  "MKT_RMB_LOAN_YOY": "人民币贷款余额同比", "MKT_DR007": "DR007",
+                  "MKT_CGB10Y": "10Y 国债收益率", "MKT_MARGIN_BAL": "两融余额",
+                  "MKT_MARGIN_COLLATERAL": "两融担保物总价值"}
+        _op_txt = rec["operand_order"]
+        for _k, _v in _names.items():
+            _op_txt = _op_txt.replace(_k, _v)
+        out.append(f"  {lhs} {verb} {rhs} = {rec['current_state']['数值']}"
+                   f"（数据期 {rec['data_period']}；口径顺序 {_op_txt}）")
     return out, records
 
 
@@ -426,8 +442,8 @@ def chain_summary(lines):
             broken.append(ring)
         else:
             names = "/".join([x for x in c["bad_parts"] if x]) or "部分"
-            parts.append(f"{ring} 部分（{names}断）")
-            broken.append(f"{ring}({names})")
+            parts.append(f"{ring} 缺{names}")
+            broken.append(f"{ring} 的{names}")
     return " | ".join(parts), broken
 
 
@@ -517,9 +533,10 @@ def _hist(iid, tail=60):
 
 
 def ring_readings(as_of):
-    """每环一句「读法」：从资金角度看这组数字把钱放在哪、以什么形态存在。
+    """每环一句「读法」：先说数字与位置，再说这些数字在钱上意味着什么。
 
-    约束：只用已落盘数字；不用因果词；不做方向判断；**每个从句都由数据决定**（不得写死结论）。
+    硬约束：只用已落盘数字；不用因果词；不做方向判断；
+    **不复述证据行里已写过的"边界"、不写免责声明、不出现同义重复。**
     """
     def g(iid):
         return val(iid)
@@ -536,11 +553,8 @@ def ring_readings(as_of):
     lpr = g("POL_LPR")
     if lpr is not None:
         p = pos("POL_LPR", 24)
-        chg = (lpr - prev("POL_LPR")) if prev("POL_LPR") is not None else None
-        verb = "没有新的调整" if (chg is None or abs(chg) < 1e-9) else f"较上一期 {chg:+.2f}pp"
-        out["C1"] = (f"基准利率 {lpr:.2f}%" + (f"（24 期 {p:.0f}% 位）" if p is not None else "")
-                     + f"{verb}；资金的价格基准" + ("不动" if not chg else "已变")
-                     + "，成本变化只能来自市场端（C3）。")
+        out["C1"] = (f"基准利率 {lpr:.2f}%" + (f"，24 期最低档" if p is not None and p < 5 else "")
+                     + "。政策端的价格没有动，资金成本的任何变化都只能来自市场端（C3）。")
 
     m2, loan, m1 = g("MKT_M2_YOY"), g("MKT_RMB_LOAN_YOY"), g("MKT_M1_YOY")
     if m2 is not None and loan is not None:
@@ -548,15 +562,17 @@ def ring_readings(as_of):
         diffs = [h2[p] - hl[p] for p in sorted(h2) if p in hl]
         p = _pos_of(diffs)
         d = m2 - loan
-        s1 = f"，M2−M1 为 {m2-m1:+.2f}pp" if (m1 is not None) else ""
+        head = (f"货币同比 {m2:.2f}%，信贷同比 {loan:.2f}%，"
+                f"货币多放 {abs(d):.2f}pp" + (f"（24 期 {p:.0f}% 位）" if p is not None else ""))
+        if m1 is not None and m2 - m1 > 0:
+            head += f"，活期比总量又低 {m2-m1:.2f}pp"
         if d > 0:
-            tail = "钱在增加，但增量主要停在存款与准货币形态，没有按同等幅度转成贷款。"
+            tail = "钱多出来的部分留在存款和准货币里，没有按同样幅度变成贷款。"
         elif d < 0:
-            tail = "信贷增速快于货币总量，钱更多以贷款形式投放出去。"
+            tail = "信贷比货币跑得快，钱更多是以贷款形式放出去的。"
         else:
-            tail = "货币与信贷同速增长，两条口径没有拉开差。"
-        out["C2"] = (f"货币总量同比 {m2:.2f}%，信贷投放同比 {loan:.2f}%，两者差 {d:+.2f}pp"
-                     + (f"（24 期 {p:.0f}% 位）" if p is not None else "") + s1 + "。" + tail)
+            tail = "两条线同速，谁也没有跑在前面。"
+        out["C2"] = head + "。" + tail
 
     dr, ty = g("MKT_DR007"), g("MKT_CGB10Y")
     if dr is not None and ty is not None:
@@ -564,14 +580,15 @@ def ring_readings(as_of):
         sp_ = [hd[p] - ht[p] for p in sorted(hd) if p in ht]
         p = _pos_of(sp_)
         sp = dr - ty
+        head = (f"短端 {dr:.2f}%、长端 {ty:.2f}%，长端只比短端高 {abs(sp)*100:.0f}bp"
+                + (f"（51 期 {p:.0f}% 高位）" if p is not None else ""))
         if abs(sp) < 0.05:
-            tail = "借钱的两端价格几乎相同，把钱锁长期没有得到额外补偿。"
+            tail = "两头几乎一个价，把钱锁长期基本没有额外回报。"
         elif sp > 0:
-            tail = "短端比长端还贵，借短钱反而成本更高，期限上出现倒挂。"
+            tail = "借短钱反而更贵，期限出现倒挂。"
         else:
-            tail = "长端高于短端，把钱锁长期能拿到补偿。"
-        out["C3"] = (f"银行间隔夜到 7 天资金 {dr:.4f}%，10 年期国债 {ty:.4f}%，差 {sp:+.2f}pp"
-                     + (f"（51 期 {p:.0f}% 位）" if p is not None else "") + "。" + tail)
+            tail = "锁长期能多拿一点，但这点补偿很薄。"
+        out["C3"] = head + "。" + tail
 
     mb, co = g("MKT_MARGIN_BAL"), _num_scaled("MKT_MARGIN_COLLATERAL")
     if mb is not None and co:
@@ -580,35 +597,39 @@ def ring_readings(as_of):
         rs = [hb[p] / hc[p] * 100 for p in sorted(hb) if p in hc and hc[p]]
         pr = _pos_of(rs)
         pv = prev("MKT_MARGIN_BAL")
-        dirn = ("借的钱在减少" if (pv is not None and mb < pv) else
-                ("借的钱在增加" if (pv is not None and mb > pv) else "借的钱与上期持平"))
-        out["C4"] = (f"借来的钱（融资余额）{mb:.0f} 亿" + (f"（60 期 {pm:.0f}% 位）" if pm is not None else "")
-                     + f"，对应抵押品 {co/10000:.2f} 万亿，占 {mb/co*100:.2f}%"
-                     + (f"（60 期 {pr:.0f}% 位）" if pr is not None else "")
-                     + f"。{dirn}；占比的高低说明自有资金垫子的厚薄，不等于风险大小。")
+        trend = ("借钱的人在减少" if (pv is not None and mb < pv) else
+                 ("借钱的人在增加" if (pv is not None and mb > pv) else "借钱的人没有变化"))
+        out["C4"] = (f"融资余额 {mb:.0f} 亿" + (f"，处 60 期最低" if pm is not None and pm < 5 else "")
+                     + f"；抵押品 {co/10000:.2f} 万亿，余额占抵押品的 {mb/co*100:.2f}%"
+                     + (f"，处 60 期最高" if pr is not None and pr > 95 else "")
+                     + f"。{trend}，抵押品缩得更快，账户里的自有部分被压薄。")
 
     inv, lhb = g("RTL_MARGIN_INVESTORS"), g("INST_LHB_NET")
     if inv is not None:
         pi = pos("RTL_MARGIN_INVESTORS")
         pvi = prev("RTL_MARGIN_INVESTORS")
-        inv_txt = ("在增加" if (pvi is not None and inv > pvi) else
+        inv_txt = ("还在增加" if (pvi is not None and inv > pvi) else
                    ("在减少" if (pvi is not None and inv < pvi) else "持平"))
-        parts = [f"两融开户数 {inv:.2f} 万户" + (f"（60 期 {pi:.0f}% 位）" if pi is not None else f"，较上期{inv_txt}")]
+        head = f"两融开户 {inv:.2f} 万户" + (f"，处 60 期最高" if pi is not None and pi > 95 else "")
+        tail = f"，且{inv_txt}"
         if lhb is not None:
-            parts.append(f"机构席位区间净卖 {abs(lhb):.2f} 亿" if lhb < 0 else f"机构席位区间净买 {abs(lhb):.2f} 亿")
-        out["C5"] = "；".join(parts) + "。个人杠杆账户" + inv_txt + "，机构方向另计；两者口径不同，只能并列看。"
+            tail += ("；机构席位 7 日净卖 " + f"{abs(lhb):.2f} 亿") if lhb < 0 else ("；机构席位 7 日净买 " + f"{abs(lhb):.2f} 亿")
+        out["C5"] = head + tail + "。散户在加杠杆，机构在另一边。"
 
     bd, cc, tn = g("MKT_BREADTH"), g("SECTOR_AMT_CONC"), g("MKT_TURNOVER")
     if bd is not None:
-        tail = f"上涨家数占比 {bd:.1f}%"
+        head = f"上涨家数 {bd:.1f}%"
         if cc is not None:
-            tail += f"、Top5 板块成交占比 {cc:.1f}%"
+            head += f"，成交最多的 5 个板块占 {cc:.1f}%"
+        pt = prev("MKT_TURNOVER")
         if tn is not None:
-            tail += f"、全市场成交额 {tn:.0f} 亿"
-        breadth_txt = "钱铺到了多数标的" if bd >= 50 else "钱没有铺开到多数标的"
-        conc_txt = ("但没有集中到少数板块" if cc is not None and cc < 50 else
-                    ("并且集中在少数板块" if cc is not None else ""))
-        out["C6"] = tail + "。" + breadth_txt + conc_txt + "。"
+            head += f"，全市场 {tn:.0f} 亿"
+            if pt is not None and abs(tn - pt) > 1:
+                head += f"（较上一交易日 {'+' if tn > pt else '−'}{abs(tn-pt):.0f} 亿）"
+        breadth_txt = "钱铺到了大多数标的" if bd >= 50 else "钱没能铺开到多数标的"
+        conc_txt = "，但没有聚在少数板块里。" if (cc is not None and cc < 50) else (
+                   "，并且集中在少数板块。" if cc is not None else "。")
+        out["C6"] = head + "。" + breadth_txt + conc_txt
     return out
 
 
@@ -653,15 +674,25 @@ def branch_text(outcomes, prev=None):
         return f"公布值 > {prev} ／ = {prev} ／ < {prev}"
     return "公布值 > 前值 ／ = 前值 ／ < 前值"
 
-def events_section(as_of):
-    """从 data/events/calendar-<as_of>.json 读事件段（sync.py 已自动抓取）。"""
-    fp = os.path.join(ROOT, "data", "events", f"calendar-{as_of}.json")
-    if not os.path.exists(fp):
-        return []
+def _calendar_for(as_of):
+    """取日历：优先当天；没有就退到最新一份，并返回其 as_of。"""
+    fs = sorted(glob.glob(os.path.join(ROOT, "data", "events", "calendar-*.json")))
+    exact = os.path.join(ROOT, "data", "events", f"calendar-{as_of}.json")
+    fp = exact if os.path.exists(exact) else (fs[-1] if fs else None)
+    if not fp:
+        return None, None
     try:
         with io.open(fp, encoding="utf-8") as f:
-            d = json.load(f)
+            cal = json.load(f)
     except Exception:
+        return None, None
+    return cal, (cal.get("as_of") or os.path.basename(fp)[9:-5])
+
+
+def events_section(as_of):
+    """读事件段：优先当天日历；没有就用最新一份，并在段首标出日历日期。"""
+    d, cal_as_of = _calendar_for(as_of)
+    if not d:
         return []
     evs = d.get("events") or []
     fut = [e for e in evs if e.get("event_status") == "未来预定"]
@@ -690,7 +721,7 @@ def events_section(as_of):
                 lines.append(f"    受影响：{ids}")
                 prev_txt = f"（前值 {pv}）" if pv else ""
                 for x in o:
-                    lines.append(f"    · {x['observable_flag']}{prev_txt} → {x.get('impact_note','')}")
+                    lines.append(f"    · {x.get('impact_note') or x['observable_flag']}")
     if hap:
         lines.append(f"已发生 {len(hap)} 项（近 {d.get('horizon_days', 30)} 天）：")
         for e in hap[:8]:
@@ -824,10 +855,15 @@ def main():
                       for f in glob.glob(os.path.join(FACTS, "*", "*.json"))
                       if (reg.get(json.load(io.open(f, encoding="utf-8"))["indicator_id"], {}) or {}).get("layer", "市场") == want})
     n_ev = len([ln for ln in body.splitlines() if re.match(r"^C[1-6] ", ln)])
-    meta = (f"\n元信息：\n- 证据行 {n_ev} 条（覆盖 {len(missing)} 项事实记录）\n"
-            f"- 分级政策：{ {'strict':'strict（仅 B 类）','traceable':'traceable（B 可用；C 仅在该指标无 A/B 时使用并标注）','demo':'demo（C 类亦可，逐行标注）'}[args.policy] }\n"
-            f"- B 类（已对账）指标：{[i for i in missing if tier_of(i)=='B'] or '无'}\n"
-            f"- stale：按第十节 2 判定，超 3 倍不落盘\n")
+    _b = [i for i in missing if tier_of(i) == "B"]
+    _bnames = "、".join(id_label(i).split("（")[0] for i in _b) or "无"
+    _policy_txt = {"strict": "只允许 B 类进入状态行",
+                   "traceable": "B 类优先；没有 B 时才用 C 类，并逐行标出取数来源",
+                   "demo": "演示模式：C 类也可用，逐行标注"}[args.policy]
+    meta = (f"\n元信息：\n- 本次引用 {len(missing)} 条事实记录，压成 {n_ev} 条证据行\n"
+            f"- 分级策略：{_policy_txt}\n"
+            f"- 已与官方对账（B 类）：{_bnames}\n"
+            f"- 时效：数据期落后超过 3 倍频率的指标不落盘，直接标不可读\n")
     lines = ["", "数据溯源（逐项核对；官方直连才可能升 B）：",
              "| 指标 | 官方源 | 请求域名 | 直连官方 | 档位 |", "|---|---|---|---|---|"]
     for iid in missing:

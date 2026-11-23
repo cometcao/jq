@@ -107,11 +107,19 @@ def validate_events(records):
 
 
 def latest_trade_day():
-    try:
-        with io.open(os.path.join(ROOT, "data", "cache", "IDX_DAILY.json"), encoding="utf-8") as f:
-            return json.load(f).get("data_period") or dt.date.today().isoformat()
-    except Exception:
-        return dt.date.today().isoformat()
+    """目标交易日：工作日且已过 15:00 → 当天，否则回退上一工作日。
+
+    不再借指数缓存的数据期——指数源滞后一天时会把日历文件标成前一天。
+    """
+    now = dt.datetime.now()
+    d = now.date()
+    while d.weekday() >= 5:
+        d -= dt.timedelta(days=1)
+    if d == now.date() and now.hour < 15:
+        d -= dt.timedelta(days=1)
+        while d.weekday() >= 5:
+            d -= dt.timedelta(days=1)
+    return d.isoformat()
 
 
 # ---------------------------------------------------------------- 源 1：统计局日程（未来预定）
