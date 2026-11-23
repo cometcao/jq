@@ -316,6 +316,66 @@ def board(top=15, sort_key="amount"):
     return 0
 
 
+# ---------------------------------------------------------------- 板块两融（深市官方明细）
+def fetch_margin_sz(force=False, max_pages=120):
+    """深交所两融明细（per stock）→ data/sw/margin/<date>.json；1 页 20 条，约 106 页。"""
+    import requests
+    day = _trade_day()
+    fp = os.path.join(SW, "margin", f"{day}.json")
+    if not force and os.path.exists(fp):
+        print(f"板块两融：{day} 已拉过，跳过")
+        return 0
+    base = "http://www.szse.cn/api/report/ShowReport/data"
+    UA = {"User-Agent": "Mozilla/5.0", "Referer": "http://www.szse.cn/"}
+    rows, page, total = [], 1, None
+    import datetime as _dt
+    # T+1：当天没有就回退
+    d = _dt.date.fromisoformat(day)
+    for _ in range(8):
+        if d.weekday() < 5:
+            first = None
+            try:
+                r = requests.get(base, params={"SHOWTYPE": "JSON", "CATALOGID": "1837_xxpl", "TABKEY": "tab2",
+                                               "PAGENO": 1, "txtDate": d.isoformat(), "random": "0.3"},
+                                 headers=UA, timeout=25)
+                j = r.json() or []
+                first = (j[0].get("data") or []) if isinstance(j, list) and j else []
+                total = ((j[0].get("metadata") or {}).get("pagecount") or 0) if first else 0
+            except Exception:
+                first = []
+            if first:
+                rows = list(first)
+                pages = min(int(total or 1), max_pages)
+                for pg in range(2, pages + 1):
+                    try:
+                        rr = requests.get(base, params={"SHOWTYPE": "JSON", "CATALOGID": "1837_xxpl",
+                                                        "TABKEY": "tab2", "PAGENO": pg,
+                                                        "txtDate": d.isoformat(), "random": "0.3"},
+                                          headers=UA, timeout=25)
+                        jj = rr.json() or []
+                        rows += (jj[0].get("data") or []) if isinstance(jj, list) and jj else []
+                    except Exception:
+                        continue
+                out = {}
+                for x in rows:
+                    code = str(x.get("zqdm") or "").zfill(6)
+                    try:
+                        bal = float(str(x.get("jrrzye") or 0).replace(",", ""))
+                    except Exception:
+                        continue
+                    if code:
+                        out[code] = bal
+                save_json(os.path.join(SW, "margin", f"{d.isoformat()}.json"),
+                          {"date": d.isoformat(), "generated_at": dt.datetime.now().isoformat(timespec="seconds"),
+                           "source": "深交所·融资融券交易明细（ShowReport 1837_xxpl tab2）",
+                           "count": len(out), "pages": pages, "fin_bal": out})
+                print(f"板块两融：{d.isoformat()} · {len(out)} 只（{pages} 页）")
+                return 0
+        d -= _dt.timedelta(days=1)
+    print("板块两融：近 8 天无数据")
+    return 3
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--meta", action="store_true")
@@ -326,6 +386,7 @@ def main():
     ap.add_argument("--depth", type=int, default=120)
     ap.add_argument("--constituents", action="store_true")
     ap.add_argument("--breadth", action="store_true")
+    ap.add_argument("--margin", action="store_true")
     ap.add_argument("--board", action="store_true")
     ap.add_argument("--rank", action="store_true")
     ap.add_argument("--top", type=int, default=20)
@@ -345,6 +406,10 @@ def main():
         rc = fetch_breadth()
         if rc:
             return rc
+    if a.margin:
+        rc = fetch_margin_sz()
+        if rc:
+            print(f"（板块两融返回 {rc}）")
     if a.board:
         return board(a.top)
     if a.rank:

@@ -824,6 +824,34 @@ def _sw_breadth(code):
     return None, obj.get("date")
 
 
+
+def _sw_margin_of(code):
+    """申万板块内个股（深市部分）融资余额合计：返回 (合计亿元, 覆盖只数, 数据日)。"""
+    mdir = os.path.join(SW_DIR, "margin")
+    if not os.path.isdir(mdir):
+        return None, 0, None
+    fs = sorted(glob.glob(os.path.join(mdir, "*.json")))
+    if not fs:
+        return None, 0, None
+    try:
+        with io.open(fs[-1], encoding="utf-8") as f:
+            m = json.load(f)
+    except Exception:
+        return None, 0, None
+    cons = {}
+    try:
+        with io.open(os.path.join(SW_DIR, "constituents.json"), encoding="utf-8") as f:
+            cons = (json.load(f).get("sectors") or {})
+    except Exception:
+        return None, 0, None
+    codes = (cons.get(code) or {}).get("codes") or []
+    bal = m.get("fin_bal") or {}
+    hit = [bal[c] for c in codes if c in bal]
+    if not hit:
+        return None, 0, m.get("date")
+    return sum(hit), len(hit), m.get("date")
+
+
 def build_sector(policy):
     """板块层六环（同名不同义）。v1 只做 C2 份额、C6 涨跌与广度；其余如实不可读。"""
     try:
@@ -880,7 +908,7 @@ def build_sector(policy):
             rings[1].add(f"{word}（{cur_d}）",
                          f"{sector}板块成交额占全市场 {cur_s:.2f}%，上一交易日 {prev_s:.2f}%"
                          + (f"（{len(shares)} 期 {pos:.0f}% 位）" if pos is not None else ""),
-                         "只说明成交份额，不说明资金流向量",
+                         "只说明成交份额，不说明资金进出的方向",
                          "〔C 类·申万二级指数成交额 ÷ 全市场成交额，未对账…〕")
             sw_share_done = True
     v = val("SECTOR_SHARE") if not sw_share_done else None
@@ -889,7 +917,7 @@ def build_sector(policy):
         word = "份额升" if v > p else ("份额降" if v < p else "不变")
         rings[1].add(f"{word}（{period('SECTOR_SHARE')}）",
                      f"{sector}板块成交额占比 {v:.2f}% 对比上一期 {p:.2f}%（{prev_period}）",
-                     "只说明成交份额，不说明资金流向量", tag_of("SECTOR_SHARE"))
+                     "只说明成交份额，不说明资金进出的方向", tag_of("SECTOR_SHARE"))
     elif (not sw_share_done) and v is not None:
         rings[1].add("不可读（—）", f"份额已有 {v:.2f}%，但修订链无更早数据期、无证据可作前值（首次落盘）",
                      "该环暂无法判方向")
@@ -904,8 +932,16 @@ def build_sector(policy):
                      "只说明相对倍数，不说明是否会回归；差值与分位归比价层", tag_of("SECTOR_VAL"))
     else:
         rings[2].add("不可读（—）", "板块估值未取到（可能在 data/sector_index_map.json 里没有该板块的指数代码）", "该环无证据")
-    # C4 默认空环
-    rings[3].add("不可读（—）", "板块层杠杆与资金池默认不读（ADR-025 口径）", "该环无证据")
+    # C4 杠杆与资金池：用深市个股两融 × 申万成分 汇总（仅深市部分）
+    mbal, mn, mday = (_sw_margin_of(sw["code"]) if sw else (None, 0, None))
+    if mbal is not None:
+        rings[3].add("不可读（—）",
+                     f"无前值（无证据可判方向）：板块内 {mn} 只深市标的融资余额合计 {mbal:,.2f} 亿元"
+                     f"（深交所官方明细汇总，{mday}），仅单日数据",
+                     "仅覆盖深市标的，沪市未纳入；次日累积后即可判方向",
+                     "〔C 类·深交所两融明细 × 申万二级成分，自算汇总…〕")
+    else:
+        rings[3].add("不可读（—）", "板块层杠杆无可用口径（沪市两融无公开接口；深市明细未拉到）", "该环无证据")
     # C5 主体行为：按中证成分过滤的龙虎榜机构净买
     v5 = val("SECTOR_INST_FLOW")
     if v5 is not None:
@@ -952,6 +988,13 @@ def build_sector(policy):
     as_of = max(daily) if daily else "不可用"
     normalize_dates(rings, as_of)
     body = "\n".join("\n".join(r_.lines) for r_ in rings)
+    # 板块层也带链条完整性
+    _cl, _broken = chain_summary([ln for ln in body.splitlines() if ln.startswith("C")])
+    _ok = sum(1 for ln in body.splitlines() if ln.startswith("C") and "不可读" not in ln)
+    _tot = sum(1 for ln in body.splitlines() if ln.startswith("C"))
+    body += f"\n\n链条完整性：{_cl}"
+    body += f"\n本次 {_tot} 条证据，{_ok} 条有值，{len(_broken)} 处断点" + (
+        f"：{'、'.join(_broken)}；断点处请勿跨环推断。" if _broken else "；六环齐全。")
     return as_of, body, sector
 
 def main():

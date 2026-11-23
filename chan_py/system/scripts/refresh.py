@@ -100,6 +100,7 @@ def main():
         (["scripts/audit.py", "--daily"], "日检(巡检+台账)"),
         (["scripts/sw_sectors.py", "--meta", "--daily"], "申万板块"),
         (["scripts/sw_sectors.py", "--breadth"], "板块广度"),
+        (["scripts/sw_sectors.py", "--margin"], "板块两融"),
         (["scripts/state.py", "--layer", "market", "--write", "--archive", "--json"], "市场层"),
         (["scripts/state.py", "--layer", "sector", "--write", "--archive"], "板块层"),
     ]
