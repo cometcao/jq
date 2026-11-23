@@ -299,6 +299,18 @@
     "frequency": "日",
     "comparable_from": null
   },
+  "MKT_MARGIN_BAL_SZ": {
+    "name": "深市融资余额（交易所官方）",
+    "layer": "市场",
+    "channel": "C4",
+    "subject": "公共池",
+    "attribute": "A4",
+    "transform": "T1",
+    "value_kind": "level",
+    "unit": "U1",
+    "frequency": "日",
+    "comparable_from": null
+  },
   "MKT_MARGIN_BAL_YOY": {
     "name": "融资余额增速",
     "layer": "市场",

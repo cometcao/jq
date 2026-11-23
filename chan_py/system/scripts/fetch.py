@@ -768,6 +768,43 @@ def p_cgb_official(_df=None):
     return ({"指标": "中债国债收益率曲线（到期）· 10 年", "值": f"{v:.4f}%",
              "对比": "中债登官方 ycDetail 曲线"}, {"data_period": _trade_day_of()})
 
+
+def p_margin_sz_official(_df=None):
+    """深交所官方两融汇总（融资融券交易总量）：直连 ShowReport 报表 1837_xxpl。
+
+    T+1 披露：当天晚上通常还没有当日数据 → 从交易日往前回退，取最近有数据的一天。
+    单位：亿元。
+    """
+    import requests
+    u = "http://www.szse.cn/api/report/ShowReport/data"
+    import datetime as _dt
+    d = _dt.date.fromisoformat(_trade_day_of())
+    last_err = None
+    for _ in range(8):
+        if d.weekday() < 5:
+            p = {"SHOWTYPE": "JSON", "CATALOGID": "1837_xxpl", "TABKEY": "tab1", "PAGENO": 1,
+                 "txtDate": d.isoformat(), "random": "0.5"}
+            try:
+                r = requests.get(u, params=p, timeout=25,
+                                 headers={"User-Agent": "Mozilla/5.0", "Referer": "http://www.szse.cn/"})
+                j = r.json() or []
+                rows = (j[0].get("data") or []) if isinstance(j, list) and j else []
+            except Exception as e:
+                last_err = e
+                rows = []
+            if rows and len(rows) == 1:
+                row = rows[0]
+                def num(k):
+                    return float(str(row.get(k) or 0).replace(",", ""))
+                fin = num("jrrzye")
+                if 100 < fin < 100000:
+                    return ({"指标": "深市融资余额（交易所官方）", "值": f"{fin:,.2f} 亿元",
+                             "对比": f"融券余额 {num('jrrjye'):,.2f} 亿；两融合计 {num('jrrzrjye'):,.2f} 亿（T+1 披露）"},
+                            {"data_period": d.isoformat()})
+        d -= _dt.timedelta(days=1)
+    raise ValueError(f"深交所两融报表近 8 天无数据{'' if last_err is None else '：' + type(last_err).__name__}")
+
+
 # ---------------------------------------------------------------- 指标声明
 SPECS = [
     dict(id="POL_LPR", channel="C1", subject="政策", freq="不定期", value_kind="level", layer="市场", tier_default="C",
@@ -942,6 +979,12 @@ SPECS = [
          official_source="巨潮资讯·上市公司公告全文检索（证监会指定披露平台）", official_url="http://www.cninfo.com.cn/",
          official_hosts=["www.cninfo.com.cn"],
          proves="近 30 天产业资本增减持公告条数之差", does_not_prove="不说明增减持金额与方向强度；条数口径"),
+    dict(id="MKT_MARGIN_BAL_SZ", channel="C4", subject="公共池", freq="日", value_kind="level", layer="市场", tier_default="C",
+         providers=[("calc", ["__margin_sz__"], p_margin_sz_official)],
+         official_source="深圳证券交易所·融资融券交易总量（ShowReport 1837_xxpl）",
+         official_url="http://www.szse.cn/disclosure/margin/margin/index.html",
+         official_hosts=["www.szse.cn"],
+         proves="深市当日融资余额（官方汇总）", does_not_prove="不含沪市；不等于全市场两融余额"),
 ]
 
 SPEC_MAP = {s["id"]: s for s in SPECS}

@@ -104,6 +104,22 @@ def official_cgb(date):
     return (float(m.group(1)), "https://yield.chinabond.com.cn/") if m else (None, "")
 
 
+def official_margin_sz(date):
+    """深交所官方两融汇总：重取同一报表，比对深市融资余额（同源复核）。"""
+    import requests
+    u = "http://www.szse.cn/api/report/ShowReport/data"
+    p = {"SHOWTYPE": "JSON", "CATALOGID": "1837_xxpl", "TABKEY": "tab1", "PAGENO": 1,
+         "txtDate": date, "random": "0.5"}
+    r = requests.get(u, params=p, timeout=25,
+                     headers={"User-Agent": "Mozilla/5.0", "Referer": "http://www.szse.cn/"})
+    j = r.json() or []
+    rows = (j[0].get("data") or []) if isinstance(j, list) and j else []
+    if not rows:
+        return None, ""
+    v = float(str(rows[0].get("jrrzye") or 0).replace(",", ""))
+    return (v, "http://www.szse.cn/disclosure/margin/margin/index.html")
+
+
 CHECKS = {
     "MKT_DR007": official_dr007,
     "FX_CNY_MID": official_fx,
@@ -141,6 +157,7 @@ def check_sector_val(period):
 
 CHECKS["SECTOR_VAL"] = check_sector_val
 CHECKS["MKT_CGB10Y"] = official_cgb
+CHECKS["MKT_MARGIN_BAL_SZ"] = official_margin_sz
 
 
 def official_cninfo(date, keyword="减持", sample=3):

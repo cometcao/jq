@@ -192,6 +192,14 @@ def build(policy, include_events=False):
     if not rings[2].lines:
         rings[2].add("不可读（—）", "利率记录缺失，或来源为 C 类、无源可支撑状态词", "该环无可用证据")
 
+    # C4 深市融资余额（交易所官方，T+1 披露）
+    ok, tag = allow("MKT_MARGIN_BAL_SZ")
+    v = val("MKT_MARGIN_BAL_SZ")
+    if ok and v is not None:
+        rings[3].add(f"深市两融（{period('MKT_MARGIN_BAL_SZ')}）",
+                     f"深市融资余额 {v:,.2f} 亿元（深交所官方汇总，T+1 披露）",
+                     "只覆盖深市，不含沪市；不与全市场口径相加", tag)
+
     # C4 杠杆 + 现金池
     ok, tag = allow("MKT_MARGIN_BAL")
     v, p = val("MKT_MARGIN_BAL"), val("MKT_MARGIN_BAL", "prev_value")
