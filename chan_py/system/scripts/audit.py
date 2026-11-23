@@ -237,10 +237,137 @@ def verdict(lag, alive, degraded, has_alt_provider, cands, direct_official=False
     return "保留", "更新正常"
 
 
+# ---------------------------------------------------------------- 官方接口巡检
+PROBES = [
+    ("中债登·收益率曲线 10Y", "chinabond", "指标级"),
+    ("巨潮·公告检索", "cninfo", "指标级"),
+    ("工信部·规划司", "miit_ghs", "事件级"),
+    ("工信部·科技司", "miit_kjs", "事件级"),
+    ("工信部·原材料司", "miit_ycls", "事件级"),
+    ("申万·二级实时行情", "sw_spot", "板块级"),
+    ("申万·二级日线", "sw_hist", "板块级"),
+    ("akshare·可用性", "ak_import", "依赖"),
+]
+
+
+def _probe(kind):
+    """返回 (ok, note)。只做最小请求，不影响任何数据。"""
+    import requests
+    UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"}
+    try:
+        if kind == "chinabond":
+            r = requests.post("https://yield.chinabond.com.cn/cbweb-mn/yc/ycDetail",
+                             params={"ycDefIds": "2c9081e50a2f9606010a3068cae70001", "zblx": "txy",
+                                     "workTime": dt.date.today().isoformat(), "dxbj": "", "qxlx": "",
+                                     "yqqxN": "", "yqqxK": "", "wrjxCBFlag": "0", "locale": ""},
+                             headers={**UA, "Referer": "https://yield.chinabond.com.cn/cbweb-mn/yield_main"},
+                             timeout=20, verify=False)
+            r.encoding = r.apparent_encoding or "utf-8"
+            m = re.search(r"10\.0y\s+([0-9.]+)", re.sub(r"<[^>]+>", " ", r.text))
+            return (bool(m), f"10Y={m.group(1)}" if m else "未解析到 10Y")
+        if kind == "cninfo":
+            r = requests.post("http://www.cninfo.com.cn/new/hisAnnouncement/query",
+                              data={"pageNum": 1, "pageSize": 1, "column": "szse", "tabName": "fulltext",
+                                    "searchkey": "减持", "seDate": f"{(dt.date.today()-dt.timedelta(days=7)).isoformat()}~{dt.date.today().isoformat()}",
+                                    "sortName": "", "sortType": "", "isHLtitle": "true"},
+                              headers={**UA, "Referer": "http://www.cninfo.com.cn/"}, timeout=20)
+            j = r.json() or {}
+            return (j.get("totalRecordNum") is not None, f"近7天减持 {j.get('totalRecordNum')} 条")
+        if kind.startswith("miit_"):
+            slug = {"miit_ghs": "ghs", "miit_kjs": "kjs", "miit_ycls": "ycls"}[kind]
+            r = requests.get(f"https://www.miit.gov.cn/jgsj/{slug}/index.html", headers=UA, timeout=20)
+            r.encoding = r.apparent_encoding or "utf-8"
+            pairs = re.findall(r'<a[^>]+href="([^"]+)"[^>]*>(.{4,90}?)</a>(.{0,300}?)(20\d{2}[-/年]\d{1,2}[-/月]\d{1,2})',
+                               r.text, flags=re.S)
+            return (len(pairs) > 0, f"解析 {len(pairs)} 条")
+        if kind == "sw_spot":
+            import akshare as ak
+            df = ak.index_spot_sw(symbol="二级行业")
+            return (len(df) > 50, f"{len(df)} 个板块")
+        if kind == "sw_hist":
+            import akshare as ak
+            df = ak.index_hist_sw(symbol="801081", period="day")
+            last = str(df["日期"].iloc[-1])[:10]
+            lag = (dt.date.today() - dt.date.fromisoformat(last)).days
+            return (len(df) > 0, f"末条 {last}（滞后 {lag} 天）")
+        if kind == "ak_import":
+            import akshare as ak
+            return (hasattr(ak, "index_spot_sw"), f"v{getattr(ak, '__version__', '?')}")
+    except Exception as e:
+        return (False, f"{type(e).__name__}: {str(e)[:40]}")
+    return (False, "未知探针")
+
+
+def run_probes():
+    out = []
+    for name, kind, scope in PROBES:
+        ok, note = _probe(kind)
+        out.append({"name": name, "scope": scope, "ok": ok, "note": note})
+    return out
+
+
+# ---------------------------------------------------------------- 数据源台账
+def write_ledger():
+    """生成 docs/12_数据源台账.md：每个指标一行，源/备源/档位/上次对账日。"""
+    reg = registry()
+    prov = provenance()
+    specs = fetch_specs()
+    facts, official = {}, {}
+    for fp in glob.glob(os.path.join(ROOT, "data", "facts", "*", "*.json")):
+        try:
+            r = json.load(io.open(fp, encoding="utf-8"))
+            facts[r["indicator_id"]] = r
+        except Exception:
+            continue
+    for fp in glob.glob(os.path.join(ROOT, "data", "official", "*.jsonl")):
+        iid = os.path.basename(fp)[:-6]
+        try:
+            rows = [json.loads(x) for x in io.open(fp, encoding="utf-8").read().splitlines() if x.strip()]
+            official[iid] = rows[-1].get("checked_at") if rows else None
+        except Exception:
+            official[iid] = None
+    lines = ["# 数据源台账（自动生成，勿手改）", "",
+             f"> 生成时间：{dt.datetime.now().isoformat(timespec='seconds')}｜来源：registry + provenance + facts + official", "",
+             "| 指标 | 名称 | 当前源 | 备源数 | 主源官方直连 | 档位 | 数据期 | 上次对账 |",
+             "|---|---|---|---|---|---|---|---|"]
+    for iid in sorted(reg):
+        meta = reg[iid]
+        spec = specs.get(iid)
+        prov_i = prov.get(iid) or {}
+        if not spec or not spec.get("providers"):
+            src = "未接入"
+        else:
+            fams = [p_[0] for p_ in spec["providers"] if p_ and p_[0]]
+            src = (fams[0] + (f"（备 {len(fams)-1}）" if len(fams) > 1 else "")) if fams else "—"
+        n_prov = len(spec["providers"]) if spec else 0
+        alt = max(n_prov - 1, 0)
+        tier = (facts.get(iid) or {}).get("source_tier") or "—"
+        period = (facts.get(iid) or {}).get("data_period") or "—"
+        _main_official = "否"
+        try:
+            sys.path.insert(0, os.path.join(ROOT, "scripts"))
+            import fetch as _F
+            first = (spec["providers"][0] if spec and spec.get("providers") else None)
+            if spec.get("official_hosts"):
+                _main_official = "是"
+            elif first:
+                hosts = _F._hosts_of(first[2] if first[0] == "calc" else (_F.resolve(first[1])[1] or (lambda: None)))
+                _main_official = "是" if hosts and all(h.endswith(_F.OFFICIAL_DOMAINS) for h in hosts) else "否"
+        except Exception:
+            pass
+        lines.append(f"| {iid} | {meta.get('name','')} | {src} | {alt} | "
+                     f"{_main_official} | {tier} | {period} | {official.get(iid) or '—'} |")
+    fp = os.path.join(ROOT, "docs", "12_数据源台账.md")
+    with io.open(fp, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    return fp, len(reg)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ring", default="")
     ap.add_argument("--no-net", action="store_true")
+    ap.add_argument("--ledger", action="store_true")
     a = ap.parse_args()
 
     reg = registry()
@@ -294,6 +421,14 @@ def main():
             "fit": fit, "fit_reason": fit_reason,
         })
 
+    probes = [] if a.no_net else run_probes()
+    if probes:
+        bad = [x for x in probes if not x["ok"]]
+        print(f"\n[接口巡检] {len(probes)-len(bad)}/{len(probes)} 通")
+        for x in probes:
+            print(f"  {'✓' if x['ok'] else '✗'} {x['name']:<20}{x['scope']:<6}{x['note']}")
+    fp_ledger, n_led = write_ledger()
+    print(f"[数据源台账] {n_led} 个指标 → {os.path.relpath(fp_ledger, ROOT)}")
     sw = sw_coverage()
     print(f"\n[申万二级板块] {sw['sectors']} 个 · 有历史 {sw['with_history']} 个 · "
           f"历史最新 {sw['history_latest']} · 当日面板 {sw['panel_latest']}（{sw['panel_days']} 天）")
@@ -325,6 +460,14 @@ def main():
             f.write(f"| {r['ring']} | {r['verdict']} | {r['fit']} | {r['name']} | {r['period']} | "
                     f"{r['lag'] if r['lag'] is not None else '—'} | {r['alive']} | {r['reason']} | "
                     f"{'、'.join(r['cands']) or '—'} |\n")
+        f.write("\n## 接口巡检（官方入口今日可达性）\n\n")
+        if probes:
+            f.write("| 接口 | 层级 | 状态 | 备注 |\n|---|---|---|---|\n")
+            for x in probes:
+                f.write(f"| {x['name']} | {x['scope']} | {'通' if x['ok'] else '**不通**'} | {x['note']} |\n")
+        else:
+            f.write("（本次 --no-net 未巡检）\n")
+        f.write(f"\n台账：`docs/12_数据源台账.md`（{n_led} 个指标，含当前源/备源数/档位/上次对账）\n")
         f.write(f"\n## 申万二级板块数据层\n\n"
                 f"- 板块数：**{sw['sectors']}**\n- 已回补历史：**{sw['with_history']}**\n"
                 f"- 历史最新交易日：**{sw['history_latest']}**\n"

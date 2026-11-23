@@ -742,6 +742,32 @@ def p_insider_net(_df=None):
              "对比": f"近 30 天 减持公告 {cut} 条 / 增持公告 {bct} 条（巨潮全文检索）"},
             {"data_period": _trade_day_of()})
 
+
+def p_cgb_official(_df=None):
+    """中债登官方收益率曲线（到期）：直连 ycDetail 取 10 年期。
+
+    实测 workTime 参数不影响返回值——接口始终回最新一条曲线，
+    因此数据期按抓取当日交易日记录，历史需逐日累积。
+    """
+    import requests
+    u = "https://yield.chinabond.com.cn/cbweb-mn/yc/ycDetail"
+    p = {"ycDefIds": "2c9081e50a2f9606010a3068cae70001", "zblx": "txy",
+         "workTime": _trade_day_of(), "dxbj": "", "qxlx": "", "yqqxN": "", "yqqxK": "",
+         "wrjxCBFlag": "0", "locale": ""}
+    r = requests.post(u, params=p, timeout=25, verify=False,
+                      headers={"User-Agent": "Mozilla/5.0",
+                               "Referer": "https://yield.chinabond.com.cn/cbweb-mn/yield_main"})
+    r.encoding = r.apparent_encoding or "utf-8"
+    txt = re.sub(r"<[^>]+>", " ", r.text)
+    m = re.search(r"10\.0y\s+([0-9.]+)", txt)
+    if not m:
+        raise ValueError("中债页面未解析到 10 年期数值")
+    v = float(m.group(1))
+    if not (0.5 < v < 10):
+        raise ValueError(f"中债 10Y 数值异常：{v}")
+    return ({"指标": "中债国债收益率曲线（到期）· 10 年", "值": f"{v:.4f}%",
+             "对比": "中债登官方 ycDetail 曲线"}, {"data_period": _trade_day_of()})
+
 # ---------------------------------------------------------------- 指标声明
 SPECS = [
     dict(id="POL_LPR", channel="C1", subject="政策", freq="不定期", value_kind="level", layer="市场", tier_default="C",
@@ -767,7 +793,8 @@ SPECS = [
          official_source="中国人民银行《货币当局资产负债表》", official_url="http://www.pbc.gov.cn/diaochatongjisi/116219/116317/index.html",
          proves="财政资金停在央行账上的规模", does_not_prove="不说明财政投放的方向"),
     dict(id="MKT_CGB10Y", channel="C3", subject="公共池", freq="日", value_kind="level", layer="市场", tier_default="C",
-         providers=[("akshare/em", ["bond_zh_us_yield_em", "bond_zh_us_rate"], p_cgb10y)],
+         providers=[("calc", ["__cgb__"], p_cgb_official),
+                    ("akshare/em", ["bond_zh_us_yield_em", "bond_zh_us_rate"], p_cgb10y)],
          official_source="中债·国债收益率曲线（中央国债登记结算）", official_url="https://yield.chinabond.com.cn/",
          proves="长端无风险利率水平", does_not_prove="不说明估值会重估"),
     dict(id="MKT_DR007", channel="C3", subject="公共池", freq="日", value_kind="level", layer="市场", tier_default="C",
@@ -913,6 +940,7 @@ SPECS = [
     dict(id="INST_INSIDER_NET", channel="C5", subject="公共池", freq="日", value_kind="count", layer="市场", tier_default="C",
          providers=[("calc", ["__insider__"], p_insider_net)],
          official_source="巨潮资讯·上市公司公告全文检索（证监会指定披露平台）", official_url="http://www.cninfo.com.cn/",
+         official_hosts=["www.cninfo.com.cn"],
          proves="近 30 天产业资本增减持公告条数之差", does_not_prove="不说明增减持金额与方向强度；条数口径"),
 ]
 

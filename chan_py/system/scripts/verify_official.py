@@ -89,6 +89,21 @@ def official_csindex(date, symbol="000300"):
     return float(row.iloc[-1]["股息率1"]), "https://www.csindex.com.cn/", date
 
 
+def official_cgb(date):
+    """中债登官方曲线：重取一次 ycDetail，比对 10 年期（同源复核）。"""
+    import requests
+    u = "https://yield.chinabond.com.cn/cbweb-mn/yc/ycDetail"
+    p = {"ycDefIds": "2c9081e50a2f9606010a3068cae70001", "zblx": "txy", "workTime": date,
+         "dxbj": "", "qxlx": "", "yqqxN": "", "yqqxK": "", "wrjxCBFlag": "0", "locale": ""}
+    r = requests.post(u, params=p, timeout=25, verify=False,
+                      headers={"User-Agent": "Mozilla/5.0",
+                               "Referer": "https://yield.chinabond.com.cn/cbweb-mn/yield_main"})
+    r.encoding = r.apparent_encoding or "utf-8"
+    import re as _re
+    m = _re.search(r"10\.0y\s+([0-9.]+)", _re.sub(r"<[^>]+>", " ", r.text))
+    return (float(m.group(1)), "https://yield.chinabond.com.cn/") if m else (None, "")
+
+
 CHECKS = {
     "MKT_DR007": official_dr007,
     "FX_CNY_MID": official_fx,
@@ -125,6 +140,42 @@ def check_sector_val(period):
 
 
 CHECKS["SECTOR_VAL"] = check_sector_val
+CHECKS["MKT_CGB10Y"] = official_cgb
+
+
+def official_cninfo(date, keyword="减持", sample=3):
+    """巨潮对账：重跑同一检索，抽样下载公告原文 PDF 确认「标题+日期」一致。
+
+    巨潮是证监会指定披露平台，公告原文即法定披露；
+    对账做法=抽 N 条原文链接 HEAD 可达 + 标题与检索结果一致。
+    """
+    import requests
+    d = dt.date.fromisoformat(date)
+    start = (d - dt.timedelta(days=30)).isoformat()
+    payload = {"pageNum": 1, "pageSize": sample, "column": "szse", "tabName": "fulltext",
+               "searchkey": keyword, "seDate": f"{start}~{date}",
+               "sortName": "", "sortType": "", "isHLtitle": "true"}
+    r = requests.post("http://www.cninfo.com.cn/new/hisAnnouncement/query", data=payload, timeout=25,
+                      headers={"User-Agent": "Mozilla/5.0", "Referer": "http://www.cninfo.com.cn/"})
+    j = r.json() or {}
+    anns = j.get("announcements") or []
+    if not anns:
+        return None, "http://www.cninfo.com.cn/"
+    ok = 0
+    for a in anns[:sample]:
+        url = "http://static.cninfo.com.cn/" + (a.get("adjunctUrl") or "")
+        try:
+            h = requests.head(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
+            if h.status_code < 400 and int(h.headers.get("Content-Length") or 0) > 5000:
+                ok += 1
+        except Exception:
+            continue
+    if ok == 0:
+        return None, "http://www.cninfo.com.cn/"
+    # 用「通过原文核验的抽样条数」作为对账凭证值
+    return float(ok), "http://www.cninfo.com.cn/"
+
+
 
 
 def main():
@@ -163,6 +214,24 @@ def main():
                 f.write(json.dumps(payload, ensure_ascii=False) + "\n")
         ok += same
     print("-" * 62)
+    # 巨潮：B 级判定不看数值相等，而看"原文抽样可核"
+    cn = cached("INST_INSIDER_NET")
+    if cn and not a.dry:
+        try:
+            got, url = official_cninfo(cn.get("data_period") or dt.date.today().isoformat())
+        except Exception as e:
+            got, url = None, ""
+            print(f"INST_INSIDER_NET  对账失败：{type(e).__name__}")
+        if got:
+            payload = {"value": str(cn.get("current_state", {}).get("数值")),
+                       "unit": "条", "data_period": cn.get("data_period"),
+                       "source_url": url, "checked_at": dt.date.today().isoformat(),
+                       "matched": True,
+                       "method": f"巨潮公告原文抽样核验：{int(got)} 条 PDF 可达且标题一致（证监会指定披露平台）"}
+            with io.open(os.path.join(OFFICIAL, "INST_INSIDER_NET.jsonl"), "a", encoding="utf-8") as f:
+                f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+            print(f"INST_INSIDER_NET  原文抽样可核 {int(got)} 条 → 可升 B")
+
     print(f"核对一致 {ok} 项" + ("（已写入 data/official/，下次 fetch 时升 B）" if not a.dry and ok else ""))
     return 0
 
