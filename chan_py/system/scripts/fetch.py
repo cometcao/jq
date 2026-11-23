@@ -211,6 +211,26 @@ def _sector_target():
 
 
 
+
+def history_prev(iid, period, tail=200):
+    """从历史序列里取「上一可比期」（严格早于当前数据期）。
+
+    calc 类解析器不吃传入的 df，用「去掉一行重解析」拿不到不同结果，
+    必须回到历史序列取前值，否则会把自己当上一期、误判成"不变"。
+    """
+    fp = os.path.join(ROOT, "data", "history", iid + ".jsonl")
+    if not os.path.exists(fp):
+        return {}
+    try:
+        rows = [json.loads(x) for x in io.open(fp, encoding="utf-8").read().splitlines() if x.strip()][1:]
+    except Exception:
+        return {}
+    earlier = [(r["data_period"], r["value"]) for r in rows if str(r.get("data_period", "")) < str(period)]
+    if not earlier:
+        return {}
+    per, val = sorted(earlier)[-1]
+    return {"prev_period": per, "prev_value": val}
+
 def _trade_day_of(now=None):
     """当前时点能拿到的最新年线交易日：工作日且已过 15:00 → 当天，否则回退上一工作日。"""
     now = now or dt.datetime.now()
@@ -961,6 +981,11 @@ def fetch_one(spec, args, as_of):
                     if str(pmeta.get("data_period", "")) and str(pmeta["data_period"]) < str(meta["data_period"]):
                         prev = {"prev_period": pmeta["data_period"], "prev_value": pcur.get("值")}
                         break
+                # calc 类或「上期=本期」时，回历史序列取上一可比期
+                if not prev or str(prev.get("prev_period", "")) >= str(meta["data_period"]):
+                    hp = history_prev(spec["id"], meta["data_period"])
+                    if hp:
+                        prev = hp
                 lag = period_lag_days(meta["data_period"])
                 limit = LAG_DAYS.get(spec["freq"], 60)
                 if lag is not None and lag > limit:
