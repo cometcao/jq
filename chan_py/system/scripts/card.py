@@ -71,6 +71,25 @@ REL_META = {
 }
 
 
+_SHAPES = {}
+
+
+def shape_of(iid):
+    global _SHAPES
+    if not _SHAPES:
+        try:
+            with io.open(os.path.join(ROOT, "data", "series_shape.json"), encoding="utf-8") as f:
+                _SHAPES = (json.load(f) or {}).get("shapes") or {}
+        except Exception:
+            _SHAPES = {}
+    return (_SHAPES.get(iid) or {}).get("visual") or "位置条"
+
+
+def _unused_shape_of(iid):
+    """R9/ADR-041：波形决定画什么图。未登记默认按波动（最保守）。"""
+    return (SHAPES.get(iid) or {}).get("visual") or "位置条"
+
+
 def load(fp, default=None):
     try:
         with io.open(fp, encoding="utf-8-sig") as f:
@@ -167,6 +186,45 @@ def cell_pos(pos, n):
             f'<div class="plbl">{n} 期 {lbl}</div>')
 
 
+def cell_visual(vals, iid):
+    """R9：累积→增速条；阶梯→档位；季节→较均值；区间汇总→不画；波动→位置条。"""
+    vis = shape_of(iid)
+    if vis == "不画":
+        return '<div class="none">区间汇总</div>'
+    if len(vals) < 2:
+        return '<div class="none">无序列</div>'
+    cur = vals[-1]
+    if vis == "增速":
+        # 近 20 期增幅，并给出该增幅在历史上的分位（R9：累积型用增速，位置恒 100% 无信息）
+        win = 20
+        if len(vals) <= win:
+            win = max(1, len(vals) - 1)
+        gs = [(vals[i] - vals[i - win]) / vals[i - win] * 100 for i in range(win, len(vals)) if vals[i - win]]
+        if not gs:
+            return '<div class="none">无序列</div>'
+        g = gs[-1]
+        pct = sum(1 for x in gs[:-1] if x < g) / max(len(gs) - 1, 1) * 100
+        cls = "up" if g > 0 else ("dn" if g < 0 else "fl")
+        return (f'<div class="pbar"><span class="pf" style="left:{pct:.0f}%"></span></div>'
+                f'<div class="plbl"><span class="{cls}">{g:+.2f}%</span>（{win} 期 · {pct:.0f}% 位）</div>')
+    if vis == "档位":
+        uniq = sorted(set(vals))
+        rank = uniq.index(cur) + 1
+        lbl = "最低档" if rank == 1 else ("最高档" if rank == len(uniq) else f"第 {rank}/{len(uniq)} 档")
+        return f'<div class="plbl">{lbl}</div>'
+    if vis == "较均值":
+        n = min(20, len(vals))
+        ma = sum(vals[-n:]) / n
+        d = (cur - ma) / ma * 100 if ma else None
+        if d is None:
+            return '<div class="none">无序列</div>'
+        cls = "up" if d > 0 else ("dn" if d < 0 else "fl")
+        return (f'<div class="pbar"><span class="pf" style="left:{min(abs(d)/60*100,100):.0f}%"></span></div>'
+                f'<div class="plbl"><span class="{cls}">{d:+.1f}%</span> 较 {n} 日均值</div>')
+    # 波动 → 位置条
+    return cell_pos(pos_pct(vals), len(vals))
+
+
 def cell_spark(vals, freq):
     sp = spark_svg(vals)
     if not sp:
@@ -233,7 +291,7 @@ def build_market():
         html.append(
             f'<div class="rn">{ring}</div><div class="nm">{label} <b>{fmt(cur, kind)}</b></div>'
             f'<div class="dcol"><span class="{dcls}">{dtxt}</span><div class="bs">{basis_of(iid, s[-1]["data_period"])}</div></div>'
-            f'<div class="pos">{cell_pos(pos_pct(vals), len(vals))}</div>{cell_spark(vals, freq)}')
+            f'<div class="pos">{cell_visual(vals, iid)}</div>{cell_spark(vals, freq)}')
 
     def rel_rows(ring):
         for r in rel_by_ring.get(ring, []):
@@ -314,7 +372,7 @@ def css():
 .gh{{grid-column:1/-1;font-size:{FS['sub']}px;color:var(--dsw-alias-label-secondary);border-bottom:1px solid var(--dsw-alias-border-l2);padding:7px 0 2px;margin-top:4px}}
 .gh b{{font-size:{FS['ring']}px;color:var(--dsw-alias-label-primary);font-weight:600;margin-right:5px}}
 .rn{{font-size:{FS['ring']}px;font-weight:600}}.nm{{font-size:{FS['name']}px}}.nm b{{font-family:ui-monospace,Consolas,monospace}}
-.nm.rel{{background:#eef0f3;border-radius:3px;padding:0 3px}}
+.nm.rel{{color:#5b6672}}.nm.rel b{{color:#3d4550}}
 .dcol{{font-size:{FS['delta']}px;font-family:ui-monospace,Consolas,monospace}}
 .bs{{font-size:{FS['sub']}px;color:var(--dsw-alias-label-secondary);font-family:system-ui,sans-serif}}
 .up{{color:#d03050}}.dn{{color:#2477b3}}.fl{{color:var(--dsw-alias-label-secondary)}}.grey{{color:#a8aeb6}}

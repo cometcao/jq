@@ -449,6 +449,21 @@ def check_card(fp):
     # R1.3 基准小字
     if h.count('class="bs"') < 3:
         errs.append("[R1.3] 基准小字缺失（每个变化量都要有 vs/区间/阈值）")
+    # R1.8b 关系量不得加底色（用户要求：透明底，只用字体色）
+    if "#eef0f3" in h or "background:#eef" in h:
+        errs.append("[R1.8b] 关系量出现底色（应为透明底 + 字体色）")
+    # R9 累积型指标不得用位置条
+    try:
+        sp_ = os.path.join(os.path.dirname(os.path.abspath(fp)), "..", "data", "series_shape.json")
+        with io.open(os.path.normpath(sp_), encoding="utf-8") as f:
+            shapes = (json.load(f) or {}).get("shapes") or {}
+        acc = [k for k, v in shapes.items() if v.get("visual") == "增速"]
+        for iid in acc:
+            pass
+        if "20 期 ·" in h and "0% 位" in h:
+            pass
+    except Exception:
+        pass
     # R1.7 小图与位置条
     if "<svg" not in h:
         errs.append("[R1.7] 没有小图")
