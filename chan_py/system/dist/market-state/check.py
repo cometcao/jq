@@ -405,13 +405,25 @@ def check_card(fp):
             h = f.read()
     except Exception as e:
         return [f"读不到卡片：{e}"]
-    # 布局一致性：网格末列宽必须等于小图容器宽（否则右侧留空档）
+    # 布局一致性（R1.7）：仅对状态卡（含 .mk）检查；事件卡没有网格/小图
+    is_market = 'class="mk"' in h or "class='mk'" in h
     mg = re.search(r"\.g\{[^}]*grid-template-columns:([^;}]+)", h)
-    mm = re.search(r"\.mini\{[^}]*width:(\d+)px", h)
-    if mg and mm:
-        last = [x for x in mg.group(1).split() if x.endswith("px")]
-        if last and int(last[-1][:-2]) != int(mm.group(1)):
-            errs.append(f"[R1.7] 网格末列 {last[-1]} ≠ 小图宽 {mm.group(1)}px（右侧会留空档）")
+    mm = re.search(r"\.mini\{[^}]*width:([^;}]+)", h)
+    if not is_market:
+        mg = mm = None
+    if mg:
+        cols = mg.group(1).strip()
+        if "fr" not in cols:
+            errs.append("[R1.7] 网格列宽没有 fr（内容无法随卡片宽度缩放，右侧会留空档）")
+        if cols.count("minmax") + cols.count("fr") == 0:
+            errs.append("[R1.7] 网格列宽不可伸缩")
+    elif is_market:
+        errs.append("[R1.7] 找不到 .g 网格定义")
+    if mm:
+        if mm.group(1).strip() not in ("100%",):
+            errs.append(f"[R1.7] 小图容器宽度应为 100%（当前 {mm.group(1).strip()}），否则不随列宽缩放")
+    elif is_market:
+        errs.append("[R1.7] 找不到 .mini 小图容器")
 
     # 事件卡分支：每个 chip 必须带悬停窗（不许裸 chip）
     if 'class="ec"' in h or "class='ec'" in h:
@@ -421,14 +433,54 @@ def check_card(fp):
             errs.append("[事件卡] 没有任何事件格子")
         if chips != tips:
             errs.append(f"[事件卡] 有 {chips - tips} 个裸 chip（chip={chips} / tip={tips}）")
+        # R8：每个事件格必须带环条（分支↔六环关系），且环条只能中性色
+        rr = len(re.findall(r'class="rr"', h))
+        if rr != chips:
+            errs.append(f"[R8] 环条数 {rr} ≠ 事件格 {chips}（每个事件都要有环条）")
+        for blk in re.findall(r'<div class="rr">(.*?)</div>', h):
+            if re.search(r"#d03050|#2477b3|class=\"up\"|class=\"dn\"", blk):
+                errs.append("[R8] 环条里出现红/蓝（环格不许按影响方向上色）")
+                break
+            if not re.search(r"C1", blk):
+                errs.append("[R8] 环条缺少 C1–C6 环名")
+                break
         for fs in set(re.findall(r"font(?:-size)?:\s*([\d.]+)px", h)):
             try:
                 v = float(fs)
             except Exception:
                 continue
-            if v not in {9.0, 9.5, 10.5, 11.5, 12.0, 12.5, 13.0}:
+            if v not in {9.0, 9.5, 10.0, 10.5, 11.5, 12.0, 12.5, 13.0}:
                 errs.append(f"[事件卡] 字号 {fs}px 不在定稿集合")
         return errs
+
+    # ---- 格式定死：按 data/card_spec.json 校验（唯一来源）
+    _spec = {}
+    for cand in (os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "card_spec.json"),
+                 "card_spec.json"):
+        try:
+            with io.open(cand, encoding="utf-8-sig") as _f:
+                _spec = json.load(_f)
+            break
+        except Exception:
+            continue
+    if _spec and is_market:
+        _fonts = set(float(x) for x in (_spec.get("font") or {}).values())
+        for fs in set(re.findall(r"font(?:-size)?:\s*([\d.]+)px", h)):
+            try:
+                v = float(fs)
+            except Exception:
+                continue
+            if v not in _fonts and v != float(_spec.get("cap", 9)):
+                errs.append(f"[R1.5] 字号 {fs}px 不在 card_spec.json 定稿集合 {sorted(_fonts)}")
+        _cols = (_spec.get("grid") or {}).get("columns")
+        mg2 = re.search(r"\.g\{[^}]*grid-template-columns:([^;}]+)", h)
+        if _cols and mg2 and mg2.group(1).strip() != _cols.strip():
+            errs.append(f"[R1.7] 网格列宽与 card_spec.json 不一致：{mg2.group(1).strip()[:40]}…")
+        # 环顺序
+        _rings = [r for r, _n in (_spec.get("rings") or [])]
+        got = re.findall(r'<div class="gh"><b>(C\d)</b>', h)
+        if _rings and got and got != _rings:
+            errs.append(f"[R1.6] 环顺序与定稿不一致：{got}")
 
     # R1.5 字号
     for fs in set(re.findall(r"font(?:-size)?:\s*([\d.]+)px", h)):

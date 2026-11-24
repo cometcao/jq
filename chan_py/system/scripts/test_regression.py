@@ -661,9 +661,21 @@ def t36():
     check("T36d", "每日 diff 可产出", "# 每日 diff" in (r.stdout or ""))
 
 
+# ---------------------------------------------------------------- T37 重复问题台账
+def t37():
+    fp = os.path.join(ROOT, "docs", "13_重复问题台账.md")
+    if not os.path.exists(fp):
+        return check("T37", "重复问题台账存在", False)
+    t = io.open(fp, encoding="utf-8").read()
+    need = ["卡片手写", "单位混用", "两条路径", "静默消失", "数据过期", "两处各写一遍", "六环关系", "文档与实现", "月份解析"]
+    miss = [k for k in need if k not in t]
+    check("T37", "台账覆盖全部已知重复类别", not miss, str(miss[:3]))
+    check("T37b", "台账写明拦截方式与失败表现", t.count("|") > 40)
+
+
 def main():
     verbose = "-v" in sys.argv
-    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, t21, t22, t23, t24, t25, t26, t27, t28, t29, t30, t31, t32, t33, t34, t35, t36):
+    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, t21, t22, t23, t24, t25, t26, t27, t28, t29, t30, t31, t32, t33, t34, t35, t36, t37):
         try:
             fn()
         except Exception as e:

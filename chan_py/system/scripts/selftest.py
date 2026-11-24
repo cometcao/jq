@@ -91,6 +91,19 @@ def main():
     r = run([os.path.join(ROOT, "scripts", "daily_diff.py")], 300)
     add("每日 diff 能产出", "# 每日 diff" in (r.stdout or ""), (r.stdout or "").splitlines()[0][:30] if r.stdout else "")
 
+    # 4d 卡片哈希（交付自证：贴出去的内容必须与被校验的文件一致）
+    import hashlib as _hl
+    hashes = {}
+    for name in ("card-market.html", "card-events.html"):
+        fp_ = os.path.join(ROOT, "reports", name)
+        if os.path.exists(fp_):
+            b = io.open(fp_, "rb").read()
+            hashes[name] = {"sha256": _hl.sha256(b).hexdigest()[:16], "chars": len(b.decode("utf-8"))}
+    if hashes:
+        hj = os.path.join(ROOT, "reports", "card-hashes.json")
+        io.open(hj, "w", encoding="utf-8").write(json.dumps(hashes, ensure_ascii=False, indent=2))
+    add("卡片哈希已记录（交付自证）", len(hashes) == 2, ", ".join(f"{k}:{v['sha256']}" for k, v in hashes.items()))
+
     # 5 契约
     ck = os.path.join(ROOT, "dist", "market-state", "check.py")
     for label, args in (

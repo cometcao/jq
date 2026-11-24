@@ -302,6 +302,182 @@ def unit_no_old_turnover_name():
     ck("证据行不再叫「行业板块成交额合计」", "行业板块成交额合计" not in t)
 
 
+# ---------------------------------------------------------------- 补覆盖：降级 / 时间边界 / 事件规则 / 布局 / 指纹
+def unit_network_fallback():
+    """网络降级：主源抛错必须切备源，并标 fallback_flag/path（此前完全没测）。"""
+    import fetch as F
+    spec = {"id": "TEST_FB", "channel": "C6", "subject": "公共池", "freq": "日", "value_kind": "level",
+            "layer": "市场", "tier_default": "C", "proves": "x", "does_not_prove": "y",
+            "providers": [("calc", ["__boom__"], None), ("calc", ["__ok__"], None)]}
+
+    def boom(df=None):
+        raise RuntimeError("主源挂了")
+
+    def ok(df=None):
+        return ({"指标": "测试", "值": "1.00 亿元", "对比": ""}, {"data_period": "2026-11-24"})
+
+    spec["providers"] = [("calc", ["__boom__"], boom), ("calc", ["__ok__"], ok)]
+
+    class A:
+        no_cache = True
+        as_of = None
+    old = dict(F.SPEC_MAP)
+    try:
+        F.SPEC_MAP["TEST_FB"] = spec
+        res = F.fetch_one(spec, A(), None)
+        ck("降级：主源失败会切备源", bool(res.get("fallback_flag")), str(res.get("fallback_path")))
+        ck("降级：仍能产出当期值", "current_state" in res)
+    except Exception as e:
+        ck("降级：主源失败会切备源", False, f"{type(e).__name__}: {e}")
+    finally:
+        F.SPEC_MAP.clear(); F.SPEC_MAP.update(old)
+        # 测试用的假指标会写 cache，必须清掉（否则污染 T18/deep_audit）
+        cf = os.path.join(ROOT, "data", "cache", "TEST_FB.json")
+        if os.path.exists(cf):
+            os.remove(cf)
+
+
+def unit_time_edges():
+    """时间边界：盘中/收盘、周末、停更阈值、跨月。"""
+    import fetch as F
+    import datetime as dt
+    sk14, _ = F.should_skip_snapshot(1.0, 2.0, "akshare/legu", 14, "日")
+    sk15, _ = F.should_skip_snapshot(1.0, 2.0, "akshare/legu", 15, "日")
+    ck("盘中边界：14:59 跳过 / 15:00 不跳过", sk14 and not sk15, f"{sk14},{sk15}")
+    st3, lag3 = F.is_stale_monthly("2026-08-01", dt.date(2026, 11, 24))
+    st4, lag4 = F.is_stale_monthly("2026-07-01", dt.date(2026, 11, 24))
+    ck("停更阈值：3 个月不判停更、4 个月判", (not st3) and st4 and lag3 == 3 and lag4 == 4, f"{lag3},{lag4}")
+    ck("月末跨月解析", F.norm_period("2026-12-31") == "2026-12-31", F.norm_period("2026-12-31"))
+
+
+def unit_event_rules():
+    """事件规则：信息含量分级、窗口过滤、同日去重。"""
+    import events as E
+    ck("信息含量：行程类=low", E.info_level("雷平会见俄罗斯联邦卫生监督局副局长") == "low")
+    ck("信息含量：印发类=high", E.info_level("工业和信息化部办公厅关于印发2026年第五批行业标准制修订项目计划的通知") == "high")
+    cals = sorted(glob.glob(os.path.join(ROOT, "data", "events", "calendar-*.json")))
+    if cals:
+        cal = load(cals[-1], {}) or {}
+        as_of = cal.get("as_of") or ""
+        horizon = cal.get("horizon_days") or 40
+        import datetime as dt
+        end = (dt.date.fromisoformat(as_of) + dt.timedelta(days=horizon)).isoformat()
+        fut = [e for e in (cal.get("events") or []) if e.get("event_status") == "未来预定"]
+        out_win = [e for e in fut if not (as_of <= (e.get("event_date") or "") <= end)]
+        ck("事件窗口内（as_of ~ horizon）", not out_win, str([e.get("event_date") for e in out_win][:3]))
+        keys = [(e.get("event_date"), (e.get("scope") or "")) for e in (cal.get("events") or [])]
+        dup = [k for k in set(keys) if keys.count(k) > 1]
+        ck("事件已去重（日期+标题唯一）", not dup, str(dup[:2]))
+
+
+def unit_layout_fill():
+    """布局：网格必须弹性填满，小图必须 100%（曾经定宽 96px 导致右侧空档）。"""
+    h = io.open(os.path.join(ROOT, "reports", "card-market.html"), encoding="utf-8").read()
+    import re as _re
+    g = _re.search(r"\.g\{[^}]*grid-template-columns:([^;}]+)", h)
+    m = _re.search(r"\.mini\{[^}]*width:([^;}]+)", h)
+    ck("网格列宽含 fr（随卡片缩放）", bool(g) and "fr" in g.group(1), g.group(1)[:40] if g else "无")
+    ck("小图容器 width:100%", bool(m) and m.group(1).strip() == "100%", m.group(1).strip() if m else "无")
+
+
+def unit_shape_fingerprint():
+    """快照型源的 facts 必须有 shape 指纹（源改版靠它发现）。"""
+    import glob as _g, json as _j
+    snap = {"akshare/ths", "akshare/legu"}
+    miss = []
+    for fp in _g.glob(os.path.join(ROOT, "data", "facts", "*", "*.json")):
+        r = _j.load(io.open(fp, encoding="utf-8"))
+        if r.get("source") in snap and not r.get("shape"):
+            miss.append(r.get("indicator_id"))
+    ck("快照源 facts 带 shape 指纹", not miss, str(sorted(set(miss))[:3]))
+
+
+def unit_cli_variants():
+    """CLI 组合：--no-events / --show-history / --policy strict 都必须能跑。"""
+    import subprocess as _sp
+    for args, expect in (
+        (["--layer", "market", "--no-events", "--json"], '"lines"'),
+        (["--show-history"], "已归档快照"),
+        (["--layer", "market", "--policy", "strict", "--json"], '"lines"'),
+    ):
+        r = _sp.run([sys.executable, "-B", os.path.join(ROOT, "scripts", "state.py")] + args,
+                    capture_output=True, text=True, encoding="utf-8", cwd=ROOT, timeout=180)
+        ck(f"CLI {' '.join(args[:2])} 可运行", expect in (r.stdout or ""), (r.stderr or "")[-50:])
+
+
+# ---------------------------------------------------------------- R8 事件分支↔六环
+def unit_event_ring_attribution():
+    """每个事件类型必须能给出环归属（或显式"不映射"），不许静默消失。"""
+    import card as C
+    rules = C.EVENT_RINGS
+    for et in ("政策会议", "逆回购到期", "公开市场操作", "解禁", "新股发行", "财报披露", "数据发布"):
+        ck(f"环归属规则已登记：{et}", et in rules, str(list(rules)[:3]))
+    ck("逆回购 → C3", "C3" in (rules.get("逆回购到期") or {}).get("rings", []))
+    ck("政策会议 → C1", "C1" in (rules.get("政策会议") or {}).get("rings", []))
+    ck("解禁 → 不映射（显式空）", (rules.get("解禁") or {}).get("rings") == [])
+    # 数据发布按 affected_indicators 的 channel
+    import glob as _g, json as _j
+    fs = _g.glob(os.path.join(ROOT, "data", "events", "scenario-*.json"))
+    if fs:
+        scen = _j.load(io.open(fs[0], encoding="utf-8"))
+        ev = {"event_type": "数据发布", "scope": scen.get("event_summary", "")}
+        hit, rule = C.rings_of_event(ev, scen)
+        ck("数据发布的环由指标通道决定", bool(hit), f"{sorted(hit)} / {rule}")
+
+
+def unit_event_ring_strip():
+    """R8 环条：6 环 + 背景齐全、命中环加粗、圆点只标分支不标方向色。"""
+    import card as C
+    import glob as _g, json as _j
+    h = io.open(os.path.join(ROOT, "reports", "card-events.html"), encoding="utf-8").read()
+    chips = len(__import__("re").findall(r"class='chip'", h))
+    rrs = len(__import__("re").findall(r'class="rr"', h))
+    ck("每个事件格都有环条", chips == rrs and chips > 0, f"chip={chips} rr={rrs}")
+    blk = __import__("re").findall(r'<div class="rr">(.*?)</div>', h)
+    if blk:
+        ck("环条含 C1–C6 与背景", all(x in blk[0] for x in ("C1", "C2", "C3", "C4", "C5", "C6", "背景")), blk[0][:40])
+    bad = [b for b in blk if ("#d03050" in b or "#2477b3" in b)]
+    ck("环条无红蓝（R8 硬规则）", not bad, str(bad[:1])[:60])
+    # 有分支的事件应出现圆点（● ○ ◌）
+    dotted = [b for b in blk if any(ch in b for ch in "●○◌")]
+    ck("数据发布事件环条带分支圆点", bool(dotted), f"{len(dotted)} 个")
+
+
+# ---------------------------------------------------------------- 市场卡格式定死
+def unit_market_card_format_frozen():
+    """格式指纹必须等于 tests/golden/card-format.json。
+
+    想改格式：改 data/card_spec.json → 重生成卡 → 更新 golden → 升版本（三处一起，缺一即失败）。
+    """
+    import re as _re, json as _j
+    h = io.open(os.path.join(ROOT, "reports", "card-market.html"), encoding="utf-8").read()
+    g = load(os.path.join(ROOT, "tests", "golden", "card-format.json"), {}) or {}
+    spec = load(os.path.join(ROOT, "data", "card_spec.json"), {}) or {}
+    ck("格式定稿版本存在", bool(spec.get("version")), str(spec.get("version")))
+    ck("卡与定稿版本一致", g.get("spec_version") == spec.get("version"),
+       f"golden={g.get('spec_version')} spec={spec.get('version')}")
+    rings = [list(x) for x in _re.findall(r'<div class="gh"><b>(C\d)</b>([^<]+)<', h)]
+    ck("环顺序与定稿一致", rings == [list(x) for x in (g.get("ring_order") or [])], str([r[0] for r in rings]))
+    labels = [_l.strip() for _l in _re.findall(r'<div class="nm(?: rel)?">([^<]+?)(?: <b>|</div>)', h) if _l.strip()]
+    ck("行顺序与定稿一致", labels == (g.get("row_labels") or []), f"{len(labels)} 行")
+    grid = _re.search(r"\.g\{[^}]*grid-template-columns:([^;}]+)", h)
+    ck("网格列宽与定稿一致", bool(grid) and grid.group(1).strip() == g.get("grid"),
+       (grid.group(1)[:50] if grid else "无"))
+    mini = _re.search(r"\.mini\{[^}]*width:([^;}]+)", h)
+    ck("小图宽度与定稿一致", bool(mini) and mini.group(1).strip() == g.get("mini_width"),
+       mini.group(1).strip() if mini else "无")
+    fonts = sorted({float(x) for x in _re.findall(r"font(?:-size)?:\s*([\d.]+)px", h)})
+    ck("字号集合与定稿一致", fonts == (g.get("fonts") or []), str(fonts))
+    ck("行数=定稿行数", len(labels) == len(g.get("row_labels") or []), f"{len(labels)}")
+    # 小图高度 / 进度条高度（曾只改常量没改 golden）
+    vb = _re.search(r'viewBox="0 0 100 (\d+)"', h)
+    ck("小图高度与定稿一致", bool(vb) and int(vb.group(1)) == int(g.get("line_h") or 0),
+       vb.group(1) if vb else "无")
+    bar = _re.search(r"\.pbar\{[^}]*height:(\d+)px", h)
+    ck("位置条高度与定稿一致", bool(bar) and int(bar.group(1)) == int(g.get("bar_h") or 0),
+       bar.group(1) if bar else "无")
+
+
 def main():
     verbose = "-v" in sys.argv
     for fn in (unit_card_fmt, unit_card_delta, unit_card_pos_spark, unit_events_info_level,
@@ -309,7 +485,9 @@ def main():
                golden_checks, golden_sector_checks, facts_hygiene,
                unit_breadth_denominator, unit_snapshot_guard, unit_stale_monthly,
                unit_turnover_provider, unit_tsf_caliber, unit_event_links,
-               unit_sector_c2_fresh, unit_prev_period_correct, unit_no_old_turnover_name, unit_card_series_units):
+               unit_sector_c2_fresh, unit_prev_period_correct, unit_no_old_turnover_name, unit_card_series_units,
+               unit_network_fallback, unit_time_edges, unit_event_rules,
+               unit_layout_fill, unit_shape_fingerprint, unit_cli_variants, unit_event_ring_attribution, unit_event_ring_strip, unit_market_card_format_frozen):
         try:
             fn()
         except Exception as e:

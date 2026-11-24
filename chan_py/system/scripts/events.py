@@ -83,6 +83,18 @@ def to_event_record(raw, calendar_version=1):
     }
 
 
+def _dedupe_events(records):
+    """按 (event_date, scope) 去重（保序）。同一公告可能被多个关键词重复抓到。"""
+    seen, out = set(), []
+    for r in records:
+        k = (r.get("event_date"), (r.get("scope") or "").strip())
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(r)
+    return out
+
+
 def validate_events(records):
     """按 event.schema.json 校验（无 jsonschema 依赖，手写最小校验：必填 + 枚举 + 类型）。"""
     sch = _schema()
@@ -267,7 +279,10 @@ def fetch_cninfo(keyword, event_type, today, horizon, limit=8):
     j = r.json() or {}
     out = []
     for a in (j.get("announcements") or []):
+        _co = (a.get("secName") or "").strip()
         title = re.sub(r"</?em>", "", a.get("announcementTitle") or "")[:80]
+        if _co and _co not in title:
+            title = f"{_co}：{title}"[:88]
         d = (a.get("announcementTime") or 0) / 1000
         day = dt.datetime.fromtimestamp(d).date() if d else None
         if not day or not (start <= day <= today):
@@ -587,7 +602,7 @@ def main():
     today = dt.date.fromisoformat(as_of)
     events, errors = collect(today, a.days)
 
-    records = [to_event_record(e) for e in events]
+    records = _dedupe_events([to_event_record(e) for e in events])
     verrs = validate_events(records)
     if verrs:
         print(f"✗ 事件记录不符合 event.schema.json（{len(verrs)} 处），未写入：")

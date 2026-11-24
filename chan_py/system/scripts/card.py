@@ -32,10 +32,24 @@ FACTS = os.path.join(ROOT, "data", "facts")
 HIST = os.path.join(ROOT, "data", "history")
 
 # ---------------------------------------------------------------- R1.5 字号（唯一常量表）
-FS = {"ring": 13, "value": 12.5, "name": 12.5, "delta": 12,
-      "sub": 10.5, "cap": 9, "bar_h": 6, "line_h": 18}
-COLS = "64px 150px 78px 66px 108px"   # R1.7 列宽（末列=小图列，定宽，避免右侧空档）
-MINI_W = int(re.match(r".*?(\d+)px$", COLS).group(1))   # 小图容器宽 = 末列宽
+# ---------------------------------------------------------------- 格式定稿（唯一来源：data/card_spec.json）
+def _load_spec():
+    try:
+        with io.open(os.path.join(ROOT, "data", "card_spec.json"), encoding="utf-8-sig") as _f:
+            return json.load(_f)
+    except Exception:
+        return {}
+
+
+SPEC = _load_spec()
+FS = dict(SPEC.get("font") or {"ring": 13, "value": 12.5, "name": 12.5, "delta": 12, "sub": 10.5, "cap": 9})
+FS["bar_h"] = SPEC.get("bar_h", 6)
+FS["line_h"] = SPEC.get("line_h", 18)
+_G = SPEC.get("grid") or {}
+CCOL = SPEC.get("colors") or {}
+COLS = _G.get("columns", "minmax(64px,0.55fr) minmax(150px,1.7fr) minmax(78px,0.8fr) minmax(66px,0.7fr) minmax(108px,1.15fr)")
+# R1.7：五列全部按比例伸缩，整行填满卡片宽度；小图容器随列宽缩放（不再定死 px）
+MINI_W = "100%"   # 小图容器填满所在列（随卡片宽缩放）
 
 # 卡内禁止出现的状态词（R1.4）——只允许出现在证据行
 STATE_WORDS = ["偏松", "偏紧", "扩", "缩", "变贵", "变便宜", "加杠杆", "去杠杆",
@@ -258,10 +272,15 @@ def cell_spark(vals, freq):
         return '<div class="mini none">无序列</div>'
     d, (lx, ly), lo, hi = sp
     H = FS["line_h"]
+    bs = CCOL.get("baseline_stroke", "#d5dae1")
+    bd = CCOL.get("baseline_dash", "2,3")
+    ss = CCOL.get("spark_stroke", "#8497ab")
+    sw = CCOL.get("spark_width", 1.1)
+    dr = CCOL.get("spark_dot_r", 1.4)
     return (f'<div class="mini"><svg viewBox="0 0 100 {H}" preserveAspectRatio="none" width="100%" height="{H}">'
-            f'<line x1="0" y1="{H/2}" x2="100" y2="{H/2}" stroke="#d5dae1" stroke-width="0.7" stroke-dasharray="2,3"/>'
-            f'<path d="{d}" fill="none" stroke="#8497ab" stroke-width="1.1" vector-effect="non-scaling-stroke"/>'
-            f'<circle cx="{lx:.1f}" cy="{ly:.1f}" r="1.4" fill="#1f2328"/></svg>'
+            f'<line x1="0" y1="{H/2}" x2="100" y2="{H/2}" stroke="{bs}" stroke-width="0.7" stroke-dasharray="{bd}"/>'
+            f'<path d="{d}" fill="none" stroke="{ss}" stroke-width="{sw}" vector-effect="non-scaling-stroke"/>'
+            f'<circle cx="{lx:.1f}" cy="{ly:.1f}" r="{dr}" fill="#1f2328"/></svg>'
             f'<div class="mcap"><span>{lo:.2f}–{hi:.2f}</span><span>{freq} {len(vals)}期</span></div></div>')
 
 
@@ -411,7 +430,7 @@ def css():
 .tbar{{height:{FS['bar_h']}px;border-radius:3px;background:var(--dsw-alias-border-l2);overflow:hidden;margin-top:2px}}
 .tfill{{height:{FS['bar_h']}px;background:#5b6672;border-radius:3px}}.tfill.lite{{background:#aab3bd}}
 .sum{{font-size:{FS['sub']}px;color:var(--dsw-alias-label-secondary);margin-bottom:6px}}
-.g{{display:grid;grid-template-columns:{COLS};column-gap:12px;row-gap:4px;align-items:start}}
+.g{{display:grid;grid-template-columns:{COLS};column-gap:{_G.get("column_gap_px",12)}px;row-gap:{_G.get("row_gap_px",4)}px;align-items:start}}
 .gh{{grid-column:1/-1;font-size:{FS['sub']}px;color:var(--dsw-alias-label-secondary);border-bottom:1px solid var(--dsw-alias-border-l2);padding:7px 0 2px;margin-top:4px}}
 .gh b{{font-size:{FS['ring']}px;color:var(--dsw-alias-label-primary);font-weight:600;margin-right:5px}}
 .rn{{font-size:{FS['ring']}px;font-weight:600}}.nm{{font-size:{FS['name']}px}}.nm b{{font-family:ui-monospace,Consolas,monospace}}
@@ -424,7 +443,7 @@ def css():
 .pf{{position:absolute;top:-2px;width:2.5px;height:{FS['bar_h']+4}px;border-radius:1.2px;background:#2477b3;transform:translateX(-1.2px)}}
 .plbl{{font-size:{FS['sub']}px;color:var(--dsw-alias-label-secondary);margin-top:1px;white-space:nowrap}}
 .none{{font-size:{FS['sub']}px;color:#b6bcc5}}
-.mini{{border:1px solid rgba(31,35,40,.07);border-radius:3px;background:transparent;padding:1px 3px;width:{MINI_W}px;box-sizing:border-box}}
+.mini{{border:{_G.get('mini_border','1px solid rgba(31,35,40,.07)')};border-radius:{_G.get('mini_radius_px',3)}px;background:transparent;padding:1px 3px;width:{MINI_W};box-sizing:border-box}}
 .mini.none{{border-color:rgba(31,35,40,.05);color:#b6bcc5;text-align:center}}
 .mcap{{display:flex;justify-content:space-between;font-size:{FS['cap']}px;color:#8a8f99;margin-top:-2px}}
 .ft{{margin-top:9px;font-size:{FS['sub']}px;color:var(--dsw-alias-label-secondary);border-top:1px solid var(--dsw-alias-border-l2);padding-top:6px;line-height:1.7}}
@@ -454,10 +473,85 @@ def _short_label(e):
     return t[:12]
 
 
+# ---------------------------------------------------------------- R8 事件影响环条（分支 × 环）
+RINGS = [("C1", "政策设定"), ("C2", "资金供给"), ("C3", "资金价格"),
+         ("C4", "杠杆抵押"), ("C5", "主体行为"), ("C6", "市场结果"), ("BG", "背景")]
+EVENT_RINGS = load(os.path.join(ROOT, "data", "event_rings.json")) or {}
+
+
+def rings_of_event(e, scen):
+    """该事件触及哪些环（R8）。返回 (命中的环 id 集合, 规则说明)。
+
+    - 数据发布：由分支 affected_indicators 的 channel 决定（背景类 → BG）
+    - 其他：按 data/event_rings.json 登记；未登记 = 不映射（显式标注，不许静默消失）
+    """
+    reg = load(os.path.join(ROOT, "dist", "market-state", "references", "registry.json")) or {}
+    hit, rule = set(), ""
+    if scen:
+        for o in (scen.get("possible_outcomes") or []):
+            for i in (o.get("affected_indicators") or []):
+                ch = (reg.get(i) or {}).get("channel") or ""
+                if ch in ("C1", "C2", "C3", "C4", "C5", "C6"):
+                    hit.add(ch)
+                elif ch == "背景":
+                    hit.add("BG")
+        rule = "由分支受影响指标的通道决定"
+        return hit, rule
+    et = e.get("event_type") or ""
+    cat = ""
+    for key in (et,):
+        r = EVENT_RINGS.get(key)
+        if r:
+            rule = r.get("rule") or ""
+            return set(r.get("rings") or []), rule
+    return set(), "未登记归属（按不映射处理）"
+
+
+def _ring_strip(e, scen):
+    """R8：一行环 + 分支圆点（紧凑写法，控制卡片体积）。
+
+    环格只用中性色；圆点只表示"哪支分支触及它"，不表示该环涨跌（R8 硬规则）。
+    """
+    hit, rule = rings_of_event(e, scen)
+    outs = (scen.get("possible_outcomes") or []) if scen else []
+
+    def dot(o):
+        lab = (o.get("observable_flag") or o.get("outcome_label") or "")
+        if ">" in lab or "高于" in lab:
+            return "●"
+        if "<" in lab or "低于" in lab:
+            return "○"
+        return "◌"
+
+    dots = "".join(dot(o) for o in outs[:3]) if outs else "·"
+    cells = []
+    for rid, rname in RINGS:
+        short = "背景" if rid == "BG" else rid
+        if rid in hit:
+            cells.append(f"<b>{short}{dots}</b>")
+        else:
+            cells.append(f"<i>{short}</i>")
+    note = "" if hit else "不映射六环（日历事件）"
+    return f'<div class="rr">{" ".join(cells)}<s>{note}</s></div>'
+
+
+def _ring_tag(e, scen):
+    """格子短标签后的环归属（一眼可见，不用悬停）。"""
+    hit, _ = rings_of_event(e, scen)
+    order = [r for r, _n in RINGS if r in hit]
+    if not order:
+        return ""
+    return " · " + "/".join(order)
+
+
+
 def _tip_html(e, scen):
     """悬停窗：标题 + 发行人 + 状态 + （数据发布）受影响指标与分支。"""
-    out = [f'<div class="tip"><b>{e.get("event_date")} {e.get("event_time") or ""} {e.get("scope","")}</b>',
+    _scope = e.get("scope", "") or ""
+    _scope = (_scope[:40] + "…") if len(_scope) > 40 else _scope
+    out = [f'<div class="tip"><b>{e.get("event_date")} {e.get("event_time") or ""} {_scope}</b>',
            f'<span class="u">{e.get("issuer","")} · {e.get("event_status","")}</span>']
+    out.append(_ring_strip(e, scen))
     if scen:
         reg = load(os.path.join(ROOT, "dist", "market-state", "references", "registry.json")) or {}
         ids_list = []
@@ -468,17 +562,14 @@ def _tip_html(e, scen):
                 lab = f"{nm}（{ch}）" if ch else nm
                 if lab not in ids_list:
                     ids_list.append(lab)
-        ids = "、".join(ids_list) or "（未登记受影响指标）"
-        out.append(f'<span class="u">受影响：{ids}</span>')
+        # 受影响指标已由 R8 环条表达，这里不再重复（省体积、避免两处口径）
         for o in scen.get("possible_outcomes") or []:
             note = o.get("impact_note") or o.get("observable_flag") or ""
             lab = o.get("observable_flag") or o.get("outcome_label") or ""
             # 卡片只放要点（完整分支在状态页"事件段"与 data/events/*.json）
             note = note.replace("按登记的传导规则，", "").replace("（收益率上行 = 债券价格下行；不预测实际落点）", "")
-            note = (note[:52] + "…") if len(note) > 52 else note
+            note = (note[:34] + "…") if len(note) > 34 else note
             out.append(f'<div class="o"><em>{lab}</em>{note}</div>')
-    else:
-        out.append(f'<div class="o">{e.get("scope","")}</div>')
     out.append("</div>")
     return "".join(out)
 
@@ -539,7 +630,7 @@ def build_events():
                             if _sc0 and _sc0 in (r.get("event_summary") or ""):
                                 sc = r
                                 break
-                    cell.append(f"<div class='ev'><span class='chip'>{_short_label(e)}</span>{_tip_html(e, sc)}</div>")
+                    cell.append(f"<div class='ev'><span class='chip'>{_short_label(e)}{_ring_tag(e, sc)}</span>{_tip_html(e, sc)}</div>")
                 cell.append("</td>")
                 html.append("".join(cell))
             html.append("</tr>")
@@ -566,6 +657,10 @@ EVENT_CSS = """<style>
 .ec .tip .u{color:#6b7280;display:block;margin-bottom:6px}
 .ec .tip .o{margin:7px 0;padding-left:9px;border-left:3px solid #2477b3}
 .ec .tip .o em{font-style:normal;font-weight:600;display:block;color:#2477b3;margin-bottom:1px}
+.ec .rr{font-size:10px;color:#b6bcc5;margin:4px 0 2px;line-height:1.6}
+.ec .rr b{color:#2a3b4d;background:#e8eef5;border-radius:3px;padding:1px 3px;font-weight:600}
+.ec .rr i{font-style:normal}
+.ec .rr s{display:block;text-decoration:none;font-size:9.5px;color:#8a8f99}
 </style>"""
 
 
