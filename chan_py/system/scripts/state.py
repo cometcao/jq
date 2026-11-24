@@ -1166,6 +1166,33 @@ def sector_readings(sector, rings_data):
     return out
 
 
+# ---------------------------------------------------------------- 板块页批量刷新
+def _all_sector_names():
+    """所有已产出过板块页的板块名（含目标板块）。"""
+    names = set()
+    for fp in glob.glob(os.path.join(REPORTS, "*-sector-*-state.md")):
+        m = re.search(r"sector-(.+)-state\.md$", os.path.basename(fp))
+        if m:
+            names.add(m.group(1))
+    try:
+        with io.open(os.path.join(ROOT, "data", "sector_target.json"), encoding="utf-8-sig") as fh:
+            names.add(json.load(fh).get("name") or "半导体")
+    except Exception:
+        names.add("半导体")
+    return sorted(names)
+
+
+def _write_sector_page(as_of, body, sector):
+    """写单个板块页（与主流程同格式），供 --all-sectors 批量刷新。"""
+    os.makedirs(REPORTS, exist_ok=True)
+    head = f"as-of {as_of}（最新交易日；板块层 · 目标板块：{sector}；行内 * 表示数据期早于 as-of）"
+    text = f"{head}\n{body}\n"
+    p = os.path.join(REPORTS, f"{as_of}-sector-{sector}-state.md")
+    with io.open(p, "w", encoding="utf-8") as f:
+        f.write("```\n" + text + "```\n")
+    print("已写入:", os.path.relpath(p, ROOT))
+
+
 def build_sector(policy, sector=None, replay=None):
     """板块层六环（同名不同义）。sector 为空时读 data/sector_target.json。"""
     if not sector:
@@ -1412,6 +1439,8 @@ def main():
     ap.add_argument("--show-history", action="store_true", help="列出已归档的状态快照")
     ap.add_argument("--archive", action="store_true", help="强制覆盖当日快照")
     ap.add_argument("--write", action="store_true")
+    ap.add_argument("--all-sectors", action="store_true",
+                    help="板块层：刷新所有已产出过的板块页（避免只刷目标板块导致陈旧）")
     ap.add_argument("--as-of", default=None,
                     help="历史回放：YYYY-MM-DD。cache/history 只取该日及以前的最新记录（验证昨天也正确）")
     args = ap.parse_args()
@@ -1429,6 +1458,17 @@ def main():
             print("  ", r)
         return 0
 
+    if args.layer == "sector" and getattr(args, "all_sectors", False):
+        done = 0
+        for name in _all_sector_names():
+            try:
+                a2, b2, sec2 = build_sector(args.policy, name, replay=args.as_of)
+                _write_sector_page(a2, b2, sec2)
+                done += 1
+            except Exception as e:
+                print(f"  板块 {name} 失败：{type(e).__name__}")
+        print(f"板块页已刷新 {done} 个")
+        return 0
     if args.layer == "sector":
         as_of, body, sector = build_sector(args.policy, args.sector or None, replay=args.as_of)
         head = f"as-of {as_of}（最新交易日；板块层 · 目标板块：{sector}；行内 * 表示数据期早于 as-of）"

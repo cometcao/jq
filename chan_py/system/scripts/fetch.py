@@ -1386,6 +1386,40 @@ def official_tier(indicator_id, spec=None):
     return "C", None
 
 
+# ---------------------------------------------------------------- 守卫（纯函数，可单测）
+SNAPSHOT_SOURCES = {"akshare/ths", "akshare/legu"}
+
+
+def is_snapshot_source(src):
+    """快照型源：会在盘前或源滞后时"回放"上日数据。"""
+    return str(src or "") in SNAPSHOT_SOURCES
+
+
+def should_skip_snapshot(cur, prev, src, hour, freq):
+    """快照一致性守卫。返回 (是否跳过, 原因)。
+
+    - 值与上一交易日完全相同 → 疑似回放旧值
+    - 日频且 15:00 前 → 盘中残缺值
+    """
+    if not is_snapshot_source(src):
+        return False, ""
+    if cur is not None and prev is not None and abs(cur - prev) < 1e-9:
+        return True, "疑似回放旧值（与上一交易日完全相同）"
+    if freq == "日" and hour is not None and hour < 15:
+        return True, f"盘中值（{hour:02d}:00 未收盘）"
+    return False, ""
+
+
+def is_stale_monthly(period, today, months=3):
+    """月频指标的源是否已停更（最新期落后超过 N 个月）。返回 (是否停更, 落后月数)。"""
+    try:
+        d0 = dt.date.fromisoformat(str(period)[:10])
+    except Exception:
+        return False, None
+    lag = (today.year - d0.year) * 12 + (today.month - d0.month)
+    return lag > months, lag
+
+
 def _last_fact_value(iid, cur_period):
     """该指标在 cur_period 之前最近一条已落盘 facts 的数值（快照回放判定用）。"""
     best = None
@@ -1480,38 +1514,28 @@ def main():
         #   实测：macro_china_social_financing 最后一行是 2026-04，被当成"当前社融"用
         _dp = rec.get("data_period") or ""
         if spec.get("freq") == "月" and _dp:
-            try:
-                _d0 = dt.date.fromisoformat(_dp)
-                _now = dt.date.today()
-                _months = (_now.year - _d0.year) * 12 + (_now.month - _d0.month)
-                if _months > 3:
-                    print(f"{spec['id']:<16}{str(res.get('source') or ''):<16}{_dp:<12}"
-                          f"{str((rec.get('current_state') or {}).get('数值')):<26}"
-                          f"源已停更（最新期落后 {_months} 个月）→ 不落盘")
-                    _cp = os.path.join(ROOT, "data", "cache", spec["id"] + ".json")
-                    if os.path.exists(_cp):
-                        os.remove(_cp)
-                    miss += 1
-                    continue
-            except Exception:
-                pass
+            _stale, _months = is_stale_monthly(_dp, dt.date.today())
+            if _stale:
+                print(f"{spec['id']:<16}{str(res.get('source') or ''):<16}{_dp:<12}"
+                      f"{str((rec.get('current_state') or {}).get('数值')):<26}"
+                      f"源已停更（最新期落后 {_months} 个月）→ 不落盘")
+                _cp = os.path.join(ROOT, "data", "cache", spec["id"] + ".json")
+                if os.path.exists(_cp):
+                    os.remove(_cp)
+                miss += 1
+                continue
 
         # 快照一致性守卫（2026-11-24 教训）：
         #   快照型源（同花顺/乐咕）在盘前或源滞后时会"回放旧值"，若原样落盘，
         #   同一数字会被记到两个不同交易日（实测 11-20 与 11-23 成交额完全相同）。
-        _snap = str(res.get("source") or "") in ("akshare/ths", "akshare/legu")
-        if _snap and rec.get("data_period") and rec.get("current_state"):
+        if rec.get("data_period") and rec.get("current_state"):
             _cur = num_of((rec.get("current_state") or {}).get("数值"))
             _prev = _last_fact_value(spec["id"], rec["data_period"])
-            if _cur is not None and _prev is not None and abs(_cur - _prev) < 1e-9:
-                print(f"{spec['id']:<16}{res.get('source',''):<16}{rec['data_period']:<12}"
-                      f"{str(_cur):<26}疑似回放旧值（与上一交易日完全相同）→ 不落盘")
-                miss += 1
-                continue
-            _now = dt.datetime.now()
-            if _now.hour < 15 and spec["freq"] == "日":
-                print(f"{spec['id']:<16}{res.get('source',''):<16}{rec['data_period']:<12}"
-                      f"{str(_cur):<26}盘中值（{_now:%H:%M} 未收盘）→ 不落盘")
+            _skip, _why = should_skip_snapshot(_cur, _prev, res.get("source"),
+                                               dt.datetime.now().hour, spec["freq"])
+            if _skip:
+                print(f"{spec['id']:<16}{str(res.get('source') or ''):<16}{rec['data_period']:<12}"
+                      f"{str(_cur):<26}{_why} → 不落盘")
                 miss += 1
                 continue
 

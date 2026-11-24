@@ -185,11 +185,113 @@ def golden_sector_checks():
                f"{abs(pan-his)/his*100:.2f}%")
 
 
+# ---------------------------------------------------------------- 守卫与口径（每个 bug 一条）
+def unit_breadth_denominator():
+    import fetch as F
+    import pandas as pd
+    df = pd.DataFrame({"item": ["上涨", "下跌", "平盘", "停牌", "统计日期"],
+                       "value": [1838, 3267, 114, 5, "2026-11-24 15:00:00"]})
+    d, meta = F.p_breadth(df)
+    ck("广度分母=涨+跌+平（剔除停牌）", d["值"] == "35.2%", d["值"])
+    ck("广度对比写明三类家数", "平盘" in d["对比"] and "停牌" in d["对比"], d["对比"])
+
+
+def unit_snapshot_guard():
+    import fetch as F
+    skip, why = F.should_skip_snapshot(15639.61, 15639.61, "akshare/ths", 16, "日")
+    ck("快照同值 → 跳过（回放旧值）", skip and "回放" in why, why)
+    skip2, why2 = F.should_skip_snapshot(1234.0, 1000.0, "akshare/legu", 9, "日")
+    ck("盘前日频 → 跳过（盘中值）", skip2 and "盘中" in why2, why2)
+    skip3, _ = F.should_skip_snapshot(1234.0, 1000.0, "akshare/ths", 16, "日")
+    ck("正常快照 → 不跳过", not skip3)
+    skip4, _ = F.should_skip_snapshot(3.0, 3.0, "calc", 9, "月")
+    ck("非快照源不受同值限制", not skip4)
+
+
+def unit_stale_monthly():
+    import fetch as F
+    import datetime as dt
+    st, lag = F.is_stale_monthly("2025-12-01", dt.date(2026, 11, 24))
+    ck("停更判定 2025-12 → 落后 11 个月", st and lag == 11, f"{st},{lag}")
+    st2, _ = F.is_stale_monthly("2026-10-01", dt.date(2026, 11, 24))
+    ck("当月数据不算停更", not st2)
+
+
+def unit_turnover_provider():
+    import fetch as F
+    spec = [x for x in F.SPECS if x["id"] == "MKT_TURNOVER"][0]
+    first = spec["providers"][0]
+    ck("成交额主源=交易所官方", first[2] is F.p_turnover_official, str(first[0]))
+    ck("成交额 official_hosts 含两所", any("sse.com.cn" in h for h in spec.get("official_hosts") or []))
+
+
+def unit_tsf_caliber():
+    import fetch as F
+    import pandas as pd
+    df = pd.DataFrame({"月份": ["202602", "202604", "202601"],
+                       "社会融资规模增量": [1.0, 6245.0, 2.0]})
+    d, meta = F.p_tsf(df)
+    ck("社融取最新期（不是最旧）", meta["data_period"] == "2026-04-01", meta["data_period"])
+    ck("社融值是增量（亿元）而非同比", "亿元" in d["值"] and "%" not in d["值"], d["值"])
+    reg = load(os.path.join(ROOT, "dist", "market-state", "references", "registry.json"), {}) or {}
+    ck("社融注册为 level（与源一致）", (reg.get("MKT_TSF_YOY") or {}).get("value_kind") == "level",
+       str((reg.get("MKT_TSF_YOY") or {}).get("value_kind")))
+
+
+def unit_event_links():
+    import glob as _g
+    cals = sorted(_g.glob(os.path.join(ROOT, "data", "events", "calendar-*.json")))
+    if not cals:
+        return ck("事件日历存在", False)
+    cal = load(cals[-1], {}) or {}
+    miss = [e for e in (cal.get("events") or []) if not e.get("source_link")]
+    ck("每个事件都有官方链接", not miss, str([e.get("scope", "")[:16] for e in miss][:3]))
+
+
+def unit_sector_c2_fresh():
+    """板块 C2 份额的数据期不得落后 as-of 3 天以上（曾停在 11-13）。"""
+    import glob as _g, re as _re, datetime as _dt
+    fps = sorted(_g.glob(os.path.join(ROOT, "reports", "*-sector-*-state.md")))
+    if not fps:
+        return ck("板块页存在", False)
+    t = io.open(fps[-1], encoding="utf-8").read()
+    body = t.split("```")[1]
+    asof = _re.search(r"as-of (\d{4}-\d{2}-\d{2})", t)
+    c2 = [l for l in body.splitlines() if l.startswith("C2 ") and "份额" in l]
+    if c2 and asof:
+        ds = _re.findall(r"（(\d{4}-\d{2}-\d{2})", c2[0])
+        if ds:
+            gap = (_dt.date.fromisoformat(asof.group(1)) - _dt.date.fromisoformat(ds[0])).days
+            ck("板块 C2 份额不落后 >3 天", gap <= 3, f"{ds[0]} vs as-of {asof.group(1)}")
+
+
+def unit_prev_period_correct():
+    """证据行的"上一期日期"必须等于 history 倒数第二期。"""
+    import state as S
+    for iid in ("MKT_TURNOVER", "MKT_DR007", "MKT_CGB10Y"):
+        h = [x for x in S._hist(iid, 400) if x[1] is not None]
+        if len(h) < 2:
+            continue
+        ck(f"{iid} 前值日期与 history 一致", S._prev_period(iid) == h[-2][0],
+           f"{S._prev_period(iid)} vs {h[-2][0]}")
+
+
+def unit_no_old_turnover_name():
+    h = io.open(os.path.join(ROOT, "reports", "card-market.html"), encoding="utf-8").read()
+    fp = os.path.join(ROOT, "reports", "2026-11-24-market-state.md")
+    t = io.open(fp, encoding="utf-8").read() if os.path.exists(fp) else ""
+    ck("卡片不再叫「全市场成交额」", "全市场成交额" not in h)
+    ck("证据行不再叫「行业板块成交额合计」", "行业板块成交额合计" not in t)
+
+
 def main():
     verbose = "-v" in sys.argv
     for fn in (unit_card_fmt, unit_card_delta, unit_card_pos_spark, unit_events_info_level,
                unit_scenarios_wording, unit_pdf_and_amac, unit_dp_of, unit_norm_period, unit_state_helpers,
-               golden_checks, golden_sector_checks, facts_hygiene):
+               golden_checks, golden_sector_checks, facts_hygiene,
+               unit_breadth_denominator, unit_snapshot_guard, unit_stale_monthly,
+               unit_turnover_provider, unit_tsf_caliber, unit_event_links,
+               unit_sector_c2_fresh, unit_prev_period_correct, unit_no_old_turnover_name):
         try:
             fn()
         except Exception as e:
