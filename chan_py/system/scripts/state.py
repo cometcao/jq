@@ -59,7 +59,36 @@ def _load_prov():
 PROV = _load_prov()
 
 
+# 历史回放（--as-of）：非 None 时，cache 与 history 都只取该日及以前的最新记录。
+# 这是"能验证昨天也正确"的前提（此前只能验证今天）。
+AS_OF = None
+
+
+def _fact_asof(iid):
+    """回放用：取 data_period <= AS_OF 的最新一条 facts 记录，包装成 cache 形状。"""
+    best = None
+    for fp in glob.glob(os.path.join(FACTS, "*", iid + ".json")):
+        try:
+            with io.open(fp, encoding="utf-8") as f:
+                r = json.load(f)
+        except Exception:
+            continue
+        dp = r.get("data_period") or ""
+        if AS_OF and dp and dp > AS_OF:
+            continue
+        if best is None or dp > (best.get("data_period") or ""):
+            best = r
+    if not best:
+        return None
+    return {"indicator_id": iid, "source": best.get("source"), "current_state": best.get("current_state") or {},
+            "data_period": best.get("data_period"), "fetched_at": best.get("observation_time"),
+            "fallback_flag": best.get("fallback_flag"), "base_value": best.get("base_value"),
+            "unit_scale": best.get("unit_scale"), "replay": True}
+
+
 def load_cache(iid):
+    if AS_OF:
+        return _fact_asof(iid)
     p = os.path.join(CACHE, iid + ".json")
     if not os.path.exists(p):
         return None
@@ -124,7 +153,13 @@ def val(iid, key="value"):
         return None
     if key == "value":
         return num(c.get("current_state", {}).get("数值"))
-    return num(c.get(key))
+    v = num(c.get(key))
+    if v is None and key == "prev_value":
+        # 缺 prev_value 时用 history 推上期（回放时 history 已按 AS_OF 截断）
+        h = [x for x in _hist(iid, 400) if x[1] is not None]
+        if len(h) >= 2:
+            v = h[-2][1]
+    return v
 
 
 RING_IDS = {
@@ -180,7 +215,51 @@ class Ring:
         self.lines.append(f"{self.code} {text}｜依据：{evidence}｜边界：{boundary}{tag}")
 
 
-def build(policy, include_events=False):
+# ---------------------------------------------------------------- 卡片行（结构化，供 card.py 渲染）
+CARD_META = {
+    "POL_LPR": ("C1", "LPR 1Y", "pct1", "月频"),
+    "MKT_M2_YOY": ("C2", "M2 同比", "pct1", "月频"),
+    "MKT_DR007": ("C3", "DR007", "pct4", "日频"),
+    "MKT_CGB10Y": ("C3", "中国 10Y", "pct4", "日频"),
+    "MKT_MARGIN_BAL": ("C4", "融资余额", "yi", "日频"),
+    "MKT_MARGIN_BAL_SZ": ("C4", "深市两融", "yi2", "日频"),
+    "MKT_MMF_SCALE": ("C4", "现金池（代理）", "trillion", "月频"),
+    "RTL_MARGIN_INVESTORS": ("C5", "两融投资者", "wan", "日频"),
+    "MKT_TURNOVER": ("C6", "行业板块成交额合计", "yi", "日频"),
+    "MKT_BREADTH": ("C6", "上涨占比", "pct1", "日频"),
+    "SECTOR_AMT_CONC": ("C6", "Top5 成交占比", "pct1", "日频"),
+    "INST_LHB_NET": ("C5", "机构龙虎榜", "yi", "区间 7 日"),
+    "EXT_CN_ETF_AUM": ("C5", "外部中国 ETF", "usd", "日频"),
+    "INST_INSIDER_NET": ("C5", "产业资本公告", "cnt", "区间 30 日"),
+}
+
+
+def card_rows():
+    """给 card.py 用：每个指标一条，含现值文本、前值、前值日期、是否有序列。"""
+    out = []
+    for iid, (ring, label, kind, freq) in CARD_META.items():
+        v = val(iid)
+        per = period(iid)
+        if v is None:
+            out.append({"ring": ring, "kind": "unreadable", "label": label, "indicator_id": iid,
+                        "value": None, "period": per, "freq": freq, "value_kind": kind})
+            continue
+        prev = val(iid, "prev_value")
+        prev_d = None
+        if prev is None:
+            h = [x for x in _hist(iid, 400) if x[1] is not None]
+            if len(h) >= 2:
+                prev, prev_d = h[-2][1], h[-2][0]
+        else:
+            prev_d = _prev_period(iid)
+        has_series = len([x for x in _hist(iid, 400) if x[1] is not None]) >= 2
+        out.append({"ring": ring, "kind": "metric", "label": label, "indicator_id": iid,
+                    "value": v, "prev": prev, "prev_period": prev_d, "period": per,
+                    "freq": freq, "value_kind": kind, "has_series": has_series})
+    return out
+
+
+def build(policy, include_events=False, replay=None):
     rings = [Ring("C1", "政策设定"), Ring("C2", "资金供给"), Ring("C3", "资金价格"),
              Ring("C4", "场内杠杆与资金池"), Ring("C5", "主体行为"), Ring("C6", "市场结果")]
 
@@ -228,13 +307,21 @@ def build(policy, include_events=False):
     else:
         rings[1].add("不可读（—）", "M2 记录缺失，或来源为 C 类、无源可支撑状态词", "该环无可用证据")
 
-    # C3 短端与长端分别写
+    # C3 短端与长端分别写（缺前值时也要出行，不许静默少一条判据）
     for iid, name in (("MKT_DR007", "短端"), ("MKT_CGB10Y", "长端")):
         ok, tag = allow(iid)
         v, p = val(iid), val(iid, "prev_value")
+        if (p is None) and (v is not None):
+            _h = [x for x in _hist(iid, 400) if x[1] is not None]
+            if len(_h) >= 2:
+                p = _h[-2][1]
         if ok and v is not None and p is not None:
             word = "不变" if v == p else ("变贵" if v > p else "变便宜")
             rings[2].add(f"{name}{word}（{period(iid)}）", f"{name}利率 {v:.4f}% 对比上一期（{_prev_period(iid) or '—'}）{p:.4f}%", "不说明估值会重估", tag)
+        elif ok and v is not None:
+            rings[2].add(f"{name}不可读（—）",
+                         f"{name}利率 {v:.4f}% 已有，但无证据可作前值（历史未累积到上一期）",
+                         "该判据暂无法判方向")
     if not rings[2].lines:
         rings[2].add("不可读（—）", "利率记录缺失，或来源为 C 类、无源可支撑状态词", "该环无可用证据")
 
@@ -395,7 +482,7 @@ def build(policy, include_events=False):
                                  "MKT_BREADTH", "SECTOR_AMT_CONC", "INST_LHB_NET",
                                  "INST_BLOCK_AMT", "MKT_DIV_YIELD", "FX_CNY_MID")
              if period(i)]
-    as_of = max(daily) if daily else "不可用"
+    as_of = replay or (max(daily) if daily else "不可用")
     normalize_dates(rings, as_of)
     body = "\n".join(r_.lines for r_ in rings) if False else "\n".join("\n".join(r_.lines) for r_ in rings)
     if include_events:
@@ -609,6 +696,8 @@ def _hist(iid, tail=60):
     if not os.path.exists(fp):
         return []
     rows = [json.loads(x) for x in io.open(fp, encoding="utf-8").read().splitlines() if x.strip()][1:]
+    if AS_OF:
+        rows = [r for r in rows if (r.get("data_period") or "") <= AS_OF]
     return [(r["data_period"], r["value"]) for r in rows][-tail:]
 
 
@@ -1077,7 +1166,7 @@ def sector_readings(sector, rings_data):
     return out
 
 
-def build_sector(policy, sector=None):
+def build_sector(policy, sector=None, replay=None):
     """板块层六环（同名不同义）。sector 为空时读 data/sector_target.json。"""
     if not sector:
         try:
@@ -1293,7 +1382,7 @@ def build_sector(policy, sector=None):
     daily = [period(i) for i in ("SECTOR_PCT", "SECTOR_BREADTH", "SECTOR_AMT") if period(i)]
     if sw_panel and sw_panel.get("date"):
         daily.append(sw_panel["date"])
-    as_of = max(daily) if daily else "不可用"
+    as_of = replay or (max(daily) if daily else "不可用")
     normalize_dates(rings, as_of)
     body = "\n".join("\n".join(r_.lines) for r_ in rings)
     # 板块层也带链条完整性
@@ -1323,7 +1412,14 @@ def main():
     ap.add_argument("--show-history", action="store_true", help="列出已归档的状态快照")
     ap.add_argument("--archive", action="store_true", help="强制覆盖当日快照")
     ap.add_argument("--write", action="store_true")
+    ap.add_argument("--as-of", default=None,
+                    help="历史回放：YYYY-MM-DD。cache/history 只取该日及以前的最新记录（验证昨天也正确）")
     args = ap.parse_args()
+    if args.as_of:
+        global AS_OF
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", args.as_of):
+            print("--as-of 需 YYYY-MM-DD"); return 2
+        AS_OF = args.as_of
     args.include_events = not args.no_events
 
     if args.show_history:
@@ -1334,10 +1430,10 @@ def main():
         return 0
 
     if args.layer == "sector":
-        as_of, body, sector = build_sector(args.policy, args.sector or None)
+        as_of, body, sector = build_sector(args.policy, args.sector or None, replay=args.as_of)
         head = f"as-of {as_of}（最新交易日；板块层 · 目标板块：{sector}；行内 * 表示数据期早于 as-of）"
     else:
-        as_of, body = build(args.policy, args.include_events)
+        as_of, body = build(args.policy, args.include_events, replay=args.as_of)
         head = f"as-of {as_of}（最新交易日；行内 * 表示该行数据期早于 as-of）"
     text = f"{head}\n{body}\n"
 
@@ -1400,6 +1496,7 @@ def main():
         payload = {"layer": args.layer, "as_of": as_of, "lines": recs,
                    "chain_coverage": {"ok": _ok, "total": _tot, "text": f"{_ok}/{_tot}"},
                    "relations_by_ring": rel,
+                   "card_rows": card_rows() if args.layer == "market" else [],
                    "b_indicators": [i for i in missing if tier_of(i) == "B"],
                    "policy": args.policy,
                    "generated_at": dt.datetime.now().isoformat(timespec="seconds")}

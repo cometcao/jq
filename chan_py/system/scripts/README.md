@@ -1,6 +1,6 @@
 # 取数层（akshare）
 
-> 版本 V2.123.0。定位：**C 类源**的免费取数层，服务于 `dist/market-state`。
+> 版本 V2.127.0。定位：**C 类源**的免费取数层，服务于 `dist/market-state`。
 > 规则依据：`docs/01_框架核心.md` 第十节（D03 分级、D04 缺失、第十节 2 的 stale 阈值）。
 
 ## 一句话
@@ -103,7 +103,7 @@ C6 参与度降（2026-11-20）｜依据：板块成交额 1985.20 亿 对比上
 
 末尾附**数据溯源表**（指标 → 官方源 → 官方页面 URL → 档位），可直接点开核对；对账通过后把值与链接写进 `data/official/<id>.json`，档位升 B，标注随之消失。
 
-## 存储与修订（D11，V2.123.0）
+## 存储与修订（D11，V2.127.0）
 
 | 路径 | 内容 | 规则 |
 |---|---|---|
@@ -119,7 +119,7 @@ C6 参与度降（2026-11-20）｜依据：板块成交额 1985.20 亿 对比上
 cat data/revisions/MKT_M2_YOY/2026-10-01.jsonl
 ```
 
-## as-of 规则（V2.123.0）
+## as-of 规则（V2.127.0）
 
 - 整页 `as-of` 取**最新交易日**（日频指标里最大的数据期），不再被月频环拖回一个月前；
 - **只标注不是最新数据的行**：数据期早于 as-of 的行尾追加 `〔非最新：YYYY-MM-DD〕`，其余行不标。
@@ -135,7 +135,7 @@ cat data/revisions/MKT_M2_YOY/2026-10-01.jsonl
 
 **未映射的板块，C3 如实写"不可读"**（不会拿别的板块顶替）。加一个新板块：找到它在官网的指数代码，加一行即可。
 
-## 市场层默认比价段（V2.123.0）
+## 市场层默认比价段（V2.127.0）
 
 `state.py --layer market` 在六环之后**默认追加两行比价**（走 `compare.py` 的七锚 + schema，并落 `data/compares/`）：
 
@@ -174,7 +174,7 @@ python scripts/sync.py --days 14
 **每次运行自动补最近缺少的数据**：`fetch.py`（快照，6h 缓存内不重复请求）→ `history.py`（**增量合并**，只补缺的期，不重写）→ `events.py` → `state.py` 两层。
 某一步失败不阻断后续（落盘数据仍可用），末尾打印 `完成 N/M 步`。
 
-**stale 按交易日计**（V2.123.0）：`fetch.py` 与 `check.py` 统一用"交易日差 ÷ 频率天数"，周末与节假日不再把 stale 惩罚放大（此前周一会把周五数据误判为 stale）。
+**stale 按交易日计**（V2.127.0）：`fetch.py` 与 `check.py` 统一用"交易日差 ÷ 频率天数"，周末与节假日不再把 stale 惩罚放大（此前周一会把周五数据误判为 stale）。
 
 ## 历史序列（history.py）
 
@@ -197,7 +197,7 @@ python scripts/history.py --rings C1,C2,C3,C4,C5,C6
 
 C6 用的是**沪指+深成指成交额合计**（比全市场窄），实测与官方两市成交额 14222 亿吻合，但口径仍需声明。
 
-## 事件段默认附在状态页（V2.123.0）
+## 事件段默认附在状态页（V2.127.0）
 
 `sync.py` 跑完事件抓取后，`state.py --layer market` **默认把事件段拼进状态页**（`--no-events` 可关）：
 
@@ -250,7 +250,7 @@ python scripts/sector.py --write    # 另存 data/sector_groups/<期>.json 并�
 
 口径固定三条：**同花顺行业分类**、**分组成员加总**、**涨跌幅按成交额加权**；成员名写错会打印 `⚠ 未找到`，不会静默跳过。
 
-## 状态快照按日归档（V2.123.0）
+## 状态快照按日归档（V2.127.0）
 
 ```bash
 python scripts/state.py --layer market --write   # 自动归档到 reports/state-history/<as_of>-market.json
@@ -260,7 +260,7 @@ python scripts/state.py --layer market --write --archive   # 强制覆盖当日�
 
 **默认不覆盖**：同一天重跑只打印"已存在（未覆盖）"，保证复盘时能看到"当时看到的是什么"。
 
-## 链条完整性归纳（V2.123.0）
+## 链条完整性归纳（V2.127.0）
 
 页面末尾自动加两行：
 
@@ -401,7 +401,7 @@ python scripts/audit.py [--ring C4] [--no-net]
 ## 回归测试（改完代码必跑）
 
 ```bash
-python scripts/test_regression.py       # 65 条断言
+python scripts/test_regression.py       # 73 条断言
 python scripts/test_regression.py -v    # 逐条显示
 ```
 

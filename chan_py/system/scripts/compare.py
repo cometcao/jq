@@ -62,10 +62,23 @@ def num(s):
 SCALE_HINT = {"万亿": 10000.0, "亿": 1.0, "万": 1.0}
 
 
+def base_of(rec):
+    """取 facts 里已归一的基础值（金额统一到亿元）；没有则返回 None。
+
+    这是 2026-11-24 教训的落地：单位换算只做一次、落在数据层，
+    下游不再各自猜「万亿 / 亿」。
+    """
+    if not rec:
+        return None
+    v = rec.get("base_value")
+    return v if isinstance(v, (int, float)) else None
+
+
 def num_scaled(s):
-    """解析数值并统一到「亿」为基准单位（万亿→亿 ×10000）。
+    """兜底：解析数值并统一到「亿」为基准单位（万亿→亿 ×10000）。
 
     返回 (数值_亿基准, 原始单位标签)。标签用于量纲锚声明是否发生换算。
+    优先用 base_of()；本函数只在旧 facts 无 base_value 时使用。
     """
     if s is None:
         return None, ""
@@ -119,8 +132,16 @@ def anchored(facts, reg, left, right, op, args):
     if op == "ratio" and (lmeta.get("value_kind") == "price" or rmeta.get("value_kind") == "price"):
         raise ValueError("属性锚：价格水平（price）不得做比值——与价格走势同构（ADR-001）")
 
-    lp, lu = num_scaled(lrec["current_state"]["数值"])
-    rp, ru = num_scaled(rrec["current_state"]["数值"]) if rrec else (None, "")
+    lp = base_of(lrec)
+    rp = base_of(rrec) if rrec else None
+    if lp is None:
+        lp, lu = num_scaled(lrec["current_state"]["数值"])
+    else:
+        lu = "base_value"
+    if rrec and rp is None:
+        rp, ru = num_scaled(rrec["current_state"]["数值"])
+    else:
+        ru = "base_value" if rrec else ""
     scale_note = ""
     if rrec and lu != ru:
         if {lu, ru} <= {"亿", "万亿→亿"}:

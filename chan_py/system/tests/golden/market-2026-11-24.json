@@ -25,7 +25,8 @@
     "MKT_CGB10Y": {
       "value": 1.5853,
       "period": "2026-11-24",
-      "derivation": "中债官方曲线 10Y 对账通过（B）"
+      "derivation": "中债官方曲线 10Y 对账通过（B）",
+      "note": "中债官方曲线（每日取最新曲线；历史由 facts 逐日累积）"
     },
     "MKT_MARGIN_BAL": {
       "value": 21419.23,

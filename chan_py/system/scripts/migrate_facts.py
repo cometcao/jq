@@ -27,6 +27,29 @@ FACTS = os.path.join(ROOT, "data", "facts")
 ARCH = os.path.join(ROOT, "data", "facts-archive")
 
 
+def backfill_base_values():
+    """给缺 base_value 的 facts 补上（幂等）。返回补了多少条。"""
+    import sys as _sys
+    _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from units import norm as unorm
+    n = 0
+    for fp in glob.glob(os.path.join(FACTS, "*", "*.json")):
+        try:
+            j = json.load(io.open(fp, encoding="utf-8-sig"))
+        except Exception:
+            continue
+        if j.get("base_value") is not None:
+            continue
+        b, bu, sc = unorm((j.get("current_state") or {}).get("数值"))
+        if b is None:
+            continue
+        j["base_value"], j["base_unit"], j["unit_scale"] = b, bu, sc
+        with io.open(fp, "w", encoding="utf-8") as f:
+            json.dump(j, f, ensure_ascii=False, indent=2)
+        n += 1
+    return n
+
+
 def plan():
     moves = []      # (src, dst, reason)
     renames = []    # (src, dst, reason)
@@ -73,8 +96,14 @@ def main():
         print(f"  改名 {os.path.basename(s)} → {os.path.basename(d)}  ({why})")
     for s, d, why in moves:
         print(f"  归档 {os.path.basename(s)} → {os.path.relpath(d, ROOT)}  ({why})")
+    if apply_:
+        fixed = backfill_base_values()
+        print(f"补 base_value：{fixed} 条")
     if not (moves or renames):
-        print("无需迁移。")
+        if not apply_:
+            print("无需迁移（只补 base_value 需 --apply）。")
+        else:
+            print("迁移完成。")
         return 0
     if not apply_:
         print("\n（dry-run）加 --apply 执行。")

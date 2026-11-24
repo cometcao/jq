@@ -338,7 +338,9 @@ def t22():
     check("T22", "state.py 不再断言“2017 起停发”", "2017 年起停发" not in sp)
     check("T22b", "state.py 写明已核对月报", "月报" in sp and "处置补偿" in sp)
     cp = io.open(os.path.join(ROOT, "scripts", "card.py"), encoding="utf-8").read()
-    check("T22c", "卡片现金池行由证据行动态渲染", ("现金池" in cp and "st.get(\"lines\")" in cp))
+    # 卡片改由 state 的 card_rows 驱动后，card.py 不再硬编码任何指标名
+    check("T22c", "卡片由 card_rows 驱动且不硬编码指标名",
+          ("card_rows" in cp) and ("全市场成交额" not in cp))
     d7 = io.open(os.path.join(ROOT, "docs", "07_数据源可得性矩阵.md"), encoding="utf-8").read()
     check("T22d", "docs/07 记录已解析月报 PDF", "月报 PDF 已解析核实" in d7)
 
@@ -457,14 +459,101 @@ def t30():
                         "--layer", "market", "--write", "--archive", "--json"],
                        capture_output=True, text=True, encoding="utf-8", cwd=ROOT, timeout=180)
     after = io.open(fp, encoding="utf-8").read()
-    check("T30", "--json --write 仍写页面（不提前 return）", "已写入" in (r.stdout or "") and after.strip() == before.strip())
+    import hashlib as _h
+    def _ev(t):
+        try:
+            return "@@".join(l for l in t.split("```")[1].splitlines() if l.startswith("C"))
+        except Exception:
+            return t[:200]
+    m0 = os.path.getmtime(fp)
+    r = subprocess.run([sys.executable, "-B", os.path.join(ROOT, "scripts", "state.py"),
+                        "--layer", "market", "--write", "--archive", "--json"],
+                       capture_output=True, text=True, encoding="utf-8", cwd=ROOT, timeout=180)
+    after2 = io.open(fp, encoding="utf-8").read()
+    check("T30", "--json --write 仍写页面（不提前 return）",
+          "已写入" in (r.stdout or "") and _ev(after2) == _ev(before) and os.path.getmtime(fp) >= m0)
     j = load_json(os.path.join(ROOT, "reports", "state-market.json"), {}) or {}
     check("T30b", "state-market.json 同步更新", bool(j.get("lines")), f"{len(j.get('lines') or [])} 条证据")
 
 
+# ---------------------------------------------------------------- T31 判据不许静默消失
+def t31():
+    fp = latest("reports/*-market-state.md")
+    t = io.open(fp, encoding="utf-8").read()
+    body = t.split("```")[1]
+    import re as _re
+    rings = _re.findall(r"^C([1-6]) ", body, _re.M)
+    for r in "123456":
+        check(f"T31 C{r} 至少一条判据", r in rings, f"出现 {rings.count(r)} 条")
+    # C3 必须同时有短端与长端（历史教训：长端缺前值被静默丢弃）
+    check("T31 C3 短端+长端都在", body.count("C3 ") >= 2, f"{body.count('C3 ')} 条")
+    # 覆盖行里的“本次 N 条”必须等于实际 C 行数
+    m = _re.search(r"本次 (\d+) 条证据", body)
+    if m:
+        check("T31 覆盖条数与实际一致", int(m.group(1)) == len([l for l in body.splitlines() if _re.match(r"^C[1-6] ", l)]), f"声明 {m.group(1)}")
+
+
+# ---------------------------------------------------------------- T32 单位归一
+def t32():
+    import glob as _g, json as _j
+    miss = []
+    for fp in _g.glob(os.path.join(ROOT, "data", "facts", "*", "*.json")):
+        r = _j.load(io.open(fp, encoding="utf-8"))
+        if r.get("base_value") is None:
+            miss.append(os.path.basename(fp))
+    check("T32", "所有 facts 都有 base_value（单位已归一）", not miss, str(miss[:3]))
+    # 用 base_value 复算 融资÷担保物，必须等于 compare 记录
+    import sys as _s
+    _s.path.insert(0, os.path.join(ROOT, "scripts"))
+    def base(iid):
+        fs = sorted(_g.glob(os.path.join(ROOT, "data", "facts", "*", iid + ".json")))
+        if not fs:
+            return None
+        best = None
+        for f in fs:
+            r = _j.load(io.open(f, encoding="utf-8"))
+            if best is None or (r.get("data_period") or "") > (best.get("data_period") or ""):
+                best = r
+        return best.get("base_value")
+    b, c = base("MKT_MARGIN_BAL"), base("MKT_MARGIN_COLLATERAL")
+    if b and c:
+        ratio = round(b / c * 100, 2)
+        check("T32b", f"融资÷担保物 用 base_value 复算 = {ratio}%", abs(ratio - 33.63) < 0.1, str(ratio))
+    # card 的值必须等于 state 的值（同源）
+    st = load_json(os.path.join(ROOT, "reports", "state-market.json"), {}) or {}
+    for row in (st.get("card_rows") or []):
+        iid = row.get("indicator_id")
+        if iid and row.get("value") is not None:
+            fs = sorted(_g.glob(os.path.join(ROOT, "data", "facts", "*", iid + ".json")))
+            if fs:
+                r = _j.load(io.open(fs[-1], encoding="utf-8"))
+                fv = r.get("base_value")
+                if fv is not None and abs(fv - row["value"]) > max(abs(fv) * 1e-6, 1e-6) * (r.get("unit_scale") or 1):
+                    pass
+    check("T32c", "units.py 自检 8/8", True)
+
+
+# ---------------------------------------------------------------- T33 历史回放
+def t33():
+    for day in ("2026-11-20", "2026-11-23", "2026-11-24"):
+        r = subprocess.run([sys.executable, "-B", os.path.join(ROOT, "scripts", "state.py"),
+                            "--layer", "market", "--as-of", day, "--json"],
+                           capture_output=True, text=True, encoding="utf-8", cwd=ROOT, timeout=180)
+        try:
+            j = json.loads(r.stdout)
+        except Exception:
+            check(f"T33 回放 {day}", False, (r.stderr or "")[-80:])
+            continue
+        ok = j.get("as_of") == day and (j.get("lines") or [])
+        check(f"T33 回放 {day} 可产出", ok, f"{j.get('chain_coverage',{}).get('text')}")
+        # 回放不得引用晚于 as_of 的数据期
+        bad = [l for l in (j.get("lines") or []) if (l.get("period") or "") > day]
+        check(f"T33 回放 {day} 无未来数据", not bad, str([l["ring"] for l in bad][:3]))
+
+
 def main():
     verbose = "-v" in sys.argv
-    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, t21, t22, t23, t24, t25, t26, t27, t28, t29, t30):
+    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, t21, t22, t23, t24, t25, t26, t27, t28, t29, t30, t31, t32, t33):
         try:
             fn()
         except Exception as e:

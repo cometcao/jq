@@ -33,7 +33,7 @@ HIST = os.path.join(ROOT, "data", "history")
 
 # ---------------------------------------------------------------- R1.5 字号（唯一常量表）
 FS = {"ring": 13, "value": 12.5, "name": 12.5, "delta": 12,
-      "sub": 10.5, "cap": 9, "bar_h": 6, "line_h": 20}
+      "sub": 10.5, "cap": 9, "bar_h": 6, "line_h": 15}
 COLS = "64px 150px 78px 66px minmax(64px,1fr)"   # R1.7 列宽
 
 # 卡内禁止出现的状态词（R1.4）——只允许出现在证据行
@@ -43,32 +43,21 @@ STATE_WORDS = ["偏松", "偏紧", "扩", "缩", "变贵", "变便宜", "加杠�
                "不可读"]
 
 # 每个判据在卡上的一行：(环, 指标名, 指标id, 值格式, 频率标签)
-ROWS = [
-    ("C1", "LPR 1Y", "POL_LPR", "pct1", "月频"),
-    ("C2", "M2 同比", "MKT_M2_YOY", "pct1", "月频"),
-    ("C3", "DR007", "MKT_DR007", "pct4", "日频"),
-    ("C3", "中国 10Y", "MKT_CGB10Y", "pct4", "日频"),
-    ("C4", "融资余额", "MKT_MARGIN_BAL", "yi", "日频"),
-    ("C4", "深市两融", "MKT_MARGIN_BAL_SZ", "yi2", "日频"),
-    ("C5", "两融投资者", "RTL_MARGIN_INVESTORS", "wan", "日频"),
-    ("C6", "全市场成交额", "MKT_TURNOVER", "yi", "日频"),
-]
+ROWS = []          # 由 reports/state-market.json 的 card_rows 提供（不再硬编码）
 GROUP_NAME = {"C1": "基准利率", "C2": "货币与信贷", "C3": "资金价格",
               "C4": "杠杆与抵押", "C5": "市场参与者", "C6": "成交与结构"}
 # 卡上要出现的"阈值类/区间类"判据（无序列，直接写比较式或区间）
-EXTRA = [
-    ("C5", "机构龙虎榜", "−30.55 亿", "区间 7 日", None),
-    ("C5", "外部中国 ETF", "4.41 十亿美元", "vs 11-20", "+0.03"),
-    ("C5", "产业资本公告", "−233 条", "区间 30 日", None),
-    ("C6", "上涨占比", "36.0%", "阈值 50%", None),
-    ("C6", "Top5 成交占比", "34.0%", "阈值 50%", None),
-]
+EXTRA = []         # 同上：阈值/区间类也由 card_rows 提供
 # 关系量的 id 组合 → 卡上名称与小数字（值取 relations_by_ring）
 REL_META = {
     ("MKT_M2_YOY", "MKT_M1_YOY"): ("▪ 剪刀差 M2−M1", "pp"),
     ("MKT_M2_YOY", "MKT_RMB_LOAN_YOY"): ("▪ M2−贷款同比", "pp"),
     ("MKT_MARGIN_BAL", "MKT_MARGIN_COLLATERAL"): ("▪ 融资÷担保物", "%"),
+    ("MKT_DR007", "MKT_CGB10Y"): ("▪ 期限差 DR007−10Y", "pp"),
 }
+ID_NAME = {"MKT_M2_YOY": "M2 同比", "MKT_M1_YOY": "M1 同比", "MKT_RMB_LOAN_YOY": "人民币贷款余额同比",
+           "MKT_MARGIN_BAL": "融资余额", "MKT_MARGIN_COLLATERAL": "两融担保物", "MKT_DR007": "DR007",
+           "MKT_CGB10Y": "中国 10Y"}
 
 
 _SHAPES = {}
@@ -117,15 +106,18 @@ def series(iid, n=60):
         rows.sort(key=lambda r: r["data_period"])
     f = fact(iid)
     if f:
-        dp, v = f.get("data_period"), num((f.get("current_state") or {}).get("数值"))
-        # 量纲对齐：facts 的"数值"按展示单位（如 6.37 万亿），history 存基础单位（亿元）
-        if v is not None and rows:
-            _ref = abs(rows[-1]["value"]) or 1e-9
-            _r = v / _ref if _ref else 1
-            if _r < 0.01:           # facts 数值远小 → 其展示单位更大（万亿），换算成基础单位（亿）
-                v = v * 1e4
-            elif _r > 100:          # facts 数值远大 → 换算回去
-                v = v / 1e4
+        dp = f.get("data_period")
+        # 优先用 facts 里已归一的基础值（units.py 写入）；老记录才退回量级启发式
+        v = f.get("base_value")
+        if v is None:
+            v = num((f.get("current_state") or {}).get("数值"))
+            if v is not None and rows:
+                _ref = abs(rows[-1]["value"]) or 1e-9
+                _r = v / _ref if _ref else 1
+                if _r < 0.01:
+                    v = v * 1e4
+                elif _r > 100:
+                    v = v / 1e4
         if v is not None and dp:
             if not rows or rows[-1]["data_period"] < dp:
                 rows.append({"data_period": dp, "value": v})
@@ -135,9 +127,27 @@ def series(iid, n=60):
 
 
 def fmt(v, kind):
-    return {"pct1": f"{v:.2f}%", "pct4": f"{v:.4f}%", "yi": f"{v:,.0f} 亿",
-            "yi2": f"{v:,.2f} 亿", "wan": f"{v:,.2f} 万户",
-            "pp": f"{v:+.2f}pp"}.get(kind, f"{v}")
+    if v is None:
+        return "—"
+    if kind == "pct1":
+        return f"{v:.2f}%"
+    if kind == "pct4":
+        return f"{v:.4f}%"
+    if kind == "yi":
+        return f"{v:,.0f} 亿" if abs(v) >= 1000 else f"{v:,.2f} 亿"
+    if kind == "yi2":
+        return f"{v:,.2f} 亿"
+    if kind == "wan":
+        return f"{v:,.2f} 万户"
+    if kind == "trillion":
+        return f"{v:.2f} 万亿"
+    if kind == "usd":
+        return f"{v:.2f} 十亿美元"
+    if kind == "cnt":
+        return f"{v:+.0f} 条"
+    if kind == "pp":
+        return f"{v:+.2f}pp"
+    return f"{v}"
 
 
 def delta(cur, prev, kind):
@@ -148,11 +158,15 @@ def delta(cur, prev, kind):
         return "0", "fl", ""
     arrow = "▲" if d > 0 else "▼"
     if kind == "yi":
-        mag = f"{abs(d):,.0f} 亿"
-    elif kind == "yi2":
-        mag = f"{abs(d):,.2f} 亿"
-    elif kind == "wan":
-        mag = f"{abs(d):,.2f} 万户"
+        mag = f"{abs(d):,.0f} 亿" if abs(d) >= 1000 else f"{abs(d):,.2f} 亿"
+    elif kind in ("yi2", "wan"):
+        mag = f"{abs(d):,.2f} " + ("亿" if kind == "yi2" else "万户")
+    elif kind == "trillion":
+        mag = f"{abs(d):.2f} 万亿"
+    elif kind == "usd":
+        mag = f"{abs(d):.2f} 十亿美元"
+    elif kind == "cnt":
+        mag = f"{abs(d):.0f} 条"
     elif kind == "pct4":
         mag = f"{abs(d)*100:.1f}bp"
     else:
@@ -240,9 +254,9 @@ def cell_spark(vals, freq):
     d, (lx, ly), lo, hi = sp
     H = FS["line_h"]
     return (f'<div class="mini"><svg viewBox="0 0 100 {H}" preserveAspectRatio="none" width="100%" height="{H}">'
-            f'<line x1="0" y1="{H/2}" x2="100" y2="{H/2}" stroke="#c9ced6" stroke-width="0.8" stroke-dasharray="3,3"/>'
-            f'<path d="{d}" fill="none" stroke="#7f9bb8" stroke-width="1.3" vector-effect="non-scaling-stroke"/>'
-            f'<circle cx="{lx:.1f}" cy="{ly:.1f}" r="1.6" fill="#1f2328"/></svg>'
+            f'<line x1="0" y1="{H/2}" x2="100" y2="{H/2}" stroke="#d5dae1" stroke-width="0.7" stroke-dasharray="2,3"/>'
+            f'<path d="{d}" fill="none" stroke="#8497ab" stroke-width="1.1" vector-effect="non-scaling-stroke"/>'
+            f'<circle cx="{lx:.1f}" cy="{ly:.1f}" r="1.4" fill="#1f2328"/></svg>'
             f'<div class="mcap"><span>{lo:.2f}–{hi:.2f}</span><span>{freq} {len(vals)}期</span></div></div>')
 
 
@@ -306,7 +320,13 @@ def build_market():
             order = r.get("operand_order") or ""
             parts = re.split(r"[÷−]", order)
             key = (parts[0].strip(), parts[1].strip()) if len(parts) == 2 else None
-            name, unit = REL_META.get(key, ("▪ " + order, r.get("value", "")[-2:] or ""))
+            if key and key in REL_META:
+                name, unit = REL_META[key]
+            elif key:
+                name = "▪ " + " ÷ ".join(ID_NAME.get(x, x) for x in key)
+                unit = "%" if "÷" in order else "pp"
+            else:
+                name, unit = "▪ 关系量", "pp"
             periods = [x["data_period"] for x in series(parts[0].strip(), 60)] if key else []
             if key and unit == "pp":
                 A = dict((x["data_period"], x["value"]) for x in series(parts[0].strip(), 60))
@@ -334,58 +354,43 @@ def build_market():
                         f'<div class="dcol"><span class="{dcls}">{dtxt}</span><div class="bs">{basis}</div></div>'
                         f'<div class="pos">{posc}</div>{spk}')
 
-    # 逐环输出
+    # 逐环输出：完全由 state 的 card_rows 驱动（不再硬编码任何数值/名称）
+    rows = st.get("card_rows") or []
+    by_ring = {}
+    for r in rows:
+        by_ring.setdefault(r["ring"], []).append(r)
+
+    def render_metric(ring, r):
+        iid, kind, freq = r.get("indicator_id"), r.get("value_kind"), r.get("freq", "日频")
+        label = r["label"]
+        if not r.get("has_series"):
+            # 无序列（区间汇总/阈值类）：只给现值与基准，不画位置条
+            _b = ("阈值 50%" if ("占比" in label) else (r.get("freq") or "无上期"))
+            html.append(f'<div class="rn">{ring}</div><div class="nm">{label} <b>{fmt(r["value"], kind)}</b></div>'
+                        f'<div class="dcol grey">—<div class="bs">{_b}</div></div>'
+                        '<div class="none">无序列</div><div class="mini none">区间/阈值</div>')
+            return
+        ser = [x["value"] for x in series(iid, 60)]
+        cur = r["value"]
+        prev = r.get("prev")
+        dtxt, dcls, _ = delta(cur, prev, kind)
+        basis = f"vs {r['prev_period'][5:10]}" if r.get("prev_period") else "无上期"
+        html.append(
+            f'<div class="rn">{ring}</div><div class="nm">{label} <b>{fmt(cur, kind)}</b></div>'
+            f'<div class="dcol"><span class="{dcls}">{dtxt}</span><div class="bs">{basis}</div></div>'
+            f'<div class="pos">{cell_visual(ser, iid)}</div>{cell_spark(ser, freq)}')
+
     for ring in ("C1", "C2", "C3", "C4", "C5", "C6"):
         gh(ring)
-        for r, label, iid, kind, freq in ROWS:
-            if r == ring:
-                metric_row(ring, label, iid, kind, freq)
+        for r in by_ring.get(ring, []):
+            if r.get("kind") == "unreadable":
+                html.append(f'<div class="rn">{ring}</div><div class="nm grey">{r["label"]}</div>'
+                            '<div class="dcol grey">—<div class="bs">无上期</div></div>'
+                            '<div class="none">不可读</div><div class="mini none">无源/无前值</div>')
+            else:
+                render_metric(ring if r is by_ring[ring][0] else "", r)
         if ring in ("C2", "C3", "C4"):
             rel_rows(ring)
-        if ring == "C3":
-            html.append('<div class="rn"></div><div class="nm rel">▪ 期限差 DR007−10Y <b class="grey">—</b></div>'
-                        '<div class="dcol grey">暂不可比<div class="bs">数据期不同（11-24 vs 11-23）</div></div>'
-                        '<div class="none">口径锚拦截</div><div class="mini none">不出数</div>')
-        if ring == "C4":
-            # 现金池按证据行动态渲染（不硬编码数值，避免与状态页不一致）
-            _ln = None
-            for _r in (st.get("lines") or []):
-                if _r.get("ring") == "C4" and "现金池" in (_r.get("raw") or ""):
-                    _ln = _r
-                    break
-            if _ln and "不可读" in (_ln.get("raw") or ""):
-                html.append('<div class="rn"></div><div class="nm grey">现金池</div>'
-                            '<div class="dcol grey">—<div class="bs">无上期</div></div>'
-                            '<div class="none">' + (_ln.get("evidence") or "")[:26] + '</div>'
-                            '<div class="mini none">代理口径</div>')
-            elif _ln:
-                _ev = _ln.get("evidence") or ""
-                _v = re.search(r"([\d.]+) 万亿", _ev)
-                _pv = re.search(r"对比上一期 ([\d.]+) 万亿", _ev)
-                _cur = float(_v.group(1)) if _v else None
-                _prev = float(_pv.group(1)) if _pv else None
-                if _cur is not None and _prev is not None:
-                    _dlt = _cur - _prev
-                    cls = "up" if _dlt > 0 else ("dn" if _dlt < 0 else "fl")
-                    html.append(f'<div class="rn"></div><div class="nm">现金池（代理） <b>{_cur:.2f} 万亿</b></div>'
-                                f'<div class="dcol"><span class="{cls}">{"▲" if _dlt>0 else ("▼" if _dlt<0 else "—")}{abs(_dlt):.2f} 万亿</span>'
-                                f'<div class="bs">vs {(_ln.get("period") or "")[5:10]} 前</div></div>'
-                                f'<div class="none">货币基金规模</div><div class="mini none">同属性代理</div>')
-                else:
-                    html.append('<div class="rn"></div><div class="nm grey">现金池（代理）</div>'
-                                '<div class="dcol grey">—<div class="bs">无上期</div></div>'
-                                '<div class="none">' + _ev[:26] + '</div><div class="mini none">代理口径</div>')
-        for r, label, val, basis, dtxt in EXTRA:
-            if r != ring:
-                continue
-            if dtxt:
-                html.append(f'<div class="rn"></div><div class="nm">{label} <b>{val}</b></div>'
-                            f'<div class="dcol"><span class="up">{dtxt}</span><div class="bs">{basis}</div></div>'
-                            '<div class="none">无序列</div><div class="mini none">代理口径</div>')
-            else:
-                html.append(f'<div class="rn"></div><div class="nm">{label} <b>{val}</b></div>'
-                            f'<div class="dcol grey">—<div class="bs">{basis}</div></div>'
-                            '<div class="none">无序列</div><div class="mini none">区间/阈值</div>')
 
     html.append("</div>")
     html.append('<div class="ft">关系量取七锚输出（reports/state-market.json · relations_by_ring）：现值按七锚口径；'
@@ -414,8 +419,8 @@ def css():
 .pf{{position:absolute;top:-2px;width:2.5px;height:{FS['bar_h']+4}px;border-radius:1.2px;background:#2477b3;transform:translateX(-1.2px)}}
 .plbl{{font-size:{FS['sub']}px;color:var(--dsw-alias-label-secondary);margin-top:1px;white-space:nowrap}}
 .none{{font-size:{FS['sub']}px;color:#b6bcc5}}
-.mini{{border:1px solid #dfe5ec;border-radius:3px;background:transparent;padding:1px 3px}}
-.mini.none{{border-color:#e8ecf1;color:#b6bcc5;text-align:center}}
+.mini{{border:1px solid rgba(31,35,40,.07);border-radius:3px;background:transparent;padding:1px 3px;max-width:96px}}
+.mini.none{{border-color:rgba(31,35,40,.05);color:#b6bcc5;text-align:center}}
 .mcap{{display:flex;justify-content:space-between;font-size:{FS['cap']}px;color:#8a8f99;margin-top:-2px}}
 .ft{{margin-top:9px;font-size:{FS['sub']}px;color:var(--dsw-alias-label-secondary);border-top:1px solid var(--dsw-alias-border-l2);padding-top:6px;line-height:1.7}}
 </style>"""
@@ -517,12 +522,15 @@ def build_events():
                 day = int(c[-2:])
                 cell = [f"<td class='{cls}'><s>{day}</s>"]
                 for e in by_day.get(c, []):
+                    # 分支只挂给「数据发布」且标题完整命中的事件；
+                    # 解禁/新股/央行操作没有三分支，硬套会张冠李戴（2026-11-24 教训）
                     sc = None
-                    for r in scen.get(c, []):
-                        t8 = (e.get("scope") or "")[:8]
-                        if t8 and t8 in (r.get("event_summary") or ""):
-                            sc = r
-                            break
+                    if e.get("event_type") == "数据发布":
+                        _sc0 = (e.get("scope") or "").strip()
+                        for r in scen.get(c, []):
+                            if _sc0 and _sc0 in (r.get("event_summary") or ""):
+                                sc = r
+                                break
                     cell.append(f"<div class='ev'><span class='chip'>{_short_label(e)}</span>{_tip_html(e, sc)}</div>")
                 cell.append("</td>")
                 html.append("".join(cell))

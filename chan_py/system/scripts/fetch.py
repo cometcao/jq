@@ -25,6 +25,7 @@ import datetime as dt
 import io
 import json
 import os
+import glob
 import re
 import statistics as st
 import sys
@@ -38,6 +39,11 @@ import pandas as pd
 warnings.filterwarnings("ignore")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from units import norm as _unit_norm
+except Exception:                                    # 兜底：不阻断抓数
+    _unit_norm = None
 sys.path.insert(0, ROOT)
 
 try:
@@ -1334,6 +1340,25 @@ def official_tier(indicator_id, spec=None):
     return "C", None
 
 
+def _last_fact_value(iid, cur_period):
+    """该指标在 cur_period 之前最近一条已落盘 facts 的数值（快照回放判定用）。"""
+    best = None
+    for fp in glob.glob(os.path.join(FACT_DIR, "*", iid + ".json")):
+        try:
+            with io.open(fp, encoding="utf-8-sig") as f:
+                r = json.load(f)
+        except Exception:
+            continue
+        dp = r.get("data_period") or ""
+        if not dp or dp >= cur_period:
+            continue
+        if best is None or dp > (best.get("data_period") or ""):
+            best = r
+    if not best:
+        return None
+    return num_of((best.get("current_state") or {}).get("数值"))
+
+
 def to_record(spec, res, as_of):
     tier, off = official_tier(spec["id"], spec)
     ok = "current_state" in res
@@ -1350,6 +1375,14 @@ def to_record(spec, res, as_of):
         rec["fallback_path"] = res["fallback_path"]
     if ok:
         rec["current_state"] = res["current_state"]
+        # 单位归一：同时存基础值，下游算数不必再猜单位（2026-11-24 教训）
+        if _unit_norm is not None:
+            _txt = (res.get("current_state") or {}).get("数值")
+            _b, _bu, _sc = _unit_norm(_txt)
+            if _b is not None:
+                rec["base_value"] = _b
+                rec["base_unit"] = _bu
+                rec["unit_scale"] = _sc
     if off:
         rec["verified_by"] = off.get("source_url")
     return rec
@@ -1397,6 +1430,25 @@ def main():
             continue
         res = fetch_one(spec, args, args.as_of)
         rec = to_record(spec, res, args.as_of)
+        # 快照一致性守卫（2026-11-24 教训）：
+        #   快照型源（同花顺/乐咕）在盘前或源滞后时会"回放旧值"，若原样落盘，
+        #   同一数字会被记到两个不同交易日（实测 11-20 与 11-23 成交额完全相同）。
+        _snap = str(res.get("source") or "") in ("akshare/ths", "akshare/legu")
+        if _snap and rec.get("data_period") and rec.get("current_state"):
+            _cur = num_of((rec.get("current_state") or {}).get("数值"))
+            _prev = _last_fact_value(spec["id"], rec["data_period"])
+            if _cur is not None and _prev is not None and abs(_cur - _prev) < 1e-9:
+                print(f"{spec['id']:<16}{res.get('source',''):<16}{rec['data_period']:<12}"
+                      f"{str(_cur):<26}疑似回放旧值（与上一交易日完全相同）→ 不落盘")
+                miss += 1
+                continue
+            _now = dt.datetime.now()
+            if _now.hour < 15 and spec["freq"] == "日":
+                print(f"{spec['id']:<16}{res.get('source',''):<16}{rec['data_period']:<12}"
+                      f"{str(_cur):<26}盘中值（{_now:%H:%M} 未收盘）→ 不落盘")
+                miss += 1
+                continue
+
         # stale 闸门（第十节 2）：>3 倍 → 不可读、不落盘；>2 倍 → 标 stale
         FREQ_DAYS = {"日": 1, "周": 5, "月": 21, "季": 63}
         try:

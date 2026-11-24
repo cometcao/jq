@@ -268,33 +268,51 @@ TASKS = {
 
 
 def append_from_facts(iid):
-    """把 facts 里该指标的当期值追加进 history（幂等，按 data_period 去重）。
+    """把 facts 目录里该指标的**全部**记录追加进 history（幂等，按 data_period 去重）。
 
-    用于只有逐日累积来源的指标（如深市两融 T+1 明细，无法回补历史）。
+    用于没有历史接口、只能逐日累积的指标（深市两融明细、中债收益率曲线、中基协月度）。
     """
     fp = os.path.join(OUT, f"{iid}.jsonl")
-    fs = sorted(glob.glob(os.path.join(ROOT, "data", "facts", "*", f"{iid}.json")))
-    if not fs:
-        return 0
-    rec = json.load(io.open(fs[-1], encoding="utf-8"))
-    dp = rec.get("data_period")
-    cs = rec.get("current_state") or {}
-    raw = str(cs.get("数值") or "")
-    m = re.search(r"-?[\d,]+(?:\.\d+)?", raw)
-    if not dp or not m:
-        return 0
-    val = float(m.group(0).replace(",", ""))
     rows = []
     if os.path.exists(fp):
-        rows = [json.loads(x) for x in io.open(fp, encoding="utf-8").read().splitlines() if x.strip()]
-    if any(r.get("data_period") == dp for r in rows):
-        return len(rows)
-    rows.append({"data_period": dp, "value": val})
+        for x in io.open(fp, encoding="utf-8").read().splitlines():
+            if not x.strip():
+                continue
+            try:
+                r0 = json.loads(x)
+            except Exception:
+                continue
+            if r0.get("data_period") and r0.get("value") is not None:
+                rows.append(r0)
+    have = {r["data_period"] for r in rows}
+    added = 0
+    for f in glob.glob(os.path.join(ROOT, "data", "facts", "*", f"{iid}.json")):
+        try:
+            rec = json.load(io.open(f, encoding="utf-8"))
+        except Exception:
+            continue
+        dp = rec.get("data_period")
+        raw = str((rec.get("current_state") or {}).get("数值") or "")
+        m = re.search(r"-?[\d,]+(?:\.\d+)?", raw)
+        if not dp or not m or dp in have:
+            continue
+        try:
+            val = float(m.group(0).replace(",", ""))
+        except Exception:
+            continue
+        _bv = rec.get("base_value")
+        _row = {"data_period": dp, "value": val}
+        if isinstance(_bv, (int, float)):
+            _row["base_value"] = _bv
+        rows.append(_row)
+        have.add(dp)
+        added += 1
     rows.sort(key=lambda r: r["data_period"])
     with io.open(fp, "w", encoding="utf-8") as f:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     return len(rows)
+
 
 
 def backfill_margin_sz(days=15):
@@ -380,7 +398,7 @@ def main():
             print(f"{ring} {iid:<22} 现有 {cnt} 期")
         except Exception as e:
             print(f"{ring} {iid:<22} 失败：{type(e).__name__}: {str(e)[:70]}")
-    for iid, fn in list(EXTRA_TASKS) + [("MKT_MARGIN_BAL_SZ", lambda: backfill_margin_sz()), ("MKT_MMF_SCALE", lambda: backfill_mmf())]:
+    for iid, fn in list(EXTRA_TASKS) + [("MKT_MARGIN_BAL_SZ", lambda: backfill_margin_sz()), ("MKT_MMF_SCALE", lambda: backfill_mmf()), ("MKT_CGB10Y", lambda: append_from_facts("MKT_CGB10Y"))]:
         try:
             cnt = fn()
             print(f"   {iid:<24} 现有 {cnt} 期")
