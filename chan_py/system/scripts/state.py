@@ -787,8 +787,12 @@ def events_section(as_of):
             scn.setdefault(key, []).append(r)
         for e in fut:
             lines.append(f"  {e['event_date']} {(e.get('event_time') or '—'):<5} {e.get('event_type',''):<5} {e.get('scope','')}")
-            cand = [r for r in scn.get(e["event_date"], [])
-                    if (r.get("event_summary", "").split(" ", 2)[-1][:6] in e.get("scope", ""))]
+            # 分支只挂给"数据发布"类（有前值、可判定条件性影响）；新股/解禁/央行操作不挂
+            cand = []
+            if e.get("event_type") == "数据发布":
+                _t = (e.get("scope") or "")[:8]
+                cand = [r for r in scn.get(e["event_date"], [])
+                        if _t and _t in (r.get("event_summary", "") or "")]
             if cand:
                 o = cand[0]["possible_outcomes"]
                 pv = (cand[0].get("prev_value") or {}).get("value")

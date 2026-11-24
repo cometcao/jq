@@ -296,9 +296,23 @@ def t18():
     check("T18c", "state.py 用 TH 而非硬编码 50", 'TH["breadth_pct"]' in src)
 
 
+# ---------------------------------------------------------------- T19 未来事件干净
+def t19():
+    import datetime as _dt
+    cal = load_json(latest("data/events/calendar-*.json"), {}) or {}
+    evs = cal.get("events") or []
+    today = _dt.date.today().isoformat()
+    bad = [e for e in evs if e.get("event_status") == "未来预定" and (e.get("event_date") or "") < today]
+    check("T19", "未来预定事件不含过去日期", not bad, str([e["event_date"] for e in bad][:3]))
+    fut = [e for e in evs if e.get("event_status") == "未来预定"]
+    issuers = {e.get("issuer") for e in fut}
+    check("T19b", "未来事件含央行操作/解禁/新股 至少两类",
+          len({"中国人民银行", "交易所·限售解禁", "交易所·新股发行"} & issuers) >= 2, str(sorted(issuers)))
+
+
 def main():
     verbose = "-v" in sys.argv
-    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18):
+    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19):
         try:
             fn()
         except Exception as e:

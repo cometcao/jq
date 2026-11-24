@@ -391,13 +391,155 @@ def info_level(title):
 COLLECT_STATS = {}
 
 
+# ---------------------------------------------------------------- 源：央行公开市场操作（解析正文 → 到期日历）
+def fetch_pbc_omo_detail(today, horizon, max_docs=25):
+    """抓央行公开市场业务交易公告正文，解析逆回购/央票/MLF，并推算到期日。
+
+    逆回购期限以正文为准（隔夜/7 天/14 天…），到期日 = 操作日 + 期限。
+    隔夜逆回购次日到期，是未来 1 天最硬的信息。
+    """
+    import requests
+    r = requests.get(PBC_OMO_URL, headers=UA, timeout=25)
+    r.encoding = r.apparent_encoding or "utf-8"
+    links = re.findall(r'<a[^>]+href="(/zhengcehuobisi/[^"]+)"[^>]*>\s*(公开市场业务交易公告[^<]*?)\s*<', r.text)
+    out, seen = [], set()
+
+    def body(href):
+        try:
+            rr = requests.get("http://www.pbc.gov.cn" + href, headers=UA, timeout=25)
+            rr.encoding = rr.apparent_encoding or "utf-8"
+            m = re.search(r'<div[^>]*id="zoom"[^>]*>(.*?)</div>', rr.text, flags=re.S)
+            if not m:
+                return ""
+            return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", m.group(1))).strip()
+        except Exception:
+            return ""
+
+    for href, title in links[:max_docs]:
+        if title in seen:
+            continue
+        seen.add(title)
+        b = body(href)
+        if not b:
+            continue
+        mdate = re.search(r"(20\d{2})年(\d{1,2})月(\d{1,2})日", b)
+        if not mdate:
+            continue
+        try:
+            d0 = dt.date(int(mdate.group(1)), int(mdate.group(2)), int(mdate.group(3)))
+        except Exception:
+            continue
+        # 逆回购：期限 + 中标量
+        mrev = re.search(r"开展了([\d,.]+)亿元([^，。]{0,8})逆回购操作", b)
+        if mrev:
+            amt = mrev.group(1).replace(",", "")
+            tenor = mrev.group(2).strip() or "隔夜"
+            days = {"隔夜": 1, "7天": 7, "7 天": 7, "14天": 14, "14 天": 14,
+                    "21天": 21, "28天": 28}.get(tenor.replace(" ", ""), None)
+            kind = f"逆回购 {tenor}"
+            maturity = (d0 + dt.timedelta(days=days)) if days else None
+        elif "央票" in b:
+            kind, amt, maturity = "央行票据", "", None
+        elif "中期借贷便利" in b or "MLF" in b:
+            kind, amt, maturity = "MLF", "", None
+        else:
+            continue
+        out.append({"date": d0.isoformat(), "time": "", "title": f"公开市场操作：{kind} {amt} 亿元",
+                    "event_type": "政策会议", "category": "公开市场操作", "event_status": "已发生",
+                    "issuer": "中国人民银行", "entry_mode": "auto", "source_link": "", "layer": "市场"})
+        if maturity and amount_ok(amt):
+            out.append({"date": maturity.isoformat(), "time": "",
+                        "title": f"逆回购到期：{kind} {amt} 亿元（{d0.isoformat()} 操作）",
+                        "event_type": "政策会议", "category": "公开市场操作",
+                        "event_status": "未来预定" if maturity >= today else "已发生",
+                        "issuer": "中国人民银行", "entry_mode": "auto", "source_link": "", "layer": "市场"})
+    return out
+
+
+def amount_ok(a):
+    try:
+        return 0 < float(a) < 100000
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------- 源：限售解禁（未来日期）
+def fetch_restricted_release(today, horizon):
+    """限售解禁日历：未来 N 天每个解禁日一条（家数 + 解禁市值）。"""
+    import akshare as ak
+    end = today + dt.timedelta(days=horizon)
+    try:
+        df = ak.stock_restricted_release_summary_em(
+            symbol="全部股票", start_date=today.strftime("%Y%m%d"), end_date=end.strftime("%Y%m%d"))
+    except Exception:
+        return []
+    out = []
+    for _, r in df.iterrows():
+        try:
+            d = _norm_date(str(r.get("解禁时间")))
+            if not d:
+                continue
+            n = r.get("当日解禁股票家数")
+            mv = r.get("实际解禁市值")
+            mv_yi = (float(mv) / 1e8) if mv is not None and str(mv) not in ("nan", "None") else None
+            title = f"限售解禁：{int(n) if n == n else '—'} 家" + (f"，解禁市值 {mv_yi:.1f} 亿" if mv_yi else "")
+            out.append({"date": d.isoformat(), "time": "", "title": title, "event_type": "解禁",
+                        "category": "限售解禁", "event_status": "未来预定" if d >= today else "已发生",
+                        "issuer": "交易所·限售解禁", "entry_mode": "auto", "source_link": "", "layer": "市场"})
+        except Exception:
+            continue
+    return out[:40]
+
+
+# ---------------------------------------------------------------- 源：定期报告披露窗口
+def _report_period_for(today):
+    """按日期挑当前/下一个披露期（预约披露表用“YYYY年报/一季/半年/三季”命名）。"""
+    m, d = today.month, today.day
+    y = today.year
+    if m == 1:
+        return f"{y-1}年报"
+    if m <= 4:
+        return f"{y}一季"
+    if m <= 8:
+        return f"{y}半年"
+    if m <= 10:
+        return f"{y}三季"
+    return f"{y}年报"
+
+
+def fetch_report_season(today, horizon, period=None):
+    period = period or _report_period_for(today)
+    """财报披露窗口：未来 N 天每天的预约披露家数（巨潮预约披露表）。"""
+    import akshare as ak
+    try:
+        df = ak.stock_report_disclosure(market="沪深京", period=period)
+    except Exception:
+        return []
+    col = "实际披露" if "实际披露" in df.columns else "首次预约"
+    from collections import Counter
+    c = Counter()
+    for v in df[col].tolist():
+        d = _norm_date(str(v)[:10])
+        if d and today <= d <= today + dt.timedelta(days=horizon):
+            c[d] += 1
+    out = []
+    for d in sorted(c):
+        out.append({"date": d.isoformat(), "time": "",
+                    "title": f"定期报告披露：{c[d]} 家（{period}）", "event_type": "财报披露",
+                    "category": "定期报告", "event_status": "未来预定",
+                    "issuer": "巨潮资讯·预约披露", "entry_mode": "auto", "source_link": "", "layer": "市场"})
+    return out[:20]
+
+
 def collect(today, horizon):
     events, errors = [], []
     tasks = [("统计局日程", lambda: fetch_stats_schedule(today, horizon)),
              ("央行新闻", lambda: fetch_news_list(PBC_URL, "中国人民银行", today, horizon)),
              ("证监会要闻", lambda: _csrc_guard(fetch_news_list, CSRC_URL, "中国证监会", today, horizon)),
-             ("央行公开市场操作", lambda: fetch_pbc_omo(today, horizon)),
-             ("新股发行", lambda: fetch_ipo(today, horizon))]
+             ("央行公开市场操作", lambda: fetch_pbc_omo_detail(today, horizon)),
+             ("新股发行", lambda: fetch_ipo(today, horizon)),
+             ("限售解禁", lambda: fetch_restricted_release(today, horizon)),
+             ("定期报告", lambda: fetch_report_season(today, horizon))]
     tasks += [(issuer, (lambda i=issuer, u=url: fetch_dept_news(i, u, today, horizon))) for issuer, url in DEPT_SOURCES]
     tasks += [(f"巨潮·{kw}", (lambda k=kw, t=et: fetch_cninfo(k, t, today, horizon))) for kw, et in CNINFO_KEYWORDS]
     tasks += [("巨潮·板块", lambda: fetch_cninfo_sector(today, horizon))]
