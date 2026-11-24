@@ -22,6 +22,7 @@ import datetime as dt
 import io
 import json
 import os
+import glob
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -325,6 +326,27 @@ def fetch_margin_sz(force=False, max_pages=120):
     if not force and os.path.exists(fp):
         print(f"板块两融：{day} 已拉过，跳过")
         return 0
+    # T+1：当日未披露时上一次会回退到前一交易日并写盘；若已有"最近一份"且其日期不早于
+    # 上一个交易日，就不必重拉 106 页（历史接口是逐页拉的，约 270 秒）
+    if not force:
+        import datetime as _dt2
+        prev_fp = None
+        for cand in sorted(glob.glob(os.path.join(SW, "margin", "*.json")), reverse=True):
+            prev_fp = cand
+            break
+        if prev_fp:
+            try:
+                d0 = _dt2.date.fromisoformat(os.path.basename(prev_fp)[:-5])
+                back = _dt2.date.fromisoformat(day)
+                for _ in range(8):
+                    back -= _dt2.timedelta(days=1)
+                    if back.weekday() < 5:
+                        break
+                if d0 >= back:
+                    print(f"板块两融：最近一份 {d0} 已覆盖到 {back}（T+1），跳过重拉")
+                    return 0
+            except Exception:
+                pass
     base = "http://www.szse.cn/api/report/ShowReport/data"
     UA = {"User-Agent": "Mozilla/5.0", "Referer": "http://www.szse.cn/"}
     rows, page, total = [], 1, None

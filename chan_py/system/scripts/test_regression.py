@@ -430,9 +430,26 @@ def t28():
         check("T28b", "读法无主观程度词/比喻", not bad, str(bad))
 
 
+# ---------------------------------------------------------------- T29 注册表·取数器·文档 三方一致
+def t29():
+    import sys as _sys, json as _j
+    _sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    import importlib, fetch as _F
+    importlib.reload(_F)
+    reg = load_json(os.path.join(ROOT, "dist", "market-state", "references", "registry.json"), {}) or {}
+    spec = {x["id"] for x in _F.SPECS}
+    check("T29", "有取数器的指标全部已注册", not (set(spec) - set(reg)), str(sorted(set(spec) - set(reg))[:3]))
+    d9 = io.open(os.path.join(ROOT, "docs", "09_指标本体表.md"), encoding="utf-8").read()
+    import re as _re
+    ids9 = set(_re.findall(r"^\|\s*([A-Z]{2,6}_[A-Z0-9_]+)\s*\|", d9, _re.M))
+    check("T29b", "docs/09 与 registry 完全一致", ids9 == set(reg), str(sorted(ids9 ^ set(reg))[:3]))
+    d11 = io.open(os.path.join(ROOT, "docs", "11_指标复核清单.md"), encoding="utf-8").read()
+    check("T29c", "docs/11 列了未接入清单", "注册但未接入" in d11)
+
+
 def main():
     verbose = "-v" in sys.argv
-    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, t21, t22, t23, t24, t25, t26, t27, t28):
+    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, t21, t22, t23, t24, t25, t26, t27, t28, t29):
         try:
             fn()
         except Exception as e:

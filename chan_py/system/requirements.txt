@@ -1,0 +1,9 @@
+# market-state 依赖（Python 3.11+）
+# 说明：核心链路只用标准库 + 下列第三方包；PDF 解析（投保基金月报、中基协月报）
+#       为**纯标准库**实现（zlib + ToUnicode CMap），不需要 pypdf/pdfplumber。
+
+requests>=2.31
+pandas>=2.0
+numpy>=1.24
+akshare>=1.16
+openpyxl>=3.1

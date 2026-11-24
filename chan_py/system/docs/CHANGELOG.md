@@ -13,6 +13,42 @@
 4. **板块层 C6 广度改用申万口径**，与 C6 涨跌、C2 份额同源同日。
 5. 修一处 f-string 里的字典属性访问错误（`r.breadth` → `r['breadth']`）。
 
+## V2.121.0（2026-11-24）· 全项目审计：11 类问题，9 项已修
+
+用户："please also review the whole project, and see if there are more issues."
+
+**A. 会真出错的结构问题（已修）**
+
+1. **Skill 包不含 `scripts/`**：SKILL.md 有 16 处 `python scripts/xxx.py`，但安装后的包只有 README/SKILL/check.py/references → 换环境直接失灵。
+   → SKILL 顶部新增「运行位置（先读这一条）」：说明脚本必须在**项目工作区**运行、如何判定、找不到时不要凭空造数据。
+2. **`fetch.py` 仍留着 `MKT_MARGIN_DEP` 取数器**（该指标已按 ADR-040 从注册表移除）→ 抓数会写未注册指标的 facts。已删。
+3. **`SECTOR_LHB_SW` 有取数器但未注册** → 违反「指标未注册不临时造 id」。已补 `docs/09` + registry（73 个指标）。
+4. **板块两融每天重拉 106 页（270 秒）**：门禁只认"当天文件"，T+1 回退后文件名是前一交易日 → 永远不命中缓存。已改为「最近一份不早于上一交易日即跳过」，实测 **270s → 0s**。
+
+**B. 一致性与文档（已修）**
+
+5. **31 个「注册但未接入」指标在文档里 0 处标注** → `docs/11` 新增自动清单（指标/名称/环/频）。
+6. **`00_README` 文档地图缺 6 个脚本**（card / ambiguity_scan / sector_dashboard / check_consistency / test_regression / sw_sectors）→ 新增 scripts/ 清单表。
+7. **无 `requirements.txt`** → 已补（requests/pandas/numpy/akshare/openpyxl；PDF 解析不需要第三方库）。
+8. **数字表述不精确**：SKILL 写「申万二级板块（124 个）」——实际二级 131 个、当日有行情 124 个。已改。
+9. **`scripts/README` 断言数过时**（29 → 60）；**`python check.py` 与 `dist/market-state/check.py` 混用**（1 处）。已统一。
+
+**C. 卫生与质量（已修）**
+
+10. **临时文件与 `__pycache__` 残留**（tmp_card*.json、card_payload.*、scripts/__pycache__）→ 已清；`selftest.py` 会把它们列为失败项。
+11. **8 处 `verify=False`** 无说明 → `docs/07` 新增 TLS 豁免清单（官方站点证书链不完整，逐域名登记理由）。
+
+**D. 新增工具**
+
+12. **`scripts/selftest.py`**：一键 11 项自检（三方一致 / 漂移 / 歧义 / 回归 / 页面+两张卡片契约 / 依赖与卫生）。当前 **11 通过 0 失败**。
+13. 回归测试 **63 条**（新增 T29：registry·SPECS·docs/09 三方一致、docs/11 须列未接入清单）。
+
+**E. 留作建议（未改，需你定）**
+
+- 未接入的 31 个指标里，`MKT_SHIBOR_*`、`POL_RRR`、`RTL_NEW_ACCT` 等属"官方已停发/不再披露"，可按 ADR-040 评估是否移出；
+- `data/cache` 与 `facts` 双写仍在（已有 `check_consistency` 守卫，但根因是两处落盘）；
+- 全量 `refresh --force` 目前约 6 分钟（抓数 2s + 对账 8s + 历史 30s + 事件 24s + 板块两融 270s→0s 后约 90s）。
+
 ## V2.120.0（2026-11-24）· 全文歧义审计：新增扫描器 + 修 6 类表述
 
 用户："please review all statements and make sure no more text ambiguity"

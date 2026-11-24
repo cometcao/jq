@@ -647,6 +647,18 @@
     "frequency": "日",
     "comparable_from": null
   },
+  "SECTOR_LHB_SW": {
+    "name": "板块内龙虎榜净买额（申万成分口径）",
+    "layer": "板块",
+    "channel": "C5",
+    "subject": "公共池",
+    "attribute": "A6",
+    "transform": "T1",
+    "value_kind": "level",
+    "unit": "U1",
+    "frequency": "日",
+    "comparable_from": null
+  },
   "SECTOR_PCT": {
     "name": "板块涨跌幅",
     "layer": "板块",

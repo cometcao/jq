@@ -5,9 +5,23 @@ description: Use when the user asks what the market or a sector looks like right
 
 # market-state · 市场状态
 
-> **规则版本 V2.120.0**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
+> **规则版本 V2.121.0**（与 `docs/` 同步；改规则须同时升此版本，并在 CHANGELOG 记一条）
 
 把当前数据压缩成 **六环 + 证据行** 的客观状态描述。
+
+## 运行位置（先读这一条）
+
+本 Skill 的**规则与校验器**随包分发，但**取数与出卡脚本不在包内**——所有 `python scripts/xxx.py` 命令必须在**项目工作区**执行：
+
+```
+<工作区>/
+  scripts/     fetch.py state.py card.py events.py scenarios.py sw_sectors.py audit.py                compare.py refresh.py test_regression.py ambiguity_scan.py check_consistency.py
+  data/        cache / facts / history / events / sw / thresholds.json / series_shape.json
+  dist/market-state/   本 Skill 包（规则 + check.py）
+```
+
+判定方法：`python scripts/state.py --layer market` 能跑通即在正确工作区。
+若 `scripts/` 不存在 → 说明当前目录不是工作区，**不要凭空生成数据**，先问用户工作区路径。
 
 ## 第 0 步：触发即刷新（每次调用第一条命令）
 
@@ -22,7 +36,7 @@ python scripts/refresh.py
 
 `--force` 强制全刷，`--check` 只看判断。**跳过与否由脚本判断，不由记忆判断。**
 
-## 状态卡只能由脚本生成（V2.120.0 硬约束）
+## 状态卡只能由脚本生成（V2.121.0 硬约束）
 
 ```bash
 python scripts/card.py --out reports/card-market.html    # 生成六环状态卡
@@ -74,13 +88,13 @@ python dist/market-state/check.py --card reports/card-events.html
 
 **事件（`include_events=true` 时）**：优先运行 `python scripts/events.py --days 30` —— 它抓的是**国家统计局·最新统计信息发布日程**（官方、结构化，含日期与时间）。该源覆盖 CPI/PPI/GDP/PMI/工业/投资/消费等；**央行 OMO、交易所公告不在其中 → 标不可读**，不要用第三方日历补位。
 
-**取数宗旨（V2.120.0）**：尽可能找到**最新、最有说服力**的数据。
+**取数宗旨（V2.121.0）**：尽可能找到**最新、最有说服力**的数据。
 
 - 频率慢本身不是缺陷——如果这是当下唯一同口径的数据源，就照用，并在状态里标出滞后（例如 C4 的货基规模是月频，日频环用它只能给滞后结论，但不因此就不用）；
 - **只有存在更高频、同口径的替代时**，才提出替换；
 - 替代候选不能由函数名推断频率，必须人工确认后再接。
 
-**媒体源最高只能是 C 类**（V2.120.0）：证券时报、中证报、上证报、东财、同花顺属二次加工媒体，即使老牌、权威，也不满足"直连官方域名"这一条，**永远封顶 C 类并带标注**。巨潮 cninfo 例外——证监会指定披露平台，公告原文属法定披露，可作 A/B 候选。媒体数据**只能当线索**，不能据此判状态词。
+**媒体源最高只能是 C 类**（V2.121.0）：证券时报、中证报、上证报、东财、同花顺属二次加工媒体，即使老牌、权威，也不满足"直连官方域名"这一条，**永远封顶 C 类并带标注**。巨潮 cninfo 例外——证监会指定披露平台，公告原文属法定披露，可作 A/B 候选。媒体数据**只能当线索**，不能据此判状态词。
 
 **必须遵守的三条标注规则**（详见 `references/data-layer.md`）：
 
@@ -101,19 +115,19 @@ python dist/market-state/check.py --card reports/card-events.html
 
 **任何一层级、标的、窗口的歧义，先问一句再执行**，不自行选定后附带说明。
 
-## 申万二级板块（124 个，V2.120.0）
+## 申万二级板块（131 个，当日有行情约 124 个）
 
 板块层的数据底层已换成**申万二级行业**（一次拿全，不逐板块抓）：
 
 ```bash
-python scripts/sw_sectors.py --meta --daily          # 每日：元数据 + 124 板块当日面板（约 7 秒）
+python scripts/sw_sectors.py --meta --daily          # 每日：元数据 + 当日面板（124 个有行情，约 7 秒）
 python scripts/sw_sectors.py --backfill --limit 32 --offset 0   # 首次：分批回补历史（每批约 45 秒）
 python scripts/sw_sectors.py --rank --top 20         # 按成交额排名
 ```
 
 产物：`data/sw/sectors.json`（清单+估值）、`data/sw/daily/<date>.json`（当日面板）、`data/sw/history/<code>.jsonl`（逐板块日线，250 期）。
 
-**板块层现状（V2.120.0）**：C2 份额、C6 涨跌、C6 广度**已全部走申万口径**（三者可同日比较）；C3 估值仍用中证指数；C1 政策、C4 杠杆仍如实不可读。
+**板块层现状（V2.121.0）**：C2 份额、C6 涨跌、C6 广度**已全部走申万口径**（三者可同日比较）；C3 估值仍用中证指数；C1 政策、C4 杠杆仍如实不可读。
 
 **口径现状**：
 - 当日面板 = 实时（价/成交额/PE/PB/股息率），已进 `refresh.py` 第 3 步；
@@ -125,6 +139,7 @@ python scripts/sw_sectors.py --rank --top 20         # 按成交额排名
 改 `scripts/` 或规则文档后，依次跑：
 
 ```bash
+python scripts/selftest.py             # 一键自检（11 项，含以上全部）
 python scripts/ambiguity_scan.py       # 歧义词机械扫描（必须 0）
 python scripts/test_regression.py -v   # 60 条历史坑断言
 python scripts/check.py --demo         # 词表/分支/页面契约
@@ -187,7 +202,7 @@ python scripts/audit.py --no-net   # 跳过联网检查，快
 5. **需要时做事件**（`include_events=true`）：按 `events.md` 出日历 + 可选分支；确定性不满足的只列"未确认线索"；**事件层不参与 as-of**，另标 `horizon=30d`。
 6. **标注空环与时效**：空环保留环名 + 缺什么；`stale` 按 2×/3× 阈值判。
 7. **输出**：证据行 + 事件段（如启用）+ 元信息 + 固定尾句（格式见下）。
-8. **自检**：`python check.py --page <你的输出.md>`；有错就改，不"先输出再提醒"。
+8. **自检**：`python dist/market-state/check.py --page <你的输出.md>`；有错就改，不"先输出再提醒"。
 
 ## 事件分支（scenario）怎么呈现
 
@@ -220,7 +235,7 @@ python scripts/audit.py --no-net   # 跳过联网检查，快
 `scripts/sync.py` 已抓事件；`state.py --layer market` **默认附事件段**（`--no-events` 关闭），来源 `data/events/calendar-<as_of>.json`：
 未来预定（官方日程）+ 已发生（官方新闻），标 `horizon`，不参与 as-of。
 
-## 事件必须带结果分支（V2.120.0）
+## 事件必须带结果分支（V2.121.0）
 
 「未来预定」事件**每一个都要有分支枚举**（`scripts/scenarios.py` 自动生成，已纳入 `sync.py`）：
 
@@ -243,7 +258,7 @@ python scripts/audit.py --no-net   # 跳过联网检查，快
 - **●红点=升支影响、○白点=降支影响、◌虚线=不变支影响**（圆点表示"哪支分支触及"，**不表示环会涨跌**）；
 - 必须绑 `scenario` 记录与日历来源，写明"排序不适用"或依据，标 `horizon`；矩阵形态只在用户要"查组合"时出。
 
-## 每环「读法」（默认，V2.120.0 · 资金视角）
+## 每环「读法」（默认，V2.121.0 · 资金视角）
 
 每条环的证据行之后，追加一行 `· C<n> 读法：…`——**用资金结构解释这组数字**，只描述口径含义与位置，不做方向判断。
 

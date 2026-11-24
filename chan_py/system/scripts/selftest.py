@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""一键自检：把项目所有机械校验串起来跑一遍（改完代码/文字后执行）。
+
+包含：
+  1. 三方一致性：registry / fetch SPECS / docs/09
+  2. cache 与 facts 漂移
+  3. 歧义表述扫描
+  4. 回归测试（历史坑断言）
+  5. 页面契约 + 两张卡片契约
+  6. 依赖与目录卫生（requirements、临时文件、__pycache__）
+
+用法：python -B scripts/selftest.py [-q]
+退出码：0 全过；1 有失败。
+"""
+import io
+import os
+import re
+import sys
+import glob
+import json
+import subprocess
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PY = sys.executable
+
+
+def run(args, timeout=300, cwd=None):
+    return subprocess.run([PY, "-B"] + args, capture_output=True, text=True,
+                          encoding="utf-8", cwd=cwd or ROOT, timeout=timeout)
+
+
+def main():
+    quiet = "-q" in sys.argv
+    results = []
+
+    def add(name, ok, detail=""):
+        results.append((name, ok, detail))
+        if not quiet:
+            print(("  ✓ " if ok else "  ✗ ") + name + (f"  [{detail}]" if detail else ""))
+
+    # 1 三方一致
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "scripts"))
+        import importlib
+        import fetch as F
+        importlib.reload(F)
+        reg = json.load(io.open(os.path.join(ROOT, "dist", "market-state", "references", "registry.json"), encoding="utf-8"))
+        spec = {s["id"] for s in F.SPECS}
+        add("有取数器的指标都已注册", not (set(spec) - set(reg)), str(sorted(set(spec) - set(reg))[:3]))
+        d9 = io.open(os.path.join(ROOT, "docs", "09_指标本体表.md"), encoding="utf-8").read()
+        ids9 = set(re.findall(r"^\|\s*([A-Z]{2,6}_[A-Z0-9_]+)\s*\|", d9, re.M))
+        add("docs/09 与 registry 一致", ids9 == set(reg), str(sorted(ids9 ^ set(reg))[:3]))
+    except Exception as e:
+        add("三方一致性", False, f"{type(e).__name__}")
+
+    # 2 一致性
+    r = run([os.path.join(ROOT, "scripts", "check_consistency.py")], 180)
+    add("cache 与 facts 无漂移", "0 漂移" in (r.stdout or ""), (r.stdout or "").strip()[-60:])
+
+    # 3 歧义
+    r = run([os.path.join(ROOT, "scripts", "ambiguity_scan.py")], 180)
+    add("歧义扫描 0 处", "0 处歧义" in (r.stdout or ""), (r.stdout or "").strip()[:80])
+
+    # 4 回归
+    r = run([os.path.join(ROOT, "scripts", "test_regression.py")], 420)
+    tail = (r.stdout or "").strip().splitlines()[-1] if r.stdout else ""
+    add("回归测试全过", "0 失败" in tail, tail[-60:])
+
+    # 5 契约
+    ck = os.path.join(ROOT, "dist", "market-state", "check.py")
+    for label, args in (
+        ("页面契约", ["--page", os.path.join(ROOT, "reports", "2026-11-24-market-state.md")]),
+        ("状态卡契约", ["--card", os.path.join(ROOT, "reports", "card-market.html")]),
+        ("事件卡契约", ["--card", os.path.join(ROOT, "reports", "card-events.html")]),
+    ):
+        fp = args[1]
+        if not os.path.exists(fp):
+            add(label, False, "文件不存在")
+            continue
+        r = run([ck] + args, 120, cwd=os.path.dirname(ck))
+        add(label, "0 错误" in (r.stdout or ""), (r.stdout or "").strip()[:80])
+
+    # 6 卫生
+    add("requirements.txt 存在", os.path.exists(os.path.join(ROOT, "requirements.txt")))
+    tmps = [p for p in glob.glob(os.path.join(ROOT, "tmp_*")) + glob.glob(os.path.join(ROOT, "card_payload*"))]
+    add("无临时文件残留", not tmps, str([os.path.basename(p) for p in tmps][:3]))
+    pyc = glob.glob(os.path.join(ROOT, "scripts", "__pycache__"))
+    add("scripts 无 __pycache__", not pyc)
+
+    bad = [r for r in results if not r[1]]
+    print(f"\n自检：{len(results) - len(bad)} 通过 / {len(bad)} 失败（共 {len(results)} 项）")
+    if bad:
+        for name, _, detail in bad:
+            print(f"  ✗ {name}  [{detail}]")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
