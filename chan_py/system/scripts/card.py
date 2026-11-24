@@ -118,6 +118,14 @@ def series(iid, n=60):
     f = fact(iid)
     if f:
         dp, v = f.get("data_period"), num((f.get("current_state") or {}).get("数值"))
+        # 量纲对齐：facts 的"数值"按展示单位（如 6.37 万亿），history 存基础单位（亿元）
+        if v is not None and rows:
+            _ref = abs(rows[-1]["value"]) or 1e-9
+            _r = v / _ref if _ref else 1
+            if _r < 0.01:           # facts 数值远小 → 其展示单位更大（万亿），换算成基础单位（亿）
+                v = v * 1e4
+            elif _r > 100:          # facts 数值远大 → 换算回去
+                v = v / 1e4
         if v is not None and dp:
             if not rows or rows[-1]["data_period"] < dp:
                 rows.append({"data_period": dp, "value": v})

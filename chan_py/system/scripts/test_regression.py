@@ -367,9 +367,19 @@ def t24():
     check("T24c", "货基指标仍在注册表", "MKT_MMF_SCALE" in reg)
 
 
+# ---------------------------------------------------------------- T25 卡片数值量级守卫
+def t25():
+    h = io.open(os.path.join(ROOT, "reports", "card-market.html"), encoding="utf-8").read()
+    bad = [w for w in ("336251", "21419.23–26369.06e") if w in h and "%。" not in h]
+    check("T25", "卡片无数值爆表（单位混用）", "▲336" not in h and "e+0" not in h)
+    import re as _re
+    pcts = [float(x) for x in _re.findall(r"[▲▼]([\d.]+)%", h)]
+    check("T25b", "变化百分比均在 ±100% 内", all(abs(x) < 100 for x in pcts), str(pcts[:6]))
+
+
 def main():
     verbose = "-v" in sys.argv
-    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, t21, t22, t23, t24):
+    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, t21, t22, t23, t24, t25):
         try:
             fn()
         except Exception as e:
