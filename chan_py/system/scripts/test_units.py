@@ -276,6 +276,24 @@ def unit_prev_period_correct():
            f"{S._prev_period(iid)} vs {h[-2][0]}")
 
 
+def unit_card_series_units():
+    """卡片小图/位置条用的序列不得混用单位（曾出现 15.19 与 158200 混排）。"""
+    import card as C
+    st = C.load(os.path.join(ROOT, "reports", "state-market.json")) or {}
+    bad = []
+    for row in (st.get("card_rows") or []):
+        iid = row.get("indicator_id")
+        if not iid or not row.get("has_series"):
+            continue
+        vals = [x["value"] for x in C.series(iid, 60) if x.get("value") is not None]
+        if len(vals) < 2:
+            continue
+        lo, hi = min(abs(v) for v in vals if v), max(abs(v) for v in vals if v)
+        if lo and hi / lo > 50:
+            bad.append(f"{iid}({lo:.4g}~{hi:.4g})")
+    ck("卡片序列单位一致（量级跨度 ≤50 倍）", not bad, ";".join(bad[:3]))
+
+
 def unit_no_old_turnover_name():
     h = io.open(os.path.join(ROOT, "reports", "card-market.html"), encoding="utf-8").read()
     fp = os.path.join(ROOT, "reports", "2026-11-24-market-state.md")
@@ -291,7 +309,7 @@ def main():
                golden_checks, golden_sector_checks, facts_hygiene,
                unit_breadth_denominator, unit_snapshot_guard, unit_stale_monthly,
                unit_turnover_provider, unit_tsf_caliber, unit_event_links,
-               unit_sector_c2_fresh, unit_prev_period_correct, unit_no_old_turnover_name):
+               unit_sector_c2_fresh, unit_prev_period_correct, unit_no_old_turnover_name, unit_card_series_units):
         try:
             fn()
         except Exception as e:

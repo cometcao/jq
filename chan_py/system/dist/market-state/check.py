@@ -405,6 +405,14 @@ def check_card(fp):
             h = f.read()
     except Exception as e:
         return [f"读不到卡片：{e}"]
+    # 布局一致性：网格末列宽必须等于小图容器宽（否则右侧留空档）
+    mg = re.search(r"\.g\{[^}]*grid-template-columns:([^;}]+)", h)
+    mm = re.search(r"\.mini\{[^}]*width:(\d+)px", h)
+    if mg and mm:
+        last = [x for x in mg.group(1).split() if x.endswith("px")]
+        if last and int(last[-1][:-2]) != int(mm.group(1)):
+            errs.append(f"[R1.7] 网格末列 {last[-1]} ≠ 小图宽 {mm.group(1)}px（右侧会留空档）")
+
     # 事件卡分支：每个 chip 必须带悬停窗（不许裸 chip）
     if 'class="ec"' in h or "class='ec'" in h:
         chips = len(re.findall(r"class=['\"]chip['\"]", h))

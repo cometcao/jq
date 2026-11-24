@@ -33,8 +33,9 @@ HIST = os.path.join(ROOT, "data", "history")
 
 # ---------------------------------------------------------------- R1.5 字号（唯一常量表）
 FS = {"ring": 13, "value": 12.5, "name": 12.5, "delta": 12,
-      "sub": 10.5, "cap": 9, "bar_h": 6, "line_h": 15}
-COLS = "64px 150px 78px 66px minmax(64px,1fr)"   # R1.7 列宽
+      "sub": 10.5, "cap": 9, "bar_h": 6, "line_h": 18}
+COLS = "64px 150px 78px 66px 108px"   # R1.7 列宽（末列=小图列，定宽，避免右侧空档）
+MINI_W = int(re.match(r".*?(\d+)px$", COLS).group(1))   # 小图容器宽 = 末列宽
 
 # 卡内禁止出现的状态词（R1.4）——只允许出现在证据行
 STATE_WORDS = ["偏松", "偏紧", "扩", "缩", "变贵", "变便宜", "加杠杆", "去杠杆",
@@ -103,6 +104,10 @@ def series(iid, n=60):
     if os.path.exists(fp):
         rows = [json.loads(x) for x in io.open(fp, encoding="utf-8").read().splitlines() if x.strip()]
         rows = [r for r in rows if r.get("value") is not None]
+        # 统一到基础单位：history 行有 base_value 就用它（否则同一序列会出现 15.19 与 158200 混排）
+        for r in rows:
+            if r.get("base_value") is not None:
+                r["value"] = r["base_value"]
         rows.sort(key=lambda r: r["data_period"])
     f = fact(iid)
     if f:
@@ -419,7 +424,7 @@ def css():
 .pf{{position:absolute;top:-2px;width:2.5px;height:{FS['bar_h']+4}px;border-radius:1.2px;background:#2477b3;transform:translateX(-1.2px)}}
 .plbl{{font-size:{FS['sub']}px;color:var(--dsw-alias-label-secondary);margin-top:1px;white-space:nowrap}}
 .none{{font-size:{FS['sub']}px;color:#b6bcc5}}
-.mini{{border:1px solid rgba(31,35,40,.07);border-radius:3px;background:transparent;padding:1px 3px;max-width:96px}}
+.mini{{border:1px solid rgba(31,35,40,.07);border-radius:3px;background:transparent;padding:1px 3px;width:{MINI_W}px;box-sizing:border-box}}
 .mini.none{{border-color:rgba(31,35,40,.05);color:#b6bcc5;text-align:center}}
 .mcap{{display:flex;justify-content:space-between;font-size:{FS['cap']}px;color:#8a8f99;margin-top:-2px}}
 .ft{{margin-top:9px;font-size:{FS['sub']}px;color:var(--dsw-alias-label-secondary);border-top:1px solid var(--dsw-alias-border-l2);padding-top:6px;line-height:1.7}}
@@ -468,6 +473,9 @@ def _tip_html(e, scen):
         for o in scen.get("possible_outcomes") or []:
             note = o.get("impact_note") or o.get("observable_flag") or ""
             lab = o.get("observable_flag") or o.get("outcome_label") or ""
+            # 卡片只放要点（完整分支在状态页"事件段"与 data/events/*.json）
+            note = note.replace("按登记的传导规则，", "").replace("（收益率上行 = 债券价格下行；不预测实际落点）", "")
+            note = (note[:52] + "…") if len(note) > 52 else note
             out.append(f'<div class="o"><em>{lab}</em>{note}</div>')
     else:
         out.append(f'<div class="o">{e.get("scope","")}</div>')
