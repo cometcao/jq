@@ -67,6 +67,11 @@ def main():
     tail = (r.stdout or "").strip().splitlines()[-1] if r.stdout else ""
     add("回归测试全过", "0 失败" in tail, tail[-60:])
 
+    # 4b 单元测试 + 数值金标
+    r = run([os.path.join(ROOT, "scripts", "test_units.py")], 240)
+    tail = (r.stdout or "").strip().splitlines()[-1] if r.stdout else ""
+    add("单元测试+金标全过", "0 失败" in tail, tail[-60:])
+
     # 5 契约
     ck = os.path.join(ROOT, "dist", "market-state", "check.py")
     for label, args in (
@@ -87,6 +92,15 @@ def main():
     add("无临时文件残留", not tmps, str([os.path.basename(p) for p in tmps][:3]))
     pyc = glob.glob(os.path.join(ROOT, "scripts", "__pycache__"))
     add("scripts 无 __pycache__", not pyc)
+    # facts 目录规范（空目录/不规范名 → 应被 migrate_facts 归档）
+    bad_dirs = []
+    for d in glob.glob(os.path.join(ROOT, "data", "facts", "*")):
+        if not os.path.isdir(d):
+            continue
+        nm = os.path.basename(d)
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", nm) or not glob.glob(os.path.join(d, "*.json")):
+            bad_dirs.append(nm)
+    add("facts 目录规范且非空", not bad_dirs, str(bad_dirs[:3]))
 
     bad = [r for r in results if not r[1]]
     print(f"\n自检：{len(results) - len(bad)} 通过 / {len(bad)} 失败（共 {len(results)} 项）")

@@ -1,0 +1,77 @@
+{
+  "as_of": "2026-11-24",
+  "note": "数值金标：每条含 derivation（怎么核对出来的）。任何静默漂移会让 test_units.py 失败。",
+  "values": {
+    "MKT_M2_YOY": {
+      "value": 7.1,
+      "period": "2026-10-01",
+      "derivation": "央行社融/M2 同比，与剪刀差复算一致"
+    },
+    "MKT_M1_YOY": {
+      "value": 4.4,
+      "period": "2026-10-01",
+      "derivation": "同上"
+    },
+    "MKT_RMB_LOAN_YOY": {
+      "value": 4.7,
+      "period": "2026-10-01",
+      "derivation": "人民币贷款余额同比"
+    },
+    "MKT_DR007": {
+      "value": 1.4,
+      "period": "2026-11-24",
+      "derivation": "中国货币网 DR007 官方对账通过（B）"
+    },
+    "MKT_CGB10Y": {
+      "value": 1.5853,
+      "period": "2026-11-24",
+      "derivation": "中债官方曲线 10Y 对账通过（B）"
+    },
+    "MKT_MARGIN_BAL": {
+      "value": 21419.23,
+      "period": "2026-11-23",
+      "derivation": "东财两融汇总（C，深市部分已由深交所官方交叉）"
+    },
+    "MKT_MARGIN_BAL_SZ": {
+      "value": 10158.74,
+      "period": "2026-11-23",
+      "derivation": "深交所 ShowReport 官方对账通过（B）"
+    },
+    "MKT_MMF_SCALE": {
+      "value": 15.82,
+      "period": "2026-09-01",
+      "derivation": "中基协官方月报解析对账通过（B）"
+    },
+    "MKT_BREADTH": {
+      "value": 35.2,
+      "period": "2026-11-24",
+      "derivation": "乐咕涨跌家数：上涨/(上涨+下跌+平盘)，剔除停牌"
+    },
+    "MKT_TURNOVER": {
+      "value": 16678.03,
+      "period": "2026-11-24",
+      "derivation": "同花顺 90 行业板块成交额加总"
+    },
+    "SECTOR_AMT_CONC": {
+      "value": 34.0,
+      "period": "2026-11-24",
+      "derivation": "同花顺行业板块 Top5 占全部"
+    }
+  },
+  "derived": {
+    "剪刀差 M2−M1": {
+      "op": "diff",
+      "lhs": 7.1,
+      "rhs": 4.4,
+      "value": 2.7,
+      "tol": 0.02
+    },
+    "M2−贷款同比": {
+      "op": "diff",
+      "lhs": 7.1,
+      "rhs": 4.7,
+      "value": 2.4,
+      "tol": 0.02
+    }
+  }
+}

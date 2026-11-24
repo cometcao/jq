@@ -13,6 +13,30 @@
 4. **板块层 C6 广度改用申万口径**，与 C6 涨跌、C2 份额同源同日。
 5. 修一处 f-string 里的字典属性访问错误（`r.breadth` → `r['breadth']`）。
 
+## V2.123.0（2026-11-24）· 单元测试 + 数值金标 + facts 归档迁移（第 2、3 项）
+
+用户：1（重构）没必要，2、3 做一下。
+
+**2. 单元测试 + 数值金标**
+
+1. 新增 `scripts/test_units.py`：**38 条**，两层——
+   - **纯函数单测**：`card.fmt/delta/pos/spark`、`events.info_level`、`scenarios.impact_of`（禁"压力"、须带不预测声明）、
+     `fetch.norm_period`、`fetch.amac_mmf_net`（**两种 PDF 排版**：`163,148.04` 与粘连 `163,14804`）、
+     `state._sw_sectors_of`（医药→6 个二级、半导体→1）、`state._prev_period`；
+   - **数值金标** `tests/golden/market-2026-11-24.json`：11 个关键读数 + 2 条派生关系，每条带 `derivation`
+     （怎么核对出来的：官方对账 / 独立复算 / 口径说明）。**任何静默漂移都会让它失败**。
+2. 顺手发现并修正一个测试自身的错误假设：`pos_pct` 的"当前位置"是**序列末位**，升序序列末位=最高（100），我最初写反了。
+
+**3. facts 归档迁移**
+
+3. 新增 `scripts/migrate_facts.py`（**只移不删**，默认 dry-run）：三类处理——
+   空目录 → `data/facts-archive/empty/`；目录名不规范 → 优先改名成 `YYYY-MM-DD`，否则归档；`data_period` 与目录不符 → 归档。
+   每次写 `manifest-<时间戳>.json`（from/to/reason），可重复执行。
+4. 实跑结果：13 个目录 → **7 个**（归档 6 个空目录，含错位的 `2026-9-01`）；迁移后再跑"无需迁移"。
+5. `selftest.py` 扩到 **13 项**（新增单元测试、facts 目录规范）。
+
+**当前验证**：单元 38/38 · 回归 65/65 · 自检 13/13 · 歧义 0 处。
+
 ## V2.122.0（2026-11-24）· 第二轮全项目审计：又找到 9 类问题（含 1 个系统性 bug）
 
 用户第二次要求"review the whole project"。这轮从**一致性**转向**数值与口径正确性**。
