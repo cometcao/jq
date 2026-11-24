@@ -1116,7 +1116,15 @@ def build_sector(policy, sector=None):
                      + ("（一级行业需选具体二级板块）" if len(sw_list) > 1 else ""),
                      "该环无证据")
     # C4 杠杆与资金池：用深市个股两融 × 申万成分 汇总（仅深市部分）
-    mbal, mn, mday = (_sw_margin_of(sw["code"]) if sw else (None, 0, None))
+    mbal, mn, mday = (None, 0, None)
+    if sw_list:
+        _tot_m, _tot_n, _d0 = 0.0, 0, None
+        for _x in sw_list:
+            _b, _n, _d = _sw_margin_of(_x["code"])
+            if _b is not None:
+                _tot_m += _b; _tot_n += _n; _d0 = _d0 or _d
+        if _tot_n:
+            mbal, mn, mday = _tot_m, _tot_n, _d0
     if mbal is not None:
         _rd_data.update({"margin": mbal, "margin_n": mn})
         rings[3].add("不可读（—）",
@@ -1128,7 +1136,7 @@ def build_sector(policy, sector=None):
         rings[3].add("不可读（—）", "板块层杠杆无可用口径（沪市两融无公开接口；深市明细未拉到）", "该环无证据")
     # C5 主体行为：按中证成分过滤的龙虎榜机构净买
     _lhb, _lhb_d, _lhb_n = _sector_lhb_sw(sector)
-    v5 = _lhb if _lhb is not None else (val("SECTOR_INST_FLOW") if _has_own_index else None)
+    v5 = _lhb     # 只用本板块（申万成分）口径；不得回退到配置里的目标板块数值
     if v5 is not None:
         _rd_data.update({"lhb": v5, "lhb_n": _lhb_n})
         word = "机构增" if v5 > 0 else ("机构减" if v5 < 0 else "机构不变")
