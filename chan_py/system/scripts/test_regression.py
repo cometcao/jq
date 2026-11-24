@@ -137,7 +137,7 @@ def t06():
     txt = io.open(page, encoding="utf-8").read()
     ring = [ln for ln in txt.split("```")[1].splitlines() if ln.startswith("C4 ")]
     c4 = [ln for ln in ring if "不可读" not in ln]
-    ok_words = ("加杠杆", "去杠杆", "不变")
+    ok_words = ("加杠杆", "去杠杆", "不变", "现金池增", "现金池减")
     bad = [ln[:40] for ln in c4 if not any(w in ln for w in ok_words)]
     check("T06", "C4 有值行用白名单状态词", not bad, str(bad[:2]))
     for ln in ring:
@@ -332,9 +332,44 @@ def t21():
     check("T21c", "卡片关系量无底色（透明底）", "#eef0f3" not in h)
 
 
+# ---------------------------------------------------------------- T22 现金池措辞必须可核对
+def t22():
+    sp = io.open(os.path.join(ROOT, "scripts", "state.py"), encoding="utf-8").read()
+    check("T22", "state.py 不再断言“2017 起停发”", "2017 年起停发" not in sp)
+    check("T22b", "state.py 写明已核对月报", "月报" in sp and "处置补偿" in sp)
+    cp = io.open(os.path.join(ROOT, "scripts", "card.py"), encoding="utf-8").read()
+    check("T22c", "卡片现金池行由证据行动态渲染", ("现金池" in cp and "st.get(\"lines\")" in cp))
+    d7 = io.open(os.path.join(ROOT, "docs", "07_数据源可得性矩阵.md"), encoding="utf-8").read()
+    check("T22d", "docs/07 记录已解析月报 PDF", "月报 PDF 已解析核实" in d7)
+
+
+# ---------------------------------------------------------------- T23 停发指标已按 ADR-040 移出
+def t23():
+    reg = load_json(os.path.join(ROOT, "dist", "market-state", "references", "registry.json"), {}) or {}
+    check("T23", "MKT_MARGIN_DEP 已移出注册表", "MKT_MARGIN_DEP" not in reg, f"registry={len(reg)}")
+    st = io.open(os.path.join(ROOT, "scripts", "state.py"), encoding="utf-8").read()
+    check("T23b", "state.py 不再引用该指标", "MKT_MARGIN_DEP" not in st)
+    d7 = io.open(os.path.join(ROOT, "docs", "07_数据源可得性矩阵.md"), encoding="utf-8").read()
+    check("T23c", "docs/07 标注已移出", "已移出注册表" in d7)
+
+
+# ---------------------------------------------------------------- T24 货基官方源与历史
+def t24():
+    import json as _j
+    rows = []
+    fp = os.path.join(ROOT, "data", "history", "MKT_MMF_SCALE.jsonl")
+    if os.path.exists(fp):
+        rows = [_j.loads(x) for x in io.open(fp, encoding="utf-8").read().splitlines() if x.strip()]
+    check("T24", "货基历史 ≥ 6 期（可判方向）", len(rows) >= 6, f"{len(rows)} 期")
+    src = io.open(os.path.join(ROOT, "scripts", "fetch.py"), encoding="utf-8").read()
+    check("T24b", "货基主源为中基协官方", "www.amac.org.cn" in src and "p_mmf_official" in src)
+    reg = load_json(os.path.join(ROOT, "dist", "market-state", "references", "registry.json"), {}) or {}
+    check("T24c", "货基指标仍在注册表", "MKT_MMF_SCALE" in reg)
+
+
 def main():
     verbose = "-v" in sys.argv
-    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, t21):
+    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, t21, t22, t23, t24):
         try:
             fn()
         except Exception as e:

@@ -333,6 +333,37 @@ def backfill_margin_sz(days=15):
     return len(rows)
 
 
+def backfill_mmf(max_months=18):
+    """货币基金规模：从中基协官方月报回补（月频，走 fetch 的 PDF 解析器）。"""
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    import fetch as _F
+    import requests as _rq
+    fp = os.path.join(OUT, "MKT_MMF_SCALE.jsonl")
+    rows = []
+    if os.path.exists(fp):
+        rows = [json.loads(x) for x in io.open(fp, encoding="utf-8").read().splitlines() if x.strip()]
+    have = {r["data_period"] for r in rows}
+    added = 0
+    for month, url in _F.amac_mmf_list()[:max_months]:
+        key = f"{month}-01"
+        if key in have:
+            continue
+        try:
+            txt = _F._pdf_text(_rq.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=40, verify=False).content)
+            v = _F.amac_mmf_net(txt)
+            if v:
+                rows.append({"data_period": key, "value": round(v / 1e4, 4)})
+                added += 1
+        except Exception:
+            continue
+    rows.sort(key=lambda r: r["data_period"])
+    with io.open(fp, "w", encoding="utf-8") as f:
+        for r in rows:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    return len(rows)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--rings", default="C1,C2,C3,C4,C5,C6")
@@ -349,7 +380,7 @@ def main():
             print(f"{ring} {iid:<22} 现有 {cnt} 期")
         except Exception as e:
             print(f"{ring} {iid:<22} 失败：{type(e).__name__}: {str(e)[:70]}")
-    for iid, fn in list(EXTRA_TASKS) + [("MKT_MARGIN_BAL_SZ", lambda: backfill_margin_sz())]:
+    for iid, fn in list(EXTRA_TASKS) + [("MKT_MARGIN_BAL_SZ", lambda: backfill_margin_sz()), ("MKT_MMF_SCALE", lambda: backfill_mmf())]:
         try:
             cnt = fn()
             print(f"   {iid:<24} 现有 {cnt} 期")

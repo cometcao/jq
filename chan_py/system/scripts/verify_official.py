@@ -158,6 +158,25 @@ def check_sector_val(period):
 CHECKS["SECTOR_VAL"] = check_sector_val
 CHECKS["MKT_CGB10Y"] = official_cgb
 CHECKS["MKT_MARGIN_BAL_SZ"] = official_margin_sz
+def official_mmf(date):
+    """中基协官方月报：重解析最新一期货币市场基金净值（同源复核）。"""
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    import fetch as _F
+    import requests as _rq
+    items = _F.amac_mmf_list()
+    for month, url in items[:3]:
+        try:
+            txt = _F._pdf_text(_rq.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=40, verify=False).content)
+            v = _F.amac_mmf_net(txt)
+            if v:
+                return (round(v / 1e4, 4), "https://www.amac.org.cn/sjtj/tjbg/gmjj/")
+        except Exception:
+            continue
+    return None, ""
+
+
+CHECKS["MKT_MMF_SCALE"] = official_mmf
 
 
 def official_cninfo(date, keyword="减持", sample=3):
@@ -195,6 +214,8 @@ def official_cninfo(date, keyword="减持", sample=3):
 
 
 
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry", action="store_true")
@@ -220,8 +241,13 @@ def main():
         if official is None:
             print(f"{iid:<16}{mine!s:>12}{'无当期值':>12}  未核对")
             continue
-        same = abs(mine - official) <= max(abs(official) * 1e-6, 1e-9)
-        print(f"{iid:<16}{mine:>12.4f}{official:>12.4f}  {'一致 → 可升 B' if same else '不一致 → 保持 C'}")
+        # 容差按"展示精度"比：缓存值存几位小数，官方值就对齐到同一位再比
+        _dec = 0
+        _mt = re.search(r"\d+\.(\d+)", str((c.get("current_state") or {}).get("数值") or ""))
+        if _mt:
+            _dec = len(_mt.group(1))
+        same = abs(round(float(mine), _dec) - round(float(official), _dec)) < 10 ** (-_dec) / 2
+        print(f"{iid:<16}{float(mine):>12.4f}{float(official):>12.4f}  {'一致 → 可升 B' if same else '不一致 → 保持 C'}")
         if same and not a.dry:
             os.makedirs(OFFICIAL, exist_ok=True)
             payload = {"value": f"{official}", "unit": "as-recorded", "data_period": used_period,

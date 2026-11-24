@@ -899,6 +899,100 @@ def p_sector_lhb_sw(_df=None):
              "对比": f"{n} 只上榜（近 7 日累计）"}, {"data_period": _trade_day_of()})
 
 
+
+# ---------------------------------------------------------------- 中基协·公募基金市场数据（官方，月频）
+AMAC_GMLIST = "https://www.amac.org.cn/sjtj/tjbg/gmjj/"
+
+
+def _pdf_text(data):
+    """纯标准库 PDF 取文：解压流 → 汇总 ToUnicode CMap → 解码 (hex) 字符串。"""
+    import zlib
+    streams = []
+    for m in re.finditer(rb"stream\r?\n", data):
+        s0 = m.end(); e0 = data.find(b"endstream", s0)
+        if e0 < 0:
+            continue
+        try:
+            streams.append(zlib.decompress(data[s0:e0]))
+        except Exception:
+            continue
+    cmap = {}
+    for st in streams:
+        if b"beginbfchar" not in st:
+            continue
+        for blk in re.findall(rb"beginbfchar(.*?)endbfchar", st, re.S):
+            for src, dst in re.findall(rb"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>", blk):
+                try:
+                    cid = int(src, 16)
+                    uni = bytes.fromhex(dst.decode()).decode("utf-16-be", "ignore")
+                    if uni and cid not in cmap:
+                        cmap[cid] = uni
+                except Exception:
+                    continue
+    out = []
+    for st in streams:
+        if b"Tj" not in st and b"TJ" not in st:
+            continue
+        for h in re.findall(rb"<([0-9A-Fa-f]{4,})>", st):
+            if len(h) % 2:
+                continue
+            b = bytes.fromhex(h.decode())
+            t = "".join(cmap.get(int.from_bytes(b[i:i + 2], "big"), "") for i in range(0, len(b) - 1, 2))
+            if t:
+                out.append(t)
+    return re.sub(r"\s+", "", " ".join(out))
+
+
+def amac_mmf_net(text):
+    """从月报文本里取「货币市场基金」当月净值（亿元）。"""
+    i = text.find("货币市场基金")
+    if i < 0:
+        return None
+    seg = text[i + 6:i + 140]
+    vals = []
+    for m in re.finditer(r"\d{1,3}(?:,\d{3})+(?:\.\d{2}|\d{3})", seg):
+        s0 = m.group(0)
+        v = float(s0.replace(",", "")) if "." in s0 else float(s0.replace(",", "")) / 1000
+        vals.append(v)
+    cand = [v for v in vals if 50000 < v < 400000]
+    return cand[1] if len(cand) >= 2 else (cand[0] if cand else None)
+
+
+def amac_mmf_list():
+    """返回 [(月份YYYY-MM, pdf_url)]，最新在前。"""
+    import requests
+    r = requests.get(AMAC_GMLIST, headers={"User-Agent": "Mozilla/5.0"}, timeout=25, verify=False)
+    r.encoding = r.apparent_encoding or "utf-8"
+    pairs = {}
+    for href, title in re.findall(r'href="(\.[^"]*\.pdf)"[^>]*>\s*([^<]{4,40})', r.text):
+        if "公募基金市场数据" not in title:
+            continue
+        m = re.search(r"(\d{4})年(\d{1,2})月", title)
+        if m:
+            pairs.setdefault(f"{m.group(1)}-{int(m.group(2)):02d}",
+                             "https://www.amac.org.cn/sjtj/tjbg/gmjj/" + href.lstrip("./"))
+    return sorted(pairs.items(), reverse=True)
+
+
+def p_mmf_official(_df=None):
+    """货币基金规模（中基协官方月报，月频）：取最新一期。"""
+    import requests
+    items = amac_mmf_list()
+    if not items:
+        raise ValueError("中基协月度列表未取到")
+    for month, url in items[:3]:
+        try:
+            txt = _pdf_text(requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=40, verify=False).content)
+            v = amac_mmf_net(txt)
+            if v:
+                return ({"指标": "货币基金净值（中基协官方）", "值": f"{v/1e4:.2f} 万亿",
+                         "对比": f"{month} 月末 净值 {v:,.2f} 亿元"},
+                        {"data_period": f"{month}-01"})
+        except Exception:
+            continue
+    raise ValueError("中基协月报解析失败")
+
+
 # ---------------------------------------------------------------- 指标声明
 SPECS = [
     dict(id="POL_LPR", channel="C1", subject="政策", freq="不定期", value_kind="level", layer="市场", tier_default="C",
@@ -1013,8 +1107,10 @@ SPECS = [
          official_source="同花顺行业板块一览（交易所行情）", official_url="https://q.10jqka.com.cn/thshy/",
          proves="板块内上涨家数占比", does_not_prove="不说明上涨幅度"),
     dict(id="MKT_MMF_SCALE", channel="C4", subject="公共池", freq="月", value_kind="level", layer="市场", tier_default="C",
-         providers=[("akshare/em", ["fund_aum_hist_em"], p_mmf_scale)],
-         official_source="中基协口径·货币基金规模（经东财汇总）", official_url="https://www.amac.org.cn/",
+         providers=[("calc", ["__mmf__"], p_mmf_official), ("akshare/em", ["fund_aum_hist_em"], p_mmf_scale)],
+         official_source="中国证券投资基金业协会·公募基金市场数据（月度，货币市场基金净值）",
+         official_url="https://www.amac.org.cn/sjtj/tjbg/gmjj/",
+         official_hosts=["www.amac.org.cn"],
          proves="闲钱停放在货币基金的总规模（保证金停发后的代理）", does_not_prove="不等于客户保证金，也不等于场内现金"),
     dict(id="EXT_CN_ETF_AUM", channel="C5", subject="外部", freq="日", value_kind="level", layer="市场", tier_default="C",
          providers=[("direct/kraneshares", ["__cn_etf_aum__"], p_cn_etf_aum)],

@@ -339,9 +339,34 @@ def build_market():
                         '<div class="dcol grey">暂不可比<div class="bs">数据期不同（11-24 vs 11-23）</div></div>'
                         '<div class="none">口径锚拦截</div><div class="mini none">不出数</div>')
         if ring == "C4":
-            html.append('<div class="rn"></div><div class="nm grey">现金池</div>'
-                        '<div class="dcol grey">—<div class="bs">无上期</div></div>'
-                        '<div class="none">保证金 2017 起停发</div><div class="mini none">代理值不可作前值</div>')
+            # 现金池按证据行动态渲染（不硬编码数值，避免与状态页不一致）
+            _ln = None
+            for _r in (st.get("lines") or []):
+                if _r.get("ring") == "C4" and "现金池" in (_r.get("raw") or ""):
+                    _ln = _r
+                    break
+            if _ln and "不可读" in (_ln.get("raw") or ""):
+                html.append('<div class="rn"></div><div class="nm grey">现金池</div>'
+                            '<div class="dcol grey">—<div class="bs">无上期</div></div>'
+                            '<div class="none">' + (_ln.get("evidence") or "")[:26] + '</div>'
+                            '<div class="mini none">代理口径</div>')
+            elif _ln:
+                _ev = _ln.get("evidence") or ""
+                _v = re.search(r"([\d.]+) 万亿", _ev)
+                _pv = re.search(r"对比上一期 ([\d.]+) 万亿", _ev)
+                _cur = float(_v.group(1)) if _v else None
+                _prev = float(_pv.group(1)) if _pv else None
+                if _cur is not None and _prev is not None:
+                    _dlt = _cur - _prev
+                    cls = "up" if _dlt > 0 else ("dn" if _dlt < 0 else "fl")
+                    html.append(f'<div class="rn"></div><div class="nm">现金池（代理） <b>{_cur:.2f} 万亿</b></div>'
+                                f'<div class="dcol"><span class="{cls}">{"▲" if _dlt>0 else ("▼" if _dlt<0 else "—")}{abs(_dlt):.2f} 万亿</span>'
+                                f'<div class="bs">vs {(_ln.get("period") or "")[5:10]} 前</div></div>'
+                                f'<div class="none">货币基金规模</div><div class="mini none">同属性代理</div>')
+                else:
+                    html.append('<div class="rn"></div><div class="nm grey">现金池（代理）</div>'
+                                '<div class="dcol grey">—<div class="bs">无上期</div></div>'
+                                '<div class="none">' + _ev[:26] + '</div><div class="mini none">代理口径</div>')
         for r, label, val, basis, dtxt in EXTRA:
             if r != ring:
                 continue

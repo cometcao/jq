@@ -74,9 +74,20 @@ def num(s):
     return float(m.group(0)) if m else None
 
 
+def _facts_sorted(iid):
+    """按 data_period 的真实日期排序（不能字符串排序：2026-09-01 < 2026-11-20 但 '9' > '1'）。"""
+    fs = glob.glob(os.path.join(FACTS, "*", iid + ".json"))
+    def key(p_):
+        try:
+            return dt.date.fromisoformat(os.path.basename(os.path.dirname(p_)))
+        except Exception:
+            return dt.date(1970, 1, 1)
+    return sorted(fs, key=key)
+
+
 def tier_of(iid):
     """从落盘事实记录读 source_tier（B / B- / C）；无记录时退回 C。"""
-    files = sorted(glob.glob(os.path.join(FACTS, "*", iid + ".json")))
+    files = _facts_sorted(iid)
     if not files:
         return "C"
     with io.open(files[-1], encoding="utf-8") as f:
@@ -237,32 +248,32 @@ def build(policy, include_events=False):
     else:
         rings[3].add("不可读（—）", "两融记录缺失，或来源为 C 类、无源可支撑状态词", "该环无可用证据")
     col = val("MKT_MARGIN_COLLATERAL")
-    ok, tag = allow("MKT_MARGIN_DEP")
+    # 现金池：官方自 2017-06 后不再公布「证券交易结算资金余额」（投保基金历史栏目止于 2017-06、
+    # 2026-06 月报已解析仅含处置补偿进度）→ 按 D06 用同属性代理：货币基金规模。
     ok2, tag2 = allow("MKT_MMF_SCALE")
-    dep = val("MKT_MARGIN_DEP")
-    if ok and dep is not None:
-        ev = f"客户保证金（交易结算资金余额）{dep:.2f} 亿"
-        if col is not None:
-            ev += f"；两融担保物总价值 {col:.2f} 万亿"
-        rings[3].add(f"现金池（{period('MKT_MARGIN_DEP')}）", ev, "月频人工录入；不等于杠杆，也不等于成交额", tag)
-    else:
-        mmf = val("MKT_MMF_SCALE")
-        if mmf is not None:
-            pmmf, prev_period = prev_value_from_revisions("MKT_MMF_SCALE", period("MKT_MMF_SCALE"))
-            if pmmf is not None:
-                word = "增" if mmf > pmmf else ("减" if mmf < pmmf else "不变")
-                ev = f"货币基金规模 {mmf:.2f} 万亿 对比上一期 {pmmf:.2f} 万亿（{prev_period}）"
-                rings[3].add(f"现金池{word}（{period('MKT_MMF_SCALE')}）", ev + "；保证金官方停发，此为同属性代理",
-                             "货币基金规模不等于客户保证金，也不等于场内现金", tag2)
-            else:
-                rings[3].add("现金池不可读（—）",
-                             f"保证金官方自 2017 年起停发；代理指标已有货币基金规模 {mmf:.2f} 万亿，但无证据可作前值（首次落盘）",
-                             "下次运行即可比较")
-        else:
-            ev = "交易结算资金余额官方自 2017 年起停止公开发布（投保基金官网历史数据止于 2017-06）"
+    mmf = val("MKT_MMF_SCALE")
+    if ok2 and mmf is not None:
+        pmmf, prev_period = prev_value_from_revisions("MKT_MMF_SCALE", period("MKT_MMF_SCALE"))
+        if pmmf is None:
+            _h = [x for x in _hist("MKT_MMF_SCALE", 60) if x[1] is not None]
+            if len(_h) >= 2:
+                pmmf, prev_period = _h[-2][1], _h[-2][0]
+        if pmmf is not None:
+            word = "增" if mmf > pmmf else ("减" if mmf < pmmf else "不变")
+            ev = f"货币基金规模 {mmf:.2f} 万亿 对比上一期 {pmmf:.2f} 万亿（{prev_period}）"
             if col is not None:
-                ev += f"；已有两融担保物总价值 {col:.2f} 万亿（含证券，不等于现金池）"
-            rings[3].add("现金池不可读（—）", ev, "该环无证据")
+                ev += f"；两融担保物总价值 {col:.2f} 万亿"
+            rings[3].add(f"现金池{word}（{period('MKT_MMF_SCALE')}）", ev + "；官方余额停发，此为同属性代理",
+                         "货币基金规模不等于客户保证金，也不等于场内现金", tag2)
+        else:
+            rings[3].add("现金池不可读（—）",
+                         f"无证据可作前值：代理指标货币基金规模 {mmf:.2f} 万亿仅一期（官方余额 2017-06 后停发）",
+                         "下一期即可比较；货基规模不等于客户保证金")
+    else:
+        ev = "官方自 2017-06 后不再公布「证券交易结算资金余额」；代理指标（货币基金规模）也未取到"
+        if col is not None:
+            ev += f"；两融担保物总价值 {col:.2f} 万亿（含证券，不等于现金池）"
+        rings[3].add("现金池不可读（—）", ev, "该环无证据")
 
     # C5 窄口径替代 + 机构/外部空环
     ok, tag = allow("RTL_MARGIN_INVESTORS")

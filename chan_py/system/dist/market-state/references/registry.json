@@ -359,18 +359,6 @@
     "frequency": "月",
     "comparable_from": null
   },
-  "MKT_MARGIN_DEP": {
-    "name": "证券客户保证金",
-    "layer": "市场",
-    "channel": "C4",
-    "subject": "公共池",
-    "attribute": "A4",
-    "transform": "T1",
-    "value_kind": "level",
-    "unit": "U1",
-    "frequency": "周",
-    "comparable_from": null
-  },
   "MKT_NORTH_AMT": {
     "name": "北向盘后成交总额",
     "layer": "市场",
