@@ -1439,6 +1439,50 @@ def _last_fact_value(iid, cur_period):
     return num_of((best.get("current_state") or {}).get("数值"))
 
 
+# ---------------------------------------------------------------- 跳过登记表（A：禁止静默失败）
+SKIP_DIR = os.path.join(ROOT, "data", "skips")
+
+
+def record_skip(iid, reason, data_period=None, extra=None):
+    """任何"不落盘"都必须登记原因，供页面与日报核对。
+
+    2026-11-24 教训：`continue` 掉的行、被 `except` 吞掉的异常，代码不报错、只少了一段，
+    靠读代码看不出来。登记后 `daily_diff` 与状态页元信息会显示"今天跳过了什么、为什么"。
+    """
+    try:
+        os.makedirs(SKIP_DIR, exist_ok=True)
+        day = dt.date.today().isoformat()
+        rec = {"at": dt.datetime.now().isoformat(timespec="seconds"), "indicator_id": iid,
+               "reason": reason, "data_period": data_period, "extra": extra or {}}
+        with io.open(os.path.join(SKIP_DIR, day + ".jsonl"), "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+def load_skips(day=None):
+    """读某天的跳过登记（默认今天）。"""
+    day = day or dt.date.today().isoformat()
+    fp = os.path.join(SKIP_DIR, day + ".jsonl")
+    if not os.path.exists(fp):
+        return []
+    out = []
+    for line in io.open(fp, encoding="utf-8").read().splitlines():
+        if line.strip():
+            try:
+                out.append(json.loads(line))
+            except Exception:
+                continue
+    return out
+
+
+def shape_of(res):
+    """源指纹：返回字段数 + 行数（源改版时这两个最容易先变）。"""
+    cs = res.get("current_state") or {}
+    return {"keys": len(cs), "rows": res.get("rows") or 0}
+
+
+
 def to_record(spec, res, as_of):
     tier, off = official_tier(spec["id"], spec)
     ok = "current_state" in res
@@ -1455,6 +1499,7 @@ def to_record(spec, res, as_of):
         rec["fallback_path"] = res["fallback_path"]
     if ok:
         rec["current_state"] = res["current_state"]
+        rec["shape"] = shape_of(res)
         # 单位归一：同时存基础值，下游算数不必再猜单位（2026-11-24 教训）
         if _unit_norm is not None:
             _txt = (res.get("current_state") or {}).get("数值")
@@ -1522,6 +1567,7 @@ def main():
                 _cp = os.path.join(ROOT, "data", "cache", spec["id"] + ".json")
                 if os.path.exists(_cp):
                     os.remove(_cp)
+                record_skip(spec["id"], f"源已停更（最新期落后 {_months} 个月）", _dp)
                 miss += 1
                 continue
 
@@ -1536,6 +1582,7 @@ def main():
             if _skip:
                 print(f"{spec['id']:<16}{str(res.get('source') or ''):<16}{rec['data_period']:<12}"
                       f"{str(_cur):<26}{_why} → 不落盘")
+                record_skip(spec["id"], _why, rec.get("data_period"), {"source": res.get("source")})
                 miss += 1
                 continue
 
@@ -1550,6 +1597,7 @@ def main():
         ratio = (lag / FREQ_DAYS[spec["freq"]]) if (lag is not None and spec["freq"] in FREQ_DAYS) else None
         if ratio is not None and ratio > _TH.get("stale_block", 3.0):
             print(f"{spec['id']:<16}{'—':<16}{rec['data_period']:<12}{'不可读（超时效倍率）':<26}未落盘")
+            record_skip(spec["id"], f"超时效倍率 {ratio:.1f}×（>{_TH.get('stale_block', 3.0)}×）", rec.get("data_period"))
             miss += 1
             continue
         if ratio is not None and ratio > _TH.get("stale_warn", 2.0):
@@ -1565,6 +1613,8 @@ def main():
             note = (note + " " if note else "") + "stale（超 2 倍时效）"
         elif rec["missing_type"] != "none":
             note = (note + " " if note else "") + "失败：" + str(res.get("errors"))[:36]
+        if rec["missing_type"] != "none" and rec["missing_type"] != "stale":
+            record_skip(spec["id"], "取数失败", rec.get("data_period"), {"errors": str(res.get("errors"))[:120]})
         print(f"{spec['id']:<16}{str(res.get('source') or '—'):<16}{rec['data_period']:<12}{str(val):<26}{note}")
         ok += rec["missing_type"] == "none"
         miss += rec["missing_type"] != "none"

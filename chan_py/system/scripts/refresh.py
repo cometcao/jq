@@ -95,6 +95,7 @@ def main():
         (["scripts/fetch.py"], "抓数"),
         (["scripts/verify_official.py"], "官方对账"),
         (["scripts/history.py"], "历史"),
+    (["scripts/daily_diff.py", "--write"], "每日diff"),
         (["scripts/events.py", "--days", "30", "--write"], "事件"),
         (["scripts/scenarios.py"], "分支"),
         (["scripts/audit.py", "--daily"], "日检(巡检+台账)"),

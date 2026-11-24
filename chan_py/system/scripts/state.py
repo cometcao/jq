@@ -1493,9 +1493,22 @@ def main():
     _policy_txt = {"strict": "只允许 B 类进入状态行",
                    "traceable": "B 类优先；没有 B 时才用 C 类，并逐行标出取数来源",
                    "demo": "演示模式：C 类也可用，逐行标注"}[args.policy]
+    # 今日跳过（A：跳过不许静默）
+    _skips = []
+    try:
+        import fetch as _F
+        _skips = _F.load_skips(as_of) if as_of and re.match(r"^\d{4}-\d{2}-\d{2}$", as_of) else _F.load_skips()
+    except Exception:
+        _skips = []
+    _byr = {}
+    for _s in _skips:
+        _byr[_s.get("reason", "?")] = _byr.get(_s.get("reason", "?"), 0) + 1
+    _skip_txt = ("无" if not _skips else
+                 "；".join(f"{k} {v} 条" for k, v in sorted(_byr.items(), key=lambda x: -x[1])))
     meta = (f"\n元信息：\n- 本次引用 {len(missing)} 条事实记录，压成 {n_ev} 条证据行\n"
             f"- 分级策略：{_policy_txt}\n"
             f"- 已与官方对账（B 类）：{_bnames}\n"
+            f"- 今日跳过 {len(_skips)} 条：{_skip_txt}\n"
             f"- 时效：数据期落后超过 3 倍频率的指标不落盘，直接标不可读\n")
     lines = ["", "数据溯源（逐项核对；官方直连才可能升 B）：",
              "| 指标 | 官方源 | 请求域名 | 直连官方 | 档位 |", "|---|---|---|---|---|"]

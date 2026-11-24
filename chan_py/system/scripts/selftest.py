@@ -72,6 +72,25 @@ def main():
     tail = (r.stdout or "").strip().splitlines()[-1] if r.stdout else ""
     add("单元测试+金标全过", "0 失败" in tail, tail[-60:])
 
+    # 4c 跳过登记 + 每日 diff
+    import glob as _g
+    sfs = sorted(_g.glob(os.path.join(ROOT, "data", "skips", "*.jsonl")))
+    bad_skip = []
+    for fp_ in sfs:
+        for line in io.open(fp_, encoding="utf-8").read().splitlines():
+            if not line.strip():
+                continue
+            try:
+                r_ = json.loads(line)
+            except Exception:
+                bad_skip.append(os.path.basename(fp_))
+                continue
+            if not r_.get("reason") or not r_.get("indicator_id"):
+                bad_skip.append(os.path.basename(fp_))
+    add("跳过登记表格式合规", not bad_skip, str(bad_skip[:2]))
+    r = run([os.path.join(ROOT, "scripts", "daily_diff.py")], 300)
+    add("每日 diff 能产出", "# 每日 diff" in (r.stdout or ""), (r.stdout or "").splitlines()[0][:30] if r.stdout else "")
+
     # 5 契约
     ck = os.path.join(ROOT, "dist", "market-state", "check.py")
     for label, args in (

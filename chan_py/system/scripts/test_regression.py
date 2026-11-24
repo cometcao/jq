@@ -629,9 +629,41 @@ def t35():
     check("T35d", "分支文案无歧义方向词", not bad_word, str(bad_word[:3]))
 
 
+# ---------------------------------------------------------------- T36 跳过登记 + 每日 diff
+def t36():
+    import glob as _g, json as _j
+    sfs = sorted(_g.glob(os.path.join(ROOT, "data", "skips", "*.jsonl")))
+    if not sfs:
+        return check("T36", "有跳过登记文件", False, "data/skips 缺失")
+    recs = []
+    for fp in sfs:
+        for line in io.open(fp, encoding="utf-8").read().splitlines():
+            if line.strip():
+                recs.append(_j.loads(line))
+    check("T36", "跳过记录都有 indicator_id 与 reason",
+          all(r.get("indicator_id") and r.get("reason") for r in recs), f"{len(recs)} 条")
+    # 成功落盘的指标不应被登记为失败
+    ok_ids = set()
+    for fp in _g.glob(os.path.join(ROOT, "data", "facts", "*", "*.json")):
+        r = _j.load(io.open(fp, encoding="utf-8"))
+        ok_ids.add(r.get("indicator_id"))
+    bad = [r["indicator_id"] for r in recs if r.get("reason") == "取数失败" and r["indicator_id"] in ok_ids
+           and r.get("data_period")]
+    check("T36b", "成功落盘的指标未被误登记为失败", not bad, str(bad[:3]))
+    # 状态页必须显示跳过条数
+    fp_page = latest("reports/*-market-state.md")
+    if fp_page:
+        t = io.open(fp_page, encoding="utf-8").read()
+        check("T36c", "状态页写明今日跳过", "今日跳过" in t)
+    # diff 报告可产出
+    r = subprocess.run([sys.executable, "-B", os.path.join(ROOT, "scripts", "daily_diff.py")],
+                       capture_output=True, text=True, encoding="utf-8", cwd=ROOT, timeout=300)
+    check("T36d", "每日 diff 可产出", "# 每日 diff" in (r.stdout or ""))
+
+
 def main():
     verbose = "-v" in sys.argv
-    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, t21, t22, t23, t24, t25, t26, t27, t28, t29, t30, t31, t32, t33, t34, t35):
+    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, t21, t22, t23, t24, t25, t26, t27, t28, t29, t30, t31, t32, t33, t34, t35, t36):
         try:
             fn()
         except Exception as e:
