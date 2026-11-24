@@ -513,32 +513,23 @@ def rings_of_event(e, scen):
     return set(), "未登记归属（按不映射处理）"
 
 
-def _ring_strip(e, scen):
-    """R8：一行环 + 分支圆点（紧凑写法，控制卡片体积）。
+def _affect_text(e, scen):
+    """R8 文字模式（V2.140.0 定稿）：用一句中文写清楚"这个事件影响哪一环"。
 
-    环格只用中性色；圆点只表示"哪支分支触及它"，不表示该环涨跌（R8 硬规则）。
+    不画圆点、不用符号：读者不需要记图例。格式固定为
+        受影响环节：C3 资金价格；背景
+    或
+        受影响环节：不映射六环（日历事件）
     """
     hit, rule = rings_of_event(e, scen)
-    outs = (scen.get("possible_outcomes") or []) if scen else []
-
-    def dot(o):
-        lab = (o.get("observable_flag") or o.get("outcome_label") or "")
-        if ">" in lab or "高于" in lab:
-            return "●"
-        if "<" in lab or "低于" in lab:
-            return "○"
-        return "◌"
-
-    dots = "".join(dot(o) for o in outs[:3]) if outs else "·"
-    cells = []
+    if not hit:
+        note = rule if rule and "未登记" not in rule else ""
+        return f'<div class="rt">受影响环节：不映射六环（日历事件）{("；" + note) if note else ""}</div>'
+    names = []
     for rid, rname in RINGS:
-        short = "背景" if rid == "BG" else rid
         if rid in hit:
-            cells.append(f"<b>{short}{dots}</b>")
-        else:
-            cells.append(f"<i>{short}</i>")
-    note = "" if hit else "不映射六环（日历事件）"
-    return f'<div class="rr">{" ".join(cells)}<s>{note}</s></div>'
+            names.append("背景" if rid == "BG" else f"{rid} {rname}")
+    return f'<div class="rt">受影响环节：{"；".join(names)}</div>'
 
 
 def _ring_tag(e, scen):
@@ -557,7 +548,7 @@ def _tip_html(e, scen):
     _scope = (_scope[:40] + "…") if len(_scope) > 40 else _scope
     out = [f'<div class="tip"><b>{e.get("event_date")} {e.get("event_time") or ""} {_scope}</b>',
            f'<span class="u">{e.get("issuer","")} · {e.get("event_status","")}</span>']
-    out.append(_ring_strip(e, scen))
+    out.append(_affect_text(e, scen))
     if scen:
         reg = load(os.path.join(ROOT, "dist", "market-state", "references", "registry.json")) or {}
         ids_list = []
@@ -570,12 +561,16 @@ def _tip_html(e, scen):
                     ids_list.append(lab)
         # 受影响指标已由 R8 环条表达，这里不再重复（省体积、避免两处口径）
         for o in scen.get("possible_outcomes") or []:
+            _flag = (o.get("observable_flag") or o.get("outcome_label") or "")
+            if "=" in _flag:      # 等于前值：数据保留，卡上不列（无新信息）
+                continue
             note = o.get("impact_note") or o.get("observable_flag") or ""
             lab = o.get("observable_flag") or o.get("outcome_label") or ""
             # 卡片只放要点（完整分支在状态页"事件段"与 data/events/*.json）
             note = note.replace("按登记的传导规则，", "").replace("（收益率上行 = 债券价格下行；不预测实际落点）", "")
             note = (note[:34] + "…") if len(note) > 34 else note
             out.append(f'<div class="o"><em>{lab}</em>{note}</div>')
+        out.append('<div class="rn2">等于前值未列（数据保留三分支）</div>')
     out.append("</div>")
     return "".join(out)
 
@@ -676,11 +671,9 @@ EVENT_CSS = """<style>
 .ec .tip .u{color:#6b7280;display:block;margin-bottom:6px}
 .ec .tip .o{margin:7px 0;padding-left:9px;border-left:3px solid #2477b3}
 .ec .tip .o em{font-style:normal;font-weight:600;display:block;color:#2477b3;margin-bottom:1px}
-.ec .rr{font-size:10px;color:#b6bcc5;margin:4px 0 2px;line-height:1.6}
-.ec .rr b{color:#2a3b4d;background:#e8eef5;border-radius:3px;padding:1px 3px;font-weight:600}
-.ec .rr i{font-style:normal}
+.ec .rt{font-size:10.5px;color:#3d4550;margin:4px 0 2px;line-height:1.6}
+.ec .rn2{font-size:9.5px;color:#8a8f99;margin:2px 0 4px}
 .ec .en{font-size:10px;color:#8a8f99;margin:0 0 6px;flex-basis:100%}
-.ec .rr s{display:block;text-decoration:none;font-size:9.5px;color:#8a8f99}
 </style>"""
 
 

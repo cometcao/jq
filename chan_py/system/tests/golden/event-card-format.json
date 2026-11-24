@@ -1,0 +1,16 @@
+{
+  "spec_version": "V2.141.0",
+  "branch_mode": "text",
+  "affect_prefix": "受影响环节：",
+  "chips": 25,
+  "affect_lines": 25,
+  "forbidden_present": [],
+  "tip_fields_order": [
+    "b",
+    "u",
+    "rt",
+    "o"
+  ],
+  "equal_branch_on_card": false,
+  "equal_note": true
+}

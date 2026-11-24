@@ -78,9 +78,10 @@ def scan_text(name, text):
             line_start = clean.rfind("\n", 0, m.start()) + 1
             line_end = clean.find("\n", m.start())
             line = clean[line_start: line_end if line_end > 0 else len(clean)]
-            seg = line[max(0, m.start() - line_start - 20): m.start() - line_start + 80]
-            if "公布值" in seg or "高于前值" in seg or "没有变化" in seg or "前值不可得" in seg:
-                continue          # 机械比较式（规则要求的写法）
+            # 机械比较式（规则要求的写法）：看紧邻上文，避免整行被当成一行 HTML
+            pre = clean[max(0, m.start() - 12): m.start()]
+            if re.search(r"(公布值\s*[><=]\s*|高于|低于|维持|等于|较|不可得)\s*$", pre) or "公布值" in pre or "前值不可得" in clean[m.start(): m.start() + 12]:
+                continue
             if not re.search(r"20\d{2}-\d{2}-\d{2}|\d", line[max(0, m.start() - line_start): m.start() - line_start + 60]):
                 bad.append((name, w, "后面必须跟日期或数值", re.sub(r"\s+", " ", line[:110])))
     return bad

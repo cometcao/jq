@@ -426,6 +426,84 @@ def unit_event_ring_attribution():
         ck("数据发布的环由指标通道决定", bool(hit), f"{sorted(hit)} / {rule}")
 
 
+def unit_event_ring_text_mode():
+    """R8 文字模式（V2.140.0）：受影响环节用中文写清，禁用圆点符号。"""
+    import re as _re, json as _j
+    spec = load(os.path.join(ROOT, "data", "event_card_spec.json"), {}) or {}
+    ck("事件卡格式定稿存在", spec.get("version") == "V2.140.0", str(spec.get("version")))
+    ck("定稿为文字模式", spec.get("branch_mode") == "text", str(spec.get("branch_mode")))
+    h = io.open(os.path.join(ROOT, "reports", "card-events.html"), encoding="utf-8").read()
+    chips = len(_re.findall(r"class='chip'", h))
+    aff = h.count("受影响环节：")
+    ck("每个事件格都有一行受影响环节", aff >= chips and chips > 0, f"chip={chips} 环节行={aff}")
+    bad = [g for g in ("●", "○", "◌") if g in h]
+    ck("全卡禁用圆点符号", not bad, str(bad))
+    ck("不映射事件有显式标注", spec.get("no_map_text") in h)
+    # 受影响环节必须列出环号或明确"不映射"
+    lines = _re.findall(r'<div class="rt">(.*?)</div>', h)
+    ck("受影响环节行内容非空", all(len(_re.sub(r"<[^>]+>", "", x).strip()) > 8 for x in lines), str(len(lines)))
+    no_ring = [x for x in lines if "不映射" not in x and not _re.search(r"C[1-6]", x)]
+    ck("命中的行必须写出 C 环号", not no_ring, str(no_ring[:2])[:60])
+    # 数据发布事件必须写环名（中文）
+    pmi = [x for x in lines if "C3" in x]
+    ck("命中环带中文名（如 C3 资金价格）", any("资金价格" in x for x in pmi), str(pmi[:1])[:60])
+
+
+def unit_layout_fill():
+    """布局：网格必须弹性填满，小图必须 100%（曾经定宽 96px 导致右侧空档）。"""
+    h = io.open(os.path.join(ROOT, "reports", "card-market.html"), encoding="utf-8").read()
+    import re as _re
+    g = _re.search(r"\.g\{[^}]*grid-template-columns:([^;}]+)", h)
+    m = _re.search(r"\.mini\{[^}]*width:([^;}]+)", h)
+    ck("网格列宽含 fr（随卡片缩放）", bool(g) and "fr" in g.group(1), g.group(1)[:40] if g else "无")
+    ck("小图容器 width:100%", bool(m) and m.group(1).strip() == "100%", m.group(1).strip() if m else "无")
+
+
+def unit_shape_fingerprint():
+    """快照型源的 facts 必须有 shape 指纹（源改版靠它发现）。"""
+    import glob as _g, json as _j
+    snap = {"akshare/ths", "akshare/legu"}
+    miss = []
+    for fp in _g.glob(os.path.join(ROOT, "data", "facts", "*", "*.json")):
+        r = _j.load(io.open(fp, encoding="utf-8"))
+        if r.get("source") in snap and not r.get("shape"):
+            miss.append(r.get("indicator_id"))
+    ck("快照源 facts 带 shape 指纹", not miss, str(sorted(set(miss))[:3]))
+
+
+def unit_cli_variants():
+    """CLI 组合：--no-events / --show-history / --policy strict 都必须能跑。"""
+    import subprocess as _sp
+    for args, expect in (
+        (["--layer", "market", "--no-events", "--json"], '"lines"'),
+        (["--show-history"], "已归档快照"),
+        (["--layer", "market", "--policy", "strict", "--json"], '"lines"'),
+    ):
+        r = _sp.run([sys.executable, "-B", os.path.join(ROOT, "scripts", "state.py")] + args,
+                    capture_output=True, text=True, encoding="utf-8", cwd=ROOT, timeout=180)
+        ck(f"CLI {' '.join(args[:2])} 可运行", expect in (r.stdout or ""), (r.stderr or "")[-50:])
+
+
+# ---------------------------------------------------------------- R8 事件分支↔六环
+def unit_event_ring_attribution():
+    """每个事件类型必须能给出环归属（或显式"不映射"），不许静默消失。"""
+    import card as C
+    rules = C.EVENT_RINGS
+    for et in ("政策会议", "逆回购到期", "公开市场操作", "解禁", "新股发行", "财报披露", "数据发布"):
+        ck(f"环归属规则已登记：{et}", et in rules, str(list(rules)[:3]))
+    ck("逆回购 → C3", "C3" in (rules.get("逆回购到期") or {}).get("rings", []))
+    ck("政策会议 → C1", "C1" in (rules.get("政策会议") or {}).get("rings", []))
+    ck("解禁 → 不映射（显式空）", (rules.get("解禁") or {}).get("rings") == [])
+    # 数据发布按 affected_indicators 的 channel
+    import glob as _g, json as _j
+    fs = _g.glob(os.path.join(ROOT, "data", "events", "scenario-*.json"))
+    if fs:
+        scen = _j.load(io.open(fs[0], encoding="utf-8"))
+        ev = {"event_type": "数据发布", "scope": scen.get("event_summary", "")}
+        hit, rule = C.rings_of_event(ev, scen)
+        ck("数据发布的环由指标通道决定", bool(hit), f"{sorted(hit)} / {rule}")
+
+
 def unit_event_ring_strip():
     """R8 环条：6 环 + 背景齐全、命中环加粗、圆点只标分支不标方向色。"""
     import card as C
@@ -536,6 +614,29 @@ def unit_event_tips_nonempty():
     ck("悬停窗含日期", all(_re.search(r"20\d{2}-\d{2}-\d{2}", b) for b in blocks if 'class="tip"' in b))
 
 
+def unit_equal_branch_hidden():
+    """等值分支：数据保留三分支，卡上只列升/降，并写明省略（V2.141.0）。"""
+    import re as _re, json as _j, glob as _g
+    spec = load(os.path.join(ROOT, "data", "event_card_spec.json"), {}) or {}
+    ck("定稿记录卡上只列升/降", spec.get("branches_on_card") == ["公布值 > 前值", "公布值 < 前值"], str(spec.get("branches_on_card")))
+    ck("定稿记录等值仍在数据", (spec.get("equal_branch") or {}).get("in_data") is True)
+    h = io.open(os.path.join(ROOT, "reports", "card-events.html"), encoding="utf-8").read()
+    ck("卡上无「公布值 = 前值」分支", "公布值 = 前值" not in h)
+    ck("卡上写明「等于前值未列」", "等于前值未列" in h)
+    # 数据侧必须仍是三分支
+    bad = []
+    for fp in _g.glob(os.path.join(ROOT, "data", "events", "scenario-*.json")):
+        r = _j.load(io.open(fp, encoding="utf-8"))
+        if len(r.get("possible_outcomes") or []) != 3:
+            bad.append(os.path.basename(fp))
+    ck("分支记录仍保留三分支", not bad, str(bad[:2]))
+    # 数据发布事件在卡上应有两支（升、降）
+    tips = _re.findall(r'<div class="tip">(.*?)</div></div>', h, _re.S)
+    pub = [t for t in tips if "公布值 > 前值" in t or "公布值 < 前值" in t]
+    two = [t for t in pub if t.count("公布值 > 前值") == 1 and t.count("公布值 < 前值") == 1]
+    ck("有分支的事件都恰好列升+降两支", len(two) == len(pub) and bool(pub), f"{len(two)}/{len(pub)}")
+
+
 def main():
     verbose = "-v" in sys.argv
     for fn in (unit_card_fmt, unit_card_delta, unit_card_pos_spark, unit_events_info_level,
@@ -545,7 +646,7 @@ def main():
                unit_turnover_provider, unit_tsf_caliber, unit_event_links,
                unit_sector_c2_fresh, unit_prev_period_correct, unit_no_old_turnover_name, unit_card_series_units,
                unit_network_fallback, unit_time_edges, unit_event_rules,
-               unit_layout_fill, unit_shape_fingerprint, unit_cli_variants, unit_event_ring_attribution, unit_event_ring_strip, unit_market_card_format_frozen, unit_unlock_threshold, unit_unlock_card_folded, unit_event_tips_nonempty):
+               unit_layout_fill, unit_shape_fingerprint, unit_cli_variants, unit_event_ring_attribution, unit_event_ring_text_mode, unit_equal_branch_hidden, unit_market_card_format_frozen, unit_unlock_threshold, unit_unlock_card_folded, unit_event_tips_nonempty):
         try:
             fn()
         except Exception as e:

@@ -447,34 +447,21 @@ def check_card(fp):
         if empty_tips:
             errs.append(f"[事件卡] {len(empty_tips)} 个格子的悬停窗没有内容")
 
-        # R8：每个事件格必须带环条（分支↔六环关系），且环条只能中性色
-        rr = len(re.findall(r'class="rr"', h))
-        if rr != chips:
-            errs.append(f"[R8] 环条数 {rr} ≠ 事件格 {chips}（每个事件都要有环条）")
-        for blk in re.findall(r'<div class="rr">(.*?)</div>', h):
-            if re.search(r"#d03050|#2477b3|class=\"up\"|class=\"dn\"", blk):
-                errs.append("[R8] 环条里出现红/蓝（环格不许按影响方向上色）")
+        # R8 文字模式（V2.140.0）：每个格子必须有一行「受影响环节：…」，且全卡禁用圆点符号
+        _aff = h.count("受影响环节：")
+        if _aff < chips:
+            errs.append(f"[R8] 受影响环节行数 {_aff} < 事件格 {chips}（每格都要写清影响哪一环）")
+        for _g in ("●", "○", "◌"):
+            if _g in h:
+                errs.append(f"[R8] 卡上出现圆点符号 {_g}（R8 定稿为文字模式，禁止符号编码）")
                 break
-            if not re.search(r"C1", blk):
-                errs.append("[R8] 环条缺少 C1–C6 环名")
-                break
-        # 解禁阈值（V2.137.0）：卡上不得出现 < 200 亿且 <1% 的解禁
-        _th = {}
-        try:
-            with io.open("thresholds.json", encoding="utf-8") as _f:
-                _th = json.load(_f)
-        except Exception:
-            _th = {}
-        import re as _re2
-        _min_yi = float(_th.get("unlock_abs_yi", 200))
-        for _m in _re2.finditer(r"解禁[^<]*?(\d+(?:\.\d+)?)\s*亿", h):
-            try:
-                _v = float(_m.group(1))
-            except Exception:
-                continue
-            if _v < _min_yi:
-                errs.append(f"[解禁阈值] 卡上出现 {_v} 亿解禁（阈值 {_min_yi:.0f} 亿，应折叠）")
-                break
+        if "公布值 = 前值" in h:
+            errs.append("[R8] 卡上出现「公布值 = 前值」分支（V2.141.0 定稿：卡上只列升/降，等值留在数据）")
+        if "等于前值未列" not in h:
+            errs.append("[R8] 缺少「等于前值未列」说明行（不许静默省略）")
+        if "不映射六环（日历事件）" not in h:
+            errs.append("[R8] 缺少「不映射六环」的显式标注（不许静默略过）")
+
         for fs in set(re.findall(r"font(?:-size)?:\s*([\d.]+)px", h)):
             try:
                 v = float(fs)
