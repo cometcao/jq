@@ -325,9 +325,14 @@ def p_m1(df):
 
 
 def p_tsf(df):
-    r = df.iloc[-1]                     # 最旧在前
-    return {"指标": "社融增量（当月）", "值": f"{float(r['社会融资规模增量']):.0f} 亿元", "对比": ""}, \
-           {"data_period": norm_period(r["月份"])}
+    # 源提供的是「社会融资规模增量（亿元）」，不是同比；按数据期取最新一行
+    # （此前用 iloc[-1] 假设"最旧在前"，实际取到了最旧一期 → 数据期停在 2026-04）
+    d = df.copy()
+    d["_d"] = d["月份"].astype(str).map(norm_period)
+    d = d.dropna(subset=["_d"]).sort_values("_d")
+    r = d.iloc[-1]
+    return ({"指标": "社融增量（当月）", "值": f"{float(r['社会融资规模增量']):.0f} 亿元", "对比": ""},
+            {"data_period": r["_d"]})
 
 
 def p_fisc_dep(df):
@@ -1058,10 +1063,10 @@ SPECS = [
                     ("akshare/sina", ["macro_china_money_supply_sina", "macro_china_money_supply"], p_m1)],
          official_source="中国人民银行《金融统计数据报告》", official_url="http://www.pbc.gov.cn/diaochatongjisi/116219/116319/index.html",
          proves="狭义货币同比", does_not_prove="不证明活化程度的变化原因"),
-    dict(id="MKT_TSF_YOY", channel="C2", subject="公共池", freq="月", value_kind="ratio", layer="市场", tier_default="C",
+    dict(id="MKT_TSF_YOY", channel="C2", subject="公共池", freq="月", value_kind="level", layer="市场", tier_default="C",
          providers=[("akshare", ["macro_china_social_financing", "macro_china_shrzgm"], p_tsf)],
          official_source="中国人民银行《社会融资规模统计数据报告》", official_url="http://www.pbc.gov.cn/diaochatongjisi/116219/116319/index.html",
-         proves="信用扩张的当月增量", does_not_prove="不等于资金进入股市"),
+         proves="社融当月增量（亿元）；**同比口径当前无官方源**", does_not_prove="不等于资金进入股市"),
     dict(id="FISC_DEP", channel="C2", subject="政策", freq="月", value_kind="level", layer="市场", tier_default="C",
          providers=[("akshare/pbc", ["macro_china_central_bank_balance"], p_fisc_dep)],
          official_source="中国人民银行《货币当局资产负债表》", official_url="http://www.pbc.gov.cn/diaochatongjisi/116219/116317/index.html",
@@ -1471,6 +1476,26 @@ def main():
             continue
         res = fetch_one(spec, args, args.as_of)
         rec = to_record(spec, res, args.as_of)
+        # 源停更守卫（2026-11-24 教训）：月频指标最新期落后 >3 个月 → 源已停更
+        #   实测：macro_china_social_financing 最后一行是 2026-04，被当成"当前社融"用
+        _dp = rec.get("data_period") or ""
+        if spec.get("freq") == "月" and _dp:
+            try:
+                _d0 = dt.date.fromisoformat(_dp)
+                _now = dt.date.today()
+                _months = (_now.year - _d0.year) * 12 + (_now.month - _d0.month)
+                if _months > 3:
+                    print(f"{spec['id']:<16}{str(res.get('source') or ''):<16}{_dp:<12}"
+                          f"{str((rec.get('current_state') or {}).get('数值')):<26}"
+                          f"源已停更（最新期落后 {_months} 个月）→ 不落盘")
+                    _cp = os.path.join(ROOT, "data", "cache", spec["id"] + ".json")
+                    if os.path.exists(_cp):
+                        os.remove(_cp)
+                    miss += 1
+                    continue
+            except Exception:
+                pass
+
         # 快照一致性守卫（2026-11-24 教训）：
         #   快照型源（同花顺/乐咕）在盘前或源滞后时会"回放旧值"，若原样落盘，
         #   同一数字会被记到两个不同交易日（实测 11-20 与 11-23 成交额完全相同）。

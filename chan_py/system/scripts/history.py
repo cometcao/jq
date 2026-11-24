@@ -33,6 +33,17 @@ OUT = os.path.join(ROOT, "data", "history")
 FULL = False
 
 
+def _dp_of(raw):
+    """把各种月份写法统一成 YYYY-MM-01（'2026.4' / '2026年4月' / '202604' 都可以）。
+
+    旧写法用"只保留数字"再取前 6 位，单数字月份（1-9 月）会变成 5 位被整段丢弃——
+    实测 243 期用电量只写进 25 期，2026-01~08 全缺。
+    """
+    import importlib
+    _f = importlib.import_module("fetch")
+    return _f.norm_period(raw)
+
+
 def write_series(iid, rows, unit, note="", full=None):
     """增量合并：已有数据期保留，新抓到的期补进去（full=True 才重写）。"""
     os.makedirs(OUT, exist_ok=True)
@@ -56,7 +67,7 @@ def write_series(iid, rows, unit, note="", full=None):
                             "generated_at": dt.datetime.now().isoformat(timespec="seconds")},
                            ensure_ascii=False) + "\n")
         for p in sorted(seen):
-            f.write(json.dumps({"data_period": p, "value": seen[p]}, ensure_ascii=False) + "\n")
+            f.write(json.dumps({"data_period": p, "value": seen[p], "base_value": seen[p]}, ensure_ascii=False) + "\n")
     return len(seen)
 
 
@@ -75,7 +86,7 @@ def backfill_m2(n):
     col = [c for c in df.columns if "M2" in c and "同比增长" in c][0]
     rows = []
     for _, r in df.head(n).iterrows():
-        m = "".join(ch for ch in str(r["月份"]) if ch.isdigit())
+        m = _dp_of(r["月份"])
         rows.append((f"{m[:4]}-{m[4:6]}-01", float(r[col])))
     return write_series("MKT_M2_YOY", sorted(rows), "%", "M2 同比（月频）")
 
@@ -139,10 +150,10 @@ def backfill_loan_yoy(n=24):
         raise ValueError(f"缺列：{col}")
     rows = []
     for _, r in df.iterrows():
-        mm = "".join(ch for ch in str(r["月份"]) if ch.isdigit())
+        mm = _dp_of(r["月份"])
         v = str(r[col]).replace("%", "").strip()
         if len(mm) >= 6 and v not in ("", "nan"):
-            rows.append((f"{mm[:4]}-{mm[4:6]}-01", float(v)))
+            rows.append((mm, float(v)))
     return write_series("MKT_RMB_LOAN_YOY", sorted(rows)[-n:], "%", "人民币贷款余额同比（月频）")
 
 
@@ -163,10 +174,10 @@ def _macro_series(iid, fn, month_col, val_col, n=24, unit="%"):
     df = fn()
     rows = []
     for _, r in df.head(n * 2).iterrows():
-        mm = "".join(ch for ch in str(r[month_col]) if ch.isdigit())
+        mm = _dp_of(r[month_col])
         v = str(r[val_col]).replace("%", "").strip()
         if len(mm) >= 6 and v not in ("", "nan"):
-            rows.append((f"{mm[:4]}-{mm[4:6]}-01", float(v)))
+            rows.append((mm, float(v)))
     return write_series(iid, sorted(rows)[-n:], unit, "")
 
 
@@ -206,10 +217,10 @@ def _bf(iid, fn, month_col, val_col, n=24, unit="%"):
     df = fn()
     rows = []
     for _, r in df.iterrows():
-        mm = "".join(ch for ch in str(r[month_col]) if ch.isdigit())
+        mm = _dp_of(r[month_col])
         v = str(r[val_col]).replace("%", "").strip()
         if len(mm) >= 6 and v not in ("", "nan"):
-            rows.append((f"{mm[:4]}-{int(mm[4:6]):02d}-01", float(v)))
+            rows.append((mm, float(v)))
     rows = sorted(rows)[-n:]
     return write_series(iid, rows, unit, "")
 
@@ -226,15 +237,15 @@ def backfill_fai(n=24):
     import akshare as ak; return _bf("MKT_FAI_YOY", ak.macro_china_fixed_asset_investment, "月份", "同比增长", n)
 
 
-def backfill_elec(n=24):
+def backfill_elec(n=300):
     import akshare as ak
     df = ak.macro_china_society_electricity()
     rows = []
     for _, r in df.iterrows():
-        mm = "".join(ch for ch in str(r["统计时间"]) if ch.isdigit())
+        mm = _dp_of(r["统计时间"])
         v = str(r["全社会用电量同比"]).strip()
         if len(mm) >= 6 and v not in ("", "nan"):
-            rows.append((f"{mm[:4]}-{int(mm[4:6]):02d}-01", float(v)))
+            rows.append((mm, float(v)))
     return write_series("MKT_ELEC_YOY", sorted(rows)[-n:], "%", "全社会用电量同比（月频）")
 
 

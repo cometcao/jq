@@ -90,6 +90,21 @@ def unit_pdf_and_amac():
     ck("货基解析 小数点粘连", vb and abs(vb - 158232.06) < 1, str(vb))
 
 
+def unit_dp_of():
+    import history as H
+    cases = [("2026.4", "2026-04-01"), ("2026.10", "2026-10-01"), ("2026年4月", "2026-04-01"),
+             ("202604", "2026-04-01"), ("2026-04", "2026-04-01"), ("2026.12", "2026-12-01")]
+    bad = []
+    for raw, exp in cases:
+        try:
+            got = H._dp_of(raw)
+        except Exception as e:
+            got = f"{type(e).__name__}"
+        if got != exp:
+            bad.append(f"{raw}→{got}")
+    ck("history._dp_of 单数字月份不丢", not bad, ";".join(bad))
+
+
 def unit_norm_period():
     import fetch as F
     ck("norm_period 去时间", F.norm_period("2026-11-24 15:00:00") == "2026-11-24", F.norm_period("2026-11-24 15:00:00"))
@@ -173,7 +188,7 @@ def golden_sector_checks():
 def main():
     verbose = "-v" in sys.argv
     for fn in (unit_card_fmt, unit_card_delta, unit_card_pos_spark, unit_events_info_level,
-               unit_scenarios_wording, unit_pdf_and_amac, unit_norm_period, unit_state_helpers,
+               unit_scenarios_wording, unit_pdf_and_amac, unit_dp_of, unit_norm_period, unit_state_helpers,
                golden_checks, golden_sector_checks, facts_hygiene):
         try:
             fn()

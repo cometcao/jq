@@ -355,7 +355,8 @@ def fetch_ipo(today, horizon):
             out.append({"date": d.isoformat(), "time": "", "title": f"新股{kind}：{name}（{code}·{exch[:2]}）",
                         "event_type": "其他", "category": "新股发行",
                         "event_status": "未来预定" if d > today else "已发生",
-                        "issuer": "交易所·新股发行", "entry_mode": "auto", "source_link": "", "layer": "市场"})
+                        "issuer": "交易所·新股发行", "entry_mode": "auto",
+        "source_link": "https://www.sse.com.cn/assortment/stock/list/share/", "layer": "市场"})
     out.sort(key=lambda x: x["date"])
     return out[:30]
 
@@ -446,13 +447,13 @@ def fetch_pbc_omo_detail(today, horizon, max_docs=25):
             continue
         out.append({"date": d0.isoformat(), "time": "", "title": f"公开市场操作：{kind} {amt} 亿元",
                     "event_type": "政策会议", "category": "公开市场操作", "event_status": "已发生",
-                    "issuer": "中国人民银行", "entry_mode": "auto", "source_link": "", "layer": "市场"})
+                    "issuer": "中国人民银行", "entry_mode": "auto", "source_link": PBC_OMO_URL, "layer": "市场"})
         if maturity and amount_ok(amt):
             out.append({"date": maturity.isoformat(), "time": "",
                         "title": f"逆回购到期：{kind} {amt} 亿元（{d0.isoformat()} 操作）",
                         "event_type": "政策会议", "category": "公开市场操作",
                         "event_status": "未来预定" if maturity >= today else "已发生",
-                        "issuer": "中国人民银行", "entry_mode": "auto", "source_link": "", "layer": "市场"})
+                        "issuer": "中国人民银行", "entry_mode": "auto", "source_link": PBC_OMO_URL, "layer": "市场"})
     return out
 
 
@@ -485,7 +486,8 @@ def fetch_restricted_release(today, horizon):
             title = f"限售解禁：{int(n) if n == n else '—'} 家" + (f"，解禁市值 {mv_yi:.1f} 亿" if mv_yi else "")
             out.append({"date": d.isoformat(), "time": "", "title": title, "event_type": "解禁",
                         "category": "限售解禁", "event_status": "未来预定" if d >= today else "已发生",
-                        "issuer": "交易所·限售解禁", "entry_mode": "auto", "source_link": "", "layer": "市场"})
+                        "issuer": "交易所·限售解禁", "entry_mode": "auto",
+                        "source_link": "https://www.szse.cn/market/periodical/statistic/index.html", "layer": "市场"})
         except Exception:
             continue
     return out[:40]
@@ -527,7 +529,8 @@ def fetch_report_season(today, horizon, period=None):
         out.append({"date": d.isoformat(), "time": "",
                     "title": f"定期报告披露：{c[d]} 家（{period}）", "event_type": "财报披露",
                     "category": "定期报告", "event_status": "未来预定",
-                    "issuer": "巨潮资讯·预约披露", "entry_mode": "auto", "source_link": "", "layer": "市场"})
+                    "issuer": "巨潮资讯·预约披露", "entry_mode": "auto",
+        "source_link": "https://www.cninfo.com.cn/new/commonUrl?url=disclosure/yuyue", "layer": "市场"})
     return out[:20]
 
 

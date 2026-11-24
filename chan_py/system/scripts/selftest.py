@@ -102,6 +102,10 @@ def main():
             bad_dirs.append(nm)
     add("facts 目录规范且非空", not bad_dirs, str(bad_dirs[:3]))
 
+    if "--deep" in sys.argv:
+        r = run([os.path.join(ROOT, "scripts", "deep_audit.py")], 900)
+        add("深度巡检 0 错误", "0 错误" in (r.stdout or ""), (r.stdout or "").strip().splitlines()[-1][:60])
+
     bad = [r for r in results if not r[1]]
     print(f"\n自检：{len(results) - len(bad)} 通过 / {len(bad)} 失败（共 {len(results)} 项）")
     if bad:

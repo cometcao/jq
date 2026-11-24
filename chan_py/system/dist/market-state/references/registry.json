@@ -120,14 +120,14 @@
     "comparable_from": null
   },
   "MKT_TSF_YOY": {
-    "name": "社融存量同比",
+    "name": "社融增量（当月，亿元）",
     "layer": "市场",
     "channel": "C2",
     "subject": "公共池",
     "attribute": "A4",
     "transform": "T2",
-    "value_kind": "ratio",
-    "unit": "U2",
+    "value_kind": "level",
+    "unit": "U1",
     "frequency": "月",
     "comparable_from": null
   },
