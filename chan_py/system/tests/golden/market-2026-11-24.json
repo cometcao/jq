@@ -49,9 +49,9 @@
       "derivation": "乐咕涨跌家数：上涨/(上涨+下跌+平盘)，剔除停牌"
     },
     "MKT_TURNOVER": {
-      "value": 16678.03,
+      "value": 16585.24,
       "period": "2026-11-24",
-      "derivation": "同花顺 90 行业板块成交额加总"
+      "derivation": "沪深交易所官方（上交所每日概况 7745.44 + 深交所市场总貌 8839.80）"
     },
     "SECTOR_AMT_CONC": {
       "value": 34.0,

@@ -371,7 +371,7 @@ def backfill_mmf(max_months=18):
             txt = _F._pdf_text(_rq.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=40, verify=False).content)
             v = _F.amac_mmf_net(txt)
             if v:
-                rows.append({"data_period": key, "value": round(v / 1e4, 4)})
+                rows.append({"data_period": key, "value": round(v / 1e4, 4), "base_value": round(v, 2)})
                 added += 1
         except Exception:
             continue
@@ -380,6 +380,53 @@ def backfill_mmf(max_months=18):
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     return len(rows)
+
+
+def backfill_turnover_official(days=20):
+    """MKT_TURNOVER 用交易所官方口径重建最近 N 个交易日（沪+深股票成交额）。
+
+    2026-11-24：此前 history 来自同花顺指数/板块加总、facts 来自快照，
+    同一天出现两个数（11-23：15528.80 vs 15639.61）。统一为交易所官方。
+    """
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    import fetch as _F
+    import datetime as _dt
+    fp = os.path.join(OUT, "MKT_TURNOVER.jsonl")
+    rows = []
+    if os.path.exists(fp):
+        for x in io.open(fp, encoding="utf-8").read().splitlines():
+            if not x.strip():
+                continue
+            try:
+                r0 = json.loads(x)
+            except Exception:
+                continue
+            if r0.get("data_period") and r0.get("value") is not None:
+                rows.append(r0)
+    by = {r["data_period"]: r for r in rows}
+    # 最近 N 个工作日（不判节假日，失败即跳过）
+    day = _dt.date.fromisoformat(_F._trade_day_of())
+    tried = got = 0
+    for _ in range(days * 2):
+        if tried >= days:
+            break
+        if day.weekday() < 5:
+            tried += 1
+            ds = day.isoformat()
+            try:
+                v = _F.p_turnover_official_date(ds)
+                if v and v > 0:
+                    by[ds] = {"data_period": ds, "value": round(v, 2), "base_value": round(v, 2)}
+                    got += 1
+            except Exception:
+                pass
+        day -= _dt.timedelta(days=1)
+    out = [by[k] for k in sorted(by)]
+    with io.open(fp, "w", encoding="utf-8") as f:
+        for r in out:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    return len(out)
 
 
 def main():
@@ -398,7 +445,7 @@ def main():
             print(f"{ring} {iid:<22} 现有 {cnt} 期")
         except Exception as e:
             print(f"{ring} {iid:<22} 失败：{type(e).__name__}: {str(e)[:70]}")
-    for iid, fn in list(EXTRA_TASKS) + [("MKT_MARGIN_BAL_SZ", lambda: backfill_margin_sz()), ("MKT_MMF_SCALE", lambda: backfill_mmf()), ("MKT_CGB10Y", lambda: append_from_facts("MKT_CGB10Y"))]:
+    for iid, fn in list(EXTRA_TASKS) + [("MKT_MARGIN_BAL_SZ", lambda: backfill_margin_sz()), ("MKT_MMF_SCALE", lambda: backfill_mmf()), ("MKT_TURNOVER", lambda: backfill_turnover_official()), ("MKT_CGB10Y", lambda: append_from_facts("MKT_CGB10Y"))]:
         try:
             cnt = fn()
             print(f"   {iid:<24} 现有 {cnt} 期")

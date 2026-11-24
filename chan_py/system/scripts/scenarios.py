@@ -227,7 +227,9 @@ def main():
             return 2
         as_of = os.path.basename(fs[-1])[len("calendar-"):-len(".json")]
     cal = json.load(io.open(os.path.join(OUT, f"calendar-{as_of}.json"), encoding="utf-8"))
-    fut = [e for e in cal["events"] if e.get("event_status") == "未来预定"]
+    # 只有「数据发布」有"公布值 vs 前值"三分支；解禁/新股/央行操作/会议硬套会张冠李戴
+    fut = [e for e in cal["events"]
+           if e.get("event_status") == "未来预定" and e.get("event_type") == "数据发布"]
 
     made = bad = 0
     for ev in fut:

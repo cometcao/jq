@@ -139,11 +139,42 @@ def facts_hygiene():
     ck("facts 目录规范且非空", not bad, "; ".join(bad[:3]))
 
 
+# ---------------------------------------------------------------- 板块金标（独立复算）
+def golden_sector_checks():
+    files = sorted(glob.glob(os.path.join(ROOT, "tests", "golden", "sector-*.json")))
+    if not files:
+        return ck("板块金标存在", False, "tests/golden/sector-*.json 缺失")
+    g = load(files[-1], {}) or {}
+    total = g.get("turnover_total")
+    import state as S
+    for name, rec in (g.get("sectors") or {}).items():
+        tot = 0
+        for c in rec.get("codes") or []:
+            fp_ = os.path.join(ROOT, "data", "sw", "history", f"{c}.jsonl")
+            if not os.path.exists(fp_):
+                continue
+            rows = [json.loads(x) for x in io.open(fp_, encoding="utf-8").read().splitlines() if x.strip()]
+            rows = [r for r in rows if r.get("date")]
+            rows.sort(key=lambda r: r["date"])
+            if rows:
+                tot += rows[-1].get("amount") or 0
+        ck(f"板块金标 {name} 历史成交额可复算", tot > 0, f"{tot:,.2f} 亿")
+        if total:
+            share = round(tot / total * 100, 2)
+            ck(f"板块金标 {name} 份额 = {rec.get('share_pct_history')}%",
+               abs(share - (rec.get("share_pct_history") or 0)) <= 0.02, f"复算 {share}%")
+        # 面板金额与历史金额不应大幅偏离（>3% 说明两源不同步）
+        pan, his = rec.get("amount") or 0, rec.get("amount_history") or 0
+        if pan and his:
+            ck(f"板块金标 {name} 面板/历史成交额差 ≤3%", abs(pan - his) / his <= 0.03,
+               f"{abs(pan-his)/his*100:.2f}%")
+
+
 def main():
     verbose = "-v" in sys.argv
     for fn in (unit_card_fmt, unit_card_delta, unit_card_pos_spark, unit_events_info_level,
                unit_scenarios_wording, unit_pdf_and_amac, unit_norm_period, unit_state_helpers,
-               golden_checks, facts_hygiene):
+               golden_checks, golden_sector_checks, facts_hygiene):
         try:
             fn()
         except Exception as e:

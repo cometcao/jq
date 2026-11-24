@@ -225,7 +225,7 @@ CARD_META = {
     "MKT_MARGIN_BAL_SZ": ("C4", "深市两融", "yi2", "日频"),
     "MKT_MMF_SCALE": ("C4", "现金池（代理）", "trillion", "月频"),
     "RTL_MARGIN_INVESTORS": ("C5", "两融投资者", "wan", "日频"),
-    "MKT_TURNOVER": ("C6", "行业板块成交额合计", "yi", "日频"),
+    "MKT_TURNOVER": ("C6", "两市股票成交额", "yi", "日频"),
     "MKT_BREADTH": ("C6", "上涨占比", "pct1", "日频"),
     "SECTOR_AMT_CONC": ("C6", "Top5 成交占比", "pct1", "日频"),
     "INST_LHB_NET": ("C5", "机构龙虎榜", "yi", "区间 7 日"),
@@ -434,7 +434,7 @@ def build(policy, include_events=False, replay=None):
                      f"近 30 天减持公告与增持公告条数之差 {v:+.0f} 条（巨潮全文检索）",
                      "只说明公告条数，不代表金额与规模", tag)
 
-    # C6 参与度：行业板块成交额合计（市场层口径，不得用单板块成交额代替）
+    # C6 参与度：两市股票成交额（交易所官方口径，不得用单板块成交额代替）
     ok, tag = allow("MKT_TURNOVER")
     v = val("MKT_TURNOVER")
     p = val("MKT_TURNOVER", "prev_value")
@@ -443,16 +443,16 @@ def build(policy, include_events=False, replay=None):
         p, prev_period = prev_value_from_revisions("MKT_TURNOVER", period("MKT_TURNOVER"))
     if ok and v is not None and p is not None:
         word = "不变" if v == p else ("升" if v > p else "降")
-        ev = f"行业板块成交额合计 {v:.2f} 亿 对比上一期（{_prev_period('MKT_TURNOVER') or '—'}）{p:.2f} 亿（行业板块加总口径）"
+        ev = f"两市股票成交额 {v:.2f} 亿 对比上一期（{_prev_period('MKT_TURNOVER') or '—'}）{p:.2f} 亿（沪深交易所官方）"
         if prev_period:
             ev += f"，前一可比期 {prev_period}"
         rings[5].add(f"参与度{word}（{period('MKT_TURNOVER')}）", ev, "不说明资金来源", tag)
     elif ok and v is not None:
         rings[5].add("参与度不可读（—）",
-                     f"行业板块成交额合计已有 {v:.2f} 亿，但修订链无更早数据期、无证据可作前值（首次落盘）",
+                     f"两市股票成交额已有 {v:.2f} 亿，但修订链无更早数据期、无证据可作前值（首次落盘）",
                      "该环暂无法判方向；下次运行即可比较")
     else:
-        rings[5].add("参与度不可读（—）", "行业板块成交额合计缺失，或来源为 C 类、无源可支撑状态词", "该环无可用证据")
+        rings[5].add("参与度不可读（—）", "两市股票成交额缺失，或来源为 C 类、无源可支撑状态词", "该环无可用证据")
     ok, tag = allow("MKT_BREADTH")
     v, p = val("MKT_BREADTH"), val("MKT_BREADTH", "prev_value")
     if ok and v is not None:
@@ -792,7 +792,7 @@ def ring_readings(as_of):
             head += f"，成交最多的 5 个板块占 {cc:.1f}%"
         pt = prev("MKT_TURNOVER")
         if tn is not None:
-            head += f"，行业板块成交额合计 {tn:.0f} 亿"
+            head += f"，两市股票成交额 {tn:.0f} 亿"
             if pt is not None and abs(tn - pt) > 1:
                 head += f"（较上一交易日 {'+' if tn > pt else '−'}{abs(tn-pt):.0f} 亿）"
         breadth_txt = "钱铺到了大多数标的" if bd >= TH["breadth_pct"] else "钱没能铺开到多数标的"
@@ -1115,7 +1115,7 @@ def sector_readings(sector, rings_data):
     # C2 份额
     if d.get("share") is not None:
         sh, pv, pos = d["share"], d.get("share_prev"), d.get("share_pos")
-        head = f"这个板块占行业板块成交额合计的 {sh:.2f}%"
+        head = f"这个板块占两市股票成交额的 {sh:.2f}%"
         if pv is not None:
             head += f"，上一交易日 {pv:.2f}%"
         if pos is not None:
@@ -1245,7 +1245,7 @@ def build_sector(policy, sector=None, replay=None):
                          f"{sector}板块成交额占全市场 {cur_s:.2f}%，上一交易日 {prev_s:.2f}%"
                          + (f"（{len(shares)} 期 {pos:.0f}% 位）" if pos is not None else ""),
                          "只说明成交份额，不说明资金进出的方向",
-                         "〔C 类·申万二级指数成交额 ÷ 行业板块成交额合计（同花顺 90 板块），未对账…〕")
+                         "〔C 类·申万二级指数成交额 ÷ 两市股票成交额（交易所官方），未对账…〕")
             _rd_data.update({"share": cur_s, "share_prev": prev_s, "share_pos": pos, "share_n": len(shares)})
             sw_share_done = True
     v = val("SECTOR_SHARE") if not sw_share_done else None
@@ -1259,7 +1259,7 @@ def build_sector(policy, sector=None, replay=None):
         rings[1].add("不可读（—）", f"份额已有 {v:.2f}%，但修订链无更早数据期、无证据可作前值（首次落盘）",
                      "该环暂无法判方向")
     elif not sw_share_done:
-        rings[1].add("不可读（—）", "板块成交额或行业板块成交额合计缺失", "该环无证据")
+        rings[1].add("不可读（—）", "板块成交额或两市股票成交额缺失", "该环无证据")
     # C3 相对贵贱：板块 PE ÷ 沪深300 PE
     _idx_map = {}
     try:

@@ -551,9 +551,87 @@ def t33():
         check(f"T33 回放 {day} 无未来数据", not bad, str([l["ring"] for l in bad][:3]))
 
 
+# ---------------------------------------------------------------- T34 facts 与 history 同日同值
+def t34():
+    import glob as _g, json as _j
+    def fact_latest(iid):
+        best = None
+        for fp in _g.glob(os.path.join(ROOT, "data", "facts", "*", iid + ".json")):
+            r = _j.load(io.open(fp, encoding="utf-8"))
+            if best is None or (r.get("data_period") or "") > (best.get("data_period") or ""):
+                best = r
+        return best
+    def hist_last(iid):
+        fp = os.path.join(ROOT, "data", "history", iid + ".jsonl")
+        if not os.path.exists(fp):
+            return None
+        rows = [_j.loads(x) for x in io.open(fp, encoding="utf-8").read().splitlines() if x.strip()]
+        rows = [r for r in rows if r.get("data_period")]
+        rows.sort(key=lambda r: r["data_period"])
+        return rows[-1] if rows else None
+    bad = []
+    for iid in ("MKT_TURNOVER", "MKT_MARGIN_BAL", "MKT_CGB10Y", "MKT_DR007",
+                "MKT_MARGIN_BAL_SZ", "MKT_MMF_SCALE"):
+        f, h = fact_latest(iid), hist_last(iid)
+        if not f or not h:
+            continue
+        if f.get("data_period") != h.get("data_period"):
+            continue
+        fv, hv = f.get("base_value"), h.get("base_value", h.get("value"))
+        if fv is None or not hv:
+            continue
+        if abs(fv - hv) / abs(hv) > 0.005:
+            bad.append(f"{iid}: facts={fv} hist={hv}")
+    check("T34", "facts 与 history 同日同值（≤0.5%）", not bad, "; ".join(bad[:3]))
+
+
+# ---------------------------------------------------------------- T35 事件分支归属
+def t35():
+    import glob as _g, json as _j
+    cals = sorted(_g.glob(os.path.join(ROOT, "data", "events", "calendar-*.json")))
+    if not cals:
+        return check("T35", "有日历文件", False)
+    cal = _j.load(io.open(cals[-1], encoding="utf-8"))
+    evs = cal.get("events") or []
+    reg = load_json(os.path.join(ROOT, "dist", "market-state", "references", "registry.json"), {}) or {}
+    bad_type, bad_ind, bad_branch, bad_word = [], [], [], []
+    files = _g.glob(os.path.join(ROOT, "data", "events", "scenario-*.json"))
+    for fp in files:
+        r = _j.load(io.open(fp, encoding="utf-8"))
+        summ = r.get("event_summary") or ""
+        day = summ[:10]
+        hit = None
+        for e in evs:
+            sc = (e.get("scope") or "")[:10]
+            if e.get("event_date") == day and sc and sc in summ:
+                hit = e
+                break
+        if not hit:
+            bad_type.append(os.path.basename(fp))
+            continue
+        if hit.get("event_type") != "数据发布":
+            bad_type.append(f"{os.path.basename(fp)}({hit.get('event_type')})")
+        outs = r.get("possible_outcomes") or []
+        if len(outs) != 3:
+            bad_branch.append(f"{os.path.basename(fp)}:{len(outs)}")
+        inds = {i for o in outs for i in (o.get("affected_indicators") or [])}
+        unk = [i for i in inds if i not in reg]
+        if unk:
+            bad_ind.append(f"{os.path.basename(fp)}:{unk}")
+        for o in outs:
+            note = o.get("impact_note") or ""
+            if any(x in note for x in ("压力", "阻力", "支撑")):
+                bad_word.append(os.path.basename(fp))
+                break
+    check("T35", f"分支只挂数据发布事件（{len(files)} 份）", not bad_type, str(bad_type[:3]))
+    check("T35b", "分支三分支齐全", not bad_branch, str(bad_branch[:3]))
+    check("T35c", "受影响指标均已注册", not bad_ind, str(bad_ind[:3]))
+    check("T35d", "分支文案无歧义方向词", not bad_word, str(bad_word[:3]))
+
+
 def main():
     verbose = "-v" in sys.argv
-    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, t21, t22, t23, t24, t25, t26, t27, t28, t29, t30, t31, t32, t33):
+    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, t21, t22, t23, t24, t25, t26, t27, t28, t29, t30, t31, t32, t33, t34, t35):
         try:
             fn()
         except Exception as e:

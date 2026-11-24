@@ -186,6 +186,40 @@ def backfill(limit=40, offset=0, depth=120):
     return made
 
 
+def append_daily_to_history():
+    """把当日面板（data/sw/daily/<date>.json）追加进各板块历史（幂等）。
+
+    2026-11-24 教训：只跑 --daily 不更新历史，板块层 C2 份额会停在旧日期
+    （曾停在 11-13，页面却照常出状态词，读者无从察觉）。
+    """
+    import glob as _g
+    files = sorted(_g.glob(os.path.join(SW, "daily", "*.json")))
+    if not files:
+        return 0
+    fp = files[-1]
+    day = os.path.basename(fp)[:-5]
+    rows = (load_json(fp, {}) or {}).get("sectors") or []
+    if isinstance(rows, dict):
+        rows = list(rows.values())
+    added = 0
+    for r in rows:
+        code = r.get("code")
+        if not code:
+            continue
+        hp = history_path(code)
+        have = existing_periods(code)
+        if day in have:
+            continue
+        row = {"date": day, "close": r.get("close"), "open": r.get("open"),
+               "high": r.get("high"), "low": r.get("low"),
+               "volume": r.get("volume"), "amount": r.get("amount")}
+        exists = os.path.exists(hp)
+        with io.open(hp, "a" if exists else "w", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        added += 1
+    return added
+
+
 def rank(top=20, key="amount"):
     day = _trade_day()
     panel = load_json(os.path.join(DAILY, f"{day}.json"), None)
@@ -403,6 +437,7 @@ def main():
     ap.add_argument("--meta", action="store_true")
     ap.add_argument("--daily", action="store_true")
     ap.add_argument("--backfill", action="store_true")
+    ap.add_argument("--append", action="store_true", help="把当日面板追加进历史（幂等，秒级）")
     ap.add_argument("--limit", type=int, default=40)
     ap.add_argument("--offset", type=int, default=0)
     ap.add_argument("--depth", type=int, default=120)
@@ -417,6 +452,9 @@ def main():
     if a.meta:
         rows = fetch_meta()
         print(f"元数据：{len(rows)} 个申万二级板块 → data/sw/sectors.json")
+    if a.append:
+        n = append_daily_to_history()
+        print(f"历史追加：{n} 个板块（当日面板 → 历史）")
     if a.daily:
         day, rows = fetch_daily()
         print(f"当日面板：{day} · {len(rows)} 个板块 → data/sw/daily/{day}.json")

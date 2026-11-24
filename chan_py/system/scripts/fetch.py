@@ -489,6 +489,44 @@ def p_sector_conc(df):
             {"data_period": norm_period(_trade_day_of())})
 
 
+# ---------------------------------------------------------------- 两市股票成交额（交易所官方）
+def _sse_turnover(day8):
+    """上交所「每日概况」股票成交金额（亿元）。"""
+    import akshare as ak
+    df = ak.stock_deal_daily_sse(date=day8)
+    row = df[df["单日情况"] == "成交金额"]["股票"]
+    return float(row.iloc[0])
+
+
+def _szse_turnover(day8):
+    """深交所「市场总貌」股票成交金额（元 → 亿元）。"""
+    import akshare as ak
+    df = ak.stock_summary_szse(date=day8)
+    v = df[df["证券类别"] == "股票"]["成交金额"].iloc[0]
+    return float(v) / 1e8
+
+
+def p_turnover_official(df=None):
+    """两市股票成交额 = 上交所 + 深交所官方披露（亿元）。
+
+    **权威口径**（2026-11-24 定）：此前用同花顺行业板块加总，与官方差 0.5% 左右，
+    且快照源会回放上日值（11-20/11-23 曾记错）。改为一律取交易所官方。
+    """
+    day = _trade_day_of()
+    day8 = day.replace("-", "")
+    a, b = _sse_turnover(day8), _szse_turnover(day8)
+    return ({"指标": "两市股票成交额（交易所官方）", "值": f"{a + b:.2f} 亿元",
+             "对比": f"上交所 {a:,.2f} + 深交所 {b:,.2f} 亿元"},
+            {"data_period": day})
+
+
+def p_turnover_official_date(day):
+    """指定日期的官方成交额（回补历史用）。"""
+    day8 = day.replace("-", "")
+    a, b = _sse_turnover(day8), _szse_turnover(day8)
+    return a + b
+
+
 def p_turnover(df):
     col = find_col(df, "总成交额")
     total = float(pd.to_numeric(df[col], errors="coerce").dropna().sum())
@@ -1089,10 +1127,13 @@ SPECS = [
          official_source="同花顺行业板块一览（交易所行情聚合，快照）", official_url="https://q.10jqka.com.cn/thshy/",
          proves="成交额在各行业板块之间的集中程度（须声明 Top-N）", does_not_prove="不说明资金去向与轮动方向"),
     dict(id="MKT_TURNOVER", channel="C6", subject="公共池", freq="日", value_kind="level", layer="市场", tier_default="C",
-         providers=[("akshare/ths", ["stock_board_industry_summary_ths"], p_turnover),
+         providers=[("calc", ["__turnover_official__"], p_turnover_official),
+                    ("akshare/ths", ["stock_board_industry_summary_ths"], p_turnover),
                     ("calc", ["__turnover_tx__"], p_turnover_tx)],
-         official_source="同花顺行业板块一览加总（交易所行情）；备源为沪深指数成交额合计", official_url="https://q.10jqka.com.cn/thshy/",
-         proves="全市场当日成交额（板块加总口径；备源为沪深指数成交额合计）", does_not_prove="不说明资金方向"),
+         official_source="沪深交易所·每日概况与市场总貌（股票成交金额，两市合计）",
+         official_url="https://www.sse.com.cn/market/stockdata/overview/day/",
+         official_hosts=["www.sse.com.cn", "www.szse.cn"],
+         proves="两市股票当日成交额（交易所官方披露，非板块加总）", does_not_prove="不说明资金方向"),
     dict(id="MKT_MARGIN_COLLATERAL", channel="C4", subject="散户", freq="日", value_kind="level", layer="市场", tier_default="C",
          providers=[("akshare/em", ["stock_margin_account_info"], p_margin_collateral)],
          official_source="交易所两融汇总·担保物总价值", official_url="http://www.sse.com.cn/market/othersdata/margin/sum/",
