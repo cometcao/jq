@@ -589,6 +589,21 @@ def p_sector_val(_df=None):
         cache[sym] = (float(row[col]), str(row["_d"]))
         return cache[sym]
 
+    # 6 小时内复用上次批量结果（45 个 xls 全拉约 30 秒，不宜每次刷新都跑）
+    _cache_fp = os.path.join(CACHE_DIR, "sector_val_by_sector.json")
+    try:
+        with io.open(_cache_fp, encoding="utf-8") as f:
+            _c = json.load(f)
+        _age = (dt.datetime.now() - dt.datetime.fromisoformat(_c["generated_at"])).total_seconds() / 3600
+        if _age < 6 and _c.get("by_sector"):
+            _by = _c["by_sector"]
+            if target in _by:
+                b = _by[target]
+                return ({"指标": f"{target}板块估值倍数", "值": f"{b['ratio']:.2f}×",
+                         "对比": f"板块 PE {b['sec_pe']:.2f} / 沪深300 PE {b['mkt_pe']:.2f}"},
+                        {"data_period": b["period"]})
+    except Exception:
+        pass
     mkt_pe, mkt_d = pe_of("000300")
     by = {}
     for name, code in mapping.items():

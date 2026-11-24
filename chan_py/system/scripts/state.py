@@ -938,6 +938,68 @@ def _sector_lhb_sw(sector):
     return sum(v["net"] for v in vals), obj.get("data_period"), sum(v["n"] for v in vals)
 
 
+def sector_readings(sector, rings_data):
+    """板块层「读法」：用资金视角解释六环数字（对齐市场层 R11）。
+
+    rings_data 里放本环已算出的数：份额/倍数/两融/龙虎榜/涨跌/广度/成交额。
+    约束同 R11：只用已落盘数字；先数字后含义；不用因果词；不做方向判断。
+    """
+    d = rings_data or {}
+    out = {}
+
+    # C1 政策
+    if d.get("clue"):
+        c = d["clue"]
+        out["C1"] = (f"对口部委近 30 天高信息量发布 {c['count']} 条（政策类 {c.get('pol', 0)} 条）。"
+                     f"政策方向不在数据里，需要人工给结论。")
+
+    # C2 份额
+    if d.get("share") is not None:
+        sh, pv, pos = d["share"], d.get("share_prev"), d.get("share_pos")
+        head = f"这个板块吃下全市场成交额的 {sh:.2f}%"
+        if pv is not None:
+            head += f"，上一交易日 {pv:.2f}%"
+        if pos is not None:
+            head += f"（{d.get('share_n', 0)} 期 {pos:.0f}% 位）"
+        tail = ("钱分给它的比例在变多。" if (pv is not None and sh > pv + 0.05) else
+                ("钱分给它的比例在变少。" if (pv is not None and sh < pv - 0.05) else
+                 "钱分给它的比例没有明显变化。"))
+        out["C2"] = head + "。" + tail
+
+    # C3 贵贱
+    if d.get("ratio") is not None:
+        r = d["ratio"]
+        word = "贵" if r > 1 else "便宜"
+        out["C3"] = (f"板块 PE {d.get('sec_pe', 0):.2f}，是沪深300 的 {r:.2f} 倍，"
+                     f"相对全市场{word} {abs(r-1)*100:.0f}%。倍数本身不说明会不会回去。")
+
+    # C4 杠杆
+    if d.get("margin") is not None:
+        out["C4"] = (f"板块内 {d.get('margin_n', 0)} 只深市标的融资余额合计 {d['margin']:,.2f} 亿元，"
+                     f"这是场内借来的钱在板块里的规模（沪市未纳入，也没有前值可比）。")
+
+    # C5 主体
+    if d.get("lhb") is not None:
+        side = "净卖出" if d["lhb"] < 0 else ("净买入" if d["lhb"] > 0 else "净额为零")
+        out["C5"] = (f"近 7 日板块内 {d.get('lhb_n', 0)} 只个股上榜龙虎榜，合计{side} {abs(d['lhb']):.2f} 亿元。"
+                     f"只覆盖上榜的少数个股。")
+
+    # C6 结果
+    parts = []
+    if d.get("pct") is not None:
+        parts.append(f"成交额加权涨跌 {d['pct']:+.2f}%")
+    if d.get("breadth") is not None:
+        parts.append(f"上涨家数 {d['breadth']:.1f}%")
+    if d.get("amount") is not None:
+        parts.append(f"成交 {d['amount']:.0f} 亿")
+    if parts:
+        bd = d.get("breadth")
+        tail = ("" if bd is None else
+                ("钱铺到了板块内多数标的。" if bd >= 50 else "钱只落在板块内少数标的上。"))
+        out["C6"] = "、".join(parts) + "。" + tail
+    return out
+
+
 def build_sector(policy, sector=None):
     """板块层六环（同名不同义）。sector 为空时读 data/sector_target.json。"""
     if not sector:
@@ -955,6 +1017,8 @@ def build_sector(policy, sector=None):
             C_REASONS = json.load(fh)
     except Exception:
         C_REASONS = {}
+
+    _rd_data = {}          # 读法用：把证据行里算出的数字同步存一份，避免重算不一致
 
     def tag_of(iid):
         t = tier_of(iid)
@@ -981,6 +1045,7 @@ def build_sector(policy, sector=None):
             _pol = [e for e in _items if _info(e.get("scope") or "") == "high"]
             _show = (_pol or _items)[:3]
             tail = "；".join(f"{e['event_date']} {e.get('scope','')[:46]}" for e in _show)
+            _rd_data["clue"] = {"count": clue["count"], "pol": len(_pol)}
             ev = (f"近 30 天对口部委**高信息量**事件 {clue['count']} 条（行程/活动类已滤除）；"
                   f"最近：{tail}" + (f"；另 {max(0, clue['count']-len(_show))} 条" if clue["count"] > len(_show) else ""))
         else:
@@ -1015,6 +1080,7 @@ def build_sector(policy, sector=None):
                          + (f"（{len(shares)} 期 {pos:.0f}% 位）" if pos is not None else ""),
                          "只说明成交份额，不说明资金进出的方向",
                          "〔C 类·申万二级指数成交额 ÷ 全市场成交额，未对账…〕")
+            _rd_data.update({"share": cur_s, "share_prev": prev_s, "share_pos": pos, "share_n": len(shares)})
             sw_share_done = True
     v = val("SECTOR_SHARE") if not sw_share_done else None
     p, prev_period = prev_value_from_revisions("SECTOR_SHARE", period("SECTOR_SHARE"))
@@ -1040,6 +1106,7 @@ def build_sector(policy, sector=None):
     v3 = _sv["ratio"] if _sv else None
     if v3 is not None:
         word = "偏贵" if v3 > 1 else ("偏便宜" if v3 < 1 else "不变")
+        _rd_data.update({"ratio": v3, "sec_pe": _sv["sec_pe"]})
         rings[2].add(f"{word}（{_sv.get('period')}）",
                      f"板块 PE {_sv['sec_pe']:.2f} ÷ 沪深300 PE {_sv['mkt_pe']:.2f} = {v3:.2f}×（基准：沪深300）",
                      "只说明相对倍数，不说明是否会回归；差值与分位归比价层", tag_of("SECTOR_VAL"))
@@ -1051,6 +1118,7 @@ def build_sector(policy, sector=None):
     # C4 杠杆与资金池：用深市个股两融 × 申万成分 汇总（仅深市部分）
     mbal, mn, mday = (_sw_margin_of(sw["code"]) if sw else (None, 0, None))
     if mbal is not None:
+        _rd_data.update({"margin": mbal, "margin_n": mn})
         rings[3].add("不可读（—）",
                      f"无前值（无证据可判方向）：板块内 {mn} 只深市标的融资余额合计 {mbal:,.2f} 亿元"
                      f"（深交所官方明细汇总，{mday}），仅单日数据",
@@ -1062,6 +1130,7 @@ def build_sector(policy, sector=None):
     _lhb, _lhb_d, _lhb_n = _sector_lhb_sw(sector)
     v5 = _lhb if _lhb is not None else (val("SECTOR_INST_FLOW") if _has_own_index else None)
     if v5 is not None:
+        _rd_data.update({"lhb": v5, "lhb_n": _lhb_n})
         word = "机构增" if v5 > 0 else ("机构减" if v5 < 0 else "机构不变")
         rings[4].add(f"{word}（{_lhb_d or period('SECTOR_INST_FLOW')}）",
                      f"板块内上榜个股龙虎榜净买额 {v5:+.2f} 亿（近 7 日累计，{_lhb_n} 只；申万成分口径）",
@@ -1084,6 +1153,7 @@ def build_sector(policy, sector=None):
             pct_agg = _num / _den
             _tot = sum((_rows.get(_x["code"]) or {}).get("amount") or 0 for _x in sw_list)
             word = "升" if pct_agg > 0 else ("降" if pct_agg < 0 else "不变")
+            _rd_data.update({"pct": pct_agg, "amount": _tot})
             rings[5].add(f"{word}（{sw_panel.get('date')}）",
                          f"{sector}（{len(sw_list)} 个二级行业）成交额加权涨跌幅 {pct_agg:+.2f}%，合计成交 {_tot:.0f} 亿",
                          "一级行业无单一指数，此处为二级加权",
@@ -1094,6 +1164,7 @@ def build_sector(policy, sector=None):
         if row and row.get("pct") is not None:
             pct_sw = float(row["pct"])
             word = "升" if pct_sw > 0 else ("降" if pct_sw < 0 else "不变")
+            _rd_data.update({"pct": pct_sw, "amount": row.get("amount")})
             rings[5].add(f"{word}（{sw_panel.get('date')}）",
                          f"{sector}板块指数涨跌幅 {pct_sw:+.2f}%（收 {row.get('close')}，成交 {row.get('amount')} 亿）",
                          "不说明板块内个股结构",
@@ -1111,6 +1182,7 @@ def build_sector(policy, sector=None):
     b = sw_b if sw_b is not None else val("SECTOR_BREADTH")
     b_period = sw_b_day if sw_b is not None else period("SECTOR_BREADTH")
     if b is not None:
+        _rd_data["breadth"] = b
         word = "强" if b > 50 else ("弱" if b < 50 else "不变")
         src_tag = ("〔C 类·申万二级成分 + 全市场个股涨跌幅，未对账…〕" if sw_b is not None
                    else tag_of("SECTOR_BREADTH"))
@@ -1127,6 +1199,11 @@ def build_sector(policy, sector=None):
     _cl, _broken = chain_summary([ln for ln in body.splitlines() if ln.startswith("C")])
     _ok = sum(1 for ln in body.splitlines() if ln.startswith("C") and "不可读" not in ln)
     _tot = sum(1 for ln in body.splitlines() if ln.startswith("C"))
+    # 读法：直接用证据行里算出的数字（_rd_data）
+    _rd = sector_readings(sector, _rd_data)
+    if _rd:
+        body += "\n\n**读法（资金视角）**\n\n" + "\n".join(f"- {k}：{v}" for k, v in sorted(_rd.items())) + "\n"
+
     _ev = sector_events_section(as_of, sector)
     if _ev:
         body += "\n" + "\n".join(_ev)
