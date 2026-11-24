@@ -103,6 +103,7 @@ def main():
         (["scripts/sw_sectors.py", "--margin"], "板块两融"),
         (["scripts/state.py", "--layer", "market", "--write", "--archive", "--json"], "市场层"),
         (["scripts/state.py", "--layer", "sector", "--write", "--archive"], "板块层"),
+        (["scripts/sector_dashboard.py"], "板块面板"),
     ]
     # 申万历史回补：官方日线滞后约 6 个交易日，6 天内跑一次就够（全量约 100 秒）
     _stamp = os.path.join(ROOT, "data", "sw", ".last_backfill")

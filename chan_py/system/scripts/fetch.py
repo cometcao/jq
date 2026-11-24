@@ -595,7 +595,7 @@ def p_sector_val(_df=None):
         with io.open(_cache_fp, encoding="utf-8") as f:
             _c = json.load(f)
         _age = (dt.datetime.now() - dt.datetime.fromisoformat(_c["generated_at"])).total_seconds() / 3600
-        if _age < 6 and _c.get("by_sector"):
+        if _age < _TH_CACHE_TTL and _c.get("by_sector"):
             _by = _c["by_sector"]
             if target in _by:
                 b = _by[target]
@@ -1302,13 +1302,18 @@ def main():
         rec = to_record(spec, res, args.as_of)
         # stale 闸门（第十节 2）：>3 倍 → 不可读、不落盘；>2 倍 → 标 stale
         FREQ_DAYS = {"日": 1, "周": 5, "月": 21, "季": 63}
+        try:
+            with io.open(os.path.join(ROOT, "data", "thresholds.json"), encoding="utf-8") as _f:
+                _TH = {k: v for k, v in (json.load(_f) or {}).items() if not k.startswith("_")}
+        except Exception:
+            _TH = {}
         lag = biz_days_between(rec.get("data_period"), args.as_of or dt.date.today().isoformat())
         ratio = (lag / FREQ_DAYS[spec["freq"]]) if (lag is not None and spec["freq"] in FREQ_DAYS) else None
-        if ratio is not None and ratio > 3:
-            print(f"{spec['id']:<16}{'—':<16}{rec['data_period']:<12}{'不可读（超 3 倍时效）':<26}未落盘")
+        if ratio is not None and ratio > _TH.get("stale_block", 3.0):
+            print(f"{spec['id']:<16}{'—':<16}{rec['data_period']:<12}{'不可读（超时效倍率）':<26}未落盘")
             miss += 1
             continue
-        if ratio is not None and ratio > 2:
+        if ratio is not None and ratio > _TH.get("stale_warn", 2.0):
             rec["missing_type"] = "stale"
         if rec["data_period"]:
             write_json(os.path.join(FACT_DIR, rec["data_period"], f"{spec['id']}.json"), rec)

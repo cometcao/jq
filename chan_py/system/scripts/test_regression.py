@@ -265,9 +265,40 @@ def t16():
         check("T16b", f"{os.path.basename(fp)} 校验 0 错误", "0 错误" in (rr.stdout or ""), (rr.stdout or "")[:120])
 
 
+# ---------------------------------------------------------------- T17 C4 深市前值
+def t17():
+    mp = latest("reports/*-market-state.md")
+    if not mp:
+        return check("T17", "市场页存在", False)
+    txt = io.open(mp, encoding="utf-8").read().split("```")[1]
+    c4 = [ln for ln in txt.splitlines() if ln.startswith("C4 ") and "深市" in ln]
+    ok = bool(c4) and "对比上一期" in c4[0]
+    check("T17", "市场层 C4 深市两融带前值（不再“仅单日”）", ok, c4[0][:70] if c4 else "无深市 C4 行")
+    sp = latest("reports/*-sector-*-state.md")
+    if sp:
+        st = io.open(sp, encoding="utf-8").read().split("```")[1]
+        sc4 = [ln for ln in st.splitlines() if ln.startswith("C4 ")]
+        ok2 = bool(sc4) and ("上一期" in sc4[0] or "不可读" in sc4[0])
+        check("T17b", "板块层 C4 有前值或明确不可读", ok2, sc4[0][:70] if sc4 else "无")
+
+
+# ---------------------------------------------------------------- T18 一致性 & 阈值
+def t18():
+    r = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "check_consistency.py")],
+                       capture_output=True, text=True, encoding="utf-8", timeout=180)
+    check("T18", "cache 与 facts 一致（0 漂移）", "0 漂移" in (r.stdout or ""), (r.stdout or "").strip()[-80:])
+    th = load_json(os.path.join(ROOT, "data", "thresholds.json"), {}) or {}
+    need = ["breadth_pct", "concentration_pct", "share_change_pp", "margin_change_yi",
+            "prev_coverage", "stale_warn", "stale_block"]
+    miss = [k for k in need if k not in th]
+    check("T18b", "thresholds.json 必需键齐全", not miss, str(miss))
+    src = io.open(os.path.join(ROOT, "scripts", "state.py"), encoding="utf-8").read()
+    check("T18c", "state.py 用 TH 而非硬编码 50", 'TH["breadth_pct"]' in src)
+
+
 def main():
     verbose = "-v" in sys.argv
-    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16):
+    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18):
         try:
             fn()
         except Exception as e:

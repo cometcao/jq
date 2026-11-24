@@ -434,6 +434,15 @@ def main():
         print(f"\n[接口巡检] {len(probes)-len(bad)}/{len(probes)} 通")
         for x in probes:
             print(f"  {'✓' if x['ok'] else '✗'} {x['name']:<20}{x['scope']:<6}{x['note']}")
+    # 一致性（cache vs facts）
+    try:
+        import subprocess as _sp
+        _cc = _sp.run([sys.executable, os.path.join(ROOT, "scripts", "check_consistency.py")],
+                      capture_output=True, text=True, encoding="utf-8", timeout=120)
+        print(_cc.stdout.strip().splitlines()[0] if _cc.stdout.strip() else "一致性：未执行")
+    except Exception as e:
+        print(f"一致性校验失败：{type(e).__name__}")
+
     fp_ledger, n_led = write_ledger()
     print(f"[数据源台账] {n_led} 个指标 → {os.path.relpath(fp_ledger, ROOT)}")
     sw = sw_coverage()

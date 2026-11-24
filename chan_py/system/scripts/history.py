@@ -18,6 +18,7 @@ import datetime as dt
 import io
 import json
 import os
+import glob
 import re
 import sys
 import time
@@ -266,6 +267,72 @@ TASKS = {
 }
 
 
+def append_from_facts(iid):
+    """把 facts 里该指标的当期值追加进 history（幂等，按 data_period 去重）。
+
+    用于只有逐日累积来源的指标（如深市两融 T+1 明细，无法回补历史）。
+    """
+    fp = os.path.join(OUT, f"{iid}.jsonl")
+    fs = sorted(glob.glob(os.path.join(ROOT, "data", "facts", "*", f"{iid}.json")))
+    if not fs:
+        return 0
+    rec = json.load(io.open(fs[-1], encoding="utf-8"))
+    dp = rec.get("data_period")
+    cs = rec.get("current_state") or {}
+    raw = str(cs.get("数值") or "")
+    m = re.search(r"-?[\d,]+(?:\.\d+)?", raw)
+    if not dp or not m:
+        return 0
+    val = float(m.group(0).replace(",", ""))
+    rows = []
+    if os.path.exists(fp):
+        rows = [json.loads(x) for x in io.open(fp, encoding="utf-8").read().splitlines() if x.strip()]
+    if any(r.get("data_period") == dp for r in rows):
+        return len(rows)
+    rows.append({"data_period": dp, "value": val})
+    rows.sort(key=lambda r: r["data_period"])
+    with io.open(fp, "w", encoding="utf-8") as f:
+        for r in rows:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    return len(rows)
+
+
+def backfill_margin_sz(days=15):
+    """深市两融官方汇总（ShowReport 1837_xxpl tab1）逐日回补：最近 N 个自然日。"""
+    import datetime as dt
+    import requests
+    fp = os.path.join(OUT, "MKT_MARGIN_BAL_SZ.jsonl")
+    rows = []
+    if os.path.exists(fp):
+        rows = [json.loads(x) for x in io.open(fp, encoding="utf-8").read().splitlines() if x.strip()]
+    have = {r["data_period"] for r in rows}
+    d = dt.date.today()
+    added = 0
+    for _ in range(days):
+        if d.weekday() < 5 and d.isoformat() not in have:
+            try:
+                r = requests.get("http://www.szse.cn/api/report/ShowReport/data",
+                                 params={"SHOWTYPE": "JSON", "CATALOGID": "1837_xxpl", "TABKEY": "tab1",
+                                         "PAGENO": 1, "txtDate": d.isoformat(), "random": "0.4"},
+                                 headers={"User-Agent": "Mozilla/5.0", "Referer": "http://www.szse.cn/"},
+                                 timeout=20)
+                j = r.json() or []
+                data = (j[0].get("data") or []) if isinstance(j, list) and j else []
+                if len(data) == 1:
+                    v = float(str(data[0].get("jrrzye") or 0).replace(",", ""))
+                    if 100 < v < 100000:
+                        rows.append({"data_period": d.isoformat(), "value": v})
+                        added += 1
+            except Exception:
+                pass
+        d -= dt.timedelta(days=1)
+    rows.sort(key=lambda r: r["data_period"])
+    with io.open(fp, "w", encoding="utf-8") as f:
+        for r in rows:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    return len(rows)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--rings", default="C1,C2,C3,C4,C5,C6")
@@ -282,7 +349,7 @@ def main():
             print(f"{ring} {iid:<22} 现有 {cnt} 期")
         except Exception as e:
             print(f"{ring} {iid:<22} 失败：{type(e).__name__}: {str(e)[:70]}")
-    for iid, fn in EXTRA_TASKS:
+    for iid, fn in list(EXTRA_TASKS) + [("MKT_MARGIN_BAL_SZ", lambda: backfill_margin_sz())]:
         try:
             cnt = fn()
             print(f"   {iid:<24} 现有 {cnt} 期")

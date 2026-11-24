@@ -26,6 +26,22 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# ---------------------------------------------------------------- 可调阈值（data/thresholds.json）
+def _load_thresholds():
+    fp = os.path.join(ROOT, "data", "thresholds.json")
+    d = {"breadth_pct": 50, "concentration_pct": 50, "share_change_pp": 0.05,
+         "margin_change_yi": 0.01, "prev_coverage": 0.7}
+    try:
+        with io.open(fp, encoding="utf-8") as f:
+            d.update({k: v for k, v in (json.load(f) or {}).items() if not k.startswith("_")})
+    except Exception:
+        pass
+    return d
+
+
+TH = _load_thresholds()
+
 CACHE = os.path.join(ROOT, "data", "cache")
 FACTS = os.path.join(ROOT, "data", "facts")
 OFFICIAL = os.path.join(ROOT, "data", "official")
@@ -196,10 +212,16 @@ def build(policy, include_events=False):
     ok, tag = allow("MKT_MARGIN_BAL_SZ")
     v = val("MKT_MARGIN_BAL_SZ")
     _pv = val("MKT_MARGIN_BAL_SZ", "prev_value")
+    if _pv is None:
+        _h = [x for x in _hist("MKT_MARGIN_BAL_SZ", 60) if x[1] is not None]
+        if len(_h) >= 2:
+            _pv = _h[-2][1]
+            _pv_period = _h[-2][0]
     if ok and v is not None and _pv is not None:
         word = "不变" if v == _pv else ("加杠杆" if v > _pv else "去杠杆")
         rings[3].add(f"深市{word}（{period('MKT_MARGIN_BAL_SZ')}）",
-                     f"深市融资余额 {v:,.2f} 亿元 对比上一期 {_pv:,.2f} 亿元（深交所官方，T+1）",
+                     f"深市融资余额 {v:,.2f} 亿元 对比上一期 {_pv:,.2f} 亿元"
+                     f"（{_pv_period if '_pv_period' in dir() and _pv_period else '上一交易日'}，深交所官方 T+1）",
                      "只覆盖深市，不含沪市；不与全市场口径相加", tag)
     elif ok and v is not None:
         rings[3].add("不可读（—）",
@@ -317,8 +339,8 @@ def build(policy, include_events=False):
     ok, tag = allow("MKT_BREADTH")
     v, p = val("MKT_BREADTH"), val("MKT_BREADTH", "prev_value")
     if ok and v is not None:
-        word = "强" if v > 50 else ("弱" if v < 50 else "均衡")
-        ev = f"上涨家数占比 {v:.1f}% " + ("> 50%" if v > 50 else "< 50%")
+        word = "强" if v > TH["breadth_pct"] else ("弱" if v < TH["breadth_pct"] else "均衡")
+        ev = f"上涨家数占比 {v:.1f}% " + (f"> {TH['breadth_pct']}%" if v > TH["breadth_pct"] else f"< {TH['breadth_pct']}%")
         if p is not None:
             ev += f"（上一期 {p:.1f}%）"
         rings[5].add(f"广度{word}（{period('MKT_BREADTH')}）", ev, "只说明广度，不说明幅度与结构", tag)
@@ -327,9 +349,9 @@ def build(policy, include_events=False):
     ok, tag = allow("SECTOR_AMT_CONC")
     v = val("SECTOR_AMT_CONC")
     if ok and v is not None:
-        word = "聚" if v >= 50 else "散"
+        word = "聚" if v >= TH["concentration_pct"] else "散"
         rings[5].add(f"结构{word}（{period('SECTOR_AMT_CONC')}）",
-                     f"Top5 板块成交额占比 {v:.1f}%（阈值 50%；N=90 个行业板块）",
+                     f"Top5 板块成交额占比 {v:.1f}%（阈值 {TH['concentration_pct']}%；N=90 个行业板块）",
                      "只说明成交在板块间的分散程度，不说明资金方向", tag + "〔Top-5 口径〕")
     else:
         rings[5].add("结构不可读（—）", "板块集中度未取到", "该环无证据")
@@ -651,8 +673,8 @@ def ring_readings(as_of):
             head += f"，全市场 {tn:.0f} 亿"
             if pt is not None and abs(tn - pt) > 1:
                 head += f"（较上一交易日 {'+' if tn > pt else '−'}{abs(tn-pt):.0f} 亿）"
-        breadth_txt = "钱铺到了大多数标的" if bd >= 50 else "钱没能铺开到多数标的"
-        conc_txt = "，但没有聚在少数板块里。" if (cc is not None and cc < 50) else (
+        breadth_txt = "钱铺到了大多数标的" if bd >= TH["breadth_pct"] else "钱没能铺开到多数标的"
+        conc_txt = "，但没有聚在少数板块里。" if (cc is not None and cc < TH["concentration_pct"]) else (
                    "，并且集中在少数板块。" if cc is not None else "。")
         out["C6"] = head + "。" + breadth_txt + conc_txt
     return out
@@ -879,30 +901,41 @@ def _sw_breadth(code):
 
 
 def _sw_margin_of(code):
-    """申万板块内个股（深市部分）融资余额合计：返回 (合计亿元, 覆盖只数, 数据日)。"""
+    """申万板块内个股（深市部分）融资余额：返回 (合计亿元, 只数, 日期, 前值合计, 前期日期)。
+
+    前值用**同一批成分股**在上一份明细里的余额，避免新增/调出标的造成假变化。
+    """
     mdir = os.path.join(SW_DIR, "margin")
     if not os.path.isdir(mdir):
-        return None, 0, None
+        return None, 0, None, None, None
     fs = sorted(glob.glob(os.path.join(mdir, "*.json")))
     if not fs:
-        return None, 0, None
-    try:
-        with io.open(fs[-1], encoding="utf-8") as f:
-            m = json.load(f)
-    except Exception:
-        return None, 0, None
-    cons = {}
+        return None, 0, None, None, None
+
+    def _load(fp):
+        try:
+            with io.open(fp, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
+    m = _load(fs[-1])
+    prev = _load(fs[-2]) if len(fs) > 1 else {}
     try:
         with io.open(os.path.join(SW_DIR, "constituents.json"), encoding="utf-8") as f:
             cons = (json.load(f).get("sectors") or {})
     except Exception:
-        return None, 0, None
+        return None, 0, None, None, None
     codes = (cons.get(code) or {}).get("codes") or []
     bal = m.get("fin_bal") or {}
-    hit = [bal[c] for c in codes if c in bal]
+    pbal = prev.get("fin_bal") or {}
+    hit = [c for c in codes if c in bal]
     if not hit:
-        return None, 0, m.get("date")
-    return sum(hit), len(hit), m.get("date")
+        return None, 0, m.get("date"), None, None
+    cur = sum(bal[c] for c in hit)
+    same = [c for c in hit if c in pbal]          # 只比两期都有的标的
+    prev_sum = sum(pbal[c] for c in same) if same and len(same) >= max(1, int(len(hit) * TH["prev_coverage"])) else None
+    return cur, len(hit), m.get("date"), prev_sum, (prev.get("date") if same else None)
 
 
 
@@ -975,8 +1008,15 @@ def sector_readings(sector, rings_data):
 
     # C4 杠杆
     if d.get("margin") is not None:
-        out["C4"] = (f"板块内 {d.get('margin_n', 0)} 只深市标的融资余额合计 {d['margin']:,.2f} 亿元，"
-                     f"这是场内借来的钱在板块里的规模（沪市未纳入，也没有前值可比）。")
+        if d.get("margin_prev") is not None:
+            dl = d["margin"] - d["margin_prev"]
+            word = "增加" if dl > 0.01 else ("减少" if dl < -0.01 else "基本持平")
+            out["C4"] = (f"板块内 {d.get('margin_n', 0)} 只深市标的融资余额合计 {d['margin']:,.2f} 亿元，"
+                         f"较上一期（{d.get('margin_prev_d')}）{word} {abs(dl):,.2f} 亿元。"
+                         f"这是场内借来的钱在板块里的规模（沪市未纳入）。")
+        else:
+            out["C4"] = (f"板块内 {d.get('margin_n', 0)} 只深市标的融资余额合计 {d['margin']:,.2f} 亿元，"
+                         f"这是场内借来的钱在板块里的规模（沪市未纳入，也没有前值可比）。")
 
     # C5 主体
     if d.get("lhb") is not None:
@@ -995,7 +1035,7 @@ def sector_readings(sector, rings_data):
     if parts:
         bd = d.get("breadth")
         tail = ("" if bd is None else
-                ("钱铺到了板块内多数标的。" if bd >= 50 else "钱只落在板块内少数标的上。"))
+                ("钱铺到了板块内多数标的。" if bd >= TH["breadth_pct"] else "钱只落在板块内少数标的上。"))
         out["C6"] = "、".join(parts) + "。" + tail
     return out
 
@@ -1074,7 +1114,7 @@ def build_sector(policy, sector=None):
             cur_d, cur_s = shares[-1]
             prev_s = shares[-2][1]
             pos = _pos_of([x[1] for x in shares])
-            word = "份额升" if cur_s > prev_s + 0.05 else ("份额降" if cur_s < prev_s - 0.05 else "不变")
+            word = "份额升" if cur_s > prev_s + TH["share_change_pp"] else ("份额降" if cur_s < prev_s - TH["share_change_pp"] else "不变")
             rings[1].add(f"{word}（{cur_d}）",
                          f"{sector}板块成交额占全市场 {cur_s:.2f}%，上一交易日 {prev_s:.2f}%"
                          + (f"（{len(shares)} 期 {pos:.0f}% 位）" if pos is not None else ""),
@@ -1116,22 +1156,38 @@ def build_sector(policy, sector=None):
                      + ("（一级行业需选具体二级板块）" if len(sw_list) > 1 else ""),
                      "该环无证据")
     # C4 杠杆与资金池：用深市个股两融 × 申万成分 汇总（仅深市部分）
-    mbal, mn, mday = (None, 0, None)
+    mbal, mn, mday, mprev, mprev_d = (None, 0, None, None, None)
     if sw_list:
-        _tot_m, _tot_n, _d0 = 0.0, 0, None
+        _tot_m, _tot_n, _d0, _tot_p, _pd = 0.0, 0, None, 0.0, None
+        _has_prev = True
         for _x in sw_list:
-            _b, _n, _d = _sw_margin_of(_x["code"])
+            _b, _n, _d, _p, _pdd = _sw_margin_of(_x["code"])
             if _b is not None:
                 _tot_m += _b; _tot_n += _n; _d0 = _d0 or _d
+                if _p is None:
+                    _has_prev = False
+                else:
+                    _tot_p += _p; _pd = _pd or _pdd
         if _tot_n:
             mbal, mn, mday = _tot_m, _tot_n, _d0
+            if _has_prev and _tot_n:
+                mprev, mprev_d = _tot_p, _pd
     if mbal is not None:
-        _rd_data.update({"margin": mbal, "margin_n": mn})
-        rings[3].add("不可读（—）",
-                     f"无前值（无证据可判方向）：板块内 {mn} 只深市标的融资余额合计 {mbal:,.2f} 亿元"
-                     f"（深交所官方明细汇总，{mday}），仅单日数据",
-                     "仅覆盖深市标的，沪市未纳入；次日累积后即可判方向",
-                     "〔C 类·深交所两融明细 × 申万二级成分，自算汇总…〕")
+        _rd_data.update({"margin": mbal, "margin_n": mn, "margin_prev": mprev, "margin_prev_d": mprev_d})
+        if mprev is not None:
+            _dw = "不变" if abs(mbal - mprev) < TH["margin_change_yi"] else ("加杠杆" if mbal > mprev else "去杠杆")
+            rings[3].add(f"{_dw}（{mday}）",
+                         f"板块内 {mn} 只深市标的融资余额合计 {mbal:,.2f} 亿元，"
+                         f"上一期 {mprev:,.2f} 亿元（{mprev_d}）",
+                         "仅覆盖深市标的，沪市未纳入；不是板块全部杠杆资金",
+                         "〔C 类·深交所两融明细 × 申万二级成分，自算汇总…〕")
+            _rd_data["margin_delta"] = mbal - mprev
+        else:
+            rings[3].add("不可读（—）",
+                         f"无前值（无证据可判方向）：板块内 {mn} 只深市标的融资余额合计 {mbal:,.2f} 亿元"
+                         f"（深交所官方明细汇总，{mday}），仅单日数据",
+                         "仅覆盖深市标的，沪市未纳入；次日累积后即可判方向",
+                         "〔C 类·深交所两融明细 × 申万二级成分，自算汇总…〕")
     else:
         rings[3].add("不可读（—）", "板块层杠杆无可用口径（沪市两融无公开接口；深市明细未拉到）", "该环无证据")
     # C5 主体行为：按中证成分过滤的龙虎榜机构净买
@@ -1191,10 +1247,10 @@ def build_sector(policy, sector=None):
     b_period = sw_b_day if sw_b is not None else period("SECTOR_BREADTH")
     if b is not None:
         _rd_data["breadth"] = b
-        word = "强" if b > 50 else ("弱" if b < 50 else "不变")
+        word = "强" if b > TH["breadth_pct"] else ("弱" if b < TH["breadth_pct"] else "不变")
         src_tag = ("〔C 类·申万二级成分 + 全市场个股涨跌幅，未对账…〕" if sw_b is not None
                    else tag_of("SECTOR_BREADTH"))
-        rings[5].add(f"广度{word}（{b_period}）", f"{sector}板块上涨家数占比 {b:.1f}%（阈值 50%）",
+        rings[5].add(f"广度{word}（{b_period}）", f"{sector}板块上涨家数占比 {b:.1f}%（阈值 {TH['breadth_pct']}%）",
                      "只说明广度，不说明幅度", src_tag)
 
     daily = [period(i) for i in ("SECTOR_PCT", "SECTOR_BREADTH", "SECTOR_AMT") if period(i)]
