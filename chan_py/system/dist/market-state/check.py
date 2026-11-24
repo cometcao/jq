@@ -10,6 +10,7 @@
 
 退出码：0 通过 / 1 有错 / 2 用法错。只依赖标准库。
 """
+import io
 import json
 import os
 import re
@@ -389,10 +390,84 @@ def demo():
     return 0 if ok else 1
 
 
+# ---------------------------------------------------------------- 卡片校验（--card）
+CARD_ALLOWED_FS = {13.0, 12.5, 12.0, 11.0, 10.5, 9.0}
+CARD_STATE_WORDS = ["偏松", "偏紧", "变贵", "变便宜", "加杠杆", "去杠杆",
+                    "结构偏活", "结构偏死", "广度强", "广度弱", "结构聚", "结构散",
+                    "份额升", "份额降", "偏贵", "偏便宜", "散户增", "机构增", "机构减"]
+
+
+def check_card(fp):
+    """卡片契约（R1.1/R1.3/R1.4/R1.5/R1.6/R1.7/R1.8 的机械版）。"""
+    errs = []
+    try:
+        with io.open(fp, encoding="utf-8") as f:
+            h = f.read()
+    except Exception as e:
+        return [f"读不到卡片：{e}"]
+    # R1.5 字号
+    for fs in set(re.findall(r"font(?:-size)?:\s*([\d.]+)px", h)):
+        try:
+            v = float(fs)
+        except Exception:
+            continue
+        if v not in CARD_ALLOWED_FS:
+            errs.append(f"[R1.5] 出现非定稿字号 {fs}px（允许 {sorted(CARD_ALLOWED_FS)}）")
+    # R1.4 不写状态词
+    for w in CARD_STATE_WORDS:
+        if w in h:
+            errs.append(f"[R1.4] 卡内出现状态词「{w}」")
+    # R1.6 顶部六格 + 覆盖率与断点
+    if len(re.findall(r"<b>C[1-6]</b> \d/\d", h)) != 6:
+        errs.append("[R1.6] 顶部链条完整性格不是 6 个")
+    if "断点处不可跨环推断" not in h:
+        errs.append("[R1.6] 缺「断点处不可跨环推断」")
+    # R1.8 关系量必须全部出现，且值与七锚输出一致
+    # 从卡片路径逐级向上找 reports/state-market.json
+    sj, d0 = None, os.path.abspath(os.path.dirname(fp))
+    for _ in range(6):
+        cand = os.path.join(d0, "reports", "state-market.json")
+        try:
+            with io.open(cand, encoding="utf-8") as f:
+                sj = json.load(f)
+            break
+        except Exception:
+            pass
+        cand2 = os.path.join(d0, "state-market.json")
+        try:
+            with io.open(cand2, encoding="utf-8") as f:
+                sj = json.load(f)
+            break
+        except Exception:
+            pass
+        d0 = os.path.dirname(d0)
+    if sj:
+        for ring, rels in (sj.get("relations_by_ring") or {}).items():
+            for r in rels:
+                if r.get("value") and r["value"] not in h:
+                    errs.append(f"[R1.8] 关系量缺失或值不符：{ring} {r.get('compare_id')} 期望 {r['value']}")
+    # R1.3 基准小字
+    if h.count('class="bs"') < 3:
+        errs.append("[R1.3] 基准小字缺失（每个变化量都要有 vs/区间/阈值）")
+    # R1.7 小图与位置条
+    if "<svg" not in h:
+        errs.append("[R1.7] 没有小图")
+    if 'class="pbar"' not in h:
+        errs.append("[R1.7] 没有位置条")
+    return errs
+
+
 def main(argv):
     if "--demo" in argv:
         return demo()
     reg = load("registry.json")
+    if "--card" in argv:
+        p = argv[argv.index("--card") + 1]
+        errs = check_card(p)
+        print(("✓ " if not errs else "✗ ") + f"{p}  {len(errs)} 错误")
+        for e in errs:
+            print("    -", e)
+        return 0 if not errs else 1
     if "--page" in argv:
         p = argv[argv.index("--page") + 1]
         errs = check_page(open(p, encoding="utf-8").read())

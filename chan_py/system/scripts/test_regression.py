@@ -310,9 +310,22 @@ def t19():
           len({"中国人民银行", "交易所·限售解禁", "交易所·新股发行"} & issuers) >= 2, str(sorted(issuers)))
 
 
+# ---------------------------------------------------------------- T20 卡片由脚本生成且过契约校验
+def t20():
+    r = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "card.py"),
+                        "--out", "reports/card-market.html"],
+                       capture_output=True, text=True, encoding="utf-8", cwd=ROOT, timeout=180)
+    fp = os.path.join(ROOT, "reports", "card-market.html")
+    check("T20", "card.py 能生成卡片", os.path.exists(fp), (r.stdout or r.stderr)[-60:])
+    ck = os.path.join(ROOT, "dist", "market-state", "check.py")
+    rr = subprocess.run([sys.executable, ck, "--card", fp], capture_output=True, text=True,
+                        encoding="utf-8", cwd=os.path.dirname(ck), timeout=120)
+    check("T20b", "生成的卡片通过 check --card 契约", "0 错误" in (rr.stdout or ""), (rr.stdout or "")[:160])
+
+
 def main():
     verbose = "-v" in sys.argv
-    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19):
+    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20):
         try:
             fn()
         except Exception as e:
