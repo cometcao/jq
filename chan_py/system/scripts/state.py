@@ -893,10 +893,20 @@ def events_section(as_of):
         return []
     evs = [e for e in (d.get("events") or []) if (e.get("layer") or "市场") == "市场"]
     fut = [e for e in evs if e.get("event_status") == "未来预定"]
+    # 解禁显示阈值（与卡片同规则，避免页面/卡片不一致）
+    try:
+        import event_rules as _er
+        _tx = val("MKT_TURNOVER") or 0.0
+        _before = len(fut)
+        fut, _folded, _fold_note = _er.filter_events(fut, _tx)
+    except Exception:
+        _fold_note, _before = "", len(fut)
     hap = [e for e in evs if e.get("event_status") == "已发生"]
     lines = ["", f"—— 事件（horizon={d.get('horizon_days', 30)}d，不参与 as-of）——"]
     if fut:
         lines.append(f"未来预定 {len(fut)} 项（含结果分支）：")
+        if _fold_note:
+            lines.append(f"  · {_fold_note}（未来共 {_before} 项）")
         # 分支记录：按日期+标题匹配
         scn = {}
         for fp in glob.glob(os.path.join(ROOT, "data", "events", "scenario-scn-*.json")):

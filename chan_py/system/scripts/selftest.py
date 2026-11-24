@@ -17,6 +17,7 @@ import io
 import os
 import re
 import sys
+sys.dont_write_bytecode = True   # 自检自身不许生成 __pycache__
 import glob
 import json
 import subprocess
@@ -26,8 +27,10 @@ PY = sys.executable
 
 
 def run(args, timeout=300, cwd=None):
+    env = dict(os.environ)
+    env["PYTHONDONTWRITEBYTECODE"] = "1"      # 子进程也不许写 __pycache__
     return subprocess.run([PY, "-B"] + args, capture_output=True, text=True,
-                          encoding="utf-8", cwd=cwd or ROOT, timeout=timeout)
+                          encoding="utf-8", cwd=cwd or ROOT, timeout=timeout, env=env)
 
 
 def main():

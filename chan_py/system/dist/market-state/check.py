@@ -433,6 +433,20 @@ def check_card(fp):
             errs.append("[事件卡] 没有任何事件格子")
         if chips != tips:
             errs.append(f"[事件卡] 有 {chips - tips} 个裸 chip（chip={chips} / tip={tips}）")
+        # 悬停窗必须有内容（防止"格子有、悬浮没东西"）
+        import re as _re3
+        blocks = _re3.findall(r"<div class='ev'>(.*?)</div></div>", h, _re3.S)
+        empty_tips = []
+        for _b in blocks:
+            if 'class="tip"' not in _b:
+                empty_tips.append("无 tip")
+                continue
+            _txt = _re3.sub(r"<[^>]+>", "", _b.split('class="tip"', 1)[1])
+            if len(_txt.strip()) < 10:
+                empty_tips.append("tip 内容为空")
+        if empty_tips:
+            errs.append(f"[事件卡] {len(empty_tips)} 个格子的悬停窗没有内容")
+
         # R8：每个事件格必须带环条（分支↔六环关系），且环条只能中性色
         rr = len(re.findall(r'class="rr"', h))
         if rr != chips:
@@ -443,6 +457,23 @@ def check_card(fp):
                 break
             if not re.search(r"C1", blk):
                 errs.append("[R8] 环条缺少 C1–C6 环名")
+                break
+        # 解禁阈值（V2.137.0）：卡上不得出现 < 200 亿且 <1% 的解禁
+        _th = {}
+        try:
+            with io.open("thresholds.json", encoding="utf-8") as _f:
+                _th = json.load(_f)
+        except Exception:
+            _th = {}
+        import re as _re2
+        _min_yi = float(_th.get("unlock_abs_yi", 200))
+        for _m in _re2.finditer(r"解禁[^<]*?(\d+(?:\.\d+)?)\s*亿", h):
+            try:
+                _v = float(_m.group(1))
+            except Exception:
+                continue
+            if _v < _min_yi:
+                errs.append(f"[解禁阈值] 卡上出现 {_v} 亿解禁（阈值 {_min_yi:.0f} 亿，应折叠）")
                 break
         for fs in set(re.findall(r"font(?:-size)?:\s*([\d.]+)px", h)):
             try:
@@ -465,6 +496,23 @@ def check_card(fp):
             continue
     if _spec and is_market:
         _fonts = set(float(x) for x in (_spec.get("font") or {}).values())
+        # 解禁阈值（V2.137.0）：卡上不得出现 < 200 亿且 <1% 的解禁
+        _th = {}
+        try:
+            with io.open("thresholds.json", encoding="utf-8") as _f:
+                _th = json.load(_f)
+        except Exception:
+            _th = {}
+        import re as _re2
+        _min_yi = float(_th.get("unlock_abs_yi", 200))
+        for _m in _re2.finditer(r"解禁[^<]*?(\d+(?:\.\d+)?)\s*亿", h):
+            try:
+                _v = float(_m.group(1))
+            except Exception:
+                continue
+            if _v < _min_yi:
+                errs.append(f"[解禁阈值] 卡上出现 {_v} 亿解禁（阈值 {_min_yi:.0f} 亿，应折叠）")
+                break
         for fs in set(re.findall(r"font(?:-size)?:\s*([\d.]+)px", h)):
             try:
                 v = float(fs)

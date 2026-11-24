@@ -15,6 +15,7 @@
 import io
 import os
 import sys
+sys.dont_write_bytecode = True   # 自检自身不许生成 __pycache__
 import json
 import glob
 import re
@@ -478,6 +479,63 @@ def unit_market_card_format_frozen():
        bar.group(1) if bar else "无")
 
 
+# ---------------------------------------------------------------- 解禁显示阈值（V2.137.0）
+def unit_unlock_threshold():
+    import event_rules as R
+    th = R.thresholds()
+    ck("解禁阈值已登记（绝对值）", th.get("unlock_abs_yi") == 200.0, str(th))
+    ck("解禁阈值已登记（相对成交额）", th.get("unlock_pct_of_turnover") == 1.0, str(th))
+    tx = 16585.24
+    ok1, mv1, r1 = R.unlock_passes("限售解禁：1 家，解禁市值 298.7 亿", tx)
+    ok2, mv2, r2 = R.unlock_passes("限售解禁：5 家，解禁市值 7.2 亿", tx)
+    ck("298.7 亿 → 显示", ok1 and mv1 == 298.7)
+    ck("7.2 亿 → 折叠", not ok2 and mv2 == 7.2)
+    ok3, _, _ = R.unlock_passes("限售解禁：1 家，解禁市值 200.0 亿", tx)
+    ck("边界 200 亿 → 显示", ok3)
+    ok4, _, _ = R.unlock_passes("限售解禁：9 家，解禁市值 150.0 亿", tx)
+    ck("150 亿（0.9% 成交）→ 折叠", not ok4)
+    # 无市值的事件不做过滤（宁可显示，不静默）
+    ok5, mv5, _ = R.unlock_passes("限售解禁：3 家", tx)
+    ck("取不到市值 → 不折叠", ok5 and mv5 is None)
+
+
+def unit_unlock_card_folded():
+    """卡上不得出现低于阈值的解禁；且必须写出折叠条数。"""
+    import re as _re, event_rules as R
+    h = io.open(os.path.join(ROOT, "reports", "card-events.html"), encoding="utf-8").read()
+    lim = R.thresholds()["unlock_abs_yi"]
+    low = []
+    for m in _re.finditer(r"解禁[^<]*?(\d+(?:\.\d+)?)\s*亿", h):
+        try:
+            v = float(m.group(1))
+        except Exception:
+            continue
+        if v < lim:
+            low.append(v)
+    ck(f"卡片无 <{lim:.0f} 亿解禁", not low, str(low[:3]))
+    ck("卡片写出折叠条数", "折叠" in h and "解禁" in h)
+
+
+def unit_event_tips_nonempty():
+    """每个事件格的悬停窗必须有内容（防"格子有、悬浮空白"）。"""
+    import re as _re
+    h = io.open(os.path.join(ROOT, "reports", "card-events.html"), encoding="utf-8").read()
+    blocks = _re.findall(r"<div class='ev'>(.*?)</div></div>", h, _re.S)
+    ck("事件格数量 > 0", len(blocks) > 0, str(len(blocks)))
+    no_tip = [b for b in blocks if 'class="tip"' not in b]
+    ck("每格都有悬停窗", not no_tip, f"{len(no_tip)} 个缺失")
+    short = []
+    for b in blocks:
+        if 'class="tip"' not in b:
+            continue
+        txt = _re.sub(r"<[^>]+>", "", b.split('class="tip"', 1)[1]).strip()
+        if len(txt) < 10:
+            short.append(txt[:12])
+    ck("悬停窗都有实际内容（≥10 字）", not short, str(short[:3]))
+    # 悬停窗里必须带日期与来源，便于核对
+    ck("悬停窗含日期", all(_re.search(r"20\d{2}-\d{2}-\d{2}", b) for b in blocks if 'class="tip"' in b))
+
+
 def main():
     verbose = "-v" in sys.argv
     for fn in (unit_card_fmt, unit_card_delta, unit_card_pos_spark, unit_events_info_level,
@@ -487,7 +545,7 @@ def main():
                unit_turnover_provider, unit_tsf_caliber, unit_event_links,
                unit_sector_c2_fresh, unit_prev_period_correct, unit_no_old_turnover_name, unit_card_series_units,
                unit_network_fallback, unit_time_edges, unit_event_rules,
-               unit_layout_fill, unit_shape_fingerprint, unit_cli_variants, unit_event_ring_attribution, unit_event_ring_strip, unit_market_card_format_frozen):
+               unit_layout_fill, unit_shape_fingerprint, unit_cli_variants, unit_event_ring_attribution, unit_event_ring_strip, unit_market_card_format_frozen, unit_unlock_threshold, unit_unlock_card_folded, unit_event_tips_nonempty):
         try:
             fn()
         except Exception as e:

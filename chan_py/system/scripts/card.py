@@ -22,6 +22,7 @@ import re
 import sys
 import json
 import glob
+from event_rules import filter_events as _filter_events, rule_text as _unlock_rule, thresholds as _ev_th
 import argparse
 import datetime as dt
 
@@ -497,13 +498,18 @@ def rings_of_event(e, scen):
                     hit.add("BG")
         rule = "由分支受影响指标的通道决定"
         return hit, rule
-    et = e.get("event_type") or ""
-    cat = ""
-    for key in (et,):
+    # 1) 关键词层（先看事件标题，解决"逆回购到期"被记为政策会议的问题）
+    sc = e.get("scope") or ""
+    for kw, r in (EVENT_RINGS.get("_keyword") or {}).items():
+        if kw and kw in sc:
+            return set(r.get("rings") or []), (r.get("rule") or "")
+    # 2) 事件类型层
+    for key in (e.get("category") or "", e.get("event_type") or ""):
+        if not key:
+            continue
         r = EVENT_RINGS.get(key)
         if r:
-            rule = r.get("rule") or ""
-            return set(r.get("rings") or []), rule
+            return set(r.get("rings") or []), (r.get("rule") or "")
     return set(), "未登记归属（按不映射处理）"
 
 
@@ -595,6 +601,17 @@ def build_events():
             scen.setdefault(m.group(1), []).append(r)
     rows = [e for e in evs if e.get("event_status") == "未来预定"]
     rows.sort(key=lambda e: (e.get("event_date"), e.get("event_time") or ""))
+    # 解禁显示阈值（V2.137.0）：低于阈值折叠，但写出折叠条数，不静默消失
+    _turn = 0.0
+    try:
+        _st = load(os.path.join(ROOT, "reports", "state-market.json")) or {}
+        for _r in (_st.get("card_rows") or []):
+            if _r.get("indicator_id") == "MKT_TURNOVER" and _r.get("value"):
+                _turn = float(_r["value"])
+    except Exception:
+        _turn = 0.0
+    _all_future = len(rows)
+    rows, _folded, _fold_note = _filter_events(rows, _turn)
     if not rows:
         return '<div class="mk">窗口内无未来事件</div>'
     months = sorted({e["event_date"][:7] for e in rows})
@@ -602,6 +619,8 @@ def build_events():
     for e in rows:
         by_day.setdefault(e["event_date"], []).append(e)
     html = [EVENT_CSS, '<div class="ec">']
+    if _fold_note:
+        html.append(f'<div class="en">{_fold_note}（未来共 {_all_future} 项，显示 {len(rows)} 项）</div>')
     for ym in months[:2]:
         y, m = int(ym[:4]), int(ym[5:7])
         html.append(f'<table><caption>{y} 年 {m} 月</caption>'
@@ -660,6 +679,7 @@ EVENT_CSS = """<style>
 .ec .rr{font-size:10px;color:#b6bcc5;margin:4px 0 2px;line-height:1.6}
 .ec .rr b{color:#2a3b4d;background:#e8eef5;border-radius:3px;padding:1px 3px;font-weight:600}
 .ec .rr i{font-style:normal}
+.ec .en{font-size:10px;color:#8a8f99;margin:0 0 6px;flex-basis:100%}
 .ec .rr s{display:block;text-decoration:none;font-size:9.5px;color:#8a8f99}
 </style>"""
 

@@ -12,6 +12,7 @@
 import io
 import os
 import sys
+sys.dont_write_bytecode = True   # 自检自身不许生成 __pycache__
 import json
 import glob
 import re
