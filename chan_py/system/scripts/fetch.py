@@ -463,8 +463,13 @@ def p_breadth(df):
         except Exception:
             pass
     up, down = items.get("上涨", 0.0), items.get("下跌", 0.0)
-    total = (up + down) or 1.0
-    return ({"指标": "上涨家数占比", "值": f"{up / total * 100:.1f}%", "对比": f"上涨 {int(up)} / 下跌 {int(down)}"},
+    flat = items.get("平盘", 0.0)
+    halt = items.get("停牌", 0.0)
+    # 分母 = 上涨 + 下跌 + 平盘（剔除停牌）；与板块广度口径一致
+    total = (up + down + flat) or 1.0
+    return ({"指标": "上涨家数占比",
+             "值": f"{up / total * 100:.1f}%",
+             "对比": f"上涨 {int(up)} / 下跌 {int(down)} / 平盘 {int(flat)}（停牌 {int(halt)} 剔除）"},
             {"data_period": norm_period(stat_date or dt.date.today())})
 
 
@@ -1036,7 +1041,7 @@ SPECS = [
          official_source="中证指数有限公司·指数估值", official_url="https://www.csindex.com.cn/",
          proves="权益的现金回报率", does_not_prove="不说明相对债券的吸引力结论"),
     dict(id="MKT_MARGIN_BAL", channel="C4", subject="散户", freq="日", value_kind="level", layer="市场", tier_default="C",
-         providers=[("akshare/exchange", ["stock_margin_account_info"], p_margin)],
+         providers=[("akshare/em", ["stock_margin_account_info"], p_margin)],
          official_source="沪深交易所·融资融券汇总", official_url="http://www.sse.com.cn/market/othersdata/margin/sum/",
          proves="场内杠杆存量", does_not_prove="不说明是新资金"),
     dict(id="SECTOR_AMT", channel="C6", subject="公共池", freq="日", value_kind="level", layer="板块", tier_default="C",
@@ -1054,7 +1059,7 @@ SPECS = [
          official_source="中国人民银行《金融机构信贷收支表》（同花顺整理）", official_url="http://www.pbc.gov.cn/diaochatongjisi/116219/116319/index.html",
          proves="信用扩张（仅人民币贷款口径）", does_not_prove="不等于社融存量同比，仅同属性窄口径替代"),
     dict(id="RTL_MARGIN_INVESTORS", channel="C5", subject="散户", freq="日", value_kind="count", layer="市场", tier_default="C",
-         providers=[("akshare/exchange", ["stock_margin_account_info"], p_margin_inv)],
+         providers=[("akshare/em", ["stock_margin_account_info"], p_margin_inv)],
          official_source="沪深交易所·两融投资者统计", official_url="http://www.sse.com.cn/market/othersdata/margin/sum/",
          proves="杠杆散户的户数变化（窄口径）", does_not_prove="不等于新增开户数，仅覆盖两融投资者"),
     dict(id="INST_LHB_NET", channel="C5", subject="机构", freq="日", value_kind="level", layer="市场", tier_default="C",
@@ -1083,7 +1088,7 @@ SPECS = [
          official_source="同花顺行业板块一览加总（交易所行情）；备源为沪深指数成交额合计", official_url="https://q.10jqka.com.cn/thshy/",
          proves="全市场当日成交额（板块加总口径；备源为沪深指数成交额合计）", does_not_prove="不说明资金方向"),
     dict(id="MKT_MARGIN_COLLATERAL", channel="C4", subject="散户", freq="日", value_kind="level", layer="市场", tier_default="C",
-         providers=[("akshare/exchange", ["stock_margin_account_info"], p_margin_collateral)],
+         providers=[("akshare/em", ["stock_margin_account_info"], p_margin_collateral)],
          official_source="交易所两融汇总·担保物总价值", official_url="http://www.sse.com.cn/market/othersdata/margin/sum/",
          proves="两融账户抵押品（现金+证券）总量", does_not_prove="不等于场内现金池"),
     dict(id="MKT_NORTH_AMT", channel="C5", subject="外部", freq="日", value_kind="level", layer="市场", tier_default="C",

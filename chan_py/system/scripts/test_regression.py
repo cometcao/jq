@@ -447,9 +447,24 @@ def t29():
     check("T29c", "docs/11 列了未接入清单", "注册但未接入" in d11)
 
 
+# ---------------------------------------------------------------- T30 --json --write 必须同时写页面
+def t30():
+    fp = os.path.join(ROOT, "reports", "2026-11-24-market-state.md")
+    if not os.path.exists(fp):
+        return check("T30", "页面存在", False)
+    before = io.open(fp, encoding="utf-8").read()
+    r = subprocess.run([sys.executable, "-B", os.path.join(ROOT, "scripts", "state.py"),
+                        "--layer", "market", "--write", "--archive", "--json"],
+                       capture_output=True, text=True, encoding="utf-8", cwd=ROOT, timeout=180)
+    after = io.open(fp, encoding="utf-8").read()
+    check("T30", "--json --write 仍写页面（不提前 return）", "已写入" in (r.stdout or "") and after.strip() == before.strip())
+    j = load_json(os.path.join(ROOT, "reports", "state-market.json"), {}) or {}
+    check("T30b", "state-market.json 同步更新", bool(j.get("lines")), f"{len(j.get('lines') or [])} 条证据")
+
+
 def main():
     verbose = "-v" in sys.argv
-    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, t21, t22, t23, t24, t25, t26, t27, t28, t29):
+    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, t21, t22, t23, t24, t25, t26, t27, t28, t29, t30):
         try:
             fn()
         except Exception as e:
