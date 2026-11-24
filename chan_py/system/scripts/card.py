@@ -421,18 +421,150 @@ def css():
 </style>"""
 
 
+# ---------------------------------------------------------------- 事件日历卡（脚本生成，禁止手写）
+def _short_label(e):
+    """格子里的短标签（按事件类型）。"""
+    t = e.get("scope") or ""
+    cat = e.get("category") or ""
+    ev = e.get("event_type") or ""
+    if "限售解禁" in t:
+        m = re.search(r"限售解禁：([\d]+) 家(?:，解禁市值 ([\d.]+) 亿)?", t)
+        if m:
+            return f"解禁 {m.group(1)} 家" + (f" {float(m.group(2)):.0f}亿" if m.group(2) else "")
+    if "逆回购到期" in t:
+        m = re.search(r"([\d,]+) 亿元", t)
+        return (f"到期 {m.group(1)} 亿" if m else "逆回购到期")[:16]
+    if "新股申购" in t:
+        m = re.search(r"新股申购：([^（(]+)", t)
+        return ("新股 " + (m.group(1).strip() if m else ""))[:14]
+    if ev == "数据发布":
+        tm = e.get("event_time") or ""
+        nm = re.sub(r"月度报告|报告$", "", t)[:8]
+        return (f"{tm[:5]} {nm}").strip()
+    return t[:12]
+
+
+def _tip_html(e, scen):
+    """悬停窗：标题 + 发行人 + 状态 + （数据发布）受影响指标与分支。"""
+    out = [f'<div class="tip"><b>{e.get("event_date")} {e.get("event_time") or ""} {e.get("scope","")}</b>',
+           f'<span class="u">{e.get("issuer","")} · {e.get("event_status","")}</span>']
+    if scen:
+        reg = load(os.path.join(ROOT, "dist", "market-state", "references", "registry.json")) or {}
+        ids_list = []
+        for o in (scen.get("possible_outcomes") or []):
+            for i in (o.get("affected_indicators") or []):
+                nm = (reg.get(i) or {}).get("name") or i
+                ch = {"C1": "C1", "C2": "C2", "C3": "C3", "C4": "C4", "C5": "C5", "C6": "C6"}.get((reg.get(i) or {}).get("channel"), "")
+                lab = f"{nm}（{ch}）" if ch else nm
+                if lab not in ids_list:
+                    ids_list.append(lab)
+        ids = "、".join(ids_list) or "（未登记受影响指标）"
+        out.append(f'<span class="u">受影响：{ids}</span>')
+        for o in scen.get("possible_outcomes") or []:
+            note = o.get("impact_note") or o.get("observable_flag") or ""
+            lab = o.get("observable_flag") or o.get("outcome_label") or ""
+            out.append(f'<div class="o"><em>{lab}</em>{note}</div>')
+    else:
+        out.append(f'<div class="o">{e.get("scope","")}</div>')
+    out.append("</div>")
+    return "".join(out)
+
+
+def build_events():
+    """事件日历卡：未来窗口按月网格；**每一个** event chip 都带悬停窗（不留裸 chip）。"""
+    import calendar as _cal
+    cals = sorted(glob.glob(os.path.join(ROOT, "data", "events", "calendar-*.json")))
+    cal = load(cals[-1]) if cals else {}
+    evs = cal.get("events") or []
+    if not evs:
+        return '<div class="mk">无事件数据</div>'
+    as_of = cal.get("as_of") or ""
+    # 分支模板（按日期 + 标题前 8 字匹配）
+    # 分支模板按**事件日期**索引（event_summary 前 10 位是 YYYY-MM-DD），
+    # 不能用 observation_time（那是生成时间，与事件日期不同）
+    scen = {}
+    for fp in glob.glob(os.path.join(ROOT, "data", "events", "scenario-*.json")):
+        r = load(fp) or {}
+        summary = r.get("event_summary") or ""
+        m = re.match(r"(\d{4}-\d{2}-\d{2})", summary)
+        if m:
+            scen.setdefault(m.group(1), []).append(r)
+    rows = [e for e in evs if e.get("event_status") == "未来预定"]
+    rows.sort(key=lambda e: (e.get("event_date"), e.get("event_time") or ""))
+    if not rows:
+        return '<div class="mk">窗口内无未来事件</div>'
+    months = sorted({e["event_date"][:7] for e in rows})
+    by_day = {}
+    for e in rows:
+        by_day.setdefault(e["event_date"], []).append(e)
+    html = [EVENT_CSS, '<div class="ec">']
+    for ym in months[:2]:
+        y, m = int(ym[:4]), int(ym[5:7])
+        html.append(f'<table><caption>{y} 年 {m} 月</caption>'
+                    '<tr><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th><th>日</th></tr>')
+        first_wd = dt.date(y, m, 1).weekday()
+        ndays = _cal.monthrange(y, m)[1]
+        cells = [None] * first_wd + [dt.date(y, m, d).isoformat() for d in range(1, ndays + 1)]
+        while len(cells) % 7:
+            cells.append(None)
+        for i in range(0, len(cells), 7):
+            html.append("<tr>")
+            for c in cells[i:i + 7]:
+                if not c:
+                    html.append("<td class='e'></td>")
+                    continue
+                cls = "td today" if c == as_of else "td"
+                day = int(c[-2:])
+                cell = [f"<td class='{cls}'><s>{day}</s>"]
+                for e in by_day.get(c, []):
+                    sc = None
+                    for r in scen.get(c, []):
+                        t8 = (e.get("scope") or "")[:8]
+                        if t8 and t8 in (r.get("event_summary") or ""):
+                            sc = r
+                            break
+                    cell.append(f"<div class='ev'><span class='chip'>{_short_label(e)}</span>{_tip_html(e, sc)}</div>")
+                cell.append("</td>")
+                html.append("".join(cell))
+            html.append("</tr>")
+        html.append("</table>")
+    html.append("</div>")
+    return "".join(html)
+
+
+EVENT_CSS = """<style>
+.ec{font:12.5px/1.4 system-ui,'Segoe UI',sans-serif;display:flex;gap:14px;color:var(--dsw-alias-label-primary);padding:10px 8px;position:relative}
+.ec table{border-collapse:collapse;flex:1}
+.ec caption{text-align:left;font-weight:600;font-size:13px;padding:2px 0 6px}
+.ec th{font-size:10.5px;color:var(--dsw-alias-label-secondary);font-weight:400;padding:2px;text-align:center}
+.ec td.td{border:1px solid var(--dsw-alias-border-l2);height:58px;width:14.2%;vertical-align:top;padding:2px 3px}
+.ec td.e{border:none}
+.ec td.today{outline:2px solid #d03050;outline-offset:-2px}
+.ec s{font-size:10.5px;color:var(--dsw-alias-label-secondary);text-decoration:none;display:block}
+.ec .ev{position:relative;margin-top:2px}
+.ec .chip{display:block;font-size:9.5px;background:var(--dsw-alias-border-l2);border-radius:3px;padding:1px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ec .ev:hover .chip{background:#d8e3ee}
+.ec .tip{display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:90;width:470px;max-width:86vw;max-height:74vh;overflow:auto;background:#fff;color:#1f2328;border:1px solid #b9c0ca;border-radius:8px;padding:13px 15px;font:11.5px/1.8 system-ui,'Segoe UI',sans-serif;box-shadow:0 12px 36px rgba(0,0,0,.25);white-space:normal;text-align:left}
+.ec .ev:hover .tip{display:block}
+.ec .tip b{font-size:12px;display:block;margin:0 0 6px}
+.ec .tip .u{color:#6b7280;display:block;margin-bottom:6px}
+.ec .tip .o{margin:7px 0;padding-left:9px;border-left:3px solid #2477b3}
+.ec .tip .o em{font-style:normal;font-weight:600;display:block;color:#2477b3;margin-bottom:1px}
+</style>"""
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--layer", default="market", choices=["market"])
+    ap.add_argument("--layer", default="market", choices=["market", "events"])
     ap.add_argument("--out", default="")
     ap.add_argument("--stdout", action="store_true")
     a = ap.parse_args()
-    html = build_market()
+    html = build_events() if a.layer == "events" else build_market()
     if a.out:
         os.makedirs(os.path.dirname(os.path.join(ROOT, a.out)) or ROOT, exist_ok=True)
         with io.open(os.path.join(ROOT, a.out), "w", encoding="utf-8") as f:
             f.write(html)
-        print(f"状态卡已生成：{a.out}（{len(html)} 字符）")
+        print(f"{'事件卡' if a.layer == 'events' else '状态卡'}已生成：{a.out}（{len(html)} 字符）")
     if a.stdout or not a.out:
         print(html)
     return 0

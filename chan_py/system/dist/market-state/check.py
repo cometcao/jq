@@ -405,6 +405,23 @@ def check_card(fp):
             h = f.read()
     except Exception as e:
         return [f"读不到卡片：{e}"]
+    # 事件卡分支：每个 chip 必须带悬停窗（不许裸 chip）
+    if 'class="ec"' in h or "class='ec'" in h:
+        chips = len(re.findall(r"class=['\"]chip['\"]", h))
+        tips = len(re.findall(r"class=['\"]tip['\"]", h))
+        if chips == 0:
+            errs.append("[事件卡] 没有任何事件格子")
+        if chips != tips:
+            errs.append(f"[事件卡] 有 {chips - tips} 个裸 chip（chip={chips} / tip={tips}）")
+        for fs in set(re.findall(r"font(?:-size)?:\s*([\d.]+)px", h)):
+            try:
+                v = float(fs)
+            except Exception:
+                continue
+            if v not in {9.0, 9.5, 10.5, 11.5, 12.0, 12.5, 13.0}:
+                errs.append(f"[事件卡] 字号 {fs}px 不在定稿集合")
+        return errs
+
     # R1.5 字号
     for fs in set(re.findall(r"font(?:-size)?:\s*([\d.]+)px", h)):
         try:

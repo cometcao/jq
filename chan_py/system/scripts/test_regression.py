@@ -377,9 +377,62 @@ def t25():
     check("T25b", "变化百分比均在 ±100% 内", all(abs(x) < 100 for x in pcts), str(pcts[:6]))
 
 
+# ---------------------------------------------------------------- T26 事件卡不许裸 chip
+def t26():
+    r = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "card.py"),
+                        "--layer", "events", "--out", "reports/card-events.html"],
+                       capture_output=True, text=True, encoding="utf-8", cwd=ROOT, timeout=180)
+    fp = os.path.join(ROOT, "reports", "card-events.html")
+    check("T26", "事件卡能由 card.py 生成", os.path.exists(fp), (r.stdout or r.stderr)[-60:])
+    if not os.path.exists(fp):
+        return
+    import re as _re
+    h = io.open(fp, encoding="utf-8").read()
+    chips = len(_re.findall(r"class=['\"]chip['\"]", h))
+    tips = len(_re.findall(r"class=['\"]tip['\"]", h))
+    check("T26b", f"每个 chip 都有悬停窗（chip={chips}/tip={tips}）", chips > 0 and chips == tips)
+    ck = os.path.join(ROOT, "dist", "market-state", "check.py")
+    rr = subprocess.run([sys.executable, ck, "--card", fp], capture_output=True, text=True,
+                        encoding="utf-8", cwd=os.path.dirname(ck), timeout=120)
+    check("T26c", "事件卡通过 check --card", "0 错误" in (rr.stdout or ""), (rr.stdout or "")[:120])
+
+
+# ---------------------------------------------------------------- T27 分支文案禁用歧义词
+def t27():
+    sc = io.open(os.path.join(ROOT, "scripts", "scenarios.py"), encoding="utf-8").read()
+    # 允许出现在注释/说明里，但不许出现在生成的 impact_note 中
+    bad = [w for w in ("上行压力", "下行压力", "面临压力") if w in sc]
+    check("T27", "scenarios.py 不再用“上行压力”类措辞", not bad, str(bad))
+    import glob as _g, json as _j
+    hits = []
+    for fp in _g.glob(os.path.join(ROOT, "data", "events", "scenario-*.json")):
+        r = _j.load(io.open(fp, encoding="utf-8"))
+        for o in (r.get("possible_outcomes") or []):
+            note = o.get("impact_note") or ""
+            if any(w in note for w in ("上行压力", "下行压力")):
+                hits.append(os.path.basename(fp))
+                break
+    check("T27b", "已生成分支记录无“压力”措辞", not hits, str(hits[:3]))
+    h = io.open(os.path.join(ROOT, "reports", "card-events.html"), encoding="utf-8").read() if os.path.exists(os.path.join(ROOT, "reports", "card-events.html")) else ""
+    check("T27c", "事件卡无“压力/阻力/支撑”", not any(w in h for w in ("压力", "阻力", "支撑")))
+
+
+# ---------------------------------------------------------------- T28 全文歧义扫描
+def t28():
+    r = subprocess.run([sys.executable, "-B", os.path.join(ROOT, "scripts", "ambiguity_scan.py")],
+                       capture_output=True, text=True, encoding="utf-8", cwd=ROOT, timeout=180)
+    check("T28", "歧义扫描 0 处", "0 处歧义" in (r.stdout or ""), (r.stdout or "").strip()[-160:])
+    # 读法里不许有主观程度词
+    fp = latest("reports/*-market-state.md")
+    if fp:
+        t = io.open(fp, encoding="utf-8").read()
+        bad = [w for w in ("很薄", "缩得更快", "另一边", "只能来自", "几乎一个价") if w in t]
+        check("T28b", "读法无主观程度词/比喻", not bad, str(bad))
+
+
 def main():
     verbose = "-v" in sys.argv
-    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, t21, t22, t23, t24, t25):
+    for fn in (t01, t02, t03, t04, t05, t06, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, t21, t22, t23, t24, t25, t26, t27, t28):
         try:
             fn()
         except Exception as e:

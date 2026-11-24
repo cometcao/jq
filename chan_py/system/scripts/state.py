@@ -94,6 +94,18 @@ def tier_of(iid):
         return json.load(f).get("source_tier", "C")
 
 
+def _prev_period(iid, cur=None):
+    """该指标上一期的数据期（用于把“上一期”说清楚，R1.3 同源要求）。"""
+    h = [x for x in _hist(iid, 400) if x[1] is not None]
+    if len(h) < 2:
+        return None
+    cur = cur or (h[-1][0] if h else None)
+    for i in range(len(h) - 1, 0, -1):
+        if h[i][0] == cur:
+            return h[i - 1][0]
+    return h[-2][0]
+
+
 def period(iid):
     c = load_cache(iid)
     return c.get("data_period") if c else None
@@ -188,7 +200,7 @@ def build(policy, include_events=False):
     v, p = val("POL_LPR"), val("POL_LPR", "prev_value")
     if ok and v is not None and p is not None:
         word = "不变" if v == p else ("偏松" if v < p else "偏紧")
-        rings[0].add(f"{word}（{period('POL_LPR')}）", f"1 年期 LPR {v:.2f}% 对比上一期 {p:.2f}%", "只说明设定值变化，不说明传导", tag)
+        rings[0].add(f"{word}（{period('POL_LPR')}）", f"1 年期 LPR {v:.2f}% 对比上一期（{_prev_period('POL_LPR') or '—'}）{p:.2f}%", "只说明设定值变化，不说明传导", tag)
     else:
         rings[0].add("不可读（—）", "LPR 记录缺失，或来源为 C 类、无源可支撑状态词", "该环无可用证据")
 
@@ -215,7 +227,7 @@ def build(policy, include_events=False):
         v, p = val(iid), val(iid, "prev_value")
         if ok and v is not None and p is not None:
             word = "不变" if v == p else ("变贵" if v > p else "变便宜")
-            rings[2].add(f"{name}{word}（{period(iid)}）", f"{name}利率 {v:.4f}% 对比上一期 {p:.4f}%", "不说明估值会重估", tag)
+            rings[2].add(f"{name}{word}（{period(iid)}）", f"{name}利率 {v:.4f}% 对比上一期（{_prev_period(iid) or '—'}）{p:.4f}%", "不说明估值会重估", tag)
     if not rings[2].lines:
         rings[2].add("不可读（—）", "利率记录缺失，或来源为 C 类、无源可支撑状态词", "该环无可用证据")
 
@@ -231,7 +243,7 @@ def build(policy, include_events=False):
     if ok and v is not None and _pv is not None:
         word = "不变" if v == _pv else ("加杠杆" if v > _pv else "去杠杆")
         rings[3].add(f"深市{word}（{period('MKT_MARGIN_BAL_SZ')}）",
-                     f"深市融资余额 {v:,.2f} 亿元 对比上一期 {_pv:,.2f} 亿元"
+                     f"深市融资余额 {v:,.2f} 亿元 对比上一期（{_prev_period('MKT_MARGIN_BAL_SZ') or '—'}）{_pv:,.2f} 亿元"
                      f"（{_pv_period if '_pv_period' in dir() and _pv_period else '上一交易日'}，深交所官方 T+1）",
                      "只覆盖深市，不含沪市；不与全市场口径相加", tag)
     elif ok and v is not None:
@@ -244,7 +256,7 @@ def build(policy, include_events=False):
     v, p = val("MKT_MARGIN_BAL"), val("MKT_MARGIN_BAL", "prev_value")
     if ok and v is not None and p is not None:
         word = "不变" if v == p else ("加杠杆" if v > p else "去杠杆")
-        rings[3].add(f"{word}（{period('MKT_MARGIN_BAL')}）", f"融资余额 {v:.2f} 亿 对比上一期 {p:.2f} 亿", "不说明是新资金", tag)
+        rings[3].add(f"{word}（{period('MKT_MARGIN_BAL')}）", f"融资余额 {v:.2f} 亿 对比上一期（{_prev_period('MKT_MARGIN_BAL') or '—'}）{p:.2f} 亿", "不说明是新资金", tag)
     else:
         rings[3].add("不可读（—）", "两融记录缺失，或来源为 C 类、无源可支撑状态词", "该环无可用证据")
     col = val("MKT_MARGIN_COLLATERAL")
@@ -280,7 +292,7 @@ def build(policy, include_events=False):
     v, p = val("RTL_MARGIN_INVESTORS"), val("RTL_MARGIN_INVESTORS", "prev_value")
     if ok and v is not None:
         word = "增" if (p is None or v > p) else ("减" if v < p else "不变")
-        ev = f"两融个人投资者 {v:.2f} 万户" + (f" 对比上一期 {p:.2f} 万户" if p is not None else "")
+        ev = f"两融个人投资者 {v:.2f} 万户" + (f" 对比上一期（{_prev_period('RTL_MARGIN_INVESTORS') or '—'}）{p:.2f} 万户" if p is not None else "")
         rings[4].add(f"散户{word}（{period('RTL_MARGIN_INVESTORS')}）", ev, "仅覆盖杠杆散户，不等于新增开户", tag + "〔替代：窄口径〕")
     else:
         rings[4].add("散户不可读（—）", "无开户或杠杆投资者记录", "该环无可用证据")
@@ -337,7 +349,7 @@ def build(policy, include_events=False):
         p, prev_period = prev_value_from_revisions("MKT_TURNOVER", period("MKT_TURNOVER"))
     if ok and v is not None and p is not None:
         word = "不变" if v == p else ("升" if v > p else "降")
-        ev = f"全市场成交额 {v:.2f} 亿 对比上一期 {p:.2f} 亿（行业板块加总口径）"
+        ev = f"全市场成交额 {v:.2f} 亿 对比上一期（{_prev_period('MKT_TURNOVER') or '—'}）{p:.2f} 亿（行业板块加总口径）"
         if prev_period:
             ev += f"，前一可比期 {prev_period}"
         rings[5].add(f"参与度{word}（{period('MKT_TURNOVER')}）", ev, "不说明资金来源", tag)
@@ -612,7 +624,7 @@ def ring_readings(as_of):
     if lpr is not None:
         p = pos("POL_LPR", 24)
         out["C1"] = (f"基准利率 {lpr:.2f}%" + (f"，24 期最低档" if p is not None and p < 5 else "")
-                     + "。政策端的价格没有动，资金成本的任何变化都只能来自市场端（C3）。")
+                     + "。政策端读数未变；同期资金价格的变化记在 C3。")
 
     m2, loan, m1 = g("MKT_M2_YOY"), g("MKT_RMB_LOAN_YOY"), g("MKT_M1_YOY")
     if m2 is not None and loan is not None:
@@ -641,11 +653,11 @@ def ring_readings(as_of):
         head = (f"短端 {dr:.2f}%、长端 {ty:.2f}%，长端只比短端高 {abs(sp)*100:.0f}bp"
                 + (f"（51 期 {p:.0f}% 高位）" if p is not None else ""))
         if abs(sp) < 0.05:
-            tail = "两头几乎一个价，把钱锁长期基本没有额外回报。"
+            tail = f"期限补偿仅 {abs(sp)*100:.0f}bp，两头接近同价"
         elif sp > 0:
-            tail = "借短钱反而更贵，期限出现倒挂。"
+            tail = f"期限倒挂 {abs(sp)*100:.0f}bp（短端高于长端）"
         else:
-            tail = "锁长期能多拿一点，但这点补偿很薄。"
+            tail = f"锁长期的补偿是 {abs(sp)*100:.0f}bp（期限差见比价）"
         out["C3"] = head + "。" + tail
 
     mb, co = g("MKT_MARGIN_BAL"), _num_scaled("MKT_MARGIN_COLLATERAL")
@@ -660,7 +672,7 @@ def ring_readings(as_of):
         out["C4"] = (f"融资余额 {mb:.0f} 亿" + (f"，处 60 期最低" if pm is not None and pm < 5 else "")
                      + f"；抵押品 {co/10000:.2f} 万亿，余额占抵押品的 {mb/co*100:.2f}%"
                      + (f"，处 60 期最高" if pr is not None and pr > 95 else "")
-                     + f"。{trend}，抵押品缩得更快，账户里的自有部分被压薄。")
+                     + f"。{trend}；抵押品降幅与融资余额降幅的对比见上行（{mb:,.0f} 亿 ÷ {co/10000:.2f} 万亿）。")
 
     inv, lhb = g("RTL_MARGIN_INVESTORS"), g("INST_LHB_NET")
     if inv is not None:
@@ -672,7 +684,7 @@ def ring_readings(as_of):
         tail = f"，且{inv_txt}"
         if lhb is not None:
             tail += ("；机构席位 7 日净卖 " + f"{abs(lhb):.2f} 亿") if lhb < 0 else ("；机构席位 7 日净买 " + f"{abs(lhb):.2f} 亿")
-        out["C5"] = head + tail + "。散户在加杠杆，机构在另一边。"
+        out["C5"] = head + tail + "。"
 
     bd, cc, tn = g("MKT_BREADTH"), g("SECTOR_AMT_CONC"), g("MKT_TURNOVER")
     if bd is not None:

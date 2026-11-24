@@ -121,7 +121,7 @@ LINK_DIRECTION = {
 def impact_of(title, label, prev_value=None):
     """条件性影响：哪个指标、从多少到多少、关联指标按固定方向怎么动。
 
-    方向按常规传导固定写死（通胀/增长读数上行 → 长端利率上行压力），
+    方向按登记的传导规则固定写死（读数上行 → 长端收益率同向上移），措辞只用机械映射，不用“压力/阻力/支撑”。
     这是机制说明，不是对当日价格的判断。
     """
     name, iid, _linked = published_of(title)
@@ -142,8 +142,10 @@ def impact_of(title, label, prev_value=None):
             return "" if linked_name is None else f"；{linked_name}没有变化"
         move = direction * sign
         if "10Y" in (linked_name or ""):
-            word = "上行压力" if move > 0 else "下行压力"
-            return f"；{linked_name}通常同向反应，面临{word}（债券价格反向）"
+            # 只用机械映射，不用"压力/阻力/支撑"这类可双向解读的词
+            word = "同向上移" if move > 0 else "同向下移"
+            return (f"；按登记的传导规则，{linked_name}与公布值同向 → 该分支对应收益率{word}"
+                    f"（收益率上行 = 债券价格下行；不预测实际落点）")
         word = "上移" if move > 0 else "下移"
         return f"；{linked_name}参照值{word}"
 
