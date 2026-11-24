@@ -560,16 +560,25 @@ def _tip_html(e, scen):
                 if lab not in ids_list:
                     ids_list.append(lab)
         # 受影响指标已由 R8 环条表达，这里不再重复（省体积、避免两处口径）
+        # 分支文字：读数变化 + 对六环的影响（不许把环影响截掉）
+        _hit2, _ = rings_of_event(e, scen)
+        _rings_txt = "、".join(("背景" if r == "BG" else r) for r, _n in RINGS if r in _hit2) or "—"
+        _dir_word = {"up": "同向上移", "down": "同向下移", "eq": "不变"}
         for o in scen.get("possible_outcomes") or []:
             _flag = (o.get("observable_flag") or o.get("outcome_label") or "")
             if "=" in _flag:      # 等于前值：数据保留，卡上不列（无新信息）
                 continue
-            note = o.get("impact_note") or o.get("observable_flag") or ""
-            lab = o.get("observable_flag") or o.get("outcome_label") or ""
-            # 卡片只放要点（完整分支在状态页"事件段"与 data/events/*.json）
-            note = note.replace("按登记的传导规则，", "").replace("（收益率上行 = 债券价格下行；不预测实际落点）", "")
-            note = (note[:34] + "…") if len(note) > 34 else note
-            out.append(f'<div class="o"><em>{lab}</em>{note}</div>')
+            note = o.get("impact_note") or ""
+            # 取"读数怎么变"那一段（第一个 '；' 之前），去掉"高于前值 → "前缀
+            _read = note.split("；")[0]
+            _read = re.sub(r"^(高于前值|低于前值|等于前值)\s*→\s*", "", _read).strip()
+            _read = _read.replace("<", "&lt;").replace(">", "&gt;")
+            if len(_read) > 34:
+                _read = _read[:34] + "…"
+            _d = "up" if (">" in _flag or "高于" in _flag) else ("down" if ("<" in _flag or "低于" in _flag) else "eq")
+            _ring_effect = f"对 {_rings_txt}：{_dir_word[_d]}"
+            lab = _flag or (o.get("outcome_label") or "")
+            out.append(f'<div class="o"><em>{lab}</em>{_read}；{_ring_effect}</div>')
         out.append('<div class="rn2">等于前值未列（数据保留三分支）</div>')
     out.append("</div>")
     return "".join(out)

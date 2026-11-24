@@ -455,6 +455,11 @@ def check_card(fp):
             if _g in h:
                 errs.append(f"[R8] 卡上出现圆点符号 {_g}（R8 定稿为文字模式，禁止符号编码）")
                 break
+        import re as _re4
+        _brs = _re4.findall(r"<em>公布值 [><=] 前值</em>([^<]*)", h)
+        _noring = [x for x in _brs if not _re4.search(r"对\s*C[1-6]", x)]
+        if _noring:
+            errs.append(f"[R8] {len(_noring)} 条分支没写六环影响（应有「对 C3：同向…」）")
         if "公布值 = 前值" in h:
             errs.append("[R8] 卡上出现「公布值 = 前值」分支（V2.141.0 定稿：卡上只列升/降，等值留在数据）")
         if "等于前值未列" not in h:

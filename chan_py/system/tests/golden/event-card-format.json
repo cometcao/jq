@@ -1,5 +1,5 @@
 {
-  "spec_version": "V2.141.0",
+  "spec_version": "V2.142.0",
   "branch_mode": "text",
   "affect_prefix": "受影响环节：",
   "chips": 25,
@@ -12,5 +12,7 @@
     "o"
   ],
   "equal_branch_on_card": false,
-  "equal_note": true
+  "equal_note": true,
+  "branch_lines": 26,
+  "branches_with_ring": 26
 }

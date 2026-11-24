@@ -637,6 +637,48 @@ def unit_equal_branch_hidden():
     ck("有分支的事件都恰好列升+降两支", len(two) == len(pub) and bool(pub), f"{len(two)}/{len(pub)}")
 
 
+def unit_branch_ring_effect():
+    """每条分支必须写出"对六环的影响"（V2.142.0），且环号与受影响环节一致。"""
+    import re as _re
+    h = io.open(os.path.join(ROOT, "reports", "card-events.html"), encoding="utf-8").read()
+    brs = _re.findall(r"<em>公布值 [><=] 前值</em>([^<]*)", h)
+    ck("卡上有分支文字", bool(brs), str(len(brs)))
+    bad = [x for x in brs if not _re.search(r"对\s*C[1-6]", x)]
+    ck("每条分支都写了「对 C<n>：…」", not bad, str(bad[:2])[:80])
+    dirs = [x for x in brs if ("同向上移" in x or "同向下移" in x)]
+    ck("分支方向词用「同向上移/同向下移」", len(dirs) >= len(brs) - 1, f"{len(dirs)}/{len(brs)}")
+    # 环号必须与同格的受影响环节一致
+    tips = _re.findall(r'<div class="tip">(.*?)</div></div>', h, _re.S)
+    mis = []
+    for t in tips:
+        m = _re.search(r"受影响环节：([^<]*)", t)
+        if not m or "不映射" in m.group(1):
+            continue
+        rings = set(_re.findall(r"C[1-6]", m.group(1)))
+        for b in _re.findall(r"<em>[^<]*</em>([^<]*)", t):
+            mb = _re.search(r"对\s*(C[1-6](?:/C[1-6])*)", b)
+            if mb:
+                rb = set(_re.findall(r"C[1-6]", mb.group(1)))
+                if not rb <= (rings | {"BG"}):
+                    mis.append(f"{sorted(rb)} vs {sorted(rings)}")
+    ck("分支环号与受影响环节一致", not mis, str(mis[:2]))
+
+
+def unit_readings_cover_six_rings():
+    """资金视角（读法）必须覆盖 C1–C6 六条，缺一即失败。"""
+    import glob as _g, re as _re
+    fps = sorted(_g.glob(os.path.join(ROOT, "reports", "*-market-state.md")))
+    ck("状态页存在", bool(fps))
+    if not fps:
+        return
+    t = io.open(fps[-1], encoding="utf-8").read()
+    i = t.find("读法（资金视角）")
+    seg = t[i:i + 3000] if i > 0 else ""
+    miss = [c for c in ("C1：", "C2：", "C3：", "C4：", "C5：", "C6：") if c not in seg]
+    ck("读法覆盖 C1–C6 六环", not miss, str(miss))
+    ck("读法非空", len(seg) > 200, str(len(seg)))
+
+
 def main():
     verbose = "-v" in sys.argv
     for fn in (unit_card_fmt, unit_card_delta, unit_card_pos_spark, unit_events_info_level,
@@ -646,7 +688,7 @@ def main():
                unit_turnover_provider, unit_tsf_caliber, unit_event_links,
                unit_sector_c2_fresh, unit_prev_period_correct, unit_no_old_turnover_name, unit_card_series_units,
                unit_network_fallback, unit_time_edges, unit_event_rules,
-               unit_layout_fill, unit_shape_fingerprint, unit_cli_variants, unit_event_ring_attribution, unit_event_ring_text_mode, unit_equal_branch_hidden, unit_market_card_format_frozen, unit_unlock_threshold, unit_unlock_card_folded, unit_event_tips_nonempty):
+               unit_layout_fill, unit_shape_fingerprint, unit_cli_variants, unit_event_ring_attribution, unit_event_ring_text_mode, unit_equal_branch_hidden, unit_branch_ring_effect, unit_readings_cover_six_rings, unit_market_card_format_frozen, unit_unlock_threshold, unit_unlock_card_folded, unit_event_tips_nonempty):
         try:
             fn()
         except Exception as e:
