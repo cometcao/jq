@@ -324,6 +324,24 @@ def replay_days(n=3):
                 add("ERROR", "回放", f"{d} 引用了未来期 {l.get('period')}")
 
 
+def _auto_cumulative():
+    """未登记但序列单调 → 会被自动按增速画；提示补登记，保证口径可追溯。"""
+    import sys as _s
+    _s.path.insert(0, os.path.join(ROOT, "scripts"))
+    import card as C
+    out = []
+    for fp in sorted(os.listdir(os.path.join(ROOT, "data", "history"))):
+        if not fp.endswith(".jsonl"):
+            continue
+        iid = fp[:-6]
+        if C._registered(iid):
+            continue
+        vals = [x["value"] for x in (C.series(iid, 60) or []) if x.get("value") is not None]
+        if C.detect_visual(iid, vals)[0] == "增速":
+            out.append(iid)
+    return out
+
+
 def main():
     verbose = "-v" in sys.argv
     F, H, C = facts_index(), hist_index(), cache_index()

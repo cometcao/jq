@@ -1,0 +1,79 @@
+{
+  "note": "指标序列形态 → 卡片图形。位置条只适合波动型；累积型用增速，季节型用同比/较均值，区间汇总不画，阶梯型用档位。",
+  "shapes": {
+    "POL_LPR": {
+      "shape": "阶梯",
+      "visual": "档位",
+      "why": "政策利率只有几档，百分位会说 0% 其实是低档"
+    },
+    "POL_RRR": {
+      "shape": "阶梯",
+      "visual": "档位",
+      "why": "同上"
+    },
+    "RTL_MARGIN_INVESTORS": {
+      "shape": "累积",
+      "visual": "增速",
+      "why": "开户户数只增不减，位置条恒贴 100%"
+    },
+    "MKT_HH_DEP": {
+      "shape": "累积",
+      "visual": "增速",
+      "why": "居民存款长期上行"
+    },
+    "MKT_MMF_SCALE": {
+      "shape": "累积",
+      "visual": "增速",
+      "why": "货基规模长期上行"
+    },
+    "FISC_DEP": {
+      "shape": "季节",
+      "visual": "同比",
+      "why": "财政存款季末/年末冲高"
+    },
+    "MKT_TURNOVER": {
+      "shape": "季节",
+      "visual": "较均值",
+      "why": "春节前后成交额异常低"
+    },
+    "GOV_DEBT_NET": {
+      "shape": "季节",
+      "visual": "同比",
+      "why": "净融资有季度节奏"
+    },
+    "INST_LHB_NET": {
+      "shape": "区间汇总",
+      "visual": "不画",
+      "why": "近 7 天加总，无“上期”"
+    },
+    "SECTOR_INST_FLOW": {
+      "shape": "区间汇总",
+      "visual": "不画",
+      "why": "同上"
+    },
+    "MKT_MARGIN_BAL": {
+      "shape": "波动",
+      "visual": "位置条"
+    },
+    "MKT_DR007": {
+      "shape": "波动",
+      "visual": "位置条"
+    },
+    "MKT_CGB10Y": {
+      "shape": "波动",
+      "visual": "位置条"
+    },
+    "MKT_M2_YOY": {
+      "shape": "波动",
+      "visual": "位置条"
+    },
+    "MKT_BREADTH": {
+      "shape": "波动",
+      "visual": "位置条"
+    },
+    "SECTOR_AMT_CONC": {
+      "shape": "波动",
+      "visual": "位置条"
+    }
+  }
+}

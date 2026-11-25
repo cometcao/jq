@@ -486,6 +486,25 @@ def check_card(fp):
             break
         except Exception:
             continue
+    # R9 累积型：小图必须是增速（水位单调线没有信息）
+    try:
+        import json as _j, re as _re5
+        with io.open("series_shape.json", encoding="utf-8") as _f:
+            _shapes = (_j.load(_f) or {}).get("shapes") or {}
+        _cum = [k for k, v in _shapes.items() if (v or {}).get("shape") == "累积"]
+        for _iid in _cum:
+            _nm = {"RTL_MARGIN_INVESTORS": "两融投资者", "MKT_MMF_SCALE": "现金池（代理）",
+                   "MKT_HH_DEP": "居民存款"}.get(_iid)
+            if not _nm or _nm not in h:
+                continue
+            _i = h.find(_nm)
+            _seg = h[_i:_i + 1400]
+            _mcap = _re5.search(r'<div class="mcap"><span>([^<]*)</span>', _seg)
+            if not _mcap or "增速" not in _mcap.group(1):
+                errs.append(f"[R9] 累积型「{_nm}」小图不是增速（应为「增速(K期) …」），水位单调线没有信息")
+    except Exception:
+        pass
+
     if _spec and is_market:
         _fonts = set(float(x) for x in (_spec.get("font") or {}).values())
         # 解禁阈值（V2.137.0）：卡上不得出现 < 200 亿且 <1% 的解禁

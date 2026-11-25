@@ -229,8 +229,11 @@ def cell_pos(pos, n):
 
 
 def cell_visual(vals, iid):
-    """R9：累积→增速条；阶梯→档位；季节→较均值；区间汇总→不画；波动→位置条。"""
-    vis = shape_of(iid)
+    """R9：累积→增速条；阶梯→档位；季节→较均值；区间汇总→不画；波动→位置条。
+
+    未登记时按 detect_visual 自动判断（与右侧小图同口径）。
+    """
+    vis = detect_visual(iid, vals)[0] if iid else "位置条"
     if vis == "不画":
         return '<div class="none">区间汇总</div>'
     if len(vals) < 2:
@@ -267,7 +270,70 @@ def cell_visual(vals, iid):
     return cell_pos(pos_pct(vals), len(vals))
 
 
-def cell_spark(vals, freq):
+def _registered(iid):
+    global _SHAPES
+    shape_of(iid)          # 触发加载
+    return _SHAPES.get(iid)
+
+
+def detect_visual(iid, vals):
+    """小图口径：先看登记，登记缺失时按序列自身特征判断（V2.144.0）。
+
+    自动判「累积」的三条同时成立：
+      ① 非降比例 ≥ 0.9（只增不减）
+      ② 区间振幅 > 3%（不是近似恒定）
+      ③ 不同取值 > 8 个（排除 LPR 这类离散档位）
+    登记优先：已登记为「档位/较均值/增速」的一律按登记，不被自动判断覆盖。
+    """
+    reg = _registered(iid)
+    if reg and (reg.get("visual") or ""):
+        return reg["visual"], True
+    vs = [v for v in vals if v is not None]
+    if len(vs) < 6:
+        return "位置条", False
+    d = [vs[i + 1] - vs[i] for i in range(len(vs) - 1)]
+    mono = sum(1 for x in d if x >= 0) / len(d) if d else 0
+    lo, hi = min(vs), max(vs)
+    amp = ((hi - lo) / abs(lo) * 100) if lo else 0
+    uniq = len(set(round(v, 6) for v in vs))
+    if mono >= 0.9 and amp > 3 and uniq > 8:
+        return "增速", False
+    return "位置条", False
+
+
+def _growth_series(vals, win=None):
+    """累积型序列 → 增速序列（相对 win 期前的变化%）。只增不减的水位曲线没有信息。"""
+    n = len(vals)
+    if n < 4:
+        return []
+    w = win or min(20, max(1, n // 2))
+    if w < 1:
+        return []
+    out = []
+    for i in range(w, n):
+        base = vals[i - w]
+        out.append(((vals[i] - base) / abs(base) * 100) if base else 0.0)
+    return out
+
+
+def cell_spark(vals, freq, iid=None):
+    """小图：默认画水位；累积型改画增速，季节型改画"较均值偏离"。"""
+    vis = detect_visual(iid, vals)[0] if iid else ""
+    label = ""
+    if vis == "增速":
+        w = min(20, max(1, len(vals) // 2))
+        g = _growth_series(vals, w)
+        if len(g) < 2:
+            return '<div class="mini none">无序列</div>'
+        vals = g
+        label = f"增速({w}期)"
+    elif vis == "较均值":
+        n = min(20, len(vals))
+        if n < 2:
+            return '<div class="mini none">无序列</div>'
+        ma = sum(vals[-n:]) / n
+        vals = [((v - ma) / ma * 100) if ma else 0.0 for v in vals[-n:]]
+        label = "较均值"
     sp = spark_svg(vals)
     if not sp:
         return '<div class="mini none">无序列</div>'
@@ -282,7 +348,7 @@ def cell_spark(vals, freq):
             f'<line x1="0" y1="{H/2}" x2="100" y2="{H/2}" stroke="{bs}" stroke-width="0.7" stroke-dasharray="{bd}"/>'
             f'<path d="{d}" fill="none" stroke="{ss}" stroke-width="{sw}" vector-effect="non-scaling-stroke"/>'
             f'<circle cx="{lx:.1f}" cy="{ly:.1f}" r="{dr}" fill="#1f2328"/></svg>'
-            f'<div class="mcap"><span>{lo:.2f}–{hi:.2f}</span><span>{freq} {len(vals)}期</span></div></div>')
+            f'<div class="mcap"><span>{label + " " if label else ""}{lo:.2f}–{hi:.2f}</span><span>{freq} {len(vals)}期</span></div></div>')
 
 
 def build_market():
@@ -338,7 +404,7 @@ def build_market():
         html.append(
             f'<div class="rn">{ring}</div><div class="nm">{label} <b>{fmt(cur, kind)}</b></div>'
             f'<div class="dcol"><span class="{dcls}">{dtxt}</span><div class="bs">{basis_of(iid, s[-1]["data_period"])}</div></div>'
-            f'<div class="pos">{cell_visual(vals, iid)}</div>{cell_spark(vals, freq)}')
+            f'<div class="pos">{cell_visual(vals, iid)}</div>{cell_spark(vals, freq, iid)}')
 
     def rel_rows(ring):
         for r in rel_by_ring.get(ring, []):
@@ -403,7 +469,7 @@ def build_market():
         html.append(
             f'<div class="rn">{ring}</div><div class="nm">{label} <b>{fmt(cur, kind)}</b></div>'
             f'<div class="dcol"><span class="{dcls}">{dtxt}</span><div class="bs">{basis}</div></div>'
-            f'<div class="pos">{cell_visual(ser, iid)}</div>{cell_spark(ser, freq)}')
+            f'<div class="pos">{cell_visual(ser, iid)}</div>{cell_spark(ser, freq, iid)}')
 
     for ring in ("C1", "C2", "C3", "C4", "C5", "C6"):
         gh(ring)

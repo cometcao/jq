@@ -121,19 +121,23 @@ def unit_state_helpers():
 
 # ---------------------------------------------------------------- 2. 数值金标
 def golden_checks():
-    files = sorted(glob.glob(os.path.join(ROOT, "tests", "golden", "market-*.json")))
-    if not files:
-        return ck("金标文件存在", False, "tests/golden/market-*.json 缺失")
-    g = load(files[-1], {}) or {}
-    as_of = g.get("as_of")
-    ck("金标 as_of 与最新状态页一致", as_of and os.path.exists(os.path.join(ROOT, "reports", f"{as_of}-market-state.md")), str(as_of))
+    """数值金标：按**最新状态页的日期**找对应 golden；缺则明确报错（不许拿旧日金标比新日数据）。"""
+    import glob as _g, re as _re
+    pages = sorted(_g.glob(os.path.join(ROOT, "reports", "*-market-state.md")))
+    if not pages:
+        return ck("状态页存在", False)
+    as_of = os.path.basename(pages[-1])[:10]
+    fp = os.path.join(ROOT, "tests", "golden", f"market-{as_of}.json")
+    g = load(fp, {})
+    ck(f"当日金标存在（{as_of}）", bool(g), f"缺 tests/golden/market-{as_of}.json：核对数据后生成")
+    if not g:
+        return
     import state as S
     for iid, rec in (g.get("values") or {}).items():
         cur = S.val(iid)
         exp = rec.get("value")
         ok = cur is not None and exp is not None and abs(cur - exp) <= max(abs(exp) * 1e-4, 1e-6)
         ck(f"金标 {iid} = {exp}", ok, f"实际 {cur}（{rec.get('derivation','')[:28]}）")
-    # 派生关系必须能由原始值复算
     for name, rec in (g.get("derived") or {}).items():
         lhs, rhs, tol = rec.get("lhs"), rec.get("rhs"), rec.get("tol", 0.02)
         got = round(lhs - rhs, 2) if rec.get("op") == "diff" else round(lhs / rhs * 100, 2)
@@ -679,6 +683,73 @@ def unit_readings_cover_six_rings():
     ck("读法非空", len(seg) > 200, str(len(seg)))
 
 
+def unit_cumulative_spark_growth():
+    """累积型指标（只增不减）的小图必须是增速，不许画水位（V2.143.0）。"""
+    import re as _re, json as _j
+    shapes = (load(os.path.join(ROOT, "data", "series_shape.json"), {}) or {}).get("shapes") or {}
+    cum = {k: v for k, v in shapes.items() if (v or {}).get("shape") == "累积"}
+    ck("累积型指标已登记", bool(cum), str(list(cum)[:3]))
+    h = io.open(os.path.join(ROOT, "reports", "card-market.html"), encoding="utf-8").read()
+    name_of = {"RTL_MARGIN_INVESTORS": "两融投资者", "MKT_MMF_SCALE": "现金池（代理）", "MKT_HH_DEP": "居民存款"}
+    for iid in cum:
+        nm = name_of.get(iid)
+        if not nm or nm not in h:
+            continue
+        i = h.find(nm); seg = h[i:i + 1600]
+        mc = _re.search(r'<div class="mcap"><span>([^<]*)</span>', seg)
+        ck(f"累积型「{nm}」小图标注增速", bool(mc) and "增速" in mc.group(1),
+           (mc.group(1) if mc else "无标注"))
+        m = _re.search(r'<path d="([^"]+)"', seg)
+        if m:
+            ys = [float(y) for _x, y in _re.findall(r"([\d.]+),([\d.]+)", m.group(1))]
+            mono = all(ys[k] >= ys[k + 1] - 1e-6 for k in range(len(ys) - 1))
+            ck(f"累积型「{nm}」小图不是单调水位线", not mono, f"{len(ys)} 点全单调")
+
+
+def unit_growth_series_math():
+    """增速序列：相对 w 期前的变化%，窗口随样本长度自适应。"""
+    import card as C
+    vals = [100, 101, 102, 103, 104, 105, 106, 107, 108, 109]
+    g = C._growth_series(vals, 5)
+    ck("增速长度 = n-w", len(g) == 5, str(len(g)))
+    ck("增速首个 = (v[5]-v[0])/v[0]", abs(g[0] - 5.0) < 1e-6, str(g[0]))
+    ck("窗口自适应（短序列也给点）", len(C._growth_series([1, 2, 3, 4, 5, 6], 5)) == 1)
+    ck("样本过短返回空", C._growth_series([1, 2], 1) == [])
+
+
+def unit_detect_visual_auto():
+    """未登记的单调累积序列自动改画增速；离散档位/波动序列不受影响（V2.144.0）。"""
+    import card as C
+    # ① 只增不减、振幅>3%、取值多 → 自动增速
+    rising = [100 + i * 0.5 + (0.3 if i % 4 == 0 else 0) for i in range(60)]
+    ck("单调累积序列 → 增速", C.detect_visual("UNREG_TEST", rising)[0] == "增速",
+       str(C.detect_visual("UNREG_TEST", rising)))
+    # ② 离散档位（取值少）→ 不判累积
+    step = [3.0] * 20 + [3.1] * 20 + [3.05] * 20
+    ck("离散档位 → 不判累积", C.detect_visual("UNREG_TEST", step)[0] == "位置条",
+       str(C.detect_visual("UNREG_TEST", step)))
+    # ③ 近似恒定（振幅 ≤3%）→ 不判累积
+    flat = [100.0 + (0.1 if i % 10 else -0.1) for i in range(60)]
+    ck("近似恒定 → 不判累积", C.detect_visual("UNREG_TEST", flat)[0] == "位置条")
+    # ④ 波动序列 → 位置条
+    wobble = [100 + (5 if i % 2 else -5) for i in range(60)]
+    ck("波动序列 → 位置条", C.detect_visual("UNREG_TEST", wobble)[0] == "位置条")
+    # ⑤ 已登记优先：LPR 是档位，即使单调也不改
+    vals = [3.0 + (0.001 if i > 30 else 0) for i in range(60)]
+    ck("已登记档位优先", C.detect_visual("POL_LPR", vals)[0] == "档位",
+       str(C.detect_visual("POL_LPR", vals)))
+    # ⑥ 已登记增速优先
+    ck("已登记增速优先", C.detect_visual("RTL_MARGIN_INVESTORS", rising)[0] == "增速")
+    # ⑦ 位置条与小图口径一致
+    h = io.open(os.path.join(ROOT, "reports", "card-market.html"), encoding="utf-8").read()
+    i = h.find("两融投资者"); seg = h[i:i + 1600]
+    pl = re.search(r'<div class="plbl">(.*?)</div>', seg, re.S)
+    mc = re.search(r'<div class="mcap"><span>([^<]*)</span>', seg)
+    both_growth = (pl and "%" in re.sub(r"<[^>]+>", "", pl.group(1))) and (mc and "增速" in mc.group(1))
+    ck("位置条与小图同口径（都是增速）", bool(both_growth),
+       f"{(pl.group(1) if pl else '')[:20]}/{(mc.group(1) if mc else '')}")
+
+
 def main():
     verbose = "-v" in sys.argv
     for fn in (unit_card_fmt, unit_card_delta, unit_card_pos_spark, unit_events_info_level,
@@ -688,7 +759,7 @@ def main():
                unit_turnover_provider, unit_tsf_caliber, unit_event_links,
                unit_sector_c2_fresh, unit_prev_period_correct, unit_no_old_turnover_name, unit_card_series_units,
                unit_network_fallback, unit_time_edges, unit_event_rules,
-               unit_layout_fill, unit_shape_fingerprint, unit_cli_variants, unit_event_ring_attribution, unit_event_ring_text_mode, unit_equal_branch_hidden, unit_branch_ring_effect, unit_readings_cover_six_rings, unit_market_card_format_frozen, unit_unlock_threshold, unit_unlock_card_folded, unit_event_tips_nonempty):
+               unit_layout_fill, unit_shape_fingerprint, unit_cli_variants, unit_event_ring_attribution, unit_event_ring_text_mode, unit_equal_branch_hidden, unit_branch_ring_effect, unit_readings_cover_six_rings, unit_market_card_format_frozen, unit_unlock_threshold, unit_unlock_card_folded, unit_event_tips_nonempty, unit_cumulative_spark_growth, unit_growth_series_math, unit_detect_visual_auto):
         try:
             fn()
         except Exception as e:
