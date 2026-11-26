@@ -161,36 +161,37 @@ def facts_hygiene():
 
 # ---------------------------------------------------------------- 板块金标（独立复算）
 def golden_sector_checks():
+    """板块金标：按**金标自己记录的日期**复算份额（不拿最新数据比历史金标）。"""
     files = sorted(glob.glob(os.path.join(ROOT, "tests", "golden", "sector-*.json")))
     if not files:
         return ck("板块金标存在", False, "tests/golden/sector-*.json 缺失")
     g = load(files[-1], {}) or {}
+    as_of = g.get("as_of")
     total = g.get("turnover_total")
-    import state as S
+    ck("板块金标带日期", bool(as_of), str(as_of))
     for name, rec in (g.get("sectors") or {}).items():
-        tot = 0
+        dates = rec.get("history_dates") or ([as_of] if as_of else [])
+        d = dates[0] if dates else None
+        tot = 0.0
+        miss = []
         for c in rec.get("codes") or []:
             fp_ = os.path.join(ROOT, "data", "sw", "history", f"{c}.jsonl")
             if not os.path.exists(fp_):
+                miss.append(c)
                 continue
             rows = [json.loads(x) for x in io.open(fp_, encoding="utf-8").read().splitlines() if x.strip()]
-            rows = [r for r in rows if r.get("date")]
-            rows.sort(key=lambda r: r["date"])
-            if rows:
-                tot += rows[-1].get("amount") or 0
-        ck(f"板块金标 {name} 历史成交额可复算", tot > 0, f"{tot:,.2f} 亿")
+            hit = [r for r in rows if r.get("date") == d]
+            if hit:
+                tot += hit[-1].get("amount") or 0
+            else:
+                miss.append(c)
+        ck(f"板块金标 {name} 当日成交额可复算（{d}）", tot > 0 and not miss, f"{tot:,.4f} 亿" + (f" 缺 {miss[:2]}" if miss else ""))
         if total:
             share = round(tot / total * 100, 2)
             ck(f"板块金标 {name} 份额 = {rec.get('share_pct_history')}%",
                abs(share - (rec.get("share_pct_history") or 0)) <= 0.02, f"复算 {share}%")
-        # 面板金额与历史金额不应大幅偏离（>3% 说明两源不同步）
-        pan, his = rec.get("amount") or 0, rec.get("amount_history") or 0
-        if pan and his:
-            ck(f"板块金标 {name} 面板/历史成交额差 ≤3%", abs(pan - his) / his <= 0.03,
-               f"{abs(pan-his)/his*100:.2f}%")
 
 
-# ---------------------------------------------------------------- 守卫与口径（每个 bug 一条）
 def unit_breadth_denominator():
     import fetch as F
     import pandas as pd

@@ -1978,7 +1978,8 @@ void ChanAnalyzer::defineXD(int initial_state) {
     // ========== TAIL INFERENCE (工程补充, 其结果标为待确认) ==========
     // 若扫描已经给出"待确认"端点 (scan_pending), 则不再推断: 一个待确认端点之后
     // 不允许再有端点, 否则会出现两个待确认端点, 与原文(只有末端点可能未确认)矛盾。
-    if (!scan_pending) {
+    // 虚线区内也要做末端推断: 末尾那一段同样可能是线段终点(只是未确认), 应作为虚线端点输出
+    if (!scan_pending || dashed_mode_) {
     std::vector<int> prev_xd_locs;
     for (int j = static_cast<int>(working_df.size()) - 1; j >= 0; j--) {
         if (working_df[j].xd_tb == TOP || working_df[j].xd_tb == BOT) {

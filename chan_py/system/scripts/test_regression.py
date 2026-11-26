@@ -519,7 +519,12 @@ def t32():
     b, c = base("MKT_MARGIN_BAL"), base("MKT_MARGIN_COLLATERAL")
     if b and c:
         ratio = round(b / c * 100, 2)
-        check("T32b", f"融资÷担保物 用 base_value 复算 = {ratio}%", abs(ratio - 33.63) < 0.1, str(ratio))
+        # 与当日卡片上的关系量对比（同源校验），不再硬编码某一交易日的数值
+        _h = io.open(os.path.join(ROOT, "reports", "card-market.html"), encoding="utf-8").read()
+        _m = re.search(r"融资÷担保物 <b>([\d.]+)%</b>", _h)
+        shown = float(_m.group(1)) if _m else None
+        ok = shown is not None and abs(ratio - shown) <= 0.02
+        check("T32b", f"融资÷担保物 用 base_value 复算 = {ratio}%（卡片 {shown}%）", ok, str(ratio))
     # card 的值必须等于 state 的值（同源）
     st = load_json(os.path.join(ROOT, "reports", "state-market.json"), {}) or {}
     for row in (st.get("card_rows") or []):
