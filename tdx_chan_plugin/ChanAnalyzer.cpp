@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <limits>
 #include <tuple>
+#include <cstdio>
 
 #ifndef CHAN_MIN_BI_SPAN
 #define CHAN_MIN_BI_SPAN 3
@@ -1464,6 +1465,11 @@ void ChanAnalyzer::repairXdExtremes(std::vector<StandardKLine>& working_df) {
             int next = (k + 1 < locs.size())
                 ? locs[k + 1] : static_cast<int>(working_df.size());
 
+            // 标准化只允许在[两侧都是已确认端点]的段内进行:
+            //   · 右邻居是数据末尾 -> 跳过(位置不能由右边还有多少数据决定)
+            //   · 自己或右邻居落在虚线区 -> 跳过(右侧尚未确认, 校正会随未来数据漂移)
+            if (next >= static_cast<int>(working_df.size())) continue;
+            if (dashed_mode_ && (cur >= dashed_floor_idx_ || next >= dashed_floor_idx_)) continue;
             // 端点必须是自己前后两段并集 [prev, next] 内的极值
             int lo_span = (prev >= 0) ? prev + 1 : 0;
             int hi_span = (next < static_cast<int>(working_df.size()))
@@ -1610,7 +1616,7 @@ int ChanAnalyzer::secondFeatureSeqConfirms(
     //
     // 返回值: 1 = 确认, 0 = 作废(反向创新高/新低), -1 = 无法判定(数据到头仍未定论 -> 待确认)
     const int n = static_cast<int>(working_df.size());
-    if (pivot_idx + 1 >= n) return -1;
+    if (pivot_idx + 1 >= n) return dashed_mode_ ? 1 : -1;
 
     const double pivot_price = working_df[pivot_idx].chan_price;
     const TopBotType want_start = (pivot_type == TOP) ? BOT : TOP;   // 反向笔的起点类型
@@ -1701,7 +1707,8 @@ int ChanAnalyzer::secondFeatureSeqConfirms(
         }
     }
 
-    return -1;   // 数据到头, 两个条件都没发生 -> 未定(待确认)
+    // 数据到头仍无定论: 正常阶段 -> 待确认; 虚线区 -> 暂定成立(继续推, 输出为虚线)
+    return dashed_mode_ ? 1 : -1;
 }
 
 // XD定义函数 (基于Python defineXD逻辑, 2026-04-28 迭代版)
@@ -1746,6 +1753,9 @@ void ChanAnalyzer::defineXD(int initial_state) {
     
     gap_XD.clear();
     pending_xd_locs_.clear();
+    dashed_mode_ = false;
+    dashed_floor_idx_ = -1;
+    dashed_floor_real_loc_ = -1;
     previous_with_xd_gap = false;
     bool scan_pending = false;   // 扫描是否已返回"待确认"端点
 
@@ -1811,8 +1821,17 @@ void ChanAnalyzer::defineXD(int initial_state) {
             // 两个"待确认"端点, 而按原文只有最后一个端点才可能是待确认。
             scan_pending = true;
             working_df[result.xd_market_idx].xd_tb = result.xd_type;
-            pending_xd_locs_.push_back(working_df[result.xd_market_idx].real_loc);
-            break;
+            if (!dashed_mode_) {
+                // 第一个尚未确认的端点 -> 从这里开始进入虚线区(地板线)
+                // 已确认的端点都在它之前, 按规则永不可取消; 之后的端点都是推测。
+                dashed_mode_ = true;
+                dashed_floor_idx_ = result.xd_market_idx;
+                dashed_floor_real_loc_ = working_df[result.xd_market_idx].real_loc;
+                gap_XD.clear();   // 地板之前的缺口端点都已确认, 不允许再被回退取消
+            }
+            tail_start = result.next_market_start;
+            direction = result.new_direction;
+            continue;
         }
 
         if (!result.found) {
@@ -1833,10 +1852,18 @@ void ChanAnalyzer::defineXD(int initial_state) {
                     pop_it = true;
                 }
                 if (pop_it &&
-                    marks_after(gap_XD.back()) <= CHAN_MAX_ROLLBACK_MARKS) {
+                    marks_after(gap_XD.back()) <= CHAN_MAX_ROLLBACK_MARKS &&
+                    dashed_mode_ && gap_XD.back() >= dashed_floor_idx_) {   // 回退只允许在虚线区内(未确认端点)
                     int rollback_idx = gap_XD.back();
                     gap_XD.pop_back();
                     working_df[rollback_idx].xd_tb = NO_TOPBOT;
+                    for (int jj = rollback_idx + 1; jj < static_cast<int>(working_df.size()); jj++) {
+                        working_df[jj].xd_tb = NO_TOPBOT;   // 回退点之后都是旧结果, 必须清除
+                    }
+                        // 同步丢弃指向回退点之后的缺口记录, 否则后续弹出会把 tail_start 设到更靠后的位置
+                        gap_XD.erase(std::remove_if(gap_XD.begin(), gap_XD.end(),
+                                                      [rollback_idx](int v) { return v > rollback_idx; }),
+                                      gap_XD.end());
                     direction = (direction == TOP2BOT) ? BOT2TOP : TOP2BOT;
                     tail_start = rollback_idx;
                     continue;
@@ -1870,10 +1897,18 @@ void ChanAnalyzer::defineXD(int initial_state) {
                     hit = true;
                 }
                 if (hit &&
-                    marks_after(gap_XD.back()) <= CHAN_MAX_ROLLBACK_MARKS) {
+                    marks_after(gap_XD.back()) <= CHAN_MAX_ROLLBACK_MARKS &&
+                    dashed_mode_ && gap_XD.back() >= dashed_floor_idx_) {   // 回退只允许在虚线区内(未确认端点)
                     rollback_idx = gap_XD.back();
                     gap_XD.pop_back();
                     working_df[rollback_idx].xd_tb = NO_TOPBOT;
+                    for (int jj = rollback_idx + 1; jj < static_cast<int>(working_df.size()); jj++) {
+                        working_df[jj].xd_tb = NO_TOPBOT;   // 回退点之后都是旧结果, 必须清除
+                    }
+                        // 同步丢弃指向回退点之后的缺口记录, 否则后续弹出会把 tail_start 设到更靠后的位置
+                        gap_XD.erase(std::remove_if(gap_XD.begin(), gap_XD.end(),
+                                                      [rollback_idx](int v) { return v > rollback_idx; }),
+                                      gap_XD.end());
                     // (restoreTbData 只写 tb, 而线段阶段不读 tb -> 已移除, 结果不变)
                     direction = (direction == TOP2BOT) ? BOT2TOP : TOP2BOT;
                     tail_start = rollback_idx;
@@ -2088,10 +2123,12 @@ cleanXdMarks(working_df);
 #endif
 
 
-    // ===== 少于三笔的相邻端点对不成线段 (线段待形成) =====
-    // 原文第65课: 线段至少三笔; 若相邻两个端点的跨度不足三笔, 那一段尚未成为线段,
-    // 不应作为线段输出 —— 去掉后一个端点, 让它并入相邻线段待其形成。
-    for (int pass = 0; pass < 16; pass++) {
+    // ===== 交替执行: 同类型相邻清理 + 少于三笔的跨度过滤, 直到两者都稳定 =====
+    // 原文第65课: 线段至少三笔; 不足三笔的那一段尚未成为线段, 去掉后一个端点并入相邻段。
+    // 两件事会互相影响(清理可能缩短跨度, 过滤可能造成同类相邻), 必须交替跑到稳定;
+    // 否则最终结果可能残留 [不足三笔的段] 或 [同类相邻端点]。
+    for (int pass = 0; pass < 32; pass++) {
+        cleanXdMarks(working_df);
         std::vector<int> locs;
         for (int j = 0; j < static_cast<int>(working_df.size()); j++) {
             if (working_df[j].xd_tb == TOP || working_df[j].xd_tb == BOT) {
@@ -2108,18 +2145,11 @@ cleanXdMarks(working_df);
         }
         if (!changed) break;
     }
-    cleanXdMarks(working_df);
 
 #if CHAN_TAIL_INFERENCE && CHAN_TAIL_PENDING
-    // 末端推断得到的端点只是假设 -> 标记为待确认 (输出 +-2)
-    if (tail_inferred) {
-        for (int j = static_cast<int>(working_df.size()) - 1; j >= 0; j--) {
-            if (working_df[j].xd_tb == TOP || working_df[j].xd_tb == BOT) {
-                pending_xd_locs_.push_back(working_df[j].real_loc);
-                break;
-            }
-        }
-    }
+    // 末端推断得到的端点是否标记[待确认], 统一由下方的[末端点重判]决定;
+    // 这里不再单独 push, 否则会出现两个待确认端点。
+    (void)tail_inferred;
 #endif
 
 #if CHAN_TAIL_PENDING
@@ -2150,6 +2180,19 @@ cleanXdMarks(working_df);
             }
             if (need_pending) {
                 pending_xd_locs_.push_back(working_df[last_mark].real_loc);
+            }
+        }
+    }
+#endif
+
+#if CHAN_TAIL_PENDING
+    // 虚线区: 从地板端点开始, 之后所有端点都只是推测 -> 全部标记为待确认(输出 +-2)
+    if (dashed_mode_ && dashed_floor_real_loc_ >= 0) {
+        pending_xd_locs_.clear();
+        for (int j = 0; j < static_cast<int>(working_df.size()); j++) {
+            if (working_df[j].xd_tb != TOP && working_df[j].xd_tb != BOT) continue;
+            if (working_df[j].real_loc >= dashed_floor_real_loc_) {
+                pending_xd_locs_.push_back(working_df[j].real_loc);
             }
         }
     }

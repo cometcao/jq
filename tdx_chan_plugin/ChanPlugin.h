@@ -275,6 +275,10 @@ private:
 
     // 待确认线段端点的 real_loc 列表 (由 findXDOnFeatureSeq 的 pending 结果写入)
     std::vector<int> pending_xd_locs_;
+    // 未确认区(虚线区): 从第一个尚未确认的端点开始, 其后所有端点都只是推测
+    bool dashed_mode_ = false;
+    int dashed_floor_idx_ = -1;        // 地板端点在 working_df 的下标
+    int dashed_floor_real_loc_ = -1;   // 地板端点的 real_loc (稳定锚点)
     bool isPendingXd(int real_loc) const;
 
     bool hasFeatureSeqInclusion(const FeatureSeqElement& e0, const FeatureSeqElement& e1,
