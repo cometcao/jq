@@ -28,6 +28,11 @@ import json
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # A. 禁用词 → 替代写法
+# 白名单：出现这些上下文时，"支撑"是机构名/发布会标题用语，不是价格表述
+BANNED_OK_IF = {
+    "支撑": ("夯实", "发展支撑", "发展改革委", "新闻发布会", "政策会议"),
+}
+
 BANNED = {
     "压力": "改为「同向上移/同向下移 + 不预测落点」",
     "阻力": "改为数值比较（x > 前值）或「区间高低」",
@@ -71,6 +76,9 @@ def scan_text(name, text):
                 continue
             # 固定声明段与机械比较式属合法用法
             if "no_prediction_statement" in ctx or "不预测哪个分支" in ctx or "不排序可能性" in ctx:
+                continue
+            # 机构名 / 官方发布会标题（如"夯实发展支撑"）不是价格表述
+            if any(k in ctx for k in BANNED_OK_IF.get(w, ())):
                 continue
             bad.append((name, w, why, ctx))
     for w in NEED_DATE:

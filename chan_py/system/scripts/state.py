@@ -259,6 +259,54 @@ def card_rows():
     return out
 
 
+def fresh_block(as_of, layer="市场"):
+    """数据新鲜度：解释"为什么今天对比的是更早一天"。
+
+    只列**同频滞后**：每个指标取最新一条事实；滞后 1–3 天；
+    且该序列本身是日频（历史相邻期间隔中位数 ≤4 天），排除月度/季度指标。
+    """
+    import datetime as _dt
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", str(as_of or "")):
+        return ""
+    try:
+        d1 = _dt.date.fromisoformat(as_of)
+    except Exception:
+        return ""
+    try:
+        with io.open(os.path.join(ROOT, "dist", "market-state", "references", "registry.json"), encoding="utf-8") as fh:
+            reg = json.load(fh)
+    except Exception:
+        return ""
+    latest = {}
+    for f in sorted(glob.glob(os.path.join(FACTS, "*", "*.json"))):
+        try:
+            r = json.load(io.open(f, encoding="utf-8"))
+        except Exception:
+            continue
+        iid = r.get("indicator_id")
+        per = (r.get("data_period") or "")[:10]
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", per):
+            continue
+        if (reg.get(iid, {}) or {}).get("layer", "市场") != layer:
+            continue
+        if iid not in latest or per > latest[iid]:
+            latest[iid] = per
+    rows = []
+    for iid, per in latest.items():
+        lag = (d1 - _dt.date.fromisoformat(per)).days
+        if not (0 < lag <= 3):
+            continue
+        # 只需"滞后 1–3 天"即视为同频滞后：月度/季度指标天然滞后数十天，进不来
+        rows.append((lag, id_label(iid).split("（")[0], per))
+    if not rows:
+        return ""
+    rows.sort(key=lambda x: (-x[0], x[1]))
+    out = "\n**同频滞后（为什么对比的是更早一天）**\n"
+    for lag, nm, per in rows[:6]:
+        out += f"- {nm}：最新期 {per}，滞后 {lag} 天（T+{lag} 披露）\n"
+    return out
+
+
 def build(policy, include_events=False, replay=None):
     rings = [Ring("C1", "政策设定"), Ring("C2", "资金供给"), Ring("C3", "资金价格"),
              Ring("C4", "场内杠杆与资金池"), Ring("C5", "主体行为"), Ring("C6", "市场结果")]
@@ -1196,6 +1244,7 @@ def _write_sector_page(as_of, body, sector):
     """写单个板块页（与主流程同格式），供 --all-sectors 批量刷新。"""
     os.makedirs(REPORTS, exist_ok=True)
     head = f"as-of {as_of}（最新交易日；板块层 · 目标板块：{sector}；行内 * 表示数据期早于 as-of）"
+    body += fresh_block(as_of, "板块")
     text = f"{head}\n{body}\n"
     p = os.path.join(REPORTS, f"{as_of}-sector-{sector}-state.md")
     with io.open(p, "w", encoding="utf-8") as f:
@@ -1485,6 +1534,7 @@ def main():
     else:
         as_of, body = build(args.policy, args.include_events, replay=args.as_of)
         head = f"as-of {as_of}（最新交易日；行内 * 表示该行数据期早于 as-of）"
+    body += fresh_block(as_of, "板块" if args.layer == "sector" else "市场")
     text = f"{head}\n{body}\n"
 
     reg = {}

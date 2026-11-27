@@ -751,6 +751,20 @@ def unit_detect_visual_auto():
        f"{(pl.group(1) if pl else '')[:20]}/{(mc.group(1) if mc else '')}")
 
 
+def unit_fresh_block():
+    """同频滞后表：只列滞后 1–3 天的指标，且月度指标不得混入（V2.145.0）。"""
+    import re as _re, state as S
+    blk = S.fresh_block("2026-11-27", "市场")
+    ck("同频滞后表可生成", bool(blk) and "同频滞后" in blk, blk[:40])
+    lags = [int(x) for x in _re.findall(r"滞后 (\d+) 天", blk)]
+    ck("滞后天数都在 1–3 天", bool(lags) and all(1 <= x <= 3 for x in lags), str(lags))
+    # 月度指标（M2/CPI/GDP）不得出现在这张表里
+    bad = [k for k in ("M2 同比", "居民消费价格指数同比", "GDP 同比", "货币基金规模") if k in blk]
+    ck("月度指标不混入滞后表", not bad, str(bad))
+    # 两融类必须被标出来
+    ck("两融类被标为 T+1", ("两融余额" in blk) and ("T+1" in blk), blk[:60])
+
+
 def main():
     verbose = "-v" in sys.argv
     for fn in (unit_card_fmt, unit_card_delta, unit_card_pos_spark, unit_events_info_level,
@@ -760,7 +774,7 @@ def main():
                unit_turnover_provider, unit_tsf_caliber, unit_event_links,
                unit_sector_c2_fresh, unit_prev_period_correct, unit_no_old_turnover_name, unit_card_series_units,
                unit_network_fallback, unit_time_edges, unit_event_rules,
-               unit_layout_fill, unit_shape_fingerprint, unit_cli_variants, unit_event_ring_attribution, unit_event_ring_text_mode, unit_equal_branch_hidden, unit_branch_ring_effect, unit_readings_cover_six_rings, unit_market_card_format_frozen, unit_unlock_threshold, unit_unlock_card_folded, unit_event_tips_nonempty, unit_cumulative_spark_growth, unit_growth_series_math, unit_detect_visual_auto):
+               unit_layout_fill, unit_shape_fingerprint, unit_cli_variants, unit_event_ring_attribution, unit_event_ring_text_mode, unit_equal_branch_hidden, unit_branch_ring_effect, unit_readings_cover_six_rings, unit_market_card_format_frozen, unit_unlock_threshold, unit_unlock_card_folded, unit_event_tips_nonempty, unit_cumulative_spark_growth, unit_growth_series_math, unit_detect_visual_auto, unit_fresh_block):
         try:
             fn()
         except Exception as e:
