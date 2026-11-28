@@ -765,6 +765,27 @@ def unit_fresh_block():
     ck("两融类被标为 T+1", ("两融余额" in blk) and ("T+1" in blk), blk[:60])
 
 
+def unit_basis_freq_label():
+    """基准必须写频率口径：月频「前一月」、日频「前一交易日」（V2.146.0）。"""
+    import re as _re, card as C
+    h = io.open(os.path.join(ROOT, "reports", "card-market.html"), encoding="utf-8").read()
+    for lab, need in (("M2 同比", "前一月"), ("现金池（代理）", "前一月"),
+                      ("融资余额", "前一交易日"), ("DR007", "前一交易日")):
+        i = h.find(lab); seg = h[i:i + 900]
+        m = _re.search(r'<div class="bs">([^<]*)</div>', seg)
+        ck(f"{lab} 基准含「{need}」", bool(m) and need in m.group(1), (m.group(1) if m else "无"))
+    ck("直接调用 basis_of（月频）", "前一月" in C.basis_of("MKT_M2_YOY", None), C.basis_of("MKT_M2_YOY", None))
+    ck("直接调用 basis_of（日频）", "前一交易日" in C.basis_of("MKT_DR007", None), C.basis_of("MKT_DR007", None))
+
+
+def unit_lowfreq_available_note():
+    """月频指标若滞后 ≥2 个月，必须说明"官方月报未发布"，不许让人以为是抓取失败。"""
+    import state as S
+    note = S.lowfreq_note("2026-11-27", "市场")
+    ck("低频滞后说明存在", bool(note), note[:60])
+    ck("说明里写明月份与原因", ("月报" in note) and ("2026-09" in note or "2026-10" in note), note[:120])
+
+
 def main():
     verbose = "-v" in sys.argv
     for fn in (unit_card_fmt, unit_card_delta, unit_card_pos_spark, unit_events_info_level,
@@ -774,7 +795,7 @@ def main():
                unit_turnover_provider, unit_tsf_caliber, unit_event_links,
                unit_sector_c2_fresh, unit_prev_period_correct, unit_no_old_turnover_name, unit_card_series_units,
                unit_network_fallback, unit_time_edges, unit_event_rules,
-               unit_layout_fill, unit_shape_fingerprint, unit_cli_variants, unit_event_ring_attribution, unit_event_ring_text_mode, unit_equal_branch_hidden, unit_branch_ring_effect, unit_readings_cover_six_rings, unit_market_card_format_frozen, unit_unlock_threshold, unit_unlock_card_folded, unit_event_tips_nonempty, unit_cumulative_spark_growth, unit_growth_series_math, unit_detect_visual_auto, unit_fresh_block):
+               unit_layout_fill, unit_shape_fingerprint, unit_cli_variants, unit_event_ring_attribution, unit_event_ring_text_mode, unit_equal_branch_hidden, unit_branch_ring_effect, unit_readings_cover_six_rings, unit_market_card_format_frozen, unit_unlock_threshold, unit_unlock_card_folded, unit_event_tips_nonempty, unit_cumulative_spark_growth, unit_growth_series_math, unit_detect_visual_auto, unit_fresh_block, unit_basis_freq_label, unit_lowfreq_available_note):
         try:
             fn()
         except Exception as e:

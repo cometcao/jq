@@ -302,9 +302,14 @@ def t19():
     import datetime as _dt
     cal = load_json(latest("data/events/calendar-*.json"), {}) or {}
     evs = cal.get("events") or []
-    today = _dt.date.today().isoformat()
-    bad = [e for e in evs if e.get("event_status") == "未来预定" and (e.get("event_date") or "") < today]
-    check("T19", "未来预定事件不含过去日期", not bad, str([e["event_date"] for e in bad][:3]))
+    # 基准是"状态页的数据日"（as-of），不是墙钟：周末刷新时 as-of 仍是上周五，
+    # 周五当天的事件相对 as-of 属于"当日"，不能判为过去。
+    as_of = cal.get("as_of") or ""
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", str(as_of)):
+        _p = sorted(__import__("glob").glob(os.path.join(ROOT, "reports", "*-market-state.md")))
+        as_of = os.path.basename(_p[-1])[:10] if _p else _dt.date.today().isoformat()
+    bad = [e for e in evs if e.get("event_status") == "未来预定" and (e.get("event_date") or "") < as_of]
+    check("T19", f"未来预定事件不含 as-of({as_of}) 之前的日期", not bad, str([e["event_date"] for e in bad][:3]))
     fut = [e for e in evs if e.get("event_status") == "未来预定"]
     issuers = {e.get("issuer") for e in fut}
     check("T19b", "未来事件含央行操作/解禁/新股 至少两类",

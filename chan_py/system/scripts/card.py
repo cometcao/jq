@@ -213,11 +213,41 @@ def spark_svg(vals):
 
 
 def basis_of(iid, period):
-    """R1.3：基准 = 该指标自己的上期日期（MM-DD）。"""
+    """R1.3：基准 = 该指标自己的上期（MM-DD），并写明"上期的口径"。
+
+    日频 → 前一交易日；月频 → 前一月；季频 → 前一季。
+    只写 MM-DD 会让人误以为"应该和昨天比"，所以频率必须显式（V2.146.0）。
+    """
     s = series(iid, 60)
     if len(s) < 2:
         return "无上期"
-    return f"vs {s[-2]['data_period'][5:10]}"
+    prev = s[-2]["data_period"][5:10]
+    cur = s[-1]["data_period"][:10]
+    gap = ""
+    try:
+        import datetime as _dt
+        d1 = _dt.date.fromisoformat(prev if len(prev) == 10 else f"{cur[:4]}-{prev}")
+        d0 = _dt.date.fromisoformat(cur)
+        m = (d0.year - d1.year) * 12 + (d0.month - d1.month)
+        if m == 1:
+            gap = "前一月"
+        elif m in (3, 4):
+            gap = "前一季"
+        elif 0 < m <= 0:
+            gap = ""
+        elif m > 12:
+            gap = f"前 {m} 个月"
+    except Exception:
+        gap = ""
+    if not gap:
+        # 日频：相邻两期相隔 1–4 天（含周末）
+        try:
+            import datetime as _dt
+            a = _dt.date.fromisoformat(s[-2]["data_period"][:10]); b = _dt.date.fromisoformat(cur)
+            gap = "前一交易日" if 0 < (b - a).days <= 4 else ""
+        except Exception:
+            gap = ""
+    return f"vs {gap + ' ' if gap else ''}{prev}"
 
 
 def cell_pos(pos, n):
@@ -436,7 +466,7 @@ def build_market():
                 arrow = "▲" if d > 0 else ("▼" if d < 0 else "—")
                 dcls = "up" if d > 0 else ("dn" if d < 0 else "fl")
                 dtxt = f'{arrow}{abs(d):.2f}{unit}'
-                basis = f"vs {s[-2][0][5:10]}"
+                basis = basis_of(parts[0].strip() if key else "", None)
                 posc = cell_pos(pos_pct(vals), len(vals))
                 spk = cell_spark(vals, "月频" if len(vals) <= 24 else "日频")
             else:
@@ -465,7 +495,7 @@ def build_market():
         cur = r["value"]
         prev = r.get("prev")
         dtxt, dcls, _ = delta(cur, prev, kind)
-        basis = f"vs {r['prev_period'][5:10]}" if r.get("prev_period") else "无上期"
+        basis = basis_of(iid, None) if r.get("prev_period") else "无上期"
         html.append(
             f'<div class="rn">{ring}</div><div class="nm">{label} <b>{fmt(cur, kind)}</b></div>'
             f'<div class="dcol"><span class="{dcls}">{dtxt}</span><div class="bs">{basis}</div></div>'

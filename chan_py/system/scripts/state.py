@@ -259,6 +259,50 @@ def card_rows():
     return out
 
 
+def lowfreq_note(as_of, layer="市场"):
+    """低频指标滞后说明：月频/季频指标落后 ≥2 个月时，写清"官方数据还没发布"。
+
+    否则读者会以为是我们抓取失败（2026-11-28 用户就问过同样的问题）。
+    """
+    import datetime as _dt
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", str(as_of or "")):
+        return ""
+    try:
+        d1 = _dt.date.fromisoformat(as_of)
+    except Exception:
+        return ""
+    try:
+        with io.open(os.path.join(ROOT, "dist", "market-state", "references", "registry.json"), encoding="utf-8") as fh:
+            reg = json.load(fh)
+    except Exception:
+        return ""
+    latest = {}
+    for f in sorted(glob.glob(os.path.join(FACTS, "*", "*.json"))):
+        try:
+            r = json.load(io.open(f, encoding="utf-8"))
+        except Exception:
+            continue
+        iid = r.get("indicator_id"); per = (r.get("data_period") or "")[:10]
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", per):
+            continue
+        if (reg.get(iid, {}) or {}).get("layer", "市场") != layer:
+            continue
+        if iid not in latest or per > latest[iid]:
+            latest[iid] = per
+    rows = []
+    for iid, per in latest.items():
+        lag = (d1 - _dt.date.fromisoformat(per)).days
+        if lag >= 55:      # ≈2 个月
+            rows.append((lag, id_label(iid).split("（")[0], per))
+    if not rows:
+        return ""
+    rows.sort(key=lambda x: -x[0])
+    out = "\n**低频指标：官方数据尚未更新**\n"
+    for lag, nm, per in rows[:5]:
+        out += f"- {nm}：最新可得 {per[:7]}（官方月报/季报未发布；不是抓取失败）\n"
+    return out
+
+
 def fresh_block(as_of, layer="市场"):
     """数据新鲜度：解释"为什么今天对比的是更早一天"。
 
@@ -1535,6 +1579,7 @@ def main():
         as_of, body = build(args.policy, args.include_events, replay=args.as_of)
         head = f"as-of {as_of}（最新交易日；行内 * 表示该行数据期早于 as-of）"
     body += fresh_block(as_of, "板块" if args.layer == "sector" else "市场")
+    body += lowfreq_note(as_of, "板块" if args.layer == "sector" else "市场")
     text = f"{head}\n{body}\n"
 
     reg = {}

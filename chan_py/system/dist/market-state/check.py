@@ -505,6 +505,22 @@ def check_card(fp):
     except Exception:
         pass
 
+    # 基准频率口径（V2.146.0）：月频必须写「前一月」，日频必须写「前一交易日」
+    if is_market:
+        import re as _re6
+        for _lab, _freq in (("M2 同比", "前一月"), ("现金池（代理）", "前一月")):
+            if _lab in h:
+                _i = h.find(_lab); _seg = h[_i:_i + 900]
+                _m = _re6.search(r'<div class="bs">([^<]*)</div>', _seg)
+                if _m and _freq not in _m.group(1):
+                    errs.append(f"[基准口径] 月频指标「{_lab}」的基准没写「{_freq}」（实际：{_m.group(1)}）")
+        for _lab in ("融资余额", "DR007"):
+            if _lab in h:
+                _i = h.find(_lab); _seg = h[_i:_i + 900]
+                _m = _re6.search(r'<div class="bs">([^<]*)</div>', _seg)
+                if _m and "前一交易日" not in _m.group(1):
+                    errs.append(f"[基准口径] 日频指标「{_lab}」的基准没写「前一交易日」（实际：{_m.group(1)}）")
+
     if _spec and is_market:
         _fonts = set(float(x) for x in (_spec.get("font") or {}).values())
         # 解禁阈值（V2.137.0）：卡上不得出现 < 200 亿且 <1% 的解禁
